@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Supply-chain guard: a release younger than pnpm's minimum release age fails
+# the install instead of being silently added to an exclusion list.
+minimumReleaseAgeStrict: true

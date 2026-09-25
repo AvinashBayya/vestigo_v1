@@ -1,0 +1,43 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "generate"],
+      "outputs": ["dist/**", "openapi.json"]
+    },
+    "generate": {
+      "dependsOn": ["^build"],
+      "outputs": ["src/client/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build", "generate"]
+    },
+    "lint": {
+      "dependsOn": ["^build", "generate", "//#format-check"]
+    },
+    "test": {
+      "dependsOn": [
+        "^build",
+        "generate",
+        "@repo/config#fabrication-check",
+        "@repo/config#check-exports"
+      ]
+    },
+    "dev": {
+      "dependsOn": ["^build", "generate"],
+      "cache": false,
+      "persistent": true
+    },
+    "@repo/config#fabrication-check": {
+      "dependsOn": ["@repo/web#generate"],
+      "cache": false
+    },
+    "@repo/config#check-exports": {
+      "cache": false
+    },
+    "//#format-check": {
+      "cache": false
+    }
+  }
+}

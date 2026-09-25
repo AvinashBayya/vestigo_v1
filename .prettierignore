@@ -1,0 +1,7 @@
+# Prettier also honours .gitignore, which already excludes build output,
+# generated code and legacy/.
+pnpm-lock.yaml
+
+# Hand-written governance and audit documents are kept exactly as authored.
+CLAUDE.md
+docs/

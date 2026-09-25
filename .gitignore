@@ -1,7 +1,12 @@
 node_modules
 dist
 .turbo
+coverage
 .env
 .env.local
 data/
 legacy/
+
+# Generated at build time; never hand-edited.
+apps/api/openapi.json
+apps/web/src/client/

@@ -1,0 +1,6 @@
+{
+  "name": "@repo/osint-engine",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder: orchestration, planner, fusion and merge. Not built yet; see docs/PLAN.md."
+}

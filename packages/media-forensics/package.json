@@ -1,0 +1,6 @@
+{
+  "name": "@repo/media-forensics",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Placeholder: media forensics (EXIF, C2PA, perceptual hashing, OCR). Not built yet; see docs/PLAN.md."
+}
