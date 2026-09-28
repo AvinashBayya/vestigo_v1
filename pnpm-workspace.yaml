@@ -5,3 +5,9 @@ packages:
 # Supply-chain guard: a release younger than pnpm's minimum release age fails
 # the install instead of being silently added to an exclusion list.
 minimumReleaseAgeStrict: true
+
+# Dependency build scripts are denied unless listed as true. esbuild's
+# postinstall only verifies a binary that pnpm already installs as a
+# platform-specific optional package, so it does not need to run.
+allowBuilds:
+  esbuild: false

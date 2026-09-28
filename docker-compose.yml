@@ -1,20 +1,25 @@
 # Local development dependencies. Ports bind to 127.0.0.1 only, so neither
 # service is reachable from the network. The credentials are local-only
-# development values and match DATABASE_URL in .env.example.
+# development values. The superuser exists only for first-run bootstrap
+# (infra/postgres/init); the application connects as app_runtime and
+# migrations run as app_owner, matching .env.example.
 
 services:
   postgres:
-    image: postgres:17
+    # Postgres 17 with pgvector, pinned. Debian-based for collation parity with
+    # managed Postgres.
+    image: pgvector/pgvector:0.8.6-pg17-trixie
     environment:
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: app
-      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      test: ["CMD-SHELL", "pg_isready -U app_owner -d app"]
       interval: 5s
       timeout: 5s
       retries: 10

@@ -24,4 +24,10 @@ describe(".env.example", () => {
     expect(rendered).toContain("# Optional.\nSHODAN_API_KEY=\n");
     expect(rendered).toContain("# API_PORT=3000");
   });
+
+  it("fills an optional variable's example, so a fresh .env can run migrations", () => {
+    expect(rendered).toContain(
+      "# Optional.\nDATABASE_MIGRATION_URL=postgres://app_owner:app_owner@127.0.0.1:5432/app\n",
+    );
+  });
 });

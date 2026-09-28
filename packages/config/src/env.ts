@@ -39,13 +39,32 @@ export const envSchema = z.object({
     .meta({ description: "TCP port the API server listens on." }),
 
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }).meta({
-    description: "PostgreSQL connection string. The example matches docker-compose.yml.",
-    examples: ["postgres://app:app@127.0.0.1:5432/app"],
+    description:
+      "PostgreSQL connection as the application role (app_runtime): no superuser, no BYPASSRLS. The example matches docker-compose.yml.",
+    examples: ["postgres://app_runtime:app_runtime@127.0.0.1:5432/app"],
   }),
+  DATABASE_MIGRATION_URL: z
+    .url({ protocol: /^postgres(ql)?$/ })
+    .optional()
+    .meta({
+      description:
+        "PostgreSQL connection as the schema owner (app_owner). Used only by pnpm db:migrate; the API and worker never use it.",
+      examples: ["postgres://app_owner:app_owner@127.0.0.1:5432/app"],
+    }),
   REDIS_URL: z.url({ protocol: /^rediss?$/ }).meta({
     description: "Redis connection string. The example matches docker-compose.yml.",
     examples: ["redis://127.0.0.1:6379"],
   }),
+
+  CONTENT_STORE_DIR: z
+    .string()
+    .min(1)
+    .optional()
+    .meta({
+      description:
+        "Directory for the local content-addressed payload store (development). Relative paths resolve from the working directory.",
+      examples: ["./data/content-store"],
+    }),
 
   // Collector credentials: placeholders until the collector registry lands in
   // Phase 3. Each registry entry will carry the source's licence verdict.
@@ -73,13 +92,31 @@ export type EnvSource = Readonly<Record<string, string | undefined>>;
  * provided", not "provided and blank".
  */
 export function loadEnv(source: EnvSource = process.env): Env {
+  return parseVariables(envSchema, source);
+}
+
+/**
+ * Validates only the named variables, for tools that need a few of them (a
+ * migration script has no use for REDIS_URL). Same rules and errors as loadEnv.
+ */
+export function loadEnvSubset<K extends keyof Env>(
+  names: readonly K[],
+  source: EnvSource = process.env,
+): Pick<Env, K> {
+  const shape = Object.fromEntries(names.map((name) => [name, envSchema.shape[name]]));
+  // The subset schema is built from envSchema's own fields, so its output is
+  // exactly Pick<Env, K>; TypeScript cannot follow that through fromEntries.
+  return parseVariables(z.object(shape), source) as unknown as Pick<Env, K>;
+}
+
+function parseVariables<T extends z.ZodObject>(schema: T, source: EnvSource): z.infer<T> {
   const input: Record<string, string | undefined> = {};
-  for (const name of Object.keys(envSchema.shape)) {
+  for (const name of Object.keys(schema.shape)) {
     const value = source[name];
     input[name] = value === "" ? undefined : value;
   }
 
-  const result = envSchema.safeParse(input);
+  const result = schema.safeParse(input);
   if (result.success) return result.data;
 
   const issues: ConfigIssue[] = result.error.issues.map((issue) => {

@@ -24,7 +24,8 @@ function formatValue(value: unknown): string {
 /**
  * Renders `.env.example` from the schema. Required variables are emitted with
  * their example value; variables with a default are commented out, showing
- * the default; optional variables without one (credentials) are left blank.
+ * the default; optional variables show their example if they have one, and
+ * are otherwise left blank (credentials never have one).
  */
 export function renderEnvExample(schema: EnvSchemaLike): string {
   const blocks = Object.entries(schema.shape).map(([name, field]) => {
@@ -38,8 +39,9 @@ export function renderEnvExample(schema: EnvSchemaLike): string {
       lines.push("# Required.");
       lines.push(`${name}=${example === undefined ? "" : formatValue(example)}`);
     } else if (parsedMissing.data === undefined) {
+      const example = meta.examples?.[0];
       lines.push("# Optional.");
-      lines.push(`${name}=`);
+      lines.push(`${name}=${example === undefined ? "" : formatValue(example)}`);
     } else {
       lines.push("# Optional; the default is shown.");
       lines.push(`# ${name}=${formatValue(parsedMissing.data)}`);

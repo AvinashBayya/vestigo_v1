@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv } from "./env.ts";
+import { loadEnv, loadEnvSubset } from "./env.ts";
 import { ConfigError } from "./errors.ts";
 
 const VALID = {
@@ -60,5 +60,35 @@ describe("loadEnv", () => {
   it("leaves an unset collector credential undefined, never a placeholder string", () => {
     const env = loadEnv({ ...VALID, SHODAN_API_KEY: "" });
     expect(env.SHODAN_API_KEY).toBeUndefined();
+  });
+});
+
+describe("loadEnvSubset", () => {
+  it("validates only the named variables", () => {
+    // REDIS_URL is required by the full schema but not requested here.
+    const env = loadEnvSubset(["DATABASE_MIGRATION_URL"], {
+      DATABASE_MIGRATION_URL: "postgres://app_owner:app_owner@127.0.0.1:5432/app",
+    });
+    expect(env).toEqual({
+      DATABASE_MIGRATION_URL: "postgres://app_owner:app_owner@127.0.0.1:5432/app",
+    });
+  });
+
+  it("names a requested required variable that is missing", () => {
+    expect(() => loadEnvSubset(["DATABASE_URL"], {})).toThrow("DATABASE_URL: required but not set");
+  });
+
+  it("rejects a malformed requested variable without echoing it", () => {
+    const secret = "owner-password-do-not-print";
+    try {
+      loadEnvSubset(["DATABASE_MIGRATION_URL"], {
+        DATABASE_MIGRATION_URL: `mysql://owner:${secret}@127.0.0.1/app`,
+      });
+      expect.unreachable("loadEnvSubset should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      expect(String(error)).toContain("DATABASE_MIGRATION_URL");
+      expect(String(error)).not.toContain(secret);
+    }
   });
 });

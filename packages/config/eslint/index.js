@@ -5,6 +5,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import { defineConfig } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import fabrication from "./fabrication-plugin.js";
 
 /**
  * Shared flat config. Every package's eslint.config.js calls this.
@@ -44,6 +45,15 @@ export function createConfig({ tsconfigRootDir, react = false, ignores = [] }) {
             patterns: [{ group: ["bun:*"], message: "Node only: do not import Bun modules." }],
           },
         ],
+      },
+    },
+    {
+      // CLAUDE.md §1: never fabricate data. No `files` key, so this applies to
+      // every linted file, TypeScript and JavaScript alike.
+      plugins: { fabrication },
+      rules: {
+        "fabrication/no-fabricated-fallback": "error",
+        "fabrication/require-fabrication-justification": "error",
       },
     },
     {
