@@ -43,5 +43,7 @@ export type { ApiKeyInputField } from "./api-keys/errors.ts";
 export { createRedisClient, waitForRedisReady } from "./rate-limit/redis-client.ts";
 export type { RedisClientOptions } from "./rate-limit/redis-client.ts";
 export { FixedWindowRateLimiter } from "./rate-limit/fixed-window.ts";
+export { SlidingLogRateLimiter } from "./rate-limit/sliding-log.ts";
+export type { IntervalPolicy, SlidingLogDecision } from "./rate-limit/sliding-log.ts";
 export type { RateLimitDecision, RateLimitPolicy } from "./rate-limit/fixed-window.ts";
 export { RateLimiterConfigError, RateLimiterUnavailableError } from "./rate-limit/errors.ts";

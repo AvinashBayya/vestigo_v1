@@ -8,6 +8,7 @@ import {
   ROLES,
 } from "./permissions.ts";
 import {
+  decideDisciplineAccess,
   decideModuleAccess,
   decidePermissionModuleAccess,
   PLAN_MODULES,
@@ -93,6 +94,22 @@ describe("module gating", () => {
         "investigation:create",
       ),
     ).toEqual({ allowed: true });
+  });
+
+  it("gates PERSON collectors on BOTH the plan and approved vetting, and no other discipline", () => {
+    for (const plan of PLANS) {
+      for (const vettingStatus of VETTING_STATUSES) {
+        const person = decideDisciplineAccess({ plan, vettingStatus }, "PERSON");
+        const expected =
+          plan === "TECHINT_AND_PERSON" && vettingStatus === "APPROVED" ? "allowed" : "refused";
+        expect(person.allowed ? "allowed" : "refused").toBe(expected);
+        for (const discipline of ["TECHINT", "SOCMINT", "MEDIAINT", "GEOINT"] as const) {
+          expect(decideDisciplineAccess({ plan, vettingStatus }, discipline)).toEqual({
+            allowed: true,
+          });
+        }
+      }
+    }
   });
 
   it("never gates account administration", () => {

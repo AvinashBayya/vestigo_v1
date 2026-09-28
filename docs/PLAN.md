@@ -13,7 +13,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 0     | Audit and migration map                 | Done. Findings in [audit/](audit/): REPORT, INVENTORY (per-module KEEP / REWRITE / DROP verdicts, used as the porting map), COLLECTORS, DEPENDENCIES, QUESTIONS. |
 | 1     | Scaffold and toolchain                  | **Done, 2026-09-25.** See below.                                                                                                                         |
 | 2     | Data foundation and tenancy             | **Done, 2026-09-28.** Session A: data layer and tenant isolation. Session B: authentication, MFA, permissions, module gating, API keys, audit, credential vault. See both records below. |
-| 3     | Collector SDK and migration             | Not started                                                                                                                                              |
+| 3     | Collector SDK and migration             | **Session A done, 2026-09-28:** collector SDK, registry, licence gating, fetcher, evidence path. Session B (porting the collectors) not started. See the record below. |
 | 4     | Jobs, orchestration and tool containers | Not started                                                                                                                                              |
 | 5     | AI, fusion and reports                  | Not started                                                                                                                                              |
 | 6     | Frontend                                | Not started                                                                                                                                              |
@@ -196,10 +196,10 @@ tests, and the Vite dev server was confirmed to serve the page and proxy `/healt
   Should a deleted tenant's audit trail be retained (for how long, and under what access), or
   removed as part of deletion? The evidence deletion path itself is not built; it will need a
   privileged, audited route, because the application role has no DELETE on evidence.
-- **Collector registry scope.** `collectors_registry` is per tenant, because every table carries
-  `tenant_id`. A collector's licence and commercial-use verdict is really a platform fact. Confirm
-  before Phase 3: either keep per-tenant rows (seeded from a platform catalogue), or ask for a
-  platform-level table exempt from the `tenant_id` rule.
+- ~~**Collector registry scope.**~~ Resolved in Phase 3A. The platform catalogue is code in
+  `packages/collectors`, the truth for every verdict. The per-tenant `collectors_registry` rows are
+  copies of it, written when a collector is dispatched, so evidence can reference them. No
+  exemption from the `tenant_id` rule was needed.
 - ~~**Users are per tenant.**~~ Resolved in Phase 2B: identity is global (`auth` schema), and
   `public.users` is each identity's profile within a tenant.
 - **No cross-tenant operator view.** RLS means no application path lists all tenants, which is
@@ -438,3 +438,201 @@ tests, and the Vite dev server was confirmed to serve the page and proxy `/healt
   intended locally, but it is why the key must come from a secret manager in production.
 - **`public.users.email` copies the identity's email** at join time; later email changes are not
   synchronised.
+
+## Phase 3, session A record: collector SDK, registry and licence gating
+
+No collector was ported; that is session B. Every collector in this session's tests is a fake,
+defined in test code only.
+
+**Built.**
+
+- `packages/collectors`: the SDK, with no database or infrastructure dependency. Lint rules and a
+  release-blocking dependency test enforce that.
+  - **Contract.** A collector declares these fields, as data:
+    - id, version, and a display name that becomes its evidence label;
+    - discipline, accepted target types and collection mode;
+    - its one catalogue source;
+    - credential vault ids, and whether it runs without them;
+    - the claim strength of its evidence, a run budget and a Zod result schema.
+
+    A collector's implementation is held privately. The only values it can return are
+    `found()` and `notFound()` from its own run: they are type-branded and registered at run time.
+  - **Platform source catalogue** (`src/catalogue.ts`): 47 upstreams, from
+    `docs/audit/COLLECTORS.md` and the Phase 3A decisions.
+    - BLOCKED (13): Shodan InternetDB, C2IntelFeeds, InsightFace buffalo_l, YouTube InnerTube,
+      YouTube via yt-dlp, the DuckDuckGo scrape, the local network scanner, Google News RSS,
+      HackerTarget, AlienVault OTX, UCDP, ReliefWeb and OpenSky.
+    - PERMITTED (4): GDELT DOC, GDELT Events, HIBP and Safecast.
+    - UNVERIFIED (30): the rest.
+    - Attribution is declared for GDELT, HIBP, Nominatim and Wikipedia.
+  - **Registry.** It validates the whole catalogue and every collector at startup. It lists BLOCKED
+    collectors with their reason and discards their implementations. It exposes attribution for
+    reports and screens.
+  - **Runtime.** The only way to run a collector. The gates run in this order:
+    1. licence;
+    2. implemented;
+    3. target type and validity;
+    4. plan and vetting;
+    5. a scope authorisation, for ACTIVE collectors;
+    6. credentials.
+
+    Then it enforces the run budget and checks the outcome against the contract. The outcomes are
+    FOUND, NOT_FOUND, FAILED, UNAVAILABLE, NEEDS_CREDENTIALS and REFUSED.
+  - **Fetcher.** The only outbound path. Every request is held to:
+    - the source's declared hosts, at public addresses, over a connection pinned to the checked
+      address;
+    - redirects only within the allowlist;
+    - a mandatory timeout of at most 60 s, and a size cap that also stops decompression bombs;
+    - the platform user agent;
+    - credential values redacted from recorded URLs;
+    - the source's rate limit, shared.
+- `packages/osint-engine`: the one evidence path, `CollectionExecutor`, in three steps.
+  1. A tenant transaction admits the collector. It syncs the tenant's registry row, reads plan
+     and vetting and, for ACTIVE collectors, the scope authorisation in force. It reads
+     credentials only once the collector is admitted.
+  2. The collector runs outside any transaction.
+  3. For FOUND only, a tenant transaction stores each raw payload by hash and writes one evidence
+     row per payload.
+
+  It also provides vault-backed credentials, whose reads are audited, and the Redis adapter for
+  the upstream limiter.
+- `packages/integrations`: `SlidingLogRateLimiter`, a Redis sliding log on Redis's own clock. It
+  allows no burst at a window boundary, and fails closed.
+- `packages/access`: `DISCIPLINE_MODULE` and `decideDisciplineAccess`.
+- `packages/config`:
+  - `COLLECTORS_ALLOW_UNVERIFIED` and `allowsUnverifiedSources` (unset: allowed in development
+    and test, refused in production);
+  - the package-boundaries test.
+- `packages/core`:
+  - collection modes `PASSIVE_API`, `PASSIVE_DATASET`, `PASSIVE_PUBLIC_WEB`, `LOCAL_ANALYSIS`
+    and `ACTIVE`;
+  - the verdict `BLOCKED`;
+  - `TARGET_TYPES`.
+- `packages/db`:
+  - Migration 0007 adds:
+    - the target-type enum and the new collection modes;
+    - `NOT_PERMITTED` renamed to `BLOCKED` in place;
+    - the registry rule changed from "enabled only if PERMITTED" to "BLOCKED is never enabled";
+    - the `scope_authorisations` table.
+  - Migration 0008 adds row-level security and grants for the new table: insert, then revoke
+    only. It also adds an `AFTER INSERT` trigger that refuses evidence from any collector not
+    enabled for the tenant (`COLLECTOR_NOT_ENABLED`).
+  - New code: `ScopeAuthorisationsRepository`, the registry `sync`, and the error type.
+
+**Verified at the checkpoint.**
+
+- `pnpm turbo lint typecheck test --force`: 43 of 43 tasks, exit 0, 687 tests.
+  - By package: core 7, access 55, config 118, db 195, integrations 78, collectors 141,
+    osint-engine 13, api 74, web 4, worker 2.
+  - The fabrication check passed on 189 files; the export check on 81 symbols across 7 entry
+    points.
+- The release-blocking tests, one per requirement:
+  - **A BLOCKED collector cannot run, by any path:**
+    - `collectors/test/runtime.test.ts`: the runtime, the registry's internals, the package's
+      exports, and a forged outcome;
+    - `osint-engine/test/collection.test.ts`: the engine, with no evidence, credential read or
+      request;
+    - `db/test/collectors.test.ts`: a direct database insert.
+  - **UNVERIFIED is refused under the production flag:** the collectors runtime and the engine.
+  - **A collector cannot set or alter its source label:** three compile-time `@ts-expect-error`
+    proofs, and run-time smuggling and mutation attempts. Evidence from two upstreams is
+    distinguishable in the database.
+  - **The rate limit is shared across collectors on one upstream:** tested in memory, and with
+    Redis across two separate runtimes standing in for two workers.
+  - **SSRF:** `collectors/test/address.test.ts` (56 payloads) and `fetcher.test.ts` (URLs, DNS
+    answers and redirects, each asserting nothing reached the server), plus the engine.
+  - **ACTIVE needs a scope authorisation in the database:** none, another target, another
+    tenant's, revoked and in force.
+  - **PERSON needs plan and vetting:** each combination.
+  - **A failure never produces evidence, a zero or an empty result.**
+- The development database, holding Phase 2A seed data, migrated forward to 0008. Its legacy
+  `PASSIVE` rows stayed valid, and the seed stayed idempotent.
+- Demonstrated with the real catalogue: a fake collector bound to `shodan-internetdb` was refused
+  at every layer.
+  - Listed as BLOCKED with the recorded reason.
+  - `LICENCE_BLOCKED` from the runtime, even fully entitled with unverified sources allowed.
+  - `LICENCE_BLOCKED` from the engine, with 0 evidence rows, 0 credential reads and the tenant row
+    `enabled: false`.
+  - `COLLECTOR_NOT_ENABLED` from a direct database insert.
+  - Its code ran 0 times.
+- Found and fixed while building:
+  - **Real traffic from a test run.** The fetcher's test seam was ignored: Node disregards
+    `createConnection` when `agent: false`. So one test run sent a handful of GET requests,
+    with made-up `Host` headers, to the placeholder address 1.1.1.1:80. The fetcher now opens
+    every socket itself, through one function, to the checked address. A test asserts that
+    every connection goes through it.
+  - **A trigger that hid other layers.** The evidence trigger was first `BEFORE INSERT`, which
+    masked the row-level security and foreign-key refusals the isolation suites prove on their
+    own. It is now `AFTER INSERT`, and the isolation tests are unchanged.
+  - **A public reach into implementations.** The registry briefly exposed implementations
+    publicly. They moved to a module-private map, and BLOCKED ones are no longer stored at all.
+  - **A timeout reported as permanent.** A run that overran its budget was reported FAILED; it
+    is UNAVAILABLE (retryable), per CLAUDE.md §5.
+  - **Three fabrication-gate matches (`?? 0`).** All were fixed in the code, and the fetch method
+    default the gate flagged became a required field. The gate was not changed.
+
+### Decisions taken in Phase 3A
+
+1. **The code catalogue is the platform truth; tenant registry rows are copies** synced at
+   dispatch. This resolves the Phase 2A question with no `tenant_id` exemption.
+2. **A licence verdict belongs to the source, not the collector.** Each collector reads exactly
+   one source, so a fallback is a separate collector with its own verdict. The fetcher reaching
+   only the source's hosts makes an internal fallback impossible.
+3. **Evidence has no label column.** It references its collector's registry row, whose label is
+   the registry entry's display name. Display names must be unique.
+4. **`collection_mode` keeps the Phase 2A value `PASSIVE`**, because Postgres cannot drop an enum
+   value in place. Application code cannot write it, and a contract migration removes it once
+   no row uses it.
+5. **Upstream limits use a sliding log, global per source.** They are not per credential, for
+   example per tenant's HIBP key.
+6. **Fetches reach declared upstream hosts only.** Collectors that must contact the target
+   itself (ACTIVE tools, user-supplied URLs) need a target-host mode, designed with the first
+   such collector in session B under the same address checks.
+7. **Running LOCAL_ANALYSIS collectors raises `NotImplementedError`** until session B designs
+   their evidence basis: the analysed input.
+8. **FOUND must carry something.** An empty list, blank text, zero or false alone is refused.
+   NOT_FOUND writes no evidence and must cite the response that said so (2xx, 404 or 410).
+9. **PERSON collectors map to the person-investigation module.** The other disciplines map to
+   the base module until the Phase 7 plan catalogue.
+10. **A scope authorisation matches the exact normalised target, per tenant.** It must expire and
+    can be revoked. It is not tied to a particular collector.
+
+### Open questions (need a human)
+
+- **Licence URLs to confirm.** The audit quoted these terms pages without recording their
+  addresses, so the catalogue's URLs were reconstructed from its descriptions:
+  - GDELT: `https://www.gdeltproject.org/about.html`
+  - HIBP: `https://haveibeenpwned.com/API/v3`
+  - InsightFace: `https://github.com/deepinsight/insightface`
+  - C2IntelFeeds: `https://github.com/drb-ra/C2IntelFeeds`
+  - YouTube terms: `https://www.youtube.com/t/terms`
+  - The OSMF Nominatim policy: `https://operations.osmfoundation.org/policies/nominatim/`
+  - The theHarvester, SearXNG and IVRE GitHub pages.
+- **HIBP is PERMITTED.** The licence is CC BY 4.0 with attribution, but whether person
+  investigation satisfies its acceptable-use policy is a legal question. Keep it PERMITTED, or
+  make it UNVERIFIED until counsel answers?
+- **Platform keys or tenant keys?** The env schema still has the Phase 1 placeholders
+  `BRAVE_SEARCH_API_KEY`, `SHODAN_API_KEY`, `HIBP_API_KEY` and `GITHUB_TOKEN`. The collector
+  contract reads keys from each tenant's vault instead. Decide whether paid upstreams use
+  platform-owned, metered keys, or keys tenants bring. Then remove or wire the placeholders.
+- **How far a scope authorisation reaches.** It covers the exact target only. Should it cover
+  subdomains, CIDR ranges, or specific tools? There is no API to create one yet; it will need
+  its own permission, and an audit entry for each one created.
+- **Tool containers are internal services.** theHarvester, SpiderFoot, SearXNG and IVRE run on
+  private addresses, which the fetcher refuses by design. Phase 4 needs an explicit, separately
+  audited path for them.
+
+### Carry-forwards from Phase 3A
+
+- **A language-neutral contract** (JSON Schema export, BUILD-PHASES Phase 3 item 2): session B.
+- **Metering usage events** per external call, and **circuit breakers and bulkheads**: Phase 4.
+- **Code that overruns its budget.** A collector over budget is reported UNAVAILABLE, and its
+  fetches are aborted, but CPU-bound code keeps running until the worker's own isolation
+  (Phase 4) stops it.
+- **Direct evidence writes.** `repos.evidence.record` is still callable directly: the seed and
+  test fixtures use it. The database guarantees the collector is enabled, but only the engine
+  guarantees the label comes from a real run. Consider restricting evidence recording to the
+  engine.
+- **Secrets in cited responses.** A collector that cited a token endpoint's response (OAuth) as
+  evidence would store the token. Review for this when porting in session B.
+- **Absence is not recorded.** NOT_FOUND is not written as evidence of absence.

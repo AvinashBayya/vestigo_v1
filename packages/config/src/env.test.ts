@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { envSchema, loadEnv, loadEnvSubset } from "./env.ts";
+import { allowsUnverifiedSources, envSchema, loadEnv, loadEnvSubset } from "./env.ts";
 import { ConfigError } from "./errors.ts";
 
 const VALID = {
@@ -117,5 +117,30 @@ describe("secrets in configuration", () => {
     for (const name of ["AUTH_SECRET", "VAULT_MASTER_KEY"] as const) {
       expect(envSchema.shape[name].meta()?.examples).toBeUndefined();
     }
+  });
+});
+
+describe("allowsUnverifiedSources", () => {
+  it.each([
+    ["development", undefined, true],
+    ["test", undefined, true],
+    ["production", undefined, false],
+    ["production", "true", true],
+    ["development", "false", false],
+    ["production", "false", false],
+  ] as const)("NODE_ENV=%s, COLLECTORS_ALLOW_UNVERIFIED=%s: %s", (nodeEnv, flag, expected) => {
+    expect(allowsUnverifiedSources({ NODE_ENV: nodeEnv, COLLECTORS_ALLOW_UNVERIFIED: flag })).toBe(
+      expected,
+    );
+  });
+
+  it("reads the flag from the environment, and refuses anything but true or false", () => {
+    const env = loadEnvSubset(["NODE_ENV", "COLLECTORS_ALLOW_UNVERIFIED"], {
+      NODE_ENV: "production",
+    });
+    expect(allowsUnverifiedSources(env)).toBe(false);
+    expect(() =>
+      loadEnvSubset(["COLLECTORS_ALLOW_UNVERIFIED"], { COLLECTORS_ALLOW_UNVERIFIED: "yes" }),
+    ).toThrow(ConfigError);
   });
 });

@@ -15,8 +15,10 @@ export {
   type Role,
 } from "./permissions.ts";
 export {
+  decideDisciplineAccess,
   decideModuleAccess,
   decidePermissionModuleAccess,
+  DISCIPLINE_MODULE,
   PLAN_MODULES,
   PLANS,
   VETTING_GATED_MODULES,

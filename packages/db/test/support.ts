@@ -84,6 +84,7 @@ export interface TenantFixture {
   readonly alertId: string;
   readonly credentialId: string;
   readonly usageEventId: string;
+  readonly scopeAuthorisationId: string;
 }
 
 export const FIXTURE_COLLECTOR_ID = "fixture";
@@ -126,11 +127,12 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       collectorId: FIXTURE_COLLECTOR_ID,
       sourceLabel: "[Fixture collector]",
       discipline: "TECHINT",
-      collectionMode: "PASSIVE",
+      collectionMode: "LOCAL_ANALYSIS",
       dataLicence: "[not applicable: test fixture]",
       commercialUse: "UNVERIFIED",
-      enabled: false,
-      disabledReason: "[test fixture, never collects]",
+      // Enabled: the database refuses evidence from a collector that is not.
+      enabled: true,
+      disabledReason: null,
     });
     const investigation = await repos.investigations.create({
       title: `[Investigation ${tag}]`,
@@ -225,6 +227,15 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       jobId: job.id,
     });
 
+    const scope = await repos.scopeAuthorisations.create({
+      targetType: "DOMAIN",
+      target: "example.com",
+      authorisedByUserId: user.id,
+      basis: `[fixture authorisation ${tag}]`,
+      validFrom: new Date(Date.parse("2026-01-01T00:00:00Z")),
+      validUntil: new Date(Date.parse("2030-01-01T00:00:00Z")),
+    });
+
     return {
       tenantId,
       userId: user.id,
@@ -248,6 +259,7 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       alertId: alert.id,
       credentialId: credential.id,
       usageEventId: usage.id,
+      scopeAuthorisationId: scope.id,
     };
   });
 }

@@ -12,6 +12,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "envSchema",
     "loadEnv",
     "loadEnvSubset",
+    "allowsUnverifiedSources",
     "Env",
     "EnvSource",
     "ConfigError",
@@ -47,6 +48,28 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "grantableApiKeyScope",
     "capApiKeyPermissions",
     "ApiKeyScopeError",
+    "decideDisciplineAccess",
+  ],
+  // The collector frame: catalogue, registry, runtime and the evidence path's pure half.
+  "packages/collectors/src/index.ts": [
+    "PLATFORM_SOURCES",
+    "defineCollector",
+    "declareCollector",
+    "CollectorRegistry",
+    "CollectorRuntime",
+    "evidenceDrafts",
+    "tenantRegistration",
+    "parseTarget",
+    "validateSource",
+    "Collector",
+    "CollectionOutcome",
+    "UpstreamRateLimiter",
+  ],
+  // The one path from a collector's result to evidence rows.
+  "packages/osint-engine/src/index.ts": [
+    "CollectionExecutor",
+    "VaultCredentialSource",
+    "redisUpstreamRateLimiter",
   ],
   // The only way to tenant data: withTenant() and the repositories it issues.
   "packages/db/src/index.ts": [
@@ -70,6 +93,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "createAuthStore",
     "AuthStore",
     "AUTH_TABLE_NAMES",
+    "CollectorNotEnabledError",
+    "ScopeAuthorisationsRepository",
   ],
   // Secrets, API key storage and rate limits: the only paths to each.
   "packages/integrations/src/index.ts": [
@@ -78,6 +103,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "SecretValue",
     "ApiKeyService",
     "FixedWindowRateLimiter",
+    "SlidingLogRateLimiter",
     "RateLimiterUnavailableError",
     "createRedisClient",
   ],

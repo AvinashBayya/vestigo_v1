@@ -2,7 +2,7 @@
   "name": "@repo/collectors",
   "version": "0.1.0",
   "private": true,
-  "description": "Collector SDK, registry and collectors.",
+  "description": "Collector SDK, platform source catalogue, registry, licence gating and the one outbound fetcher. No database access.",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -14,12 +14,19 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@repo/access": "workspace:*",
+    "@repo/config": "workspace:*",
+    "@repo/core": "workspace:*",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@repo/config": "workspace:*",
     "@types/node": "^24.0.0",
     "eslint": "^10.11.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
   }
 }

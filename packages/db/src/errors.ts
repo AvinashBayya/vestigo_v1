@@ -113,6 +113,19 @@ export class MergeRuleViolationError extends AppError {
   }
 }
 
+/**
+ * The database refused evidence because its collector is not enabled for the
+ * tenant (a BLOCKED collector never is).
+ */
+export class CollectorNotEnabledError extends AppError {
+  readonly code = "COLLECTOR_NOT_ENABLED";
+
+  constructor() {
+    super("Evidence was refused: its collector is not enabled for this tenant.");
+    this.name = "CollectorNotEnabledError";
+  }
+}
+
 export class InvalidIdentifierError extends AppError {
   readonly code = "INVALID_IDENTIFIER";
 
@@ -214,6 +227,8 @@ export function translateDatabaseError(error: unknown): Error {
       return new MergeRuleViolationError("ALREADY_REVERTED", message);
     case "MRG03":
       return new MergeRuleViolationError("REVERT_ONLY", message);
+    case "COL01":
+      return new CollectorNotEnabledError();
     default:
       // Data exceptions (class 22) can echo the offending input value.
       return sqlState?.startsWith("22")

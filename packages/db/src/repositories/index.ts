@@ -20,6 +20,7 @@ import {
   InvestigationsRepository,
   JobsRepository,
   RunsRepository,
+  ScopeAuthorisationsRepository,
 } from "./work.ts";
 
 /** One repository per table, all bound to the same live tenant scope. */
@@ -29,6 +30,7 @@ export interface Repositories {
   readonly apiKeys: ApiKeysRepository;
   readonly auditLog: AuditLogRepository;
   readonly collectorsRegistry: CollectorsRegistryRepository;
+  readonly scopeAuthorisations: ScopeAuthorisationsRepository;
   readonly investigations: InvestigationsRepository;
   readonly runs: RunsRepository;
   readonly jobs: JobsRepository;
@@ -52,6 +54,7 @@ export const REPOSITORY_TABLES: Readonly<Record<keyof Repositories, string>> = {
   apiKeys: "api_keys",
   auditLog: "audit_log",
   collectorsRegistry: "collectors_registry",
+  scopeAuthorisations: "scope_authorisations",
   investigations: "investigations",
   runs: "runs",
   jobs: "jobs",
@@ -75,6 +78,7 @@ export function createRepositories(scope: TenantScope): Repositories {
     apiKeys: new ApiKeysRepository(scope),
     auditLog: new AuditLogRepository(scope),
     collectorsRegistry: new CollectorsRegistryRepository(scope),
+    scopeAuthorisations: new ScopeAuthorisationsRepository(scope),
     investigations: new InvestigationsRepository(scope),
     runs: new RunsRepository(scope),
     jobs: new JobsRepository(scope),

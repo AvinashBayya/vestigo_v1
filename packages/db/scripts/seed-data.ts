@@ -75,11 +75,12 @@ async function seedTenant(
       collectorId: SEED_COLLECTOR_ID,
       sourceLabel: "[Development seed]",
       discipline: "TECHINT",
-      collectionMode: "PASSIVE",
+      collectionMode: "LOCAL_ANALYSIS",
       dataLicence: "[not applicable: development seed, collects nothing]",
       commercialUse: "UNVERIFIED",
-      enabled: false,
-      disabledReason: "[development seed; never collects]",
+      // Enabled: the database refuses evidence from a collector that is not.
+      enabled: true,
+      disabledReason: null,
     });
     const investigation = await repos.investigations.create({
       title: `[Seed investigation: ${spec.domain}]`,

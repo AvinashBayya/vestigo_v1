@@ -1,3 +1,4 @@
+import type { CollectorDiscipline } from "@repo/core";
 import { PERMISSION_MODULE, type Module, type Permission } from "./permissions.ts";
 
 /**
@@ -48,6 +49,28 @@ export function decideModuleAccess(tenant: TenantEntitlement, module: Module): M
     return { allowed: false, reason: "VETTING_NOT_APPROVED" };
   }
   return { allowed: true };
+}
+
+/**
+ * The module each collector discipline belongs to. PERSON collectors are the
+ * person-investigation module, so dispatching one needs the plan AND approved
+ * vetting. The other disciplines sit in the base module every plan includes,
+ * until the commercial plan catalogue (Phase 7) prices them separately.
+ */
+export const DISCIPLINE_MODULE: Readonly<Record<CollectorDiscipline, Module>> = {
+  TECHINT: "TECHINT",
+  SOCMINT: "TECHINT",
+  MEDIAINT: "TECHINT",
+  GEOINT: "TECHINT",
+  PERSON: "PERSON_INVESTIGATION",
+};
+
+/** Whether a tenant may dispatch a collector of this discipline. */
+export function decideDisciplineAccess(
+  tenant: TenantEntitlement,
+  discipline: CollectorDiscipline,
+): ModuleDecision {
+  return decideModuleAccess(tenant, DISCIPLINE_MODULE[discipline]);
 }
 
 /** The module decision for exercising a permission; permissions outside any module are allowed. */

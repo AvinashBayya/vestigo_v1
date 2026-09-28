@@ -14,6 +14,7 @@ export {
   MERGE_SIGNALS,
   NAME_ONLY_AUTOMERGE_FORBIDDEN,
   RUN_STATUSES,
+  TARGET_TYPES,
   TENANT_REGIONS,
   USAGE_UNITS,
   type AuditActorKind,
@@ -28,6 +29,7 @@ export {
   type JobStatus,
   type MergeSignal,
   type RunStatus,
+  type TargetType,
   type TenantRegion,
   type UsageUnit,
 } from "./vocabulary.ts";

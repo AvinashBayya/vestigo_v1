@@ -105,9 +105,46 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
         r.collectorsRegistry
           .setEnabled(v.collectorId, { enabled: false, reason: "[A disabling its own]" })
           .then(() => null),
+      // An upsert on the shared id: it may only ever reach A's own row.
+      (r, v) =>
+        r.collectorsRegistry
+          .sync({
+            collectorId: v.collectorId,
+            sourceLabel: "[relabelled by A]",
+            discipline: "TECHINT",
+            collectionMode: "LOCAL_ANALYSIS",
+            dataLicence: "[A's licence text]",
+            commercialUse: "BLOCKED",
+            enabled: false,
+            disabledReason: "[A blocking its own]",
+          })
+          .then(() => null),
     ],
     references: [],
     list: (r) => r.collectorsRegistry.list(page),
+  },
+  scopeAuthorisations: {
+    reads: [
+      (r, v) => r.scopeAuthorisations.findById(v.scopeAuthorisationId),
+      // Both tenants authorised the same target; A must only ever get its own.
+      (r, _v, a) =>
+        r.scopeAuthorisations
+          .findInForce("DOMAIN", "example.com")
+          .then((row) => (row?.tenantId === a.tenantId ? null : row)),
+    ],
+    writes: [(r, v) => r.scopeAuthorisations.revoke(v.scopeAuthorisationId)],
+    references: [
+      (r, v) =>
+        r.scopeAuthorisations.create({
+          targetType: "DOMAIN",
+          target: "example.org",
+          authorisedByUserId: v.userId,
+          basis: "[cross-tenant authoriser]",
+          validFrom: new Date(Date.parse("2026-01-01T00:00:00Z")),
+          validUntil: new Date(Date.parse("2030-01-01T00:00:00Z")),
+        }),
+    ],
+    list: (r) => r.scopeAuthorisations.list(page),
   },
   investigations: {
     reads: [(r, v) => r.investigations.findById(v.investigationId)],

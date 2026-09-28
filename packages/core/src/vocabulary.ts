@@ -61,13 +61,39 @@ export const COLLECTOR_DISCIPLINES = [
 ] as const;
 export type CollectorDiscipline = (typeof COLLECTOR_DISCIPLINES)[number];
 
-/** Passive reads a third party's record; active sends traffic to the target. */
-export const COLLECTION_MODES = ["PASSIVE", "ACTIVE"] as const;
+/**
+ * How a collector gets its data. Every mode but ACTIVE reads a third party's
+ * record, or analyses local input, and never contacts the target. ACTIVE sends
+ * traffic to the target and needs a recorded scope authorisation (CLAUDE.md §3).
+ */
+export const COLLECTION_MODES = [
+  "PASSIVE_API",
+  "PASSIVE_DATASET",
+  "PASSIVE_PUBLIC_WEB",
+  "LOCAL_ANALYSIS",
+  "ACTIVE",
+] as const;
 export type CollectionMode = (typeof COLLECTION_MODES)[number];
 
-/** Whether a source's licence permits commercial use. UNVERIFIED blocks enabling. */
-export const COMMERCIAL_USE_VERDICTS = ["PERMITTED", "NOT_PERMITTED", "UNVERIFIED"] as const;
+/**
+ * Whether a source may be used in a commercial product. BLOCKED never runs.
+ * UNVERIFIED runs only where configuration allows unverified sources.
+ */
+export const COMMERCIAL_USE_VERDICTS = ["PERMITTED", "BLOCKED", "UNVERIFIED"] as const;
 export type CommercialUseVerdict = (typeof COMMERCIAL_USE_VERDICTS)[number];
+
+/** What a collector can be pointed at. Named like the matching entity kinds. */
+export const TARGET_TYPES = [
+  "DOMAIN",
+  "IP_ADDRESS",
+  "EMAIL_ADDRESS",
+  "PHONE_NUMBER",
+  "USERNAME",
+  "ORGANIZATION",
+  "URL",
+  "FILE",
+] as const;
+export type TargetType = (typeof TARGET_TYPES)[number];
 
 export const RUN_STATUSES = [
   "QUEUED",

@@ -7,10 +7,18 @@ import type {
   CommercialUseVerdict,
   JobStatus,
   RunStatus,
+  TargetType,
 } from "@repo/core";
 import type { Permission } from "@repo/access";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { auditLog, collectorsRegistry, investigations, jobs, runs } from "../schema/index.ts";
+import {
+  auditLog,
+  collectorsRegistry,
+  investigations,
+  jobs,
+  runs,
+  scopeAuthorisations,
+} from "../schema/index.ts";
 import {
   firstRow,
   limitOf,
@@ -164,8 +172,29 @@ export class CollectorsRegistryRepository extends TenantRepository {
   }
 
   /**
-   * Enables or disables a collector. The database refuses to enable one whose
-   * commercial use is not PERMITTED, and requires a reason to disable.
+   * Writes the tenant's copy of a platform registry entry: inserts it, or
+   * brings an existing row up to date. Idempotent. The database refuses to
+   * enable a BLOCKED collector, and requires a reason to disable one.
+   */
+  async sync(input: NewCollectorRegistration): Promise<CollectorRegistration> {
+    const { collectorId, ...current } = input;
+    return this.run(async (tx) =>
+      onlyRow(
+        await tx
+          .insert(collectorsRegistry)
+          .values({ tenantId: this.tenantId, collectorId, ...current })
+          .onConflictDoUpdate({
+            target: [collectorsRegistry.tenantId, collectorsRegistry.collectorId],
+            set: current,
+          })
+          .returning(),
+      ),
+    );
+  }
+
+  /**
+   * Enables or disables a collector. The database refuses to enable a
+   * BLOCKED one, and requires a reason to disable.
    */
   async setEnabled(
     collectorId: string,
@@ -181,6 +210,96 @@ export class CollectorsRegistryRepository extends TenantRepository {
           )
           .returning(),
       ),
+    );
+  }
+}
+
+export type ScopeAuthorisation = typeof scopeAuthorisations.$inferSelect;
+
+export interface NewScopeAuthorisation {
+  readonly targetType: TargetType;
+  /** The target in its normalised form; matched exactly. */
+  readonly target: string;
+  readonly authorisedByUserId: string;
+  readonly basis: string;
+  readonly validFrom: Date;
+  readonly validUntil: Date;
+}
+
+/**
+ * Recorded authorisations to collect actively against a target (CLAUDE.md §3).
+ * Recorded, then only ever revoked.
+ */
+export class ScopeAuthorisationsRepository extends TenantRepository {
+  async create(input: NewScopeAuthorisation): Promise<ScopeAuthorisation> {
+    return this.run(async (tx) =>
+      onlyRow(
+        await tx
+          .insert(scopeAuthorisations)
+          .values({ tenantId: this.tenantId, ...input })
+          .returning(),
+      ),
+    );
+  }
+
+  async findById(id: string): Promise<ScopeAuthorisation | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx.select().from(scopeAuthorisations).where(this.owned(scopeAuthorisations, id)),
+      ),
+    );
+  }
+
+  /**
+   * The authorisation in force for exactly this target now, judged by the
+   * database clock: started, not yet expired, not revoked. Null when none is.
+   * When several are, the one that runs longest.
+   */
+  async findInForce(targetType: TargetType, target: string): Promise<ScopeAuthorisation | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .select()
+          .from(scopeAuthorisations)
+          .where(
+            and(
+              this.inTenant(scopeAuthorisations),
+              eq(scopeAuthorisations.targetType, targetType),
+              eq(scopeAuthorisations.target, target),
+              sql`${scopeAuthorisations.revokedAt} is null`,
+              sql`${scopeAuthorisations.validFrom} <= now()`,
+              sql`${scopeAuthorisations.validUntil} > now()`,
+            ),
+          )
+          .orderBy(desc(scopeAuthorisations.validUntil))
+          .limit(1),
+      ),
+    );
+  }
+
+  /** Ends an authorisation now. Null if it does not exist here or was already revoked. */
+  async revoke(id: string): Promise<ScopeAuthorisation | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .update(scopeAuthorisations)
+          .set({ revokedAt: sql`now()` })
+          .where(
+            and(this.owned(scopeAuthorisations, id), sql`${scopeAuthorisations.revokedAt} is null`),
+          )
+          .returning(),
+      ),
+    );
+  }
+
+  async list(options: ListOptions): Promise<ScopeAuthorisation[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(scopeAuthorisations)
+        .where(this.inTenant(scopeAuthorisations))
+        .orderBy(asc(scopeAuthorisations.createdAt), asc(scopeAuthorisations.id))
+        .limit(limitOf(options)),
     );
   }
 }

@@ -11,6 +11,7 @@ import {
   JOB_STATUSES,
   MERGE_SIGNALS,
   RUN_STATUSES,
+  TARGET_TYPES,
   TENANT_REGIONS,
   USAGE_UNITS,
 } from "@repo/core";
@@ -28,8 +29,19 @@ export const mergeSignal = pgEnum("merge_signal", MERGE_SIGNALS);
 export const decisionActorKind = pgEnum("decision_actor_kind", DECISION_ACTOR_KINDS);
 export const auditActorKind = pgEnum("audit_actor_kind", AUDIT_ACTOR_KINDS);
 export const collectorDiscipline = pgEnum("collector_discipline", COLLECTOR_DISCIPLINES);
-export const collectionMode = pgEnum("collection_mode", COLLECTION_MODES);
+/**
+ * "PASSIVE" is the Phase 2A value, kept only because Postgres cannot drop an
+ * enum value in place and rows written then still hold it. Nothing writes it
+ * now: the TypeScript type is COLLECTION_MODES, which excludes it. A contract
+ * migration removes it once no row uses it.
+ */
+export const LEGACY_COLLECTION_MODES = ["PASSIVE"] as const;
+export const collectionMode = pgEnum("collection_mode", [
+  ...LEGACY_COLLECTION_MODES,
+  ...COLLECTION_MODES,
+]);
 export const commercialUseVerdict = pgEnum("commercial_use_verdict", COMMERCIAL_USE_VERDICTS);
+export const targetType = pgEnum("target_type", TARGET_TYPES);
 export const runStatus = pgEnum("run_status", RUN_STATUSES);
 export const jobStatus = pgEnum("job_status", JOB_STATUSES);
 export const usageUnit = pgEnum("usage_unit", USAGE_UNITS);

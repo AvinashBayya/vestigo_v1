@@ -15,7 +15,7 @@ export {
   authRateLimit,
 } from "./auth.ts";
 export { auditLog } from "./audit.ts";
-export { collectorsRegistry } from "./collectors.ts";
+export { collectorsRegistry, scopeAuthorisations } from "./collectors.ts";
 export { investigations, runs, jobs } from "./work.ts";
 export { entities, entityRelationships, entityMerges } from "./entities.ts";
 export { evidence, claims } from "./evidence.ts";

@@ -126,6 +126,48 @@ Identity is [Better Auth](https://www.better-auth.com), self-hosted and mounted 
   ([packages/integrations](packages/integrations)), envelope-encrypted under `VAULT_MASTER_KEY`. No
   API response returns one, and every server-side read is audited.
 
+## Collectors
+
+The collector frame is built; the collectors themselves are ported in Phase 3B.
+
+- **Every upstream is in the platform catalogue**
+  ([packages/collectors/src/catalogue.ts](packages/collectors/src/catalogue.ts)) with its
+  commercial-use verdict. The verdict is a reviewed code change, never configuration.
+  - PERMITTED rests on terms someone read, with the URL recorded.
+  - BLOCKED never runs, by any path. It is still listed, with its reason.
+  - UNVERIFIED runs only where `COLLECTORS_ALLOW_UNVERIFIED` allows it. Unset, that means on in
+    development and test, and off in production.
+- **A collector is a pure function** of (target, credentials, fetch). It declares, as data, the
+  following:
+  - its id and version, and a display name that becomes its evidence label;
+  - its discipline, the target types it accepts and its collection mode;
+  - its one source, its credential vault ids, its run budget and a Zod result schema.
+
+  It has no database access and no network access except the fetch it is given. Lint rules and a
+  dependency test enforce both.
+
+- **Source labels come from the registry, never from a collector.** Evidence rows have no label
+  column; they reference their collector's registry row. A collector has no way to state a label,
+  and its fetch reaches only its own source's hosts. A fallback to another upstream is a separate
+  collector with its own verdict.
+- **The fetcher is the only way out.** Each request passes these checks:
+  - only the source's declared hosts, at public addresses, over a connection pinned to the
+    checked address;
+  - redirects only within the allowlist;
+  - a mandatory timeout of at most 60 s, and a size cap;
+  - the platform user agent;
+  - the source's rate limit, shared through Redis by every collector and worker using it.
+- **Gates before a collector runs:**
+  - an ACTIVE collector needs a `scope_authorisations` row in force for the exact target;
+  - a PERSON collector needs the plan and approved vetting;
+  - credentials come from the tenant's vault, and every read is audited.
+- **Outcomes are distinct:** FOUND, NOT_FOUND, FAILED, UNAVAILABLE, NEEDS_CREDENTIALS and REFUSED.
+  - Only FOUND writes evidence, through one path
+    ([packages/osint-engine](packages/osint-engine)). That path stores the raw payload by hash, and
+    keeps `observed_at` null when the upstream gives none.
+  - An empty or zero result is refused as FOUND.
+  - The database independently refuses evidence from any collector that is not enabled.
+
 ## Tasks
 
 Run from the repository root. Each is a Turborepo task across every package.
@@ -184,8 +226,9 @@ packages/access   who may do what: permissions, plan and vetting, API key hashin
                   verification; pure, depends only on core, shared by API and workers
 packages/db       schema, migrations, row-level security, repositories, content store
 packages/integrations  credential vault, API key storage, rate limits
-packages/*        collectors, llm (toolchain only so far); osint-engine,
-                  media-forensics, ui (placeholders)
+packages/collectors  collector SDK, platform source catalogue, registry, runtime, the one fetcher
+packages/osint-engine  dispatching collectors through every gate; the one evidence path
+packages/*        llm (toolchain only so far); media-forensics, ui (placeholders)
 infra/postgres    first-run database bootstrap for docker compose (three roles, pgvector)
 docs/             architecture decisions, audit, build phases, plan
 ```

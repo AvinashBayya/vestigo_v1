@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "cache": false,
+      "env": ["TEST_ENGINE_DATABASE_URL", "TEST_ENGINE_DATABASE_OWNER_URL", "TEST_REDIS_URL"]
+    }
+  }
+}

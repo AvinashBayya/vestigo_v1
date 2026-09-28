@@ -110,6 +110,11 @@ export const envSchema = z.object({
       examples: ["./data/content-store"],
     }),
 
+  COLLECTORS_ALLOW_UNVERIFIED: z.enum(["true", "false"]).optional().meta({
+    description:
+      "Whether collectors whose source licence is UNVERIFIED may run. BLOCKED sources never run. Unset: allowed in development and test, refused in production.",
+  }),
+
   // Collector credentials: placeholders until the collector registry lands in
   // Phase 3. Each registry entry will carry the source's licence verdict.
   BRAVE_SEARCH_API_KEY: collectorCredential(
@@ -127,6 +132,21 @@ export const envSchema = z.object({
 export type Env = z.infer<typeof envSchema>;
 
 export type EnvSource = Readonly<Record<string, string | undefined>>;
+
+/**
+ * Whether collectors whose source licence is UNVERIFIED may run here. An
+ * explicit COLLECTORS_ALLOW_UNVERIFIED decides; unset, they run in development
+ * and test and are refused in production. BLOCKED sources never run, whatever
+ * this says.
+ */
+export function allowsUnverifiedSources(
+  env: Pick<Env, "NODE_ENV" | "COLLECTORS_ALLOW_UNVERIFIED">,
+): boolean {
+  if (env.COLLECTORS_ALLOW_UNVERIFIED !== undefined) {
+    return env.COLLECTORS_ALLOW_UNVERIFIED === "true";
+  }
+  return env.NODE_ENV !== "production";
+}
 
 /**
  * Validates the environment and returns typed config. Throws `ConfigError`
