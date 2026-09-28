@@ -78,6 +78,15 @@ describe("the platform catalogue", () => {
     }
   });
 
+  it("holds HIBP at UNVERIFIED until its acceptable-use policy is resolved, keeping its attribution", () => {
+    const hibp = PLATFORM_SOURCES.find((source) => source.id === "hibp");
+    expect(hibp?.licence.commercialUse).toBe("UNVERIFIED");
+    expect(hibp?.licence.reason).toMatch(/acceptable-use policy/);
+    expect(hibp?.licence.reason).toMatch(/harm to the victims/);
+    expect(hibp?.licence.check?.sourceUrl).toBe("https://haveibeenpwned.com/API/v3");
+    expect(hibp?.attribution?.url).toBe("https://haveibeenpwned.com/");
+  });
+
   it("reaches every networked platform source over https only", () => {
     for (const source of PLATFORM_SOURCES) {
       if (source.network !== null) expect(source.network.protocol, source.id).toBe("https");

@@ -462,8 +462,8 @@ defined in test code only.
     - BLOCKED (13): Shodan InternetDB, C2IntelFeeds, InsightFace buffalo_l, YouTube InnerTube,
       YouTube via yt-dlp, the DuckDuckGo scrape, the local network scanner, Google News RSS,
       HackerTarget, AlienVault OTX, UCDP, ReliefWeb and OpenSky.
-    - PERMITTED (4): GDELT DOC, GDELT Events, HIBP and Safecast.
-    - UNVERIFIED (30): the rest.
+    - PERMITTED (3): GDELT DOC, GDELT Events and Safecast.
+    - UNVERIFIED (31): the rest, including HIBP since the review (below).
     - Attribution is declared for GDELT, HIBP, Nominatim and Wikipedia.
   - **Registry.** It validates the whole catalogue and every collector at startup. It lists BLOCKED
     collectors with their reason and discards their implementations. It exposes attribution for
@@ -570,6 +570,24 @@ defined in test code only.
     is UNAVAILABLE (retryable), per CLAUDE.md §5.
   - **Three fabrication-gate matches (`?? 0`).** All were fixed in the code, and the fetch method
     default the gate flagged became a required field. The gate was not changed.
+- Review changes after the Phase 3A commit:
+  - **HIBP is UNVERIFIED**, with the unresolved acceptable-use question recorded as the reason.
+  - **Collector credentials come only from the tenant vault.** The four collector variables were
+    removed from the env schema. ESLint forbids `process.env` in collector and engine source.
+  - **New release-blocking tests** show that no collector credential can be resolved from
+    configuration, at every layer:
+    - the schema, checked against the catalogue;
+    - `loadEnv`, which drops collector credentials;
+    - the runtime;
+    - the engine, end to end.
+  - **An adversarial review** found 24 candidate problems with 75 agents; 1 survived
+    three-skeptic verification. The environment test never reached `ctx.credentials.get()`, so it
+    could not catch a fallback there. The fix runs collectors that proceed without the key while
+    every environment spelling is set. A planted `process.env` fallback in `credentials.get()`
+    now fails both the runtime and the engine test.
+  - **Results.** `pnpm turbo lint typecheck test --force`: 43 of 43 tasks, exit 0, 695 tests.
+    By package: core 7, access 55, config 119, db 195, integrations 78, collectors 147,
+    osint-engine 14, api 74, web 4, worker 2.
 
 ### Decisions taken in Phase 3A
 
@@ -608,13 +626,15 @@ defined in test code only.
   - YouTube terms: `https://www.youtube.com/t/terms`
   - The OSMF Nominatim policy: `https://operations.osmfoundation.org/policies/nominatim/`
   - The theHarvester, SearXNG and IVRE GitHub pages.
-- **HIBP is PERMITTED.** The licence is CC BY 4.0 with attribution, but whether person
-  investigation satisfies its acceptable-use policy is a legal question. Keep it PERMITTED, or
-  make it UNVERIFIED until counsel answers?
-- **Platform keys or tenant keys?** The env schema still has the Phase 1 placeholders
-  `BRAVE_SEARCH_API_KEY`, `SHODAN_API_KEY`, `HIBP_API_KEY` and `GITHUB_TOKEN`. The collector
-  contract reads keys from each tenant's vault instead. Decide whether paid upstreams use
-  platform-owned, metered keys, or keys tenants bring. Then remove or wire the placeholders.
+- ~~**HIBP is PERMITTED.**~~ Resolved in review: HIBP is UNVERIFIED. The CC BY 4.0 licence is
+  fine, but whether a commercial OSINT-on-persons product satisfies its acceptable-use policy
+  (no queries intended to cause harm to the victims) is unresolved. The registry entry records
+  that reason.
+- ~~**Platform keys or tenant keys?**~~ Resolved in review: tenant keys only. Collector
+  credentials come solely from the tenant's vault, with no platform-level fallback for any of
+  them. `BRAVE_SEARCH_API_KEY`, `SHODAN_API_KEY`, `HIBP_API_KEY` and `GITHUB_TOKEN` were removed
+  from the env schema. Platform-owned keys, such as a future LLM provider key, stay in
+  configuration.
 - **How far a scope authorisation reaches.** It covers the exact target only. Should it cover
   subdomains, CIDR ranges, or specific tools? There is no API to create one yet; it will need
   its own permission, and an audit entry for each one created.

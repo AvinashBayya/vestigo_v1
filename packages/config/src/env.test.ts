@@ -69,9 +69,21 @@ describe("loadEnv", () => {
     expect(error.issues.map((issue) => issue.variable)).toEqual(["API_PORT"]);
   });
 
-  it("leaves an unset collector credential undefined, never a placeholder string", () => {
-    const env = loadEnv({ ...VALID, SHODAN_API_KEY: "" });
-    expect(env.SHODAN_API_KEY).toBeUndefined();
+  it("leaves an empty optional variable undefined, never a placeholder string", () => {
+    const env = loadEnv({ ...VALID, COLLECTORS_ALLOW_UNVERIFIED: "" });
+    expect(env.COLLECTORS_ALLOW_UNVERIFIED).toBeUndefined();
+  });
+
+  it("drops collector credentials set in the environment: they come only from the tenant vault", () => {
+    const retired = {
+      BRAVE_SEARCH_API_KEY: "[env brave key]",
+      SHODAN_API_KEY: "[env shodan key]",
+      HIBP_API_KEY: "[env hibp key]",
+      GITHUB_TOKEN: "[env github token]",
+    };
+    const env = loadEnv({ ...VALID, ...retired });
+    for (const name of Object.keys(retired)) expect(env).not.toHaveProperty(name);
+    expect(JSON.stringify(env)).not.toContain("[env ");
   });
 });
 

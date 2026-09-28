@@ -2,13 +2,6 @@ import { z } from "zod";
 import { ConfigError, type ConfigIssue } from "./errors.ts";
 
 /**
- * A collector credential. Optional: when it is unset the collector that needs it
- * must report "needs key", never an empty successful result (CLAUDE.md §1).
- */
-const collectorCredential = (description: string) =>
-  z.string().min(1).optional().meta({ description });
-
-/**
  * The environment every server-side process validates at startup.
  *
  * `.env.example` is generated from this schema
@@ -115,18 +108,11 @@ export const envSchema = z.object({
       "Whether collectors whose source licence is UNVERIFIED may run. BLOCKED sources never run. Unset: allowed in development and test, refused in production.",
   }),
 
-  // Collector credentials: placeholders until the collector registry lands in
-  // Phase 3. Each registry entry will carry the source's licence verdict.
-  BRAVE_SEARCH_API_KEY: collectorCredential(
-    "Brave Search API key. Chosen dork-engine backend (ARCHITECTURE-DECISIONS §11).",
-  ),
-  SHODAN_API_KEY: collectorCredential(
-    "Shodan paid API key. InternetDB is non-commercial only (ARCHITECTURE-DECISIONS §11).",
-  ),
-  HIBP_API_KEY: collectorCredential(
-    "Have I Been Pwned API key. Commercial terms not yet verified (ARCHITECTURE-DECISIONS §11).",
-  ),
-  GITHUB_TOKEN: collectorCredential("GitHub API token."),
+  // No collector credential is ever configured here. Collectors read their
+  // credentials only from each tenant's vault, so there is no platform-level
+  // fallback for any of them; a test fails if a variable here names a collector
+  // source. Platform-owned secrets (the session secret, the vault master key,
+  // later the LLM provider's key) do belong here.
 });
 
 export type Env = z.infer<typeof envSchema>;

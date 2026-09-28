@@ -254,23 +254,6 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     attribution: { text: "Source: The GDELT Project", url: "https://www.gdeltproject.org/" },
   },
   {
-    id: "hibp",
-    name: "Have I Been Pwned API",
-    licence: {
-      commercialUse: "PERMITTED",
-      reason:
-        "Data licensed CC BY 4.0 with clear, visible attribution and a link wherever it appears. Its acceptable-use policy bans queries intended to harm the people in the data; whether person investigation satisfies it is a legal question.",
-      check: audited(17, "https://haveibeenpwned.com/API/v3"),
-    },
-    network: https(["haveibeenpwned.com"], {
-      requests: 10,
-      intervalSeconds: 60,
-      basis: "SELF_IMPOSED",
-      note: "The permitted rate depends on the subscription; ten a minute until one is chosen.",
-    }),
-    attribution: { text: "Data from Have I Been Pwned", url: "https://haveibeenpwned.com/" },
-  },
-  {
     id: "safecast",
     name: "Safecast radiation data",
     licence: {
@@ -283,6 +266,23 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   },
 
   // ── UNVERIFIED: run only where configuration allows unverified sources ──
+  {
+    id: "hibp",
+    name: "Have I Been Pwned API",
+    licence: {
+      commercialUse: "UNVERIFIED",
+      reason:
+        "The data licence, CC BY 4.0, permits commercial use with clear, visible attribution and a link. Unresolved: whether a commercial OSINT-on-persons product satisfies its acceptable-use policy, which bans queries intended to cause harm to the victims.",
+      check: audited(17, "https://haveibeenpwned.com/API/v3"),
+    },
+    network: https(["haveibeenpwned.com"], {
+      requests: 10,
+      intervalSeconds: 60,
+      basis: "SELF_IMPOSED",
+      note: "The permitted rate depends on the subscription; ten a minute until one is chosen.",
+    }),
+    attribution: { text: "Data from Have I Been Pwned", url: "https://haveibeenpwned.com/" },
+  },
   {
     id: "crtsh",
     name: "crt.sh Certificate Transparency",

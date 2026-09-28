@@ -246,6 +246,15 @@ const COLLECTORS: Collector[] = [
     }),
     namesFrom("two.test", "fake.keyed"),
   ),
+  // Declares the same key but runs without it, so its code does call
+  // ctx.credentials.get() when the vault has nothing: the path a
+  // platform-level fallback would take.
+  defineCollector(
+    declaration("fake.optional-key", "two", {
+      credentials: { vaultIds: ["one-key"], runsWithout: true },
+    }),
+    namesFrom("two.test", "fake.optional-key"),
+  ),
   defineCollector(declaration("fake.errors", "one"), async (ctx) => {
     const response = await ctx.fetch("http://one.test/error", { method: "GET", timeoutMs: 800 });
     return ctx.found({ names: ["from a failed request"] }, [{ response, observedAt: null }]);
@@ -640,5 +649,70 @@ describe("credentials", () => {
     expect(found.outcome.status).toBe("FOUND");
     expect(requests[0]?.headers.authorization).toBe("Bearer tenant-secret-value");
     expect(await credentialReads(tenantId)).toBe(1);
+  });
+});
+
+describe("no collector credential can be resolved from environment configuration (RELEASE-BLOCKING)", () => {
+  // Every spelling a platform-level fallback could plausibly read: the retired
+  // variables, and the collector's own vault id in the usual env forms.
+  const SPELLINGS = [
+    "BRAVE_SEARCH_API_KEY",
+    "SHODAN_API_KEY",
+    "HIBP_API_KEY",
+    "GITHUB_TOKEN",
+    "ONE_KEY",
+    "ONE_KEY_API_KEY",
+    "ONE_KEY_TOKEN",
+    "ONE_KEY_SECRET",
+    "COLLECTOR_ONE_KEY",
+    "one-key",
+  ];
+
+  it("ignores the environment entirely: without a vault credential the collector needs one, and with one it gets the vault's", async () => {
+    const { tenantId } = await newTenant("environment");
+    routes.set("two.test/names?q=example.com", (res) => res.end('["keyed"]'));
+    const saved = new Map(SPELLINGS.map((name) => [name, process.env[name]]));
+    try {
+      for (const name of SPELLINGS) process.env[name] = "environment-secret-value";
+      // Built after the environment was set, so nothing could have missed it.
+      const executor = engine();
+
+      const missing = await collect(executor, tenantId, "fake.keyed");
+      expect(missing.outcome).toMatchObject({ status: "NEEDS_CREDENTIALS", missing: ["one-key"] });
+      expect(requests).toEqual([]);
+      expect(await credentialReads(tenantId)).toBe(0);
+
+      // Collectors that run without the key reach ctx.credentials.get() with an
+      // empty vault. Declared or not, the key must be absent: nothing is sent.
+      routes.set("one.test/names?q=example.com", (res) => res.end('["unkeyed"]'));
+      for (const collectorId of ["fake.optional-key", "fake.one"]) {
+        expect((await collect(executor, tenantId, collectorId)).outcome.status).toBe("FOUND");
+      }
+      expect(requests.map((request) => request.headers.authorization)).toEqual([
+        undefined,
+        undefined,
+      ]);
+      expect(JSON.stringify(requests)).not.toContain("environment-secret-value");
+      requests.length = 0;
+
+      await db.withTenant(tenantId, (ctx) =>
+        vault.store(ctx, {
+          provider: "one-key",
+          label: "[Tenant key]",
+          secret: "vault-secret-value",
+        }),
+      );
+      const found = await collect(executor, tenantId, "fake.keyed");
+      expect(found.outcome.status).toBe("FOUND");
+      expect(requests.map((request) => request.headers.authorization)).toEqual([
+        "Bearer vault-secret-value",
+      ]);
+      expect(JSON.stringify(requests)).not.toContain("environment-secret-value");
+    } finally {
+      for (const [name, value] of saved) {
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else process.env[name] = value;
+      }
+    }
   });
 });

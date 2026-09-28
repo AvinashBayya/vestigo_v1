@@ -392,6 +392,50 @@ describe("collectors sharing an upstream share its rate limit (RELEASE-BLOCKING)
   });
 });
 
+describe("no collector credential comes from the environment (RELEASE-BLOCKING)", () => {
+  it("gives a collector only the credentials it was handed, whatever the environment holds", async () => {
+    routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));
+    const spellings = ["ONE_KEY", "ONE_KEY_API_KEY", "ONE_KEY_TOKEN", "one-key", "HIBP_API_KEY"];
+    const saved = new Map(spellings.map((name) => [name, process.env[name]]));
+    const seen: (string | null)[] = [];
+    const optional = defineCollector(
+      declaration("fake.optional", "one", {
+        credentials: { vaultIds: ["one-key"], runsWithout: true },
+      }),
+      async (ctx) => {
+        const key = ctx.credentials.get("one-key");
+        seen.push(key === null ? null : key.expose());
+        const response = await ctx.fetch("http://one.test/names?q=example.com", {
+          method: "GET",
+          timeoutMs: 1_000,
+          ...(key === null ? {} : { headers: { authorization: `Bearer ${key.expose()}` } }),
+        });
+        return ctx.found({ names: ["a"] }, [{ response, observedAt: null }]);
+      },
+    );
+    try {
+      for (const name of spellings) process.env[name] = "environment-secret-value";
+      const runtime = runtimeWith([optional]);
+      expectStatus(await runtime.execute("fake.optional", request()), "FOUND");
+      const handed = new Map([["one-key", { expose: () => "handed-secret-value" }]]);
+      expectStatus(
+        await runtime.execute("fake.optional", request({ credentials: handed })),
+        "FOUND",
+      );
+    } finally {
+      for (const [name, value] of saved) {
+        if (value === undefined) Reflect.deleteProperty(process.env, name);
+        else process.env[name] = value;
+      }
+    }
+    expect(seen).toEqual([null, "handed-secret-value"]);
+    expect(upstream.requests.map((r) => r.headers.authorization)).toEqual([
+      undefined,
+      "Bearer handed-secret-value",
+    ]);
+  });
+});
+
 describe("ACTIVE and PERSON collectors are gated (RELEASE-BLOCKING)", () => {
   it("refuses an ACTIVE collector without a scope authorisation for the exact target", async () => {
     routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));

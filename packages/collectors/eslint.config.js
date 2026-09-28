@@ -33,6 +33,22 @@ const RESTRICTED_GLOBALS = [
 export default [
   ...createConfig({ tsconfigRootDir: import.meta.dirname }),
   {
+    // Configuration reaches collectors by injection only. In particular no
+    // credential can come from the environment: the tenant vault is the only source.
+    files: ["src/**/*.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "process",
+          property: "env",
+          message:
+            "Collectors never read the environment; credentials come only from the tenant vault.",
+        },
+      ],
+    },
+  },
+  {
     files: ["src/**/*.ts"],
     ignores: ["src/fetcher/**"],
     rules: {

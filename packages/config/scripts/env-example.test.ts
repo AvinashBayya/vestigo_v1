@@ -19,9 +19,10 @@ describe(".env.example", () => {
     }
   });
 
-  it("marks required variables and leaves credentials blank", () => {
+  it("marks required variables and leaves secrets blank", () => {
     expect(rendered).toContain("# Required.\nDATABASE_URL=postgres://");
-    expect(rendered).toContain("# Optional.\nSHODAN_API_KEY=\n");
+    expect(rendered).toContain("# Required.\nAUTH_SECRET=\n");
+    expect(rendered).toContain("# Optional.\nCOLLECTORS_ALLOW_UNVERIFIED=\n");
     expect(rendered).toContain("# API_PORT=3000");
   });
 
