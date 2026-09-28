@@ -64,9 +64,6 @@ export async function sqlStateOf(run: () => Promise<unknown>): Promise<string | 
 export interface TenantFixture {
   readonly tenantId: TenantId;
   readonly userId: string;
-  readonly roleId: string;
-  readonly permission: string;
-  readonly membershipId: string;
   readonly apiKeyId: string;
   readonly auditEntryId: string;
   readonly collectorId: string;
@@ -106,21 +103,24 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       displayName: `[Analyst ${tag}]`,
       status: "ACTIVE",
     });
-    const role = await repos.roles.create({ name: `[role ${tag}]`, description: null });
-    const permission = await repos.permissions.grant(role.id, "case:read");
-    const membership = await repos.memberships.create({ userId: user.id, roleId: role.id });
     const apiKey = await repos.apiKeys.create({
+      id: randomUUID(),
       name: `[key ${tag}]`,
       keyPrefix: `fx_${tag}_${randomBytes(3).toString("hex")}`,
       keyHash: createHash("sha256").update(randomBytes(32)).digest("hex"),
       createdByUserId: user.id,
       expiresAt: null,
+      permissions: ["investigation:read"],
+      rotatedFromId: null,
     });
     const audit = await repos.auditLog.append({
       actor: { kind: "USER", userId: user.id },
       action: "fixture.create",
       target: null,
       details: null,
+      authorization: { method: "SESSION", permission: "investigation:create", sessionId: null },
+      outcome: "ALLOWED",
+      requestId: null,
     });
     const collector = await repos.collectorsRegistry.register({
       collectorId: FIXTURE_COLLECTOR_ID,
@@ -211,6 +211,7 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       evidenceId: evidence.id,
     });
     const credential = await repos.credentials.create({
+      id: randomUUID(),
       provider: "fixture",
       label: `[Credential ${tag}]`,
       ciphertext: randomBytes(32),
@@ -227,9 +228,6 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
     return {
       tenantId,
       userId: user.id,
-      roleId: role.id,
-      permission: permission.permission,
-      membershipId: membership.id,
       apiKeyId: apiKey.id,
       auditEntryId: audit.id,
       collectorId: collector.collectorId,

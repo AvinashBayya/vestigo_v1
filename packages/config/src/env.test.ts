@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { loadEnv, loadEnvSubset } from "./env.ts";
+import { envSchema, loadEnv, loadEnvSubset } from "./env.ts";
 import { ConfigError } from "./errors.ts";
 
 const VALID = {
-  DATABASE_URL: "postgres://app:app@127.0.0.1:5432/app",
+  DATABASE_URL: "postgres://app_runtime:app_runtime@127.0.0.1:5432/app",
+  DATABASE_AUTH_URL: "postgres://app_auth:app_auth@127.0.0.1:5432/app",
   REDIS_URL: "redis://127.0.0.1:6379",
+  AUTH_SECRET: "x".repeat(32),
+  AUTH_BASE_URL: "http://127.0.0.1:3000",
+  WEB_ORIGIN: "http://localhost:5173",
+  VAULT_MASTER_KEY: "[test master key]",
+  VAULT_MASTER_KEY_ID: "test-1",
 };
 
 function configErrorFrom(source: Record<string, string | undefined>): ConfigError {
@@ -33,8 +39,14 @@ describe("loadEnv", () => {
     const error = configErrorFrom({});
     expect(error.code).toBe("CONFIG_INVALID");
     expect(error.issues.map((issue) => issue.variable).sort()).toEqual([
+      "AUTH_BASE_URL",
+      "AUTH_SECRET",
+      "DATABASE_AUTH_URL",
       "DATABASE_URL",
       "REDIS_URL",
+      "VAULT_MASTER_KEY",
+      "VAULT_MASTER_KEY_ID",
+      "WEB_ORIGIN",
     ]);
     expect(error.message).toContain("DATABASE_URL: required but not set");
     expect(error.message).toContain("REDIS_URL: required but not set");
@@ -89,6 +101,21 @@ describe("loadEnvSubset", () => {
       expect(error).toBeInstanceOf(ConfigError);
       expect(String(error)).toContain("DATABASE_MIGRATION_URL");
       expect(String(error)).not.toContain(secret);
+    }
+  });
+});
+
+describe("secrets in configuration", () => {
+  it("rejects a short auth secret without echoing it", () => {
+    const secret = "short-secret-do-not-print";
+    const error = configErrorFrom({ ...VALID, AUTH_SECRET: secret });
+    expect(error.issues.map((issue) => issue.variable)).toEqual(["AUTH_SECRET"]);
+    expect(error.message).not.toContain(secret);
+  });
+
+  it("never gives a secret an example value in the generated .env.example", () => {
+    for (const name of ["AUTH_SECRET", "VAULT_MASTER_KEY"] as const) {
+      expect(envSchema.shape[name].meta()?.examples).toBeUndefined();
     }
   });
 });

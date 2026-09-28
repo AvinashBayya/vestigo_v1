@@ -239,6 +239,8 @@ export class AlertsRepository extends TenantRepository {
 
 /** Already-encrypted material. This package never sees a plaintext secret. */
 export interface NewCredential {
+  /** Chosen by the caller: the vault binds the ciphertext to this id. */
+  readonly id: string;
   readonly provider: string;
   readonly label: string;
   readonly ciphertext: Uint8Array;
@@ -252,7 +254,7 @@ export class CredentialsRepository extends TenantRepository {
       onlyRow(
         await tx
           .insert(credentials)
-          .values({ tenantId: this.tenantId, ...input })
+          .values({ ...input, tenantId: this.tenantId, id: requireUuid(input.id) })
           .returning(),
       ),
     );

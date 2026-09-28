@@ -1,5 +1,7 @@
 import {
   AUDIT_ACTOR_KINDS,
+  AUDIT_OUTCOMES,
+  AUTH_METHODS,
   CLAIM_STRENGTHS,
   COLLECTION_MODES,
   COLLECTOR_DISCIPLINES,
@@ -12,10 +14,12 @@ import {
   TENANT_REGIONS,
   USAGE_UNITS,
 } from "@repo/core";
+import { PLANS, VETTING_STATUSES } from "@repo/access";
 import { pgEnum } from "drizzle-orm/pg-core";
 
-// Every enum is generated from the shared vocabulary in @repo/core, so the
-// column type and the TypeScript union cannot drift apart.
+// Every enum is generated from the shared vocabulary in @repo/core (plans and
+// vetting statuses: @repo/access), so the column type and the TypeScript union
+// cannot drift apart.
 
 /** First-class claim strength (CLAUDE.md §1). */
 export const claimStrength = pgEnum("claim_strength", CLAIM_STRENGTHS);
@@ -33,3 +37,8 @@ export const tenantRegion = pgEnum("tenant_region", TENANT_REGIONS);
 
 export const USER_STATUSES = ["ACTIVE", "DISABLED"] as const;
 export const userStatus = pgEnum("user_status", USER_STATUSES);
+
+export const tenantPlan = pgEnum("tenant_plan", PLANS);
+export const vettingStatus = pgEnum("vetting_status", VETTING_STATUSES);
+export const authMethod = pgEnum("auth_method", AUTH_METHODS);
+export const auditOutcome = pgEnum("audit_outcome", AUDIT_OUTCOMES);

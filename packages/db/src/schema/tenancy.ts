@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, foreignKey, pgTable, primaryKey, text, unique, uuid } from "drizzle-orm/pg-core";
 import { createdAtColumn, idColumn, optionalTimestamp, tenantIdColumn } from "./columns.ts";
-import { tenantRegion, userStatus } from "./enums.ts";
+import { tenantPlan, tenantRegion, userStatus, vettingStatus } from "./enums.ts";
 
 /**
  * One row per tenant. Its primary key is named tenant_id like every other
@@ -13,6 +13,13 @@ export const tenants = pgTable(
     tenantId: uuid("tenant_id").primaryKey(),
     name: text("name").notNull(),
     region: tenantRegion("region").notNull(),
+    /**
+     * The plan and the customer-vetting state gate modules. The application
+     * role cannot write either: it may only insert name and region, so a new
+     * tenant always starts on the defaults, and it has no UPDATE on these.
+     */
+    plan: tenantPlan("plan").notNull().default("TECHINT"),
+    vettingStatus: vettingStatus("vetting_status").notNull().default("NOT_SUBMITTED"),
     createdAt: createdAtColumn(),
   },
   (t) => [check("tenants_name_not_blank", sql`length(btrim(${t.name})) > 0`)],
@@ -43,86 +50,11 @@ export const users = pgTable(
   ],
 );
 
-export const roles = pgTable(
-  "roles",
-  {
-    tenantId: tenantIdColumn(),
-    id: idColumn(),
-    name: text("name").notNull(),
-    description: text("description"),
-    createdAt: createdAtColumn(),
-  },
-  (t) => [
-    primaryKey({ name: "roles_pk", columns: [t.tenantId, t.id] }),
-    foreignKey({
-      name: "roles_tenant_fk",
-      columns: [t.tenantId],
-      foreignColumns: [tenants.tenantId],
-    }),
-    unique("roles_name_key").on(t.tenantId, t.name),
-    check("roles_name_not_blank", sql`length(btrim(${t.name})) > 0`),
-  ],
-);
-
 /**
- * A permission granted to a role. Access checks test permissions such as
- * `investigation:create`, never role names (ARCHITECTURE-DECISIONS §4).
+ * API keys are stored hashed; the plaintext is shown once and never persisted.
+ * Each key carries its own permission scope, fixed at creation; to change a
+ * scope, create a new key. A rotated key records the key it replaced.
  */
-export const permissions = pgTable(
-  "permissions",
-  {
-    tenantId: tenantIdColumn(),
-    roleId: uuid("role_id").notNull(),
-    permission: text("permission").notNull(),
-    createdAt: createdAtColumn(),
-  },
-  (t) => [
-    primaryKey({ name: "permissions_pk", columns: [t.tenantId, t.roleId, t.permission] }),
-    foreignKey({
-      name: "permissions_tenant_fk",
-      columns: [t.tenantId],
-      foreignColumns: [tenants.tenantId],
-    }),
-    foreignKey({
-      name: "permissions_role_fk",
-      columns: [t.tenantId, t.roleId],
-      foreignColumns: [roles.tenantId, roles.id],
-    }).onDelete("cascade"),
-    check("permissions_key_format", sql`${t.permission} ~ '^[a-z][a-z_]*:[a-z][a-z_]*$'`),
-  ],
-);
-
-export const memberships = pgTable(
-  "memberships",
-  {
-    tenantId: tenantIdColumn(),
-    id: idColumn(),
-    userId: uuid("user_id").notNull(),
-    roleId: uuid("role_id").notNull(),
-    createdAt: createdAtColumn(),
-  },
-  (t) => [
-    primaryKey({ name: "memberships_pk", columns: [t.tenantId, t.id] }),
-    foreignKey({
-      name: "memberships_tenant_fk",
-      columns: [t.tenantId],
-      foreignColumns: [tenants.tenantId],
-    }),
-    foreignKey({
-      name: "memberships_user_fk",
-      columns: [t.tenantId, t.userId],
-      foreignColumns: [users.tenantId, users.id],
-    }),
-    foreignKey({
-      name: "memberships_role_fk",
-      columns: [t.tenantId, t.roleId],
-      foreignColumns: [roles.tenantId, roles.id],
-    }),
-    unique("memberships_user_role_key").on(t.tenantId, t.userId, t.roleId),
-  ],
-);
-
-/** API keys are stored hashed; the plaintext is shown once and never persisted. */
 export const apiKeys = pgTable(
   "api_keys",
   {
@@ -136,6 +68,12 @@ export const apiKeys = pgTable(
     lastUsedAt: optionalTimestamp("last_used_at"),
     expiresAt: optionalTimestamp("expires_at"),
     revokedAt: optionalTimestamp("revoked_at"),
+    // Default empty: a key with no scope can do nothing, so pre-existing rows stay safe.
+    permissions: text("permissions")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    rotatedFromId: uuid("rotated_from_id"),
   },
   (t) => [
     primaryKey({ name: "api_keys_pk", columns: [t.tenantId, t.id] }),
@@ -152,5 +90,15 @@ export const apiKeys = pgTable(
     unique("api_keys_prefix_key").on(t.tenantId, t.keyPrefix),
     check("api_keys_prefix_format", sql`${t.keyPrefix} ~ '^[A-Za-z0-9_-]{6,32}$'`),
     check("api_keys_hash_present", sql`length(${t.keyHash}) >= 32`),
+    foreignKey({
+      name: "api_keys_rotated_from_fk",
+      columns: [t.tenantId, t.rotatedFromId],
+      foreignColumns: [t.tenantId, t.id],
+    }),
+    check(
+      "api_keys_permissions_format",
+      sql`array_to_string(${t.permissions}, ',') ~ '^([a-z][a-z_]*:[a-z][a-z_]*(,[a-z][a-z_]*:[a-z][a-z_]*)*)?$'`,
+    ),
+    check("api_keys_not_rotated_from_self", sql`${t.rotatedFromId} is distinct from ${t.id}`),
   ],
 );

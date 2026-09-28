@@ -1,12 +1,15 @@
 import type {
   AuditActorKind,
+  AuditOutcome,
+  AuthMethod,
   CollectionMode,
   CollectorDiscipline,
   CommercialUseVerdict,
   JobStatus,
   RunStatus,
 } from "@repo/core";
-import { and, asc, eq, sql } from "drizzle-orm";
+import type { Permission } from "@repo/access";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { auditLog, collectorsRegistry, investigations, jobs, runs } from "../schema/index.ts";
 import {
   firstRow,
@@ -34,6 +37,18 @@ export interface NewAuditEntry {
   readonly action: string;
   readonly target: { readonly type: string; readonly id: string } | null;
   readonly details: Record<string, unknown> | null;
+  /**
+   * Under what authorisation the action ran: how the actor was authenticated,
+   * and the permission the action required. Null only for actions no request
+   * authorised (a system job).
+   */
+  readonly authorization: {
+    readonly method: AuthMethod;
+    readonly permission: Permission | null;
+    readonly sessionId: string | null;
+  } | null;
+  readonly outcome: AuditOutcome | null;
+  readonly requestId: string | null;
 }
 
 /**
@@ -56,6 +71,14 @@ export class AuditLogRepository extends TenantRepository {
             targetType: entry.target === null ? null : entry.target.type,
             targetId: entry.target === null ? null : entry.target.id,
             details: entry.details,
+            authMethod: entry.authorization === null ? null : entry.authorization.method,
+            permission: entry.authorization === null ? null : entry.authorization.permission,
+            sessionId:
+              entry.authorization?.sessionId == null
+                ? null
+                : requireUuid(entry.authorization.sessionId),
+            outcome: entry.outcome,
+            requestId: entry.requestId,
           })
           .returning(),
       ),
@@ -65,6 +88,18 @@ export class AuditLogRepository extends TenantRepository {
   async findById(id: string): Promise<AuditEntry | null> {
     return this.run(async (tx) =>
       firstRow(await tx.select().from(auditLog).where(this.owned(auditLog, id))),
+    );
+  }
+
+  /** Newest first. */
+  async recent(options: ListOptions): Promise<AuditEntry[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(auditLog)
+        .where(this.inTenant(auditLog))
+        .orderBy(desc(auditLog.recordedAt), desc(auditLog.id))
+        .limit(limitOf(options)),
     );
   }
 

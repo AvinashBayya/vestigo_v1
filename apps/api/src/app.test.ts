@@ -9,7 +9,7 @@ import { OPENAPI_PATH } from "./routes/openapi.ts";
 let app: Awaited<ReturnType<typeof buildApp>>;
 
 beforeAll(async () => {
-  app = await buildApp({ logger: false });
+  app = await buildApp({ logger: false, services: null });
   await app.ready();
 });
 
@@ -53,11 +53,10 @@ describe(`GET ${OPENAPI_PATH}`, () => {
     });
     const spec = z
       .object({
-        paths: z.record(
-          z.string(),
-          z.record(
-            z.string(),
-            z.object({
+        // Only /health is parsed; other paths are left alone.
+        paths: z.object({
+          "/health": z.object({
+            get: z.object({
               operationId: z.string(),
               responses: z.record(
                 z.string(),
@@ -73,14 +72,14 @@ describe(`GET ${OPENAPI_PATH}`, () => {
                 }),
               ),
             }),
-          ),
-        ),
+          }),
+        }),
       })
       .parse(await fetchSpec());
 
-    const operation = spec.paths["/health"]?.get;
-    expect(operation?.operationId).toBe("getHealth");
-    const documented = operation?.responses["200"]?.content["application/json"].schema;
+    const operation = spec.paths["/health"].get;
+    expect(operation.operationId).toBe("getHealth");
+    const documented = operation.responses["200"]?.content["application/json"].schema;
 
     // Every expected value is read from the Zod schema, so a change to the
     // schema that the document did not pick up fails here.
@@ -90,8 +89,28 @@ describe(`GET ${OPENAPI_PATH}`, () => {
     expect(documented?.properties.status?.enum).toEqual([...status.values]);
   });
 
-  it("does not document the spec route itself", async () => {
+  it("documents the API's routes, but not the spec route or the identity provider's", async () => {
     const spec = await fetchSpec();
-    expect(Object.keys(spec.paths as object)).toEqual(["/health"]);
+    const paths = Object.keys(spec.paths as object);
+    expect(paths).toContain("/health");
+    expect(paths).toContain("/api/v1/me");
+    expect(paths).toContain("/api/v1/person/search");
+    expect(paths).not.toContain(OPENAPI_PATH);
+    expect(paths.filter((path) => path.startsWith("/api/auth"))).toEqual([]);
+  });
+
+  it("declares how protected routes authenticate", async () => {
+    const spec = z
+      .object({
+        components: z.object({ securitySchemes: z.record(z.string(), z.unknown()) }),
+        paths: z.record(
+          z.string(),
+          z.record(z.string(), z.object({ security: z.unknown().optional() })),
+        ),
+      })
+      .parse(await fetchSpec());
+    expect(Object.keys(spec.components.securitySchemes).sort()).toEqual(["apiKey", "session"]);
+    expect(spec.paths["/api/v1/me"]?.get?.security).toEqual([{ session: [] }, { apiKey: [] }]);
+    expect(spec.paths["/health"]?.get?.security).toBeUndefined();
   });
 });

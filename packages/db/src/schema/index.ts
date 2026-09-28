@@ -1,5 +1,19 @@
 export * from "./enums.ts";
-export { tenants, users, roles, permissions, memberships, apiKeys } from "./tenancy.ts";
+export { tenants, users, apiKeys } from "./tenancy.ts";
+export {
+  authSchema,
+  authTables,
+  AUTH_TABLE_NAMES,
+  authUser,
+  authSession,
+  authAccount,
+  authVerification,
+  authTwoFactor,
+  authOrganization,
+  authMember,
+  authInvitation,
+  authRateLimit,
+} from "./auth.ts";
 export { auditLog } from "./audit.ts";
 export { collectorsRegistry } from "./collectors.ts";
 export { investigations, runs, jobs } from "./work.ts";

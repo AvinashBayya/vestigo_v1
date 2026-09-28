@@ -64,35 +64,6 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     references: [],
     list: (r) => r.users.list(page),
   },
-  roles: {
-    reads: [(r, v) => r.roles.findById(v.roleId)],
-    writes: [
-      (r, v) => r.roles.update(v.roleId, { name: "[hijacked]" }),
-      (r, v) => r.roles.delete(v.roleId).then((deleted) => (deleted ? "deleted" : null)),
-    ],
-    references: [],
-    list: (r) => r.roles.list(page),
-  },
-  permissions: {
-    reads: [(r, v) => r.permissions.listForRole(v.roleId).then((rows) => rows[0] ?? null)],
-    writes: [
-      (r, v) =>
-        r.permissions.revoke(v.roleId, v.permission).then((done) => (done ? "revoked" : null)),
-    ],
-    references: [(r, v) => r.permissions.grant(v.roleId, "case:write")],
-    list: (r) => r.permissions.list(page),
-  },
-  memberships: {
-    reads: [(r, v) => r.memberships.findById(v.membershipId)],
-    writes: [
-      (r, v) => r.memberships.delete(v.membershipId).then((done) => (done ? "deleted" : null)),
-    ],
-    references: [
-      (r, v, a) => r.memberships.create({ userId: v.userId, roleId: a.roleId }),
-      (r, v, a) => r.memberships.create({ userId: a.userId, roleId: v.roleId }),
-    ],
-    list: (r) => r.memberships.list(page),
-  },
   apiKeys: {
     reads: [(r, v) => r.apiKeys.findById(v.apiKeyId)],
     writes: [
@@ -103,11 +74,14 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     references: [
       (r, v) =>
         r.apiKeys.create({
+          id: "00000000-0000-4000-8000-0000000000c1",
           name: "[cross-tenant]",
           keyPrefix: "fx_cross_1",
           keyHash: "0".repeat(64),
           createdByUserId: v.userId,
           expiresAt: null,
+          permissions: [],
+          rotatedFromId: null,
         }),
     ],
     list: (r) => r.apiKeys.list(page),
@@ -389,9 +363,6 @@ async function victimSnapshot(): Promise<unknown> {
   return db.withTenant(victim.tenantId, async ({ repos }) => ({
     tenant: await repos.tenants.current(),
     user: await repos.users.findById(victim.userId),
-    role: await repos.roles.findById(victim.roleId),
-    permissions: await repos.permissions.listForRole(victim.roleId),
-    membership: await repos.memberships.findById(victim.membershipId),
     apiKey: await repos.apiKeys.findById(victim.apiKeyId),
     audit: await repos.auditLog.findById(victim.auditEntryId),
     collector: await repos.collectorsRegistry.find(victim.collectorId),

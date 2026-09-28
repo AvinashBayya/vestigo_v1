@@ -13,14 +13,7 @@ import {
   MonitorsRepository,
   UsageEventsRepository,
 } from "./operations.ts";
-import {
-  ApiKeysRepository,
-  MembershipsRepository,
-  PermissionsRepository,
-  RolesRepository,
-  TenantsRepository,
-  UsersRepository,
-} from "./tenancy.ts";
+import { ApiKeysRepository, TenantsRepository, UsersRepository } from "./tenancy.ts";
 import {
   AuditLogRepository,
   CollectorsRegistryRepository,
@@ -33,9 +26,6 @@ import {
 export interface Repositories {
   readonly tenants: TenantsRepository;
   readonly users: UsersRepository;
-  readonly roles: RolesRepository;
-  readonly permissions: PermissionsRepository;
-  readonly memberships: MembershipsRepository;
   readonly apiKeys: ApiKeysRepository;
   readonly auditLog: AuditLogRepository;
   readonly collectorsRegistry: CollectorsRegistryRepository;
@@ -59,9 +49,6 @@ export interface Repositories {
 export const REPOSITORY_TABLES: Readonly<Record<keyof Repositories, string>> = {
   tenants: "tenants",
   users: "users",
-  roles: "roles",
-  permissions: "permissions",
-  memberships: "memberships",
   apiKeys: "api_keys",
   auditLog: "audit_log",
   collectorsRegistry: "collectors_registry",
@@ -85,9 +72,6 @@ export function createRepositories(scope: TenantScope): Repositories {
   return {
     tenants: new TenantsRepository(scope),
     users: new UsersRepository(scope),
-    roles: new RolesRepository(scope),
-    permissions: new PermissionsRepository(scope),
-    memberships: new MembershipsRepository(scope),
     apiKeys: new ApiKeysRepository(scope),
     auditLog: new AuditLogRepository(scope),
     collectorsRegistry: new CollectorsRegistryRepository(scope),

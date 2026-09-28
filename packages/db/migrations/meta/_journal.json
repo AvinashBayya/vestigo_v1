@@ -22,6 +22,34 @@
       "when": 1790331197807,
       "tag": "0002_security",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790575324061,
+      "tag": "0003_drop_legacy_rbac",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790575490938,
+      "tag": "0004_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790575512122,
+      "tag": "0005_identity_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790576974679,
+      "tag": "0006_auth_id_defaults",
+      "breakpoints": true
     }
   ]
 }

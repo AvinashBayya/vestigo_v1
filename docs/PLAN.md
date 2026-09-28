@@ -12,7 +12,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | ----- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | Audit and migration map                 | Done. Findings in [audit/](audit/): REPORT, INVENTORY (per-module KEEP / REWRITE / DROP verdicts, used as the porting map), COLLECTORS, DEPENDENCIES, QUESTIONS. |
 | 1     | Scaffold and toolchain                  | **Done, 2026-09-25.** See below.                                                                                                                         |
-| 2     | Data foundation and tenancy             | **Session A done, 2026-09-28:** data layer and tenant isolation. See below. Session B (Better Auth, MFA, API keys, permission guards, module gating, credential vault) not started. |
+| 2     | Data foundation and tenancy             | **Done, 2026-09-28.** Session A: data layer and tenant isolation. Session B: authentication, MFA, permissions, module gating, API keys, audit, credential vault. See both records below. |
 | 3     | Collector SDK and migration             | Not started                                                                                                                                              |
 | 4     | Jobs, orchestration and tool containers | Not started                                                                                                                                              |
 | 5     | AI, fusion and reports                  | Not started                                                                                                                                              |
@@ -200,8 +200,8 @@ tests, and the Vite dev server was confirmed to serve the page and proxy `/healt
   `tenant_id`. A collector's licence and commercial-use verdict is really a platform fact. Confirm
   before Phase 3: either keep per-tenant rows (seeded from a platform catalogue), or ask for a
   platform-level table exempt from the `tenant_id` rule.
-- **Users are per tenant.** A person in two tenants has two `users` rows. Better Auth's model
-  (session B) may want a global identity with per-tenant memberships; decide in session B.
+- ~~**Users are per tenant.**~~ Resolved in Phase 2B: identity is global (`auth` schema), and
+  `public.users` is each identity's profile within a tenant.
 - **No cross-tenant operator view.** RLS means no application path lists all tenants, which is
   what CLAUDE.md §2 requires. Platform administration (approvals, support) will need a separate,
   audited design that does not bypass RLS.
@@ -212,10 +212,229 @@ tests, and the Vite dev server was confirmed to serve the page and proxy `/healt
 ### Carry-forwards from Phase 2A
 
 - **S3-compatible content store backend** is not built; only the filesystem backend exists.
-- **The API and worker validate `DATABASE_URL` but do not connect yet.** Nothing is wired to
-  routes.
+- ~~**The API and worker validate `DATABASE_URL` but do not connect yet.**~~ The API connects
+  since Phase 2B; the worker still does not.
 - **Fabrication ESLint plugin, two legacy defects left as found:**
   - The `configCallees` option has no effect.
   - `require-fabrication-justification` does not check blanket `eslint-disable` comments, or
     disables of itself.
 - **Scheduled monitors** exist as rows only; materialising them into jobs is Phase 4.
+
+## Phase 2, session B record: authentication and access control
+
+**Built.**
+
+- **Identity:** Better Auth 1.7.6, self-hosted at `/api/auth`, with the organisation and two-factor
+  plugins. Telemetry is off. Its tables live in a separate `auth` schema, reachable only by a new
+  `app_auth` role that has no access to tenant data. CLAUDE.md §2 is amended to name exactly these
+  tables as the one exception to `tenant_id`, and a test fails on any other table without it.
+- **Tenants are organisations.** An organisation's id is its tenant id. An operator creates a
+  tenant and its first owner (`provision-tenant`, password from the environment). Sign-up is
+  invitation-only, and nobody can create or delete a tenant through the API.
+- **MFA (TOTP) is required for every account.**
+  - Enforced by the API's guard, and by a before-hook on every identity endpoint except sign-in,
+    sign-up, sign-out, session lookup and TOTP enrolment and verification.
+  - `/two-factor/disable` is refused. Backup codes are stored encrypted.
+- **Permission-based authorisation:**
+  - A catalogue of `resource:action` permissions in `@repo/core`, with roles (`owner`, `admin`,
+    `analyst`, `viewer`) mapping to permission sets. The same map drives Better Auth's own endpoint
+    checks.
+  - Every route declares `config.access` (a permission and an audit action, or why it is public).
+    An undeclared route stops the app from starting.
+  - A test forbids comparing role names anywhere in source.
+- **Plan and vetting gating:**
+  - Plans (`TECHINT`, `TECHINT_AND_PERSON`, descriptive placeholders until Phase 7) and vetting
+    statuses. Person investigation needs both the plan and `APPROVED` vetting.
+  - The application role cannot write either column: column-level grants, and tenant creation
+    names only name and region.
+  - A trigger audits every change to them, whoever makes it.
+- **The request pipeline:**
+  - Authentication runs before validation.
+  - One tenant transaction per request, with the tenant from the session's verified active
+    membership or from the API key, never from the request.
+  - Then the permission check, then the module gate.
+  - Audit outcomes: ALLOWED is written in the same transaction as the action; DENIED is written
+    and committed; FAILED is written in its own transaction when the handler throws.
+  - Cookie-authenticated changes must come from a trusted Origin.
+  - Errors are RFC 9457 problem details with machine-readable codes. Request ids are UUIDs.
+- **API keys** (`@repo/integrations`):
+  - Format `ak_<tenant>_<key>_<secret>`, with SHA-256 of a 256-bit secret stored.
+  - Scoped to permissions the issuer holds, and capped at authentication time by the issuer's
+    current role. A key stops working when its issuer leaves.
+  - Shown once, rotatable with an optional overlap, and revocable.
+  - Rate-limited per key with a Redis fixed window that fails closed (503).
+- **Audit log** gained `auth_method`, `permission`, `outcome`, `session_id` and `request_id`.
+  Identity-provider actions touching a tenant are audited in that tenant: invitations, joining,
+  role changes, removal, switching tenant, and tenant provisioning.
+- **Credential vault** (`@repo/integrations`):
+  - AES-256-GCM envelope encryption per credential, with a random data key wrapped by the master
+    key.
+  - The binding data ties the ciphertext to its tenant, credential and provider.
+  - Every `reveal` is audited. `SecretValue` and `MasterKey` redact themselves in logs, JSON and
+    inspection. No API route returns a secret or ciphertext.
+- **Endpoints:**
+  - `/api/v1/me`
+  - `/api/v1/investigations`: create, list, read.
+  - `/api/v1/audit-log`
+  - `/api/v1/api-keys`: create, list, rotate, revoke.
+  - `/api/v1/credentials`: store, list, revoke; never reveal.
+  - `/api/v1/person/search`: gated, then an honest 501 until Phase 3.
+- **Migrations 0003–0006:**
+  - 0003 drops the Phase 2A `roles`, `permissions` and `memberships` tables. They are superseded
+    by `auth.member` and the core catalogue, and no deployed code read them.
+  - 0004 adds the auth schema and the new columns.
+  - 0005 adds the grants and the entitlement trigger.
+  - 0006 adds database-generated auth ids.
+
+**Verified at the checkpoint.**
+
+- `pnpm turbo typecheck test --force`: 24 of 24 tasks, 465 tests. By package: core 25, config 108,
+  db 169, integrations 99, api 58, web 4, worker 2. The full `build lint typecheck test --force`
+  from a clean state: 38 of 38 tasks.
+- The dev database, holding Phase 2A seed data, migrated forward from 0002 to 0006 cleanly. The
+  seed tenants landed on the default plan with vetting `NOT_SUBMITTED`.
+- Live flow against the built server with curl:
+  - The operator provisions a tenant.
+  - Password sign-in, then every request refused with `MFA_ENROLLMENT_REQUIRED`.
+  - TOTP enrolled.
+  - A fresh sign-in stops at `twoFactorRedirect`, with no session.
+  - The TOTP code yields a session.
+  - Set the active tenant, then `/me` and an investigation created.
+  - Audit rows appear through the API and in Postgres, with actor, tenant, permission, method,
+    session and request id.
+  - The server log contained none of the three secrets.
+- Mutation testing: 13 deliberate breakages of access control, all caught. They included:
+  - Dropping MFA on either path.
+  - Dropping the permission check or the module gate, or treating vetting as approved.
+  - Allowing undeclared routes.
+  - Uncapping API keys.
+  - Dropping the Origin check.
+  - Taking the tenant from a request header.
+  - Skipping the rate limit.
+  - Skipping any of the three audit writes.
+- Added before commit: `packages/db/test/isolation.auth-schema.test.ts`, a release-blocking suite
+  proving the application role cannot read or write the `auth` schema, enforced by grants. It uses
+  raw SQL as `app_runtime`, with no application code involved:
+  - Every auth table, and every column on its own, is refused with `42501`, with and without a
+    tenant context. The same statement succeeds as `app_auth` against a seeded row, so the refusal
+    is not vacuous.
+  - Each layer is checked on its own:
+    - no `USAGE` on the schema;
+    - no table, column, sequence or function privilege for `app_runtime` or `PUBLIC`;
+    - no role membership (including `pg_read_all_data`) and no superuser;
+    - no default privilege that would hand over a future auth table;
+    - no view or `SECURITY DEFINER` function reading auth with its owner's rights;
+    - no `dblink` or foreign server.
+  - The two runtime-to-auth tests in `identity.test.ts` moved into this suite, whose checks are
+    strictly stronger.
+  - Results: 17 tests. The db package now has 184 tests; the full `lint typecheck test --force`
+    ran 34 of 34 tasks.
+  - Mutation testing: 12 breakages, all caught by assertions. They were:
+    - schema `USAGE` alone;
+    - a table grant without `USAGE`;
+    - `USAGE` plus a single-column grant;
+    - auth opened to `PUBLIC`;
+    - a write-only grant;
+    - a default privilege;
+    - a public view;
+    - a definer-rights function;
+    - membership of `pg_read_all_data`;
+    - membership of `app_auth`;
+    - a superuser `app_runtime`;
+    - `dblink`.
+- Review changes, before commit: `packages/access` extracted (decision 8), and the sign-up
+  exception recorded in CLAUDE.md §1.
+  - The full `build lint typecheck test --force`: 42 of 42 tasks and 491 tests. By package:
+    access 54, core 7, config 108, db 184, integrations 73, api 59, web 4, worker 2.
+  - Tests moved with their code: 18 from core and 26 from integrations. 11 are new:
+    - the scope rules and the issuer cap;
+    - the unknown-key comparison;
+    - the sign-up decoy, pinned for both refusal causes.
+  - Mutation testing: three breakages, all caught. They were:
+    - sign-up refusals answered honestly (only the new test caught this);
+    - the issuer cap removed (caught by both the unit and end-to-end tests);
+    - an unknown key allowed to match.
+- The identity provider's logging is clamped to `warn`, before commit. Better Auth logs email
+  addresses at info level (`Sign-up attempt for existing email: …`), which CLAUDE.md §8 forbids.
+  - `identityProviderLogger` in `apps/api/src/auth/better-auth.ts` follows `LOG_LEVEL` down to
+    `error` and `silent`, never below `warn`.
+  - `apps/api/test/identity-logging.test.ts` (release-blocking) builds the provider as the server
+    does, once for every `LOG_LEVEL` the schema accepts, and records what its logger writes. It
+    also runs a duplicate sign-up at the default level and checks the address appears in no
+    output.
+  - Mutation testing:
+    - raising the provider's level directly: caught;
+    - raising the clamp: caught;
+    - deleting the config: caught, by the follows-down test only;
+    - raising the app's default `LOG_LEVEL` to `debug`: passes, correctly, because the clamp
+      holds.
+
+### Decisions taken in Phase 2B
+
+1. **Global identity in an `auth` schema** (your choice). Three database roles with disjoint reach.
+2. **`public.users` stays as the per-tenant profile** of an identity. It is created when someone
+   joins, disabled when they leave, and never deleted, so a tenant's records keep saying who did
+   what.
+3. **Static roles in code.** Per-tenant custom roles (Better Auth's dynamic access control) are
+   deferred.
+4. **The tenant row is created from whichever identity hook fires first.** Better Auth adds the
+   creator as a member before `afterCreateOrganization`, so the step is idempotent.
+5. **API keys are verified inside the key's own tenant.** The tenant id is part of the key, so no
+   cross-tenant lookup exists.
+6. **Better Auth's rate limits are stored in Postgres,** shared across replicas. The client IP it
+   sees is set from the socket, never from the client.
+7. **A refused sign-up is answered like an accepted one.** Better Auth does this for
+   anti-enumeration when auto sign-in is off, and I kept it. The review approved it as the one
+   exception to the never-fabricate rule, recorded in CLAUDE.md §1.
+8. **`packages/access` holds every access decision** (review, before the Phase 2B commit). The
+   API and the Phase 4 workers use the same rules through it. It contains:
+   - the permission catalogue;
+   - plan and vetting evaluation;
+   - API key hashing, verification and scope rules, including the issuer cap.
+
+   It is pure: no I/O, and it depends only on `packages/core`. The other code went elsewhere:
+   - `packages/db` depends on it for the `Permission` type and the plan and vetting enums.
+   - API key storage and lifecycle (`ApiKeyService`) stayed in `packages/integrations`, because
+     it needs the database. Moving it would create a cycle: access to db to access.
+   - `apps/api` keeps the Fastify guards, the principal resolution, the identity provider's
+     wiring and the sign-in routes.
+
+### Open questions (need a human)
+
+- ~~**The anti-enumeration sign-up response is a decoy.**~~ Resolved in review: kept, and
+  recorded in CLAUDE.md §1 as the one named exception to the never-fabricate rule, for sign-up
+  refusal responses only. `auth-flow.test.ts` pins it: both refusal causes, no invitation and an
+  existing account, get 200 and a user id that names no account.
+- **Invitation email and email verification are not built** (no email provider).
+  - Invitation ids must be shared out of band.
+  - Emails are not verified, so whoever knows an email has a pending invitation can register it
+    first. They still need the invitation id to join.
+  - Verification belongs with signup vetting in Phase 7, and should land before launch.
+- **Enrol-on-first-login gap.** A password stolen before its owner enrols TOTP lets the thief enrol
+  their own device. Invitation plus email verification narrows this. Consider a one-time
+  enrolment link instead.
+- **Sign-in and MFA events are not in `audit_log`.** They are not tenant-scoped, so they only
+  appear in logs. Decide whether to add a per-user security event log.
+- ~~**`apps/api` now holds identity wiring and the access layer.**~~ Resolved in review: the
+  decisions moved to `packages/access` (decision 8), which is now in CLAUDE.md §6. The HTTP and
+  identity wiring stays in `apps/api`.
+- **Better Auth's endpoints are not in the OpenAPI document.** Phase 6 must decide how the web app
+  signs in: merge the provider's own OpenAPI schema into ours, or use its client library for
+  `/api/auth` only.
+- **Plan and vetting changes have no operator console.** Today they are made only as the database
+  owner; the trigger audits them. An audited operator path is Phase 7.
+
+### Carry-forwards from Phase 2B
+
+- **Vault findings from its build:**
+  - The `credential.read` audit row sits in the caller's transaction, so callers must reveal
+    inside a short dedicated transaction.
+  - `credentials.last_used_at` is never recorded.
+  - Master-key rotation (a keyring and re-wrapping) is not built; it needs a Phase 8 runbook.
+- **API key rate limiting is a fixed window,** so a caller can briefly burst up to twice the limit
+  across a window boundary. There is no per-user rate limit beyond Better Auth's limits on its own
+  endpoints.
+- **A new vault master key each dev session** makes earlier local credentials unreadable. This is
+  intended locally, but it is why the key must come from a secret manager in production.
+- **`public.users.email` copies the identity's email** at join time; later email changes are not
+  synchronised.

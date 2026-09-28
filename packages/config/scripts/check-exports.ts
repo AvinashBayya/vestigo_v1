@@ -28,6 +28,26 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ENTITY_KINDS",
     "NAME_ONLY_AUTOMERGE_FORBIDDEN",
   ],
+  // Who may do what, for the API and the workers alike.
+  "packages/access/src/index.ts": [
+    "PERMISSIONS",
+    "Permission",
+    "isPermission",
+    "ROLE_PERMISSIONS",
+    "permissionsForRoles",
+    "PERMISSION_MODULE",
+    "decideModuleAccess",
+    "decidePermissionModuleAccess",
+    "PLANS",
+    "VETTING_STATUSES",
+    "generateApiKey",
+    "parseApiKey",
+    "hashApiKeySecret",
+    "secretMatches",
+    "grantableApiKeyScope",
+    "capApiKeyPermissions",
+    "ApiKeyScopeError",
+  ],
   // The only way to tenant data: withTenant() and the repositories it issues.
   "packages/db/src/index.ts": [
     "createDatabase",
@@ -47,6 +67,19 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ContentStore",
     "hashContent",
     "contentRef",
+    "createAuthStore",
+    "AuthStore",
+    "AUTH_TABLE_NAMES",
+  ],
+  // Secrets, API key storage and rate limits: the only paths to each.
+  "packages/integrations/src/index.ts": [
+    "CredentialVault",
+    "MasterKey",
+    "SecretValue",
+    "ApiKeyService",
+    "FixedWindowRateLimiter",
+    "RateLimiterUnavailableError",
+    "createRedisClient",
   ],
 };
 

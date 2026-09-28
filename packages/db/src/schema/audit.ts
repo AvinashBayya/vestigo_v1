@@ -10,7 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { idColumn, tenantIdColumn } from "./columns.ts";
-import { auditActorKind } from "./enums.ts";
+import { auditActorKind, auditOutcome, authMethod } from "./enums.ts";
 import { tenants } from "./tenancy.ts";
 
 /**
@@ -34,6 +34,13 @@ export const auditLog = pgTable(
     targetType: text("target_type"),
     targetId: text("target_id"),
     details: jsonb("details"),
+    /** How the actor was authenticated for this action. */
+    authMethod: authMethod("auth_method"),
+    /** The permission the action required and exercised. */
+    permission: text("permission"),
+    outcome: auditOutcome("outcome"),
+    sessionId: uuid("session_id"),
+    requestId: text("request_id"),
   },
   (t) => [
     primaryKey({ name: "audit_log_pk", columns: [t.tenantId, t.id] }),
@@ -50,5 +57,17 @@ export const auditLog = pgTable(
         or (${t.actorKind} = 'SYSTEM' and ${t.actorUserId} is null and ${t.actorApiKeyId} is null)`,
     ),
     check("audit_log_target_consistent", sql`(${t.targetType} is null) = (${t.targetId} is null)`),
+    check(
+      "audit_log_outcome_has_authorisation",
+      sql`${t.outcome} is null or ${t.authMethod} is not null`,
+    ),
+    check(
+      "audit_log_permission_format",
+      sql`${t.permission} is null or ${t.permission} ~ '^[a-z][a-z_]*:[a-z][a-z_]*$'`,
+    ),
+    check(
+      "audit_log_session_matches_method",
+      sql`${t.sessionId} is null or ${t.authMethod} = 'SESSION'`,
+    ),
   ],
 );

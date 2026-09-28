@@ -74,11 +74,16 @@ async function hasTablePrivilege(table: string, privilege: string): Promise<bool
   return result.rows[0]?.ok === true;
 }
 
-/** Insertable columns (not generated) of a table. */
+/**
+ * Columns of a table the application role may insert (not generated, and
+ * covered by a table- or column-level INSERT grant), so a refused insert is
+ * refused by row-level security rather than by a missing column grant.
+ */
 async function insertableColumns(table: string): Promise<string[]> {
   const result = await owner.query<{ attname: string }>(
     `select a.attname from pg_attribute a
      where a.attrelid = $1::regclass and a.attnum > 0 and not a.attisdropped and a.attgenerated = ''
+       and has_column_privilege('app_runtime', a.attrelid, a.attnum, 'INSERT')
      order by a.attnum`,
     [`public.${table}`],
   );

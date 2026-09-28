@@ -2,6 +2,8 @@ export { AppError, NotImplementedError } from "./errors.ts";
 export { InvalidTenantIdError, parseTenantId, type TenantId } from "./tenant.ts";
 export {
   AUDIT_ACTOR_KINDS,
+  AUDIT_OUTCOMES,
+  AUTH_METHODS,
   CLAIM_STRENGTHS,
   COLLECTION_MODES,
   COLLECTOR_DISCIPLINES,
@@ -15,6 +17,8 @@ export {
   TENANT_REGIONS,
   USAGE_UNITS,
   type AuditActorKind,
+  type AuditOutcome,
+  type AuthMethod,
   type ClaimStrength,
   type CollectionMode,
   type CollectorDiscipline,

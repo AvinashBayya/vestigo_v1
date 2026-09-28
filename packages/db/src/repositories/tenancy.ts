@@ -1,6 +1,7 @@
+import type { Permission } from "@repo/access";
 import type { TenantRegion } from "@repo/core";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { apiKeys, memberships, permissions, roles, tenants, users } from "../schema/index.ts";
+import { apiKeys, tenants, users } from "../schema/index.ts";
 import {
   firstRow,
   limitOf,
@@ -12,23 +13,23 @@ import {
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;
-export type Role = typeof roles.$inferSelect;
-export type Permission = typeof permissions.$inferSelect;
-export type Membership = typeof memberships.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 
 /** The current tenant's own row. A tenant can never see another tenant's row. */
 export class TenantsRepository extends TenantRepository {
-  /** Inserts the row for the scope's tenant. Used when provisioning. */
+  /**
+   * Inserts the row for the scope's tenant. Used when provisioning. Only name
+   * and region can be given: plan and vetting status always start on their
+   * defaults, and the application role has no privilege to set them.
+   * (Explicit SQL, because an ORM insert would list the defaulted columns too.)
+   */
   async create(input: { readonly name: string; readonly region: TenantRegion }): Promise<Tenant> {
-    return this.run(async (tx) =>
-      onlyRow(
-        await tx
-          .insert(tenants)
-          .values({ tenantId: this.tenantId, ...input })
-          .returning(),
-      ),
-    );
+    return this.run(async (tx) => {
+      await tx.execute(
+        sql`insert into ${tenants} (tenant_id, name, region) values (${this.tenantId}, ${input.name}, ${input.region})`,
+      );
+      return onlyRow(await tx.select().from(tenants).where(eq(tenants.tenantId, this.tenantId)));
+    });
   }
 
   async current(): Promise<Tenant | null> {
@@ -110,6 +111,42 @@ export class UsersRepository extends TenantRepository {
     );
   }
 
+  /**
+   * Makes sure an identity has an active profile in this tenant, with the same
+   * id as the identity. Called when someone joins; reactivates a profile
+   * disabled when they previously left. Profiles are never deleted, because
+   * the tenant's records keep referring to who did what.
+   */
+  async ensureMember(input: {
+    readonly userId: string;
+    readonly email: string;
+    readonly displayName: string | null;
+  }): Promise<User> {
+    const id = requireUuid(input.userId);
+    return this.run(async (tx) => {
+      await tx
+        .insert(users)
+        .values({
+          tenantId: this.tenantId,
+          id,
+          email: input.email.toLowerCase(),
+          displayName: input.displayName,
+          status: "ACTIVE",
+        })
+        .onConflictDoUpdate({ target: [users.tenantId, users.id], set: { status: "ACTIVE" } });
+      return onlyRow(await tx.select().from(users).where(this.owned(users, id)));
+    });
+  }
+
+  /** Marks a profile disabled, when its identity leaves the tenant. */
+  async disable(id: string): Promise<User | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx.update(users).set({ status: "DISABLED" }).where(this.owned(users, id)).returning(),
+      ),
+    );
+  }
+
   async update(
     id: string,
     patch: Partial<Pick<NewUser, "email" | "displayName" | "status">>,
@@ -120,158 +157,19 @@ export class UsersRepository extends TenantRepository {
   }
 }
 
-export class RolesRepository extends TenantRepository {
-  async create(input: {
-    readonly name: string;
-    readonly description: string | null;
-  }): Promise<Role> {
-    return this.run(async (tx) =>
-      onlyRow(
-        await tx
-          .insert(roles)
-          .values({ tenantId: this.tenantId, ...input })
-          .returning(),
-      ),
-    );
-  }
-
-  async findById(id: string): Promise<Role | null> {
-    return this.run(async (tx) =>
-      firstRow(await tx.select().from(roles).where(this.owned(roles, id))),
-    );
-  }
-
-  async list(options: ListOptions): Promise<Role[]> {
-    return this.run((tx) =>
-      tx
-        .select()
-        .from(roles)
-        .where(this.inTenant(roles))
-        .orderBy(asc(roles.name))
-        .limit(limitOf(options)),
-    );
-  }
-
-  async update(
-    id: string,
-    patch: { readonly name?: string; readonly description?: string | null },
-  ): Promise<Role | null> {
-    return this.run(async (tx) =>
-      firstRow(await tx.update(roles).set(patch).where(this.owned(roles, id)).returning()),
-    );
-  }
-
-  /** Deletes the role and its permission grants. Fails while members hold it. */
-  async delete(id: string): Promise<boolean> {
-    return this.run(async (tx) => {
-      const rows = await tx.delete(roles).where(this.owned(roles, id)).returning({ id: roles.id });
-      return rows.length === 1;
-    });
-  }
-}
-
-/** Permission grants to roles. Checks test these keys, never role names. */
-export class PermissionsRepository extends TenantRepository {
-  async grant(roleId: string, permission: string): Promise<Permission> {
-    return this.run(async (tx) =>
-      onlyRow(
-        await tx
-          .insert(permissions)
-          .values({ tenantId: this.tenantId, roleId: requireUuid(roleId), permission })
-          .returning(),
-      ),
-    );
-  }
-
-  async revoke(roleId: string, permission: string): Promise<boolean> {
-    return this.run(async (tx) => {
-      const rows = await tx
-        .delete(permissions)
-        .where(
-          and(
-            this.inTenant(permissions),
-            eq(permissions.roleId, requireUuid(roleId)),
-            eq(permissions.permission, permission),
-          ),
-        )
-        .returning({ roleId: permissions.roleId });
-      return rows.length === 1;
-    });
-  }
-
-  async listForRole(roleId: string): Promise<Permission[]> {
-    return this.run((tx) =>
-      tx
-        .select()
-        .from(permissions)
-        .where(and(this.inTenant(permissions), eq(permissions.roleId, requireUuid(roleId))))
-        .orderBy(asc(permissions.permission)),
-    );
-  }
-
-  async list(options: ListOptions): Promise<Permission[]> {
-    return this.run((tx) =>
-      tx
-        .select()
-        .from(permissions)
-        .where(this.inTenant(permissions))
-        .orderBy(asc(permissions.roleId), asc(permissions.permission))
-        .limit(limitOf(options)),
-    );
-  }
-}
-
-export class MembershipsRepository extends TenantRepository {
-  async create(input: { readonly userId: string; readonly roleId: string }): Promise<Membership> {
-    return this.run(async (tx) =>
-      onlyRow(
-        await tx
-          .insert(memberships)
-          .values({
-            tenantId: this.tenantId,
-            userId: requireUuid(input.userId),
-            roleId: requireUuid(input.roleId),
-          })
-          .returning(),
-      ),
-    );
-  }
-
-  async findById(id: string): Promise<Membership | null> {
-    return this.run(async (tx) =>
-      firstRow(await tx.select().from(memberships).where(this.owned(memberships, id))),
-    );
-  }
-
-  async list(options: ListOptions): Promise<Membership[]> {
-    return this.run((tx) =>
-      tx
-        .select()
-        .from(memberships)
-        .where(this.inTenant(memberships))
-        .orderBy(asc(memberships.createdAt))
-        .limit(limitOf(options)),
-    );
-  }
-
-  async delete(id: string): Promise<boolean> {
-    return this.run(async (tx) => {
-      const rows = await tx
-        .delete(memberships)
-        .where(this.owned(memberships, id))
-        .returning({ id: memberships.id });
-      return rows.length === 1;
-    });
-  }
-}
-
 export interface NewApiKey {
+  /** Chosen by the caller, because the key's id is part of the key itself. */
+  readonly id: string;
   readonly name: string;
   readonly keyPrefix: string;
   /** A hash of the key. The plaintext key is never stored. */
   readonly keyHash: string;
   readonly createdByUserId: string | null;
   readonly expiresAt: Date | null;
+  /** The key's scope. Fixed for its lifetime. */
+  readonly permissions: readonly Permission[];
+  /** The key this one replaced, when created by rotation. */
+  readonly rotatedFromId: string | null;
 }
 
 export class ApiKeysRepository extends TenantRepository {
@@ -280,7 +178,13 @@ export class ApiKeysRepository extends TenantRepository {
       onlyRow(
         await tx
           .insert(apiKeys)
-          .values({ tenantId: this.tenantId, ...input })
+          .values({
+            ...input,
+            tenantId: this.tenantId,
+            id: requireUuid(input.id),
+            permissions: [...input.permissions],
+            rotatedFromId: input.rotatedFromId === null ? null : requireUuid(input.rotatedFromId),
+          })
           .returning(),
       ),
     );
@@ -289,6 +193,40 @@ export class ApiKeysRepository extends TenantRepository {
   async findById(id: string): Promise<ApiKey | null> {
     return this.run(async (tx) =>
       firstRow(await tx.select().from(apiKeys).where(this.owned(apiKeys, id))),
+    );
+  }
+
+  /**
+   * The key if it can be used right now: not revoked and not expired, judged
+   * by the database clock. Null otherwise.
+   */
+  async findUsable(id: string): Promise<ApiKey | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .select()
+          .from(apiKeys)
+          .where(
+            and(
+              this.owned(apiKeys, id),
+              sql`${apiKeys.revokedAt} is null`,
+              sql`(${apiKeys.expiresAt} is null or ${apiKeys.expiresAt} > now())`,
+            ),
+          ),
+      ),
+    );
+  }
+
+  /** Brings a key's expiry forward (never later), e.g. to end a rotation overlap. */
+  async expireBy(id: string, at: Date): Promise<ApiKey | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .update(apiKeys)
+          .set({ expiresAt: sql`least(coalesce(${apiKeys.expiresAt}, ${at}), ${at})` })
+          .where(and(this.owned(apiKeys, id), sql`${apiKeys.revokedAt} is null`))
+          .returning(),
+      ),
     );
   }
 

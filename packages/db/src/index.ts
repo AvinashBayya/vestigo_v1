@@ -4,6 +4,9 @@
 export { createDatabase, UnsafeDatabaseRoleError } from "./database.ts";
 export type { Database, DatabaseOptions, TenantContext } from "./database.ts";
 export { TenantScope } from "./scope.ts";
+export { createAuthStore, UnsafeAuthRoleError } from "./auth-store.ts";
+export type { AuthStore, AuthStoreOptions } from "./auth-store.ts";
+export { AUTH_TABLE_NAMES, authTables } from "./schema/auth.ts";
 export { migrateDatabase, MigrationRoleError, MIGRATIONS_FOLDER } from "./migrate.ts";
 export type { MigrationResult } from "./migrate.ts";
 export {

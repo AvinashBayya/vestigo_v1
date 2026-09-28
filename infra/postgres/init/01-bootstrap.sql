@@ -7,10 +7,14 @@
 --                BYPASSRLS; every table forces row-level security, so it is
 --                subject to the tenant policies too. CREATEDB lets the test
 --                suite recreate its database; production does not grant it.
---   app_runtime  the only role the API and worker use. No superuser, no
---                BYPASSRLS, owns nothing, so row-level security always applies.
+--   app_runtime  the only role the API and worker use for tenant data. No
+--                superuser, no BYPASSRLS, owns nothing, so row-level security
+--                always applies. It has no privilege on the auth schema.
+--   app_auth     the identity provider's role: the auth schema only (users,
+--                sessions, organisations, memberships). It has no privilege on
+--                tenant data.
 --
--- Passwords are local development values; both roles are reachable only on
+-- Passwords are local development values; all three roles are reachable only on
 -- 127.0.0.1 (see docker-compose.yml).
 
 create role app_owner login password 'app_owner'
@@ -19,9 +23,12 @@ create role app_owner login password 'app_owner'
 create role app_runtime login password 'app_runtime'
   nosuperuser nobypassrls nocreatedb nocreaterole noreplication;
 
+create role app_auth login password 'app_auth'
+  nosuperuser nobypassrls nocreatedb nocreaterole noreplication;
+
 create database app owner app_owner;
 revoke all on database app from public;
-grant connect on database app to app_runtime;
+grant connect on database app to app_runtime, app_auth;
 
 -- pgvector's control file is not marked trusted, so only a superuser can
 -- create it. Installing it here, in template1 as well, means the first

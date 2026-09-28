@@ -16,12 +16,14 @@ This is the product's core promise and the most important rule in the repository
 - Partial results are labelled partial, and the response states what was not covered.
 - Every claim carries its strength label: OBSERVED, REPORTED, DERIVED, CORRELATED, INFERRED, HYPOTHESIS.
 - Never invent statistics, source names, dates or identifiers in code, fixtures, comments, documentation or UI copy. Use bracketed placeholders.
+- **The one exception: sign-up refusal responses** (approved in the Phase 2B review). A refused sign-up is answered exactly like an accepted one, so the response cannot reveal which email addresses have accounts or invitations (anti-enumeration). The refusal can be for either reason: no pending invitation, or the address already has an account. For both, `POST /api/auth/sign-up/email` returns 200 with a synthetic user for an account that was never created. The synthetic user has a fresh id, the current time as its timestamps, and the submitted name and email. This applies ONLY to sign-up refusal responses. No other endpoint, error path, collector, report, export or UI may return a decoy or synthetic record, for any reason. Clients never display, store or act on the synthetic user. The UI copy stays honest even though the API response is deliberately ambiguous. After any sign-up it says "If that address is eligible, you'll receive an email", never "Account created". That sentence becomes true only once sign-up sends an email, which is not built yet, so no sign-up screen ships before then. `apps/api/test/auth-flow.test.ts` pins this behaviour, so a change to it fails CI. Extending this exception needs explicit approval.
 
 Tests enforce this. Do not weaken or skip them.
 
 ## 2. Tenant isolation is absolute
 
 - Every table carries `tenant_id`. Every query runs inside a transaction with the tenant context set, so Postgres row-level security applies.
+- **The one exception: identity** (approved in Phase 2B). The identity provider's tables in the `auth` schema (`user`, `account`, `session`, `verification`, `two_factor`, `organization`, `member`, `invitation`, `rate_limit`) carry no `tenant_id`: a person signs in before any tenant is known, and one identity may belong to several tenants. These tables hold identity and membership, never investigation data. Only the `app_auth` role can reach them, and it has no access to tenant data. The application role has no access to them. A schema test fails if any other table lacks `tenant_id`. Adding a table to this exception needs explicit approval.
 - No repository function may be callable without a tenant context.
 - Never disable RLS, never use a superuser connection from application code, never add a "just for admin" bypass path.
 - Cross-tenant isolation tests run in CI and block release. If they fail, nothing ships.
@@ -60,12 +62,13 @@ apps/web          React SPA (Vite)
 apps/api          Fastify API — routes only, no business logic
 apps/worker       one worker codebase, deployed as pools by queue
 packages/core     domain types, evidence model, target detection
+packages/access   permission catalogue, plan and vetting evaluation, API key hashing and verification
 packages/collectors  collector SDK, registry, collectors
 packages/osint-engine  orchestration, planner, fusion, merge
 packages/llm      provider interface, citation validation
 packages/db       schema, migrations, RLS policies
 packages/media-forensics
-packages/integrations  credential vault, rate limits, exports
+packages/integrations  credential vault, API key storage, rate limits, exports
 packages/ui       shadcn/ui components
 packages/config   env schema, shared tsconfig/eslint
 services/vision   Python FastAPI (GPU, optional)
@@ -79,6 +82,8 @@ Rules:
 - A new module copies the shape of an existing one. Consistency beats cleverness.
 - Cross-package imports go through package entry points, never deep paths.
 - `packages/core` depends on nothing else in the repo.
+- `packages/access` depends only on `packages/core` and does no I/O.
+- Every access decision is made in `packages/access`: permissions, plan, vetting and API key scope. The API and the workers therefore apply the same rules. `apps/api` keeps only the HTTP guards, the Fastify plugins, the identity provider's wiring and the sign-in routes.
 
 ## 7. Contracts and types
 

@@ -71,16 +71,6 @@ async function seedTenant(
       displayName: `[Analyst, ${spec.name}]`,
       status: "ACTIVE",
     });
-    const role = await repos.roles.create({ name: "[analyst]", description: "[seed role]" });
-    for (const permission of [
-      "investigation:create",
-      "investigation:read",
-      "case:read",
-      "case:write",
-    ]) {
-      await repos.permissions.grant(role.id, permission);
-    }
-    await repos.memberships.create({ userId: user.id, roleId: role.id });
     await repos.collectorsRegistry.register({
       collectorId: SEED_COLLECTOR_ID,
       sourceLabel: "[Development seed]",
@@ -164,6 +154,9 @@ async function seedTenant(
       action: "seed.create",
       target: { type: "tenant", id: spec.tenantId },
       details: { note: "[development seed]" },
+      authorization: { method: "SYSTEM", permission: null, sessionId: null },
+      outcome: "ALLOWED",
+      requestId: null,
     });
     return {
       tenantId: spec.tenantId,

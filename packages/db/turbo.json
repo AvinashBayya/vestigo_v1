@@ -4,7 +4,12 @@
   "tasks": {
     "test": {
       "cache": false,
-      "env": ["TEST_DATABASE_URL", "TEST_DATABASE_OWNER_URL", "TEST_DATABASE_SUPERUSER_URL"]
+      "env": [
+        "TEST_DATABASE_URL",
+        "TEST_DATABASE_OWNER_URL",
+        "TEST_DATABASE_AUTH_URL",
+        "TEST_DATABASE_SUPERUSER_URL"
+      ]
     }
   }
 }

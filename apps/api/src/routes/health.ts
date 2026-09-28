@@ -13,6 +13,7 @@ export const healthRoutes: FastifyPluginAsyncZod = (app) => {
   app.get(
     "/health",
     {
+      config: { access: { public: "Liveness must be checkable without credentials." } },
       schema: {
         operationId: "getHealth",
         summary: "Liveness check",

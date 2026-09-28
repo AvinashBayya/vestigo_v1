@@ -22,8 +22,16 @@ cp .env.example .env          # local defaults that match docker-compose.yml
 docker compose up -d          # Postgres 17 + pgvector and Redis, bound to 127.0.0.1 only
 pnpm db:migrate               # applies migrations as the schema owner
 pnpm db:seed                  # optional: two development tenants with distinct data
+
+# Two secrets come from the shell environment, never from a file:
+export AUTH_SECRET=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")
+export VAULT_MASTER_KEY=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))")
 pnpm dev                      # builds dependencies, then runs the API and the web app
 ```
+
+The vault master key encrypts stored provider credentials; a new one each session makes
+credentials stored earlier unreadable, which is harmless locally. A Postgres volume created before
+Phase 2B lacks the `app_auth` role: recreate it with `docker compose down -v`.
 
 | What          | Where                                     |
 | ------------- | ----------------------------------------- |
@@ -43,11 +51,16 @@ To stop the databases: `docker compose down` (add `-v` to delete their data volu
 Postgres is the single source of truth, accessed through Drizzle in
 [packages/db](packages/db). Tenant isolation is enforced by the database, not by convention:
 
-- **Two roles, neither a superuser nor able to bypass row-level security.** `app_owner` owns the
-  schema and runs migrations (`DATABASE_MIGRATION_URL`). `app_runtime` is the only role application code
-  connects as (`DATABASE_URL`); it owns nothing and holds the minimum grants. Both are created
-  by [infra/postgres/init](infra/postgres/init) when the compose volume is first initialised. Before
-  its first query, `createDatabase` checks the role and refuses a superuser or `BYPASSRLS` role.
+- **Three roles with disjoint reach, none a superuser or able to bypass row-level security.**
+  `app_owner` owns the schema and runs migrations (`DATABASE_MIGRATION_URL`). `app_runtime` is the
+  only role that reaches tenant data (`DATABASE_URL`); it owns nothing and holds the minimum grants.
+  `app_auth` is the identity provider's role (`DATABASE_AUTH_URL`): the `auth` schema only, no
+  tenant data. All three are created by [infra/postgres/init](infra/postgres/init) when the compose
+  volume is first initialised. Each database handle checks its role before first use and refuses
+  one that could escape its reach.
+- **Identity is the one exception to `tenant_id`** (CLAUDE.md §2): users, sessions, organisations
+  and memberships live in the `auth` schema, because a person signs in before any tenant is known
+  and may belong to several. A test fails if any other table lacks `tenant_id`.
 - **Every table** carries `tenant_id`, forces row-level security, and has one policy comparing
   `tenant_id` with the transaction's tenant. Foreign keys and unique keys all include
   `tenant_id`, so no row can reference, or collide with, another tenant's.
@@ -72,6 +85,46 @@ Row-level security, grants, triggers and partitioning live in hand-written SQL m
 The db tests run against a real Postgres: `docker compose up -d` first. They recreate a separate
 `app_test` database on every run (override with the `TEST_DATABASE_*` variables), and are never
 served from the Turborepo cache.
+
+## Authentication and access
+
+Identity is [Better Auth](https://www.better-auth.com), self-hosted and mounted at `/api/auth`.
+
+- **Tenants are organisations.** An operator creates a tenant and its first owner:
+
+  ```sh
+  PROVISION_OWNER_PASSWORD='...' pnpm --filter @repo/api provision-tenant \
+    --name "[Tenant]" --slug tenant --owner-email owner@example.com \
+    --owner-name "[Owner]" --operator "[you]"
+  ```
+
+  Everyone else joins by invitation; there is no open sign-up, and nobody can create or delete a
+  tenant through the API. A refused sign-up is answered exactly like an accepted one, so the
+  response does not reveal which addresses have accounts: the one exception to the never-fabricate
+  rule (CLAUDE.md §1), and it applies to nothing else.
+
+- **MFA (TOTP) is required for every account.** After a password sign-in, only TOTP enrolment
+  works. Later sign-ins stop at the second factor. MFA cannot be switched off.
+- **The tenant comes from the session's active organisation** (`/api/auth/organization/set-active`)
+  or from the API key, never from anything else in the request. Every request runs in one tenant
+  transaction.
+- **Access is by permission** (`investigation:create`, `person:search`), never by role name.
+  Roles (`owner`, `admin`, `analyst`, `viewer`) map to permission sets in
+  [packages/access/src/permissions.ts](packages/access/src/permissions.ts). Every route declares
+  its permission or why it is public; an undeclared route stops the app from starting. The API
+  and the workers make every access decision through [packages/access](packages/access).
+- **Modules are gated by plan.** Person investigation needs a plan that includes it and approved
+  vetting. The application cannot change a tenant's plan or vetting status; a database trigger
+  audits any change an operator makes.
+- **API keys** (`Authorization: Bearer ak_…`) are scoped to permissions, capped by what their issuer
+  can do now, hashed at rest, shown once, rotatable, and rate-limited per key in Redis. If Redis is
+  unreachable, API-key requests are refused (503), not waved through.
+- **Every authenticated action is audited** in the tenant's `audit_log`: actor, action, target,
+  outcome (allowed, denied or failed), the permission exercised, how the caller authenticated, and
+  the request id.
+- **Provider credentials** go in the per-tenant vault
+  ([packages/integrations](packages/integrations)), envelope-encrypted under `VAULT_MASTER_KEY`. No
+  API response returns one, and every server-side read is audited.
 
 ## Tasks
 
@@ -122,14 +175,17 @@ Calling a path, or sending a shape, that the spec does not describe fails to com
 ## Layout
 
 ```
-apps/api          Fastify API: routes only, no business logic
+apps/api          Fastify API: routes, identity wiring, HTTP guards; no business logic
 apps/web          React SPA (Vite)
 apps/worker       one worker codebase, deployed as pools by queue
 packages/config   env schema, product name, shared tsconfig / ESLint / Prettier, repo gates
-packages/core     domain types, vocabulary and errors; depends on nothing else in the repo
+packages/core     domain types, vocabulary, errors; depends on nothing else
+packages/access   who may do what: permissions, plan and vetting, API key hashing and
+                  verification; pure, depends only on core, shared by API and workers
 packages/db       schema, migrations, row-level security, repositories, content store
+packages/integrations  credential vault, API key storage, rate limits
 packages/*        collectors, llm (toolchain only so far); osint-engine,
-                  media-forensics, integrations, ui (placeholders)
-infra/postgres    first-run database bootstrap for docker compose (roles, pgvector)
+                  media-forensics, ui (placeholders)
+infra/postgres    first-run database bootstrap for docker compose (three roles, pgvector)
 docs/             architecture decisions, audit, build phases, plan
 ```

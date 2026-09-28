@@ -101,3 +101,11 @@ export type UsageUnit = (typeof USAGE_UNITS)[number];
 /** Data-residency regions. One today (ARCHITECTURE-DECISIONS §10: India). */
 export const TENANT_REGIONS = ["IN"] as const;
 export type TenantRegion = (typeof TENANT_REGIONS)[number];
+
+/** How an audited request was authorised. */
+export const AUTH_METHODS = ["SESSION", "API_KEY", "SYSTEM"] as const;
+export type AuthMethod = (typeof AUTH_METHODS)[number];
+
+/** Whether an audited action was allowed, denied, or allowed and then failed. */
+export const AUDIT_OUTCOMES = ["ALLOWED", "DENIED", "FAILED"] as const;
+export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
