@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc9083#section-5.3",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. An HTTP 200 whose RDAP object is an entity, not the domain object a domain lookup must return. Not observed live."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/example.com"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/rdap+json"
+    },
+    "body": "{\"objectClassName\":\"entity\",\"handle\":\"[entity handle]\"}"
+  }
+}

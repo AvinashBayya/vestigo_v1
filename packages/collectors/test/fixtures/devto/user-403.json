@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.forem.com/api/v1",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A refusal of the request."
+  },
+  "request": {
+    "host": "dev.to",
+    "path": "/api/users/by_username?url=thepracticaldev"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"error\":\"forbidden\",\"status\":403}"
+  }
+}

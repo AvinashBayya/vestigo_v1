@@ -126,6 +126,19 @@ export class CollectorNotEnabledError extends AppError {
   }
 }
 
+/**
+ * The database refused to change what a job already recorded: its result,
+ * its evidence, its fusion, or a FOUND outcome (migration 0010).
+ */
+export class JobRecordedOnceError extends AppError {
+  readonly code = "JOB_RECORDED_ONCE";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "JobRecordedOnceError";
+  }
+}
+
 export class InvalidIdentifierError extends AppError {
   readonly code = "INVALID_IDENTIFIER";
 
@@ -229,6 +242,8 @@ export function translateDatabaseError(error: unknown): Error {
       return new MergeRuleViolationError("REVERT_ONLY", message);
     case "COL01":
       return new CollectorNotEnabledError();
+    case "JOB01":
+      return new JobRecordedOnceError(message);
     default:
       // Data exceptions (class 22) can echo the offending input value.
       return sqlState?.startsWith("22")

@@ -1,4 +1,5 @@
 export { AppError, NotImplementedError } from "./errors.ts";
+export { detectTargetType, EmptyTargetError, type DetectedTarget } from "./target-detection.ts";
 export { InvalidTenantIdError, parseTenantId, type TenantId } from "./tenant.ts";
 export {
   AUDIT_ACTOR_KINDS,
@@ -10,9 +11,11 @@ export {
   COMMERCIAL_USE_VERDICTS,
   DECISION_ACTOR_KINDS,
   ENTITY_KINDS,
+  JOB_OUTCOMES,
   JOB_STATUSES,
   MERGE_SIGNALS,
   NAME_ONLY_AUTOMERGE_FORBIDDEN,
+  QUOTA_PERIODS,
   RUN_STATUSES,
   TARGET_TYPES,
   TENANT_REGIONS,
@@ -26,8 +29,10 @@ export {
   type CommercialUseVerdict,
   type DecisionActorKind,
   type EntityKind,
+  type JobOutcome,
   type JobStatus,
   type MergeSignal,
+  type QuotaPeriod,
   type RunStatus,
   type TargetType,
   type TenantRegion,

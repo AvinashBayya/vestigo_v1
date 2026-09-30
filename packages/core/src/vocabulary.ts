@@ -115,14 +115,35 @@ export const JOB_STATUSES = [
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
+/**
+ * What a collector job's last attempt produced: the collectors runtime's
+ * outcome, recorded on the job. Additive only, and the same set as the
+ * runtime's CollectionOutcome status.
+ */
+export const JOB_OUTCOMES = [
+  "FOUND",
+  "NOT_FOUND",
+  "FAILED",
+  "UNAVAILABLE",
+  "NEEDS_CREDENTIALS",
+  "REFUSED",
+] as const;
+export type JobOutcome = (typeof JOB_OUTCOMES)[number];
+
 /** Units metered against a tenant for every external call. */
 export const USAGE_UNITS = [
   "API_CREDIT",
   "SEARCH_QUERY",
   "LLM_INPUT_TOKEN",
   "LLM_OUTPUT_TOKEN",
+  /** One request a collector sent to its upstream, whatever the answer. */
+  "UPSTREAM_REQUEST",
 ] as const;
 export type UsageUnit = (typeof USAGE_UNITS)[number];
+
+/** The calendar period a quota counts over, in UTC. */
+export const QUOTA_PERIODS = ["DAY", "MONTH"] as const;
+export type QuotaPeriod = (typeof QUOTA_PERIODS)[number];
 
 /** Data-residency regions. One today (ARCHITECTURE-DECISIONS §10: India). */
 export const TENANT_REGIONS = ["IN"] as const;

@@ -1,0 +1,21 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: the primary rate limit exhausted: 403 with x-ratelimit-remaining 0 and a reset time (2100-01-01, far enough ahead to stay in the future)."
+  },
+  "request": {
+    "host": "api.github.com",
+    "path": "/users/octocat"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": "0",
+      "x-ratelimit-reset": "4102444800"
+    },
+    "body": "{\"message\":\"[synthetic rate limit message]\"}"
+  }
+}

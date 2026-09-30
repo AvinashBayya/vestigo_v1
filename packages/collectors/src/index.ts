@@ -6,6 +6,21 @@
 // implementation. The runtime is the only way to run one.
 export { PLATFORM_SOURCES } from "./catalogue.ts";
 export {
+  COMMONCRAWL_RESULT,
+  CONTACT_PHONE_RESULT,
+  createPlatformRegistry,
+  CRTSH_RESULT,
+  DEVTO_RESULT,
+  DNS_RESULT,
+  GITHUB_RESULT,
+  HACKERNEWS_RESULT,
+  NEWS_RESULT,
+  PLATFORM_COLLECTORS,
+  RDAP_RESULT,
+  WAYBACK_RESULT,
+  WIKIDATA_RESULT,
+} from "./platform/index.ts";
+export {
   declareCollector,
   defineCollector,
   type Collector,
@@ -41,7 +56,7 @@ export {
   type TenantRegistration,
 } from "./evidence.ts";
 export { isPublicAddress } from "./fetcher/address.ts";
-export type { CapturedResponse } from "./fetcher/capture.ts";
+export type { Captured, CapturedResponse, LocalRecord } from "./fetcher/capture.ts";
 export {
   COLLECTOR_USER_AGENT,
   MAX_FETCH_TIMEOUT_MS,
@@ -70,6 +85,7 @@ export {
   isEmptyResult,
   type Admission,
   type DispatchRequest,
+  type UsageMeter,
   type ScopeClearance,
 } from "./runtime.ts";
 export {
@@ -81,6 +97,7 @@ export {
   type Source,
   type SourceDeclaration,
   type SourceNetwork,
+  type SourceOperator,
   type SourceRateLimit,
 } from "./source.ts";
 export { parseTarget, type Target } from "./target.ts";

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.wikidata.org/w/api.php?action=help&modules=wbgetentities",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: the entity read reports the searched item missing (deleted between the two requests), and omits the others."
+  },
+  "request": {
+    "host": "www.wikidata.org",
+    "path": "/w/api.php?action=wbgetentities&ids=Q242540%7CQ47470786%7CQ47472642%7CQ47474617%7CQ47470936&props=labels%7Cdescriptions%7Cclaims%7Cinfo&languages=en&format=json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"entities\":{\"Q242540\":{\"id\":\"Q242540\",\"missing\":\"\"}}}"
+  }
+}

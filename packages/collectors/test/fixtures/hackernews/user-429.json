@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/HackerNews/API",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A rate-limited answer with Retry-After in seconds."
+  },
+  "request": {
+    "host": "hacker-news.firebaseio.com",
+    "path": "/v0/user/fixture-user.json"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "retry-after": "30"
+    },
+    "body": "{\"error\":\"[rate limited]\"}"
+  }
+}

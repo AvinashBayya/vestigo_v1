@@ -1,0 +1,26 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://crt.sh/?q=%25.example.invalid&output=json",
+    "recordedOn": "2026-09-28",
+    "notes": "Recorded with curl from the live upstream. The .invalid TLD is reserved (RFC 2606), so no certificate names it: crt.sh's genuine zero result, an empty JSON array. Body and headers unaltered (header names lower-cased)."
+  },
+  "request": {
+    "host": "crt.sh",
+    "path": "/?q=%25.example.invalid&output=json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "server": "nginx",
+      "date": "Mon, 28 Sep 2026 10:44:25 GMT",
+      "content-type": "application/json",
+      "content-length": "2",
+      "connection": "keep-alive",
+      "access-control-allow-origin": "*",
+      "strict-transport-security": "max-age=15768000; includeSubDomains; preload",
+      "expect-ct": "preload"
+    },
+    "body": "[]"
+  }
+}

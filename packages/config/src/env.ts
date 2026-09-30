@@ -108,6 +108,69 @@ export const envSchema = z.object({
       "Whether collectors whose source licence is UNVERIFIED may run. BLOCKED sources never run. Unset: allowed in development and test, refused in production.",
   }),
 
+  // ── Jobs and workers (Phase 4) ──
+  QUEUE_PREFIX: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]{1,64}$/)
+    .default("jobs")
+    .meta({
+      description:
+        "Prefix of every job queue's Redis keys, so deployments sharing one Redis stay apart.",
+    }),
+  WORKER_QUEUES: z
+    .string()
+    .min(1)
+    .default("*")
+    .meta({
+      description:
+        "Queues this worker pool consumes, comma-separated: investigations, fusion, collect.<source>, collect.* for every source, or * for all.",
+      examples: ["investigations,fusion", "collect.*", "collect.crtsh,collect.rdap"],
+    }),
+  COLLECT_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(2).meta({
+    description:
+      "The bulkhead: the most collector jobs of one source that run at once, across every worker.",
+  }),
+  JOB_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5).meta({
+    description:
+      "Attempts a job gets, the first included. Only rate limits, timeouts and unavailable upstreams are retried; the last such attempt dead-letters the job.",
+  }),
+  JOB_RETRY_BASE_MS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(2_000)
+    .meta({ description: "Wait before a job's second attempt; it doubles per attempt after." }),
+  JOB_RETRY_MAX_MS: z.coerce.number().int().min(1).default(300_000).meta({
+    description: "Longest the backoff alone waits. An upstream's own Retry-After may be longer.",
+  }),
+  CIRCUIT_FAILURE_THRESHOLD: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .default(5)
+    .meta({ description: "Consecutive failures of one source that open its circuit." }),
+  CIRCUIT_FAILURE_WINDOW_MS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(300_000)
+    .meta({ description: "A failure older than this no longer counts towards opening a circuit." }),
+  CIRCUIT_COOLING_MS: z.coerce.number().int().min(1).default(60_000).meta({
+    description: "How long an open circuit refuses calls before one probe is let through.",
+  }),
+  CIRCUIT_PROBE_LEASE_MS: z.coerce.number().int().min(1).default(600_000).meta({
+    description:
+      "How long a half-open circuit's probe holds its slot; longer than any collector's run budget.",
+  }),
+  RUN_EVENTS_POLL_MS: z.coerce
+    .number()
+    .int()
+    .min(100)
+    .max(10_000)
+    .default(1_000)
+    .meta({ description: "How often the run progress stream reads a run's state." }),
+
   // No collector credential is ever configured here. Collectors read their
   // credentials only from each tenant's vault, so there is no platform-level
   // fallback for any of them; a test fails if a variable here names a collector

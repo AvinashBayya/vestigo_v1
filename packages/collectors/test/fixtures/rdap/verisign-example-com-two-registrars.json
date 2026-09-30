@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc9083#section-5.3",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. A domain object naming two registrar entities, so there is no single registrar to report. Not observed live."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/example.com"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/rdap+json"
+    },
+    "body": "{\"objectClassName\":\"domain\",\"ldhName\":\"EXAMPLE.COM\",\"entities\":[{\"objectClassName\":\"entity\",\"handle\":\"[registrar handle 1]\",\"roles\":[\"registrar\"]},{\"objectClassName\":\"entity\",\"handle\":\"[registrar handle 2]\",\"roles\":[\"registrar\"]}]}"
+  }
+}

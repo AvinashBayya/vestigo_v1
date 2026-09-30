@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc7480#section-5.5",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. rdap.org refusing a lookup with HTTP 429 and a Retry-After in seconds, as RFC 7480 section 5.5 describes. Not observed live."
+  },
+  "request": {
+    "host": "rdap.org",
+    "path": "/domain/example.com"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "text/plain",
+      "retry-after": "120"
+    },
+    "body": ""
+  }
+}

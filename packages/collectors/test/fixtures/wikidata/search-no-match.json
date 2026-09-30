@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://www.wikidata.org/w/api.php?action=wbsearchentities&search=Qzxwv+Placeholder+Organisation+Nonexistent&language=en&uselang=en&type=item&limit=5&format=json",
+    "recordedOn": "2026-09-30",
+    "notes": "Live wbsearchentities answer for a placeholder name that matches nothing: an empty search list, as received."
+  },
+  "request": {
+    "host": "www.wikidata.org",
+    "path": "/w/api.php?action=wbsearchentities&search=Qzxwv+Placeholder+Organisation+Nonexistent&language=en&uselang=en&type=item&limit=5&format=json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"searchinfo\":{\"search\":\"Qzxwv Placeholder Organisation Nonexistent\"},\"search\":[],\"success\":1}"
+  }
+}

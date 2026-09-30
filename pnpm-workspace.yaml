@@ -9,5 +9,8 @@ minimumReleaseAgeStrict: true
 # Dependency build scripts are denied unless listed as true. esbuild's
 # postinstall only verifies a binary that pnpm already installs as a
 # platform-specific optional package, so it does not need to run.
+# msgpackr-extract (via BullMQ) is an optional native accelerator for
+# msgpackr; without its build, msgpackr uses its pure-JavaScript path.
 allowBuilds:
   esbuild: false
+  msgpackr-extract: false

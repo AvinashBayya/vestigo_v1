@@ -1,0 +1,38 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://rdap.org/domain/example.com",
+    "recordedOn": "2026-09-28",
+    "notes": "rdap.org's redirect for example.com to the .com registry's RDAP server (first hop of a real two-hop lookup). Recorded with an Accept: application/rdap+json request header and a curl user agent."
+  },
+  "request": {
+    "host": "rdap.org",
+    "path": "/domain/example.com"
+  },
+  "response": {
+    "status": 302,
+    "headers": {
+      "date": "Mon, 28 Sep 2026 10:41:42 GMT",
+      "content-type": "text/html",
+      "transfer-encoding": "chunked",
+      "connection": "keep-alive",
+      "access-control-allow-origin": "*",
+      "server": "cloudflare",
+      "expires": "Tue, 29 Sep 2026 05:08:04 GMT",
+      "cache-control": "public, max-age=28800",
+      "referrer-policy": "origin",
+      "location": "https://rdap.verisign.com/com/v1/domain/example.com",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "via": "1.1 fly.io, 1.1 fly.io",
+      "fly-request-id": "01M3K6KF764R949S10HPKAG96S-sin",
+      "age": "20017",
+      "cf-cache-status": "HIT",
+      "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=EJEADbw7l%2FyQkuJGbUPK1dJ4RrghOdHUhFnesEepw2K2FC0S%2B2ZjU0XVkDzvFU8g58KB%2F%2FRY9z%2B9NcolM%2B%2FBh9WNAihO6eWd0CzuvJIua22fEAYXVUsRGw9D4g%3D%3D\"}]}",
+      "cf-ray": "a422231f5b9c5ef9-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": ""
+  }
+}

@@ -1,12 +1,25 @@
 import { NotImplementedError } from "@repo/core";
+import type { CollectorRegistry } from "@repo/collectors";
 import type { CredentialVault } from "@repo/integrations";
+import type { InvestigationQueue, JobReplayer } from "@repo/osint-engine";
 import type { Auth } from "./auth/better-auth.ts";
 import type { AccessServices } from "./http/access.ts";
 import { resolvePrincipal, type PrincipalServices } from "./http/principal.ts";
 
+/** What the run routes need: queues to start and replay work, never to do it. */
+export interface RunServices {
+  readonly investigations: InvestigationQueue;
+  readonly replayer: JobReplayer;
+  /** The platform registry, for each job's source label. */
+  readonly registry: CollectorRegistry;
+  /** How often the progress stream reads a run's state. */
+  readonly eventsPollMs: number;
+}
+
 /** Everything request handling needs. Constructed once, in server.ts or a test. */
 export interface Services extends PrincipalServices {
   readonly vault: CredentialVault;
+  readonly runs: RunServices;
 }
 
 /**

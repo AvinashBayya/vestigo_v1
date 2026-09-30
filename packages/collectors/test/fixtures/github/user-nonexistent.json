@@ -1,0 +1,23 @@
+{
+  "provenance": {
+    "kind": "recorded-redacted",
+    "source": "https://api.github.com/users/qzxwv-placeholder-nonexistent-login",
+    "recordedOn": "2026-09-30",
+    "notes": "Live answer for a placeholder login that does not exist: 404. Body as received; response headers trimmed to the content type, Link and rate-limit headers."
+  },
+  "request": {
+    "host": "api.github.com",
+    "path": "/users/qzxwv-placeholder-nonexistent-login"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-limit": "60",
+      "x-ratelimit-remaining": "57",
+      "x-ratelimit-resource": "core",
+      "x-ratelimit-reset": "1790757640"
+    },
+    "body": "{\"message\":\"Not Found\",\"documentation_url\":\"https://docs.github.com/rest\",\"status\":\"404\"}"
+  }
+}

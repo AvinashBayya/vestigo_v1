@@ -9,7 +9,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../src/database.ts";
 import { ReferenceNotFoundError } from "../src/errors.ts";
 import { REPOSITORY_TABLES, type Repositories } from "../src/repositories/index.ts";
-import { createTenantFixture, openDatabase, type TenantFixture } from "./support.ts";
+import {
+  createTenantFixture,
+  openDatabase,
+  SHARED_IDENTIFIER,
+  type TenantFixture,
+} from "./support.ts";
 
 let db: Database;
 let attacker: TenantFixture;
@@ -159,8 +164,16 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     list: (r) => r.investigations.list(page),
   },
   runs: {
-    reads: [(r, v) => r.runs.findById(v.runId)],
-    writes: [(r, v) => r.runs.transition(v.runId, { status: "CANCELLED" })],
+    reads: [
+      (r, v) => r.runs.findById(v.runId),
+      (r, v) => r.runs.lock(v.runId),
+      (r, v) =>
+        r.runs.listForInvestigation(v.investigationId, page).then((rows) => rows[0] ?? null),
+    ],
+    writes: [
+      (r, v) => r.runs.transition(v.runId, { status: "CANCELLED" }),
+      (r, v) => r.runs.setPlan(v.runId, { hijacked: true }),
+    ],
     references: [
       (r, v) =>
         r.runs.create({
@@ -172,9 +185,32 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     list: (r) => r.runs.list(page),
   },
   jobs: {
-    reads: [(r, v) => r.jobs.findById(v.jobId), (r) => r.jobs.findByIdempotencyKey("fixture:b")],
-    writes: [(r, v) => r.jobs.transition(v.jobId, { status: "FAILED", attempts: 99 })],
+    reads: [
+      (r, v) => r.jobs.findById(v.jobId),
+      (r) => r.jobs.findByIdempotencyKey("fixture:b"),
+      (r, v) => r.jobs.lock(v.jobId),
+      (r, v) => r.jobs.listForRun(v.runId, page).then((rows) => rows[0] ?? null),
+    ],
+    writes: [
+      (r, v) => r.jobs.transition(v.jobId, { status: "FAILED", attempts: 99 }),
+      (r, v) =>
+        r.jobs.transition(v.jobId, {
+          status: "SUCCEEDED",
+          outcome: "NOT_FOUND",
+          nextAttemptAt: null,
+          deadLetteredAt: null,
+        }),
+    ],
     references: [
+      (r, v, a) =>
+        r.jobs.createOrFind({
+          runId: v.runId,
+          collectorId: a.collectorId,
+          idempotencyKey: "cross-tenant:create-or-find",
+          status: "QUEUED",
+          targetType: "DOMAIN",
+          target: "example.com",
+        }),
       (r, v, a) =>
         r.jobs.create({
           runId: v.runId,
@@ -208,7 +244,18 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     list: (r) => r.evidence.list(page),
   },
   entities: {
-    reads: [(r, v) => r.entities.findById(v.entityId)],
+    reads: [
+      (r, v) => r.entities.findById(v.entityId),
+      // Both tenants resolved the same identifier; A must only ever get its own.
+      (r, _v, a) =>
+        r.entities
+          .resolveByIdentifier({
+            kind: "DOMAIN",
+            identifier: SHARED_IDENTIFIER,
+            displayName: "[resolved by A]",
+          })
+          .then(({ entity }) => (entity.tenantId === a.tenantId ? null : entity)),
+    ],
     writes: [(r, v) => r.entities.rename(v.entityId, "[hijacked]")],
     references: [],
     list: (r) => r.entities.list(page),
@@ -222,6 +269,12 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
           sourceEntityId: v.entityId,
           targetEntityId: a.entityId,
           kind: "cross_tenant",
+        }),
+      (r, v, a) =>
+        r.entityRelationships.resolve({
+          sourceEntityId: a.entityId,
+          targetEntityId: v.entityId,
+          kind: "cross_tenant_resolve",
         }),
     ],
     list: (r) => r.entityRelationships.list(page),
@@ -380,9 +433,24 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     list: (r) => r.credentials.list(page),
   },
   usageEvents: {
-    reads: [(r, v) => r.usageEvents.findById(v.usageEventId)],
+    reads: [
+      (r, v) => r.usageEvents.findById(v.usageEventId),
+      // A's own fixture consumed one API credit; the victim's would make two.
+      (r) =>
+        r.usageEvents
+          .totalSince("API_CREDIT", new Date(0))
+          .then((total) => (total === 1 ? null : total)),
+    ],
     writes: [], // append-only
     references: [
+      (r, v, a) =>
+        r.usageEvents.recordAttempt({
+          unit: "UPSTREAM_REQUEST",
+          quantity: 1,
+          collectorId: a.collectorId,
+          jobId: v.jobId,
+          attempt: 1,
+        }),
       (r, v) =>
         r.usageEvents.record({
           unit: "API_CREDIT",
@@ -392,6 +460,18 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
         }),
     ],
     list: (r) => r.usageEvents.list(page),
+  },
+  tenantQuotas: {
+    // Both tenants have a quota for the same unit and period; A must only get its own.
+    reads: [
+      (r, _v, a) =>
+        r.tenantQuotas
+          .find("UPSTREAM_REQUEST", "DAY")
+          .then((row) => (row?.tenantId === a.tenantId ? null : row)),
+    ],
+    writes: [], // read-only for the application: operators set quotas
+    references: [],
+    list: (r) => r.tenantQuotas.list(page),
   },
 };
 
@@ -417,6 +497,8 @@ async function victimSnapshot(): Promise<unknown> {
     alert: await repos.alerts.findById(victim.alertId),
     credential: await repos.credentials.findById(victim.credentialId),
     usage: await repos.usageEvents.findById(victim.usageEventId),
+    identified: await repos.entities.findById(victim.identifiedEntityId),
+    quotas: await repos.tenantQuotas.list(page),
   }));
 }
 

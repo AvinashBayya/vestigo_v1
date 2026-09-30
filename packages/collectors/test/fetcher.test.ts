@@ -75,6 +75,7 @@ const one = testSource("one", {
     protocol: "http",
     hosts: ["one.test", "mirror.one.test"],
     rateLimit: { requests: 100, intervalSeconds: 1, basis: "SELF_IMPOSED", note: "[test]" },
+    operators: [{ name: "fake", hosts: ["one.test", "mirror.one.test"] }],
   },
 });
 const GET = { method: "GET", timeoutMs: 2_000 } as const;
@@ -266,6 +267,7 @@ describe("the shared per-upstream rate limit", () => {
         protocol: "http",
         hosts: ["one.test"],
         rateLimit: { requests: 1, intervalSeconds: 1, basis: "UPSTREAM_STATED", note: "[test]" },
+        operators: [{ name: "fake", hosts: ["one.test"] }],
       },
     });
     const network = testNetwork(upstream, { rateLimiter: new MemoryRateLimiter() });

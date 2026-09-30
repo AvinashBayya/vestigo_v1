@@ -7,10 +7,12 @@ import {
   type CollectionOutcome,
   type CollectorRuntime,
   type CollectorSecret,
+  type FoundOutcome,
   type ScopeClearance,
+  type UsageMeter,
 } from "@repo/collectors";
 import { AppError, type TargetType, type TenantId } from "@repo/core";
-import type { ContentStore, Database } from "@repo/db";
+import type { ContentStore, Database, TenantContext } from "@repo/db";
 import type { CredentialSource } from "./credentials.ts";
 
 export interface CollectionRequest {
@@ -20,6 +22,8 @@ export interface CollectionRequest {
   readonly jobId: string | null;
   /** The request that caused it, for the audit entries credential reads write. */
   readonly requestId: string | null;
+  /** Told of every request the collector sends upstream, for metering. */
+  readonly meter?: UsageMeter;
 }
 
 /** What a collection did. Evidence ids are present only for FOUND. */
@@ -82,14 +86,9 @@ export class CollectionExecutor {
     this.#credentials = options.credentials;
   }
 
-  async collect(tenantId: TenantId, request: CollectionRequest): Promise<CollectionReport> {
+  /** Admits, then runs, a collector; writes nothing. The first two of the three steps. */
+  async run(tenantId: TenantId, request: CollectionRequest): Promise<CollectionOutcome> {
     const entry = this.#runtime.registry.entry(request.collectorId);
-    const report = (outcome: CollectionOutcome, evidenceIds: readonly string[] = []) => ({
-      collectorId: entry.id,
-      outcome,
-      evidenceIds,
-    });
-
     const admitted = await this.#db.withTenant(tenantId, async (ctx): Promise<Admitted> => {
       await ctx.repos.collectorsRegistry.sync(tenantRegistration(entry));
       const tenant = await ctx.repos.tenants.current();
@@ -126,34 +125,56 @@ export class CollectionExecutor {
       });
       return { rejected: null, admission, credentials };
     });
-    if (admitted.rejected !== null) return report(admitted.rejected);
+    if (admitted.rejected !== null) return admitted.rejected;
 
-    const outcome = await this.#runtime.execute(entry.id, {
+    return this.#runtime.execute(entry.id, {
       ...admitted.admission,
       credentials: admitted.credentials,
+      ...(request.meter === undefined ? {} : { meter: request.meter }),
     });
-    if (outcome.status !== "FOUND") return report(outcome);
+  }
 
-    const drafts = evidenceDrafts(entry, outcome);
-    const evidenceIds = await this.#db.withTenant(tenantId, async (ctx) => {
-      const ids: string[] = [];
-      for (const draft of drafts) {
-        const stored = await this.#contentStore.put(tenantId, draft.payload);
-        const row = await ctx.repos.evidence.record({
-          collectorId: draft.collectorId,
-          collectorVersion: draft.collectorVersion,
-          jobId: request.jobId,
-          sourceUrl: draft.sourceUrl,
-          contentHash: stored.contentHash,
-          payloadRef: stored.ref,
-          observedAt: draft.observedAt,
-          collectedAt: draft.collectedAt,
-          claimStrength: draft.claimStrength,
-        });
-        ids.push(row.id);
-      }
-      return ids;
-    });
-    return report(outcome, evidenceIds);
+  /**
+   * The third step: stores each raw payload of a FOUND outcome by its hash and
+   * writes one evidence row per payload, inside the caller's tenant
+   * transaction, so the evidence commits (or not) with whatever else the
+   * caller records there. Returns the evidence ids in the outcome's order.
+   */
+  async persistEvidence(
+    ctx: TenantContext,
+    tenantId: TenantId,
+    outcome: FoundOutcome,
+    jobId: string | null,
+  ): Promise<string[]> {
+    const entry = this.#runtime.registry.entry(outcome.collectorId);
+    const ids: string[] = [];
+    for (const draft of evidenceDrafts(entry, outcome)) {
+      const stored = await this.#contentStore.put(tenantId, draft.payload);
+      const row = await ctx.repos.evidence.record({
+        collectorId: draft.collectorId,
+        collectorVersion: draft.collectorVersion,
+        jobId,
+        sourceUrl: draft.sourceUrl,
+        contentHash: stored.contentHash,
+        payloadRef: stored.ref,
+        observedAt: draft.observedAt,
+        collectedAt: draft.collectedAt,
+        claimStrength: draft.claimStrength,
+      });
+      ids.push(row.id);
+    }
+    return ids;
+  }
+
+  /** All three steps: admit, run, and for FOUND write the evidence in its own transaction. */
+  async collect(tenantId: TenantId, request: CollectionRequest): Promise<CollectionReport> {
+    const outcome = await this.run(tenantId, request);
+    if (outcome.status !== "FOUND") {
+      return { collectorId: outcome.collectorId, outcome, evidenceIds: [] };
+    }
+    const evidenceIds = await this.#db.withTenant(tenantId, (ctx) =>
+      this.persistEvidence(ctx, tenantId, outcome, request.jobId),
+    );
+    return { collectorId: outcome.collectorId, outcome, evidenceIds };
   }
 }

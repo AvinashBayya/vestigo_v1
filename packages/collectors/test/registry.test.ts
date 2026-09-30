@@ -3,7 +3,6 @@
  * product decisions; these tests pin the ones the Phase 3A brief requires, and
  * the rules that keep every verdict honest.
  */
-import { NotImplementedError } from "@repo/core";
 import { describe, expect, it } from "vitest";
 import {
   CollectorDefinitionError,
@@ -153,6 +152,7 @@ describe("source rules", () => {
       protocol: "https",
       hosts: [host],
       rateLimit: { requests: 1, intervalSeconds: 1, basis: "SELF_IMPOSED", note: "[x]" },
+      operators: [{ name: "fake", hosts: [host] }],
     } as const;
     expect(() => {
       validateSource(testSource("bad", { network }));
@@ -242,19 +242,28 @@ describe("the registry", () => {
     ).toThrow(CollectorDefinitionError);
   });
 
-  it("refuses to run a LOCAL_ANALYSIS collector until its evidence basis exists (Phase 3B)", () => {
+  it("registers a LOCAL_ANALYSIS collector only with DERIVED evidence, and DERIVED only for one", () => {
+    const offline = testSource("offline", { network: null });
+    const local = declaration({
+      source: "offline",
+      collectionMode: "LOCAL_ANALYSIS",
+      claimStrength: "DERIVED",
+    });
     expect(
-      () =>
-        new CollectorRegistry({
-          sources: [testSource("offline", { network: null })],
-          collectors: [
-            defineCollector(
-              declaration({ source: "offline", collectionMode: "LOCAL_ANALYSIS" }),
-              never,
-            ),
-          ],
-        }),
-    ).toThrow(NotImplementedError);
+      new CollectorRegistry({
+        sources: [offline],
+        collectors: [defineCollector(local, never)],
+      }).entry("fake.one").claimStrength,
+    ).toBe("DERIVED");
+    for (const [sourceList, bad] of [
+      [[offline], { ...local, claimStrength: "REPORTED" as const }],
+      [sources, declaration({ claimStrength: "DERIVED" })],
+    ] as const) {
+      expect(
+        () =>
+          new CollectorRegistry({ sources: sourceList, collectors: [defineCollector(bad, never)] }),
+      ).toThrow(CollectorDefinitionError);
+    }
   });
 
   it("exposes the attribution a report must render", () => {
@@ -269,5 +278,67 @@ describe("the registry", () => {
       text: "[Cite us]",
       url: "https://example.com/",
     });
+  });
+});
+
+describe("a label names every operator whose hosts the collector reads (Phase 4)", () => {
+  const PAIR_NETWORK = {
+    protocol: "https",
+    hosts: ["api.pair.example", "search.pair.example"],
+    rateLimit: { requests: 1, intervalSeconds: 1, basis: "SELF_IMPOSED", note: "[x]" },
+    operators: [
+      { name: "Primary Operator", hosts: ["api.pair.example"] },
+      { name: "Search Partner", hosts: ["search.pair.example"] },
+    ],
+  } as const;
+  const twoOperators = testSource("pair", { network: PAIR_NETWORK });
+  const register = (displayName: string) =>
+    new CollectorRegistry({
+      sources: [twoOperators],
+      collectors: [defineCollector(declaration({ source: "pair", displayName }), never)],
+    });
+
+  it("regression (the hackernews case): refuses a label that names one operator of two", () => {
+    expect(() => register("Primary Operator account")).toThrow(/does not name "Search Partner"/);
+  });
+
+  it("accepts a label that names both", () => {
+    expect(() => register("Account (Primary Operator and Search Partner)")).not.toThrow();
+  });
+
+  it("matches whole words, case-insensitively", () => {
+    expect(() => register("primary operator via search partner")).not.toThrow();
+    expect(() => register("PrimaryOperators and Search Partners")).toThrow(
+      CollectorDefinitionError,
+    );
+  });
+
+  it("every platform source assigns each host to exactly one operator", () => {
+    for (const source of PLATFORM_SOURCES) {
+      if (source.network === null) continue;
+      const operated = source.network.operators.flatMap((operator) => operator.hosts);
+      expect([...operated].sort(), source.id).toEqual([...source.network.hosts].sort());
+    }
+  });
+
+  it.each([
+    ["no operator", []],
+    ["a host no operator runs", [{ name: "Primary Operator", hosts: ["api.pair.example"] }]],
+    [
+      "a host two operators run",
+      [
+        { name: "Primary Operator", hosts: ["api.pair.example", "search.pair.example"] },
+        { name: "Search Partner", hosts: ["search.pair.example"] },
+      ],
+    ],
+    ["a blank operator name", [{ name: " ", hosts: ["api.pair.example", "search.pair.example"] }]],
+  ])("refuses a source with %s", (_label, operators) => {
+    expect(() => {
+      validateSource(
+        testSource("pair", {
+          network: { ...PAIR_NETWORK, operators },
+        }),
+      );
+    }).toThrow(CollectorDefinitionError);
   });
 });

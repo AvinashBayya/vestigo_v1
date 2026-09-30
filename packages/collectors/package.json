@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
     }
   },
   "scripts": {
@@ -21,6 +25,7 @@
     "@repo/access": "workspace:*",
     "@repo/config": "workspace:*",
     "@repo/core": "workspace:*",
+    "libphonenumber-js": "1.13.14",
     "zod": "^4.6.5"
   },
   "devDependencies": {

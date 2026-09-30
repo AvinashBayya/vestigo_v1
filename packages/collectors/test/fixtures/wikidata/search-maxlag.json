@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.mediawiki.org/wiki/API:Etiquette",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: MediaWiki reports replication lag as a 200 carrying an error of code maxlag, with Retry-After."
+  },
+  "request": {
+    "host": "www.wikidata.org",
+    "path": "/w/api.php?action=wbsearchentities&search=Internet+Assigned+Numbers+Authority&language=en&uselang=en&type=item&limit=5&format=json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "retry-after": "5"
+    },
+    "body": "{\"error\":{\"code\":\"maxlag\",\"info\":\"[synthetic lag message]\"}}"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/HackerNews/API",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A documented minimal user: no about and no submitted list."
+  },
+  "request": {
+    "host": "hacker-news.firebaseio.com",
+    "path": "/v0/user/fixture-user.json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"created\":1160418092,\"id\":\"fixture-user\",\"karma\":1}"
+  }
+}

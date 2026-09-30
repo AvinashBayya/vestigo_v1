@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc7480#section-5",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. The .com registry answering HTTP 503 with no Retry-After header. Not observed live."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/example.com"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "content-type": "text/plain"
+    },
+    "body": ""
+  }
+}

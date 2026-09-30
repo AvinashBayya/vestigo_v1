@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/",
+    "recordedOn": "2026-09-28",
+    "notes": "NOERROR whose A record data is not an IPv4 address. Synthetic, in the documented shape; the TTL is a placeholder."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=bad-a-record.example.org&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/dns-json"
+    },
+    "body": "{\"Status\":0,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"bad-a-record.example.org\",\"type\":1}],\"Answer\":[{\"name\":\"bad-a-record.example.org\",\"type\":1,\"TTL\":3600,\"data\":\"[not an IPv4 address]\"}]}"
+  }
+}

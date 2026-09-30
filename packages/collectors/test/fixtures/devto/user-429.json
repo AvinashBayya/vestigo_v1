@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.forem.com/api/v1",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A rate-limited answer with Retry-After in seconds; cannot be provoked on demand without loading DEV."
+  },
+  "request": {
+    "host": "dev.to",
+    "path": "/api/users/by_username?url=thepracticaldev"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "retry-after": "30"
+    },
+    "body": "{\"error\":\"Rate limit reached\",\"status\":429}"
+  }
+}

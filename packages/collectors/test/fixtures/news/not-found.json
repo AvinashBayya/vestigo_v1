@@ -1,0 +1,26 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://api.gdeltproject.org/api/v2/doc/doc?query=%22example.com%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc",
+    "recordedOn": "2026-09-28",
+    "notes": "Live GDELT DOC answer for the IANA-reserved domain example.com: 200 with an empty JSON object, which is how GDELT DOC reports no matching articles. Stored as received."
+  },
+  "request": {
+    "host": "api.gdeltproject.org",
+    "path": "/api/v2/doc/doc?query=%22example.com%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "date": "Mon, 28 Sep 2026 10:42:35 GMT",
+      "server": "GDELT Server",
+      "access-control-allow-origin": "*",
+      "timing-allow-origin": "*",
+      "x-xss-protection": "1; mode=block",
+      "cache-control": "public, max-age=900",
+      "transfer-encoding": "chunked",
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{}"
+  }
+}

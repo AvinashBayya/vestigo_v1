@@ -1,13 +1,32 @@
 import { loadEnvSubset } from "@repo/config";
-import { NotImplementedError } from "@repo/core";
+import { pino } from "pino";
+import { startWorker, WORKER_ENV } from "./worker.ts";
 
-// Fail fast on invalid configuration before anything else runs. The worker
-// validates only what it uses; it never holds the auth secret or vault key.
-loadEnvSubset(["DATABASE_URL", "REDIS_URL"]);
+// Fail fast on invalid configuration before anything else runs.
+const env = loadEnvSubset(WORKER_ENV);
+const logger = pino({ level: env.LOG_LEVEL, base: { service: "worker" } });
 
-// No queue consumer exists yet. Failing loudly is the honest behaviour: a
-// worker that started and idled would look healthy while processing nothing.
-throw new NotImplementedError(
-  "worker.queue-consumption",
-  "BullMQ queues and worker pools are built in Phase 4.",
-);
+const worker = await startWorker(env, logger);
+
+let stopping = false;
+const stop = (signal: string) => {
+  if (stopping) return;
+  stopping = true;
+  logger.info({ signal }, "worker stopping: finishing running jobs");
+  worker.close().then(
+    () => {
+      logger.info("worker stopped");
+      process.exit(0);
+    },
+    (error: unknown) => {
+      logger.error({ err: error }, "worker did not stop cleanly");
+      process.exit(1);
+    },
+  );
+};
+process.on("SIGTERM", () => {
+  stop("SIGTERM");
+});
+process.on("SIGINT", () => {
+  stop("SIGINT");
+});

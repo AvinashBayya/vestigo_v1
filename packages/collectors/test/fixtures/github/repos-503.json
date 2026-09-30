@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: a 503 on the repository list after a good profile."
+  },
+  "request": {
+    "host": "api.github.com",
+    "path": "/users/octocat/repos?sort=updated&per_page=30"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "[synthetic server error page]"
+  }
+}

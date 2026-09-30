@@ -1,0 +1,422 @@
+/**
+ * The engine's rules in isolation: idempotency keys, retries by cause,
+ * circuit verdicts, quota periods, planning with every exclusion reason, the
+ * identifier rules ported from legacy entity resolution (with their
+ * regressions), and every registered collector's extractor run against its
+ * own recorded FOUND fixtures.
+ */
+import {
+  CollectorRegistry,
+  CollectorRuntime,
+  defineCollector,
+  PLATFORM_COLLECTORS,
+  type CollectionOutcome,
+  type SourceDeclaration,
+} from "@repo/collectors";
+import { loadFixture, startHarness, type Fixture } from "@repo/collectors/testing";
+import { EmptyTargetError, type TargetType } from "@repo/core";
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import {
+  circuitVerdict,
+  EXTRACTORS,
+  jobIdempotencyKey,
+  periodStart,
+  planRun,
+  retryDelayMs,
+} from "../src/index.ts";
+import {
+  normaliseDomain,
+  normaliseUrl,
+  normaliseUsername,
+  socialAccountIdentifier,
+} from "../src/fusion/identifiers.ts";
+
+// ── Idempotency ───────────────────────────────────────────────────────────
+
+describe("job idempotency keys", () => {
+  const base = {
+    tenantId: "00000000-0000-4000-8000-000000000001",
+    runId: "00000000-0000-4000-8000-000000000002",
+    collectorId: "crtsh",
+    target: { type: "DOMAIN" as TargetType, value: "example.com" },
+    params: { depth: 1, include: ["a", "b"] },
+  };
+
+  it("is the same for the same work, whatever the parameters' key order", () => {
+    expect(jobIdempotencyKey(base)).toBe(
+      jobIdempotencyKey({ ...base, params: { include: ["a", "b"], depth: 1 } }),
+    );
+    expect(jobIdempotencyKey(base)).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it.each([
+    ["tenant", { tenantId: "00000000-0000-4000-8000-000000000009" }],
+    ["run", { runId: "00000000-0000-4000-8000-000000000009" }],
+    ["collector", { collectorId: "dns" }],
+    ["target", { target: { type: "DOMAIN", value: "example.net" } as const }],
+    ["parameters", { params: { depth: 2, include: ["a", "b"] } }],
+  ])("differs when the %s differs", (_name, change) => {
+    expect(jobIdempotencyKey({ ...base, ...change })).not.toBe(jobIdempotencyKey(base));
+  });
+});
+
+// ── Retries and circuits ──────────────────────────────────────────────────
+
+describe("retry delays", () => {
+  const policy = { maxAttempts: 5, baseDelayMs: 1_000, maxDelayMs: 8_000 };
+
+  it("doubles per attempt, capped, with at most a fifth added", () => {
+    expect(retryDelayMs(policy, 1, null, () => 0)).toBe(1_000);
+    expect(retryDelayMs(policy, 3, null, () => 0)).toBe(4_000);
+    expect(retryDelayMs(policy, 10, null, () => 0)).toBe(8_000);
+    expect(retryDelayMs(policy, 3, null, () => 1)).toBe(4_800);
+  });
+
+  it("never retries sooner than the upstream asked", () => {
+    expect(retryDelayMs(policy, 1, 60_000, () => 0)).toBe(60_000);
+  });
+});
+
+describe("what an outcome says about its source's health", () => {
+  const outcome = (status: string, code: string | null): CollectionOutcome =>
+    (code === null
+      ? { status, collectorId: "x", detail: "[x]", result: null, evidence: [], response: null }
+      : {
+          status,
+          collectorId: "x",
+          error: { code, message: "[x]" },
+          retryAfterMs: null,
+        }) as CollectionOutcome;
+
+  it.each([
+    ["FOUND", null, "SUCCESS"],
+    ["NOT_FOUND", null, "SUCCESS"],
+    ["UNAVAILABLE", "UPSTREAM_UNAVAILABLE", "FAILURE"],
+    ["UNAVAILABLE", "UPSTREAM_TIMEOUT", "FAILURE"],
+    ["UNAVAILABLE", "COLLECTOR_TIMEOUT", "FAILURE"],
+    ["FAILED", "UPSTREAM_RESPONSE_INVALID", "FAILURE"],
+    // A rate limit is the source working as designed.
+    ["UNAVAILABLE", "UPSTREAM_RATE_LIMITED", "NEUTRAL"],
+    // A refusal, a missing credential or a bad target says nothing about the source.
+    ["FAILED", "UPSTREAM_REFUSED", "NEUTRAL"],
+    ["FAILED", "TARGET_INVALID", "NEUTRAL"],
+  ])("%s %s is %s", (status, code, verdict) => {
+    expect(circuitVerdict(outcome(status, code))).toBe(verdict);
+  });
+});
+
+describe("quota periods", () => {
+  it("start at the UTC day and month", () => {
+    const now = new Date("2026-09-30T23:59:59.999Z");
+    expect(periodStart("DAY", now).toISOString()).toBe("2026-09-30T00:00:00.000Z");
+    expect(periodStart("MONTH", now).toISOString()).toBe("2026-09-01T00:00:00.000Z");
+  });
+});
+
+// ── Planning ──────────────────────────────────────────────────────────────
+
+function source(
+  id: string,
+  commercialUse: "PERMITTED" | "BLOCKED" | "UNVERIFIED",
+): SourceDeclaration {
+  return {
+    id,
+    name: `[Source ${id}]`,
+    licence: {
+      commercialUse,
+      reason: "[test]",
+      check:
+        commercialUse === "UNVERIFIED"
+          ? null
+          : {
+              checkedOn: "2026-09-30",
+              sourceUrl: "https://example.com/terms",
+              recordedIn: "[test]",
+            },
+    },
+    network: {
+      protocol: "https",
+      hosts: [`${id}.example`],
+      rateLimit: { requests: 1, intervalSeconds: 1, basis: "SELF_IMPOSED", note: "[test]" },
+      operators: [{ name: "fake", hosts: [`${id}.example`] }],
+    },
+    attribution: null,
+  };
+}
+
+const NAMES = z.object({ names: z.array(z.string()), derived: z.object({}) });
+const fake = (
+  id: string,
+  sourceId: string,
+  declared: {
+    readonly targetTypes: TargetType[];
+    readonly discipline: "TECHINT" | "PERSON";
+    readonly mode: "PASSIVE_API" | "ACTIVE";
+  },
+) =>
+  defineCollector(
+    {
+      id,
+      version: "1.0.0",
+      displayName: `[fake ${id}]`,
+      discipline: declared.discipline,
+      targetTypes: declared.targetTypes,
+      collectionMode: declared.mode,
+      source: sourceId,
+      credentials: { vaultIds: [], runsWithout: true },
+      claimStrength: "REPORTED",
+      timeoutMs: 1_000,
+      resultSchema: NAMES,
+    },
+    () => Promise.reject(new Error("planning never runs a collector")),
+  );
+
+/** A passive TECHINT collector of domains: what each fake is, unless it says otherwise. */
+const PASSIVE_DOMAIN = {
+  targetTypes: ["DOMAIN"] as TargetType[],
+  discipline: "TECHINT",
+  mode: "PASSIVE_API",
+} as const;
+
+const runtime = new CollectorRuntime({
+  registry: new CollectorRegistry({
+    sources: [
+      source("open", "PERMITTED"),
+      source("blocked", "BLOCKED"),
+      source("unchecked", "UNVERIFIED"),
+    ],
+    collectors: [
+      fake("fake.domain", "open", PASSIVE_DOMAIN),
+      fake("fake.username", "open", { ...PASSIVE_DOMAIN, targetTypes: ["USERNAME"] }),
+      fake("fake.blocked", "blocked", PASSIVE_DOMAIN),
+      fake("fake.unverified", "unchecked", PASSIVE_DOMAIN),
+      fake("fake.person", "open", { ...PASSIVE_DOMAIN, discipline: "PERSON" }),
+      fake("fake.active", "open", { ...PASSIVE_DOMAIN, mode: "ACTIVE" }),
+    ],
+  }),
+  allowUnverifiedSources: false,
+  network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
+});
+
+const TECHINT = { plan: "TECHINT", vettingStatus: "NOT_SUBMITTED" } as const;
+
+describe("planning a run", () => {
+  it("plans what may run, and records every exclusion with its reason", async () => {
+    const plan = await planRun(runtime, {
+      input: "Example.COM",
+      requestedType: null,
+      entitlement: TECHINT,
+      scopeFor: () => Promise.resolve(null),
+    });
+    expect(plan.detected).toEqual({ primaryType: "DOMAIN", alternateTypes: [] });
+    expect(plan.targets).toEqual([{ type: "DOMAIN", value: "example.com" }]);
+    expect(plan.jobs).toEqual([
+      { collectorId: "fake.domain", target: { type: "DOMAIN", value: "example.com" } },
+    ]);
+    expect(Object.fromEntries(plan.excluded.map((e) => [e.collectorId, e.reason]))).toEqual({
+      "fake.username": "TARGET_TYPE_NOT_ACCEPTED",
+      "fake.blocked": "LICENCE_BLOCKED",
+      "fake.unverified": "UNVERIFIED_SOURCE_NOT_ALLOWED",
+      "fake.person": "MODULE_NOT_IN_PLAN",
+      "fake.active": "SCOPE_AUTHORISATION_REQUIRED",
+    });
+  });
+
+  it("runs an ACTIVE collector only with a scope authorisation for the exact target", async () => {
+    const plan = await planRun(runtime, {
+      input: "example.com",
+      requestedType: "DOMAIN",
+      entitlement: TECHINT,
+      scopeFor: (target) =>
+        Promise.resolve(
+          target.value === "example.com"
+            ? {
+                id: "00000000-0000-4000-8000-00000000000a",
+                targetType: "DOMAIN",
+                target: "example.com",
+              }
+            : null,
+        ),
+    });
+    expect(plan.jobs.map((job) => job.collectorId)).toContain("fake.active");
+  });
+
+  it("plans an ambiguous input under each plausible type, once per collector", async () => {
+    const plan = await planRun(runtime, {
+      input: "octocat",
+      requestedType: null,
+      entitlement: TECHINT,
+      scopeFor: () => Promise.resolve(null),
+    });
+    expect(plan.detected).toEqual({ primaryType: "USERNAME", alternateTypes: ["ORGANIZATION"] });
+    expect(plan.jobs).toEqual([
+      { collectorId: "fake.username", target: { type: "USERNAME", value: "octocat" } },
+    ]);
+  });
+
+  it("records an input that is not the requested type, and plans nothing on it", async () => {
+    const plan = await planRun(runtime, {
+      input: "not a domain",
+      requestedType: "DOMAIN",
+      entitlement: TECHINT,
+      scopeFor: () => Promise.resolve(null),
+    });
+    expect(plan.targets).toEqual([{ type: "DOMAIN", invalid: expect.any(String) as string }]);
+    expect(plan.jobs).toEqual([]);
+  });
+
+  it("refuses an empty input, rather than guessing a type for it", async () => {
+    await expect(
+      planRun(runtime, {
+        input: "   ",
+        requestedType: null,
+        entitlement: TECHINT,
+        scopeFor: () => Promise.resolve(null),
+      }),
+    ).rejects.toBeInstanceOf(EmptyTargetError);
+  });
+});
+
+// ── Identifiers (legacy entity resolution, KEEP with three fixes) ─────────
+
+describe("identifier rules", () => {
+  it("normalises domains, keeping www as a different name", () => {
+    expect(normaliseDomain(" Example.COM. ")).toBe("example.com");
+    expect(normaliseDomain("www.example.com")).not.toBe(normaliseDomain("example.com"));
+  });
+
+  it("regression: keeps a username's case (legacy lower-cased it, merging distinct Hacker News accounts)", () => {
+    expect(normaliseUsername("@PG")).toBe("PG");
+    expect(socialAccountIdentifier("hackernews", "PG")).not.toBe(
+      socialAccountIdentifier("hackernews", "pg"),
+    );
+    // Platforms whose handles are case-insensitive still resolve one account.
+    expect(socialAccountIdentifier("github", "OctoCat")).toBe(
+      socialAccountIdentifier("github", "octocat"),
+    );
+  });
+
+  it("regression: gives an unparseable URL no identifier (legacy merged on its lower-cased text)", () => {
+    expect(normaliseUrl("not a url")).toBeNull();
+    expect(normaliseUrl("HTTPS://Example.COM/path/?q=1#frag")).toBe("https://example.com/path?q=1");
+  });
+
+  it("regression: invents no confidence (legacy scored merges 0.5 + 0.15 per extra source)", async () => {
+    const source = await import("../src/fusion/identifiers.ts");
+    expect(Object.keys(source).some((name) => /confidence|score/i.test(name))).toBe(false);
+  });
+});
+
+// ── Every extractor, against its collector's recorded FOUND fixtures ──────
+
+const FOUND_CASES: readonly {
+  readonly collectorId: string;
+  readonly target: { readonly type: TargetType; readonly value: string };
+  readonly fixtures: readonly Fixture[];
+}[] = [
+  {
+    collectorId: "crtsh",
+    target: { type: "DOMAIN", value: "example.com" },
+    fixtures: [loadFixture("crtsh", "found-example-com")],
+  },
+  {
+    collectorId: "dns",
+    target: { type: "DOMAIN", value: "example.com" },
+    fixtures: [loadFixture("dns", "found-example-com")],
+  },
+  {
+    collectorId: "rdap",
+    target: { type: "DOMAIN", value: "example.com" },
+    fixtures: [
+      loadFixture("rdap", "rdap-org-example-com-redirect"),
+      loadFixture("rdap", "verisign-example-com"),
+    ],
+  },
+  {
+    collectorId: "wayback",
+    target: { type: "DOMAIN", value: "example.net" },
+    fixtures: [loadFixture("wayback", "domain-capped")],
+  },
+  {
+    collectorId: "contact.phone",
+    target: { type: "PHONE_NUMBER", value: "+442079460000" },
+    fixtures: [],
+  },
+  {
+    collectorId: "wikidata",
+    target: { type: "ORGANIZATION", value: "Internet Assigned Numbers Authority" },
+    fixtures: [loadFixture("wikidata", "search-iana"), loadFixture("wikidata", "entities-iana")],
+  },
+  {
+    collectorId: "github",
+    target: { type: "USERNAME", value: "octocat" },
+    fixtures: ["user-octocat", "repos-octocat", "commits-octocat"].map((name) =>
+      loadFixture("github", name),
+    ),
+  },
+  {
+    collectorId: "hackernews",
+    target: { type: "USERNAME", value: "fixture-user" },
+    fixtures: [loadFixture("hackernews", "user-found"), loadFixture("hackernews", "search-found")],
+  },
+  {
+    collectorId: "devto",
+    target: { type: "USERNAME", value: "thepracticaldev" },
+    fixtures: [loadFixture("devto", "user-thepracticaldev")],
+  },
+  {
+    collectorId: "commoncrawl",
+    target: { type: "DOMAIN", value: "iana.org" },
+    fixtures: [loadFixture("commoncrawl", "collinfo"), loadFixture("commoncrawl", "cdx-iana")],
+  },
+];
+
+describe("extractors", () => {
+  it("every registered platform collector has one, and nothing else does", () => {
+    expect(Object.keys(EXTRACTORS).sort()).toEqual(
+      PLATFORM_COLLECTORS.map((collector) => collector.declaration.id).sort(),
+    );
+    expect(FOUND_CASES.map((c) => c.collectorId).sort()).toEqual(Object.keys(EXTRACTORS).sort());
+  });
+
+  it.each(FOUND_CASES)(
+    "$collectorId: every claim cites real evidence, asserts a value, and names known entities",
+    async (testCase) => {
+      const harness = await startHarness({
+        collectors: PLATFORM_COLLECTORS.filter((c) => c.declaration.id === testCase.collectorId),
+        fixtures: testCase.fixtures,
+      });
+      try {
+        const outcome = await harness.run(testCase.collectorId, testCase.target);
+        expect(outcome.status, JSON.stringify(outcome)).toBe("FOUND");
+        if (outcome.status !== "FOUND") return;
+        const extract = EXTRACTORS[testCase.collectorId];
+        if (extract === undefined) throw new Error("no extractor");
+        const extraction = extract({ target: testCase.target, result: outcome.result });
+        const entityKeys = new Set(extraction.entities.map((e) => e.key));
+        const relationshipKeys = new Set(extraction.relationships.map((r) => r.key));
+        expect(extraction.claims.length).toBeGreaterThan(0);
+        for (const claim of extraction.claims) {
+          expect(claim.evidence).toBeGreaterThanOrEqual(0);
+          expect(claim.evidence).toBeLessThan(outcome.evidence.length);
+          expect(claim.attribute).toMatch(/^[a-z][a-z0-9_]*$/);
+          if ("entity" in claim.subject) {
+            expect(entityKeys.has(claim.subject.entity)).toBe(true);
+            expect(claim.value).not.toBeNull();
+          } else {
+            expect(relationshipKeys.has(claim.subject.relationship)).toBe(true);
+          }
+        }
+        for (const entity of extraction.entities) {
+          if (entity.kind === "PERSON" || entity.kind === "ORGANIZATION") {
+            // Never a bare name: only an external registry's namespaced id.
+            if (entity.identifier !== null) expect(entity.identifier).toMatch(/^[a-z]+:[^ ]+$/);
+          }
+        }
+      } finally {
+        await harness.close();
+      }
+    },
+  );
+});

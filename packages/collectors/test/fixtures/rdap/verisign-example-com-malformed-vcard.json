@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc9083#section-5.3",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. A domain object whose registrar entity carries a vcardArray that is not a jCard (RFC 7095), so its name cannot be read. Not observed live."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/example.com"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/rdap+json"
+    },
+    "body": "{\"objectClassName\":\"domain\",\"ldhName\":\"EXAMPLE.COM\",\"entities\":[{\"objectClassName\":\"entity\",\"handle\":\"[registrar handle]\",\"roles\":[\"registrar\"],\"vcardArray\":[\"vcard\",\"[not a list of properties]\"]}]}"
+  }
+}

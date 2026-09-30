@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "recorded-redacted",
+    "source": "https://hacker-news.firebaseio.com/v0/user/PG.json",
+    "recordedOn": "2026-09-30",
+    "notes": "Live answer for an existing handle asked for in a different case: 200 with null. Hacker News handles are case-sensitive. Headers trimmed to the content type."
+  },
+  "request": {
+    "host": "hacker-news.firebaseio.com",
+    "path": "/v0/user/PG.json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "null"
+  }
+}

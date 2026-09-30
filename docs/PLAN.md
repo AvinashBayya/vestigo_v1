@@ -13,8 +13,8 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 0     | Audit and migration map                 | Done. Findings in [audit/](audit/): REPORT, INVENTORY (per-module KEEP / REWRITE / DROP verdicts, used as the porting map), COLLECTORS, DEPENDENCIES, QUESTIONS. |
 | 1     | Scaffold and toolchain                  | **Done, 2026-09-25.** See below.                                                                                                                         |
 | 2     | Data foundation and tenancy             | **Done, 2026-09-28.** Session A: data layer and tenant isolation. Session B: authentication, MFA, permissions, module gating, API keys, audit, credential vault. See both records below. |
-| 3     | Collector SDK and migration             | **Session A done, 2026-09-28:** collector SDK, registry, licence gating, fetcher, evidence path. Session B (porting the collectors) not started. See the record below. |
-| 4     | Jobs, orchestration and tool containers | Not started                                                                                                                                              |
+| 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
+| 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | Not started                                                                                                                                              |
 | 6     | Frontend                                | Not started                                                                                                                                              |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
@@ -213,12 +213,13 @@ tests, and the Vite dev server was confirmed to serve the page and proxy `/healt
 
 - **S3-compatible content store backend** is not built; only the filesystem backend exists.
 - ~~**The API and worker validate `DATABASE_URL` but do not connect yet.**~~ The API connects
-  since Phase 2B; the worker still does not.
+  since Phase 2B; the worker since Phase 4.
 - **Fabrication ESLint plugin, two legacy defects left as found:**
   - The `configCallees` option has no effect.
   - `require-fabrication-justification` does not check blanket `eslint-disable` comments, or
     disables of itself.
-- **Scheduled monitors** exist as rows only; materialising them into jobs is Phase 4.
+- **Scheduled monitors** exist as rows only. Materialising them into jobs was deferred out of
+  Phase 4 (your decision); see the Phase 4 carry-forwards.
 
 ## Phase 2, session B record: authentication and access control
 
@@ -410,9 +411,9 @@ tests, and the Vite dev server was confirmed to serve the page and proxy `/healt
   - Emails are not verified, so whoever knows an email has a pending invitation can register it
     first. They still need the invitation id to join.
   - Verification belongs with signup vetting in Phase 7, and should land before launch.
-- **Enrol-on-first-login gap.** A password stolen before its owner enrols TOTP lets the thief enrol
-  their own device. Invitation plus email verification narrows this. Consider a one-time
-  enrolment link instead.
+- ~~**Enrol-on-first-login gap.**~~ Resolved in Phase 4: a first MFA enrolment needs a one-time
+  token issued with the invitation (or at provisioning), carried in the hand-shared link. See the
+  Phase 4 record.
 - **Sign-in and MFA events are not in `audit_log`.** They are not tenant-scoped, so they only
   appear in logs. Decide whether to add a per-user security event log.
 - ~~**`apps/api` now holds identity wiring and the access layer.**~~ Resolved in review: the
@@ -636,8 +637,9 @@ defined in test code only.
   from the env schema. Platform-owned keys, such as a future LLM provider key, stay in
   configuration.
 - **How far a scope authorisation reaches.** It covers the exact target only. Should it cover
-  subdomains, CIDR ranges, or specific tools? There is no API to create one yet; it will need
-  its own permission, and an audit entry for each one created.
+  subdomains, CIDR ranges, or specific tools? The API to record one was built in Phase 4, with
+  its own permission and an audit entry for each one created; it still covers the exact target
+  only.
 - **Tool containers are internal services.** theHarvester, SpiderFoot, SearXNG and IVRE run on
   private addresses, which the fetcher refuses by design. Phase 4 needs an explicit, separately
   audited path for them.
@@ -645,7 +647,8 @@ defined in test code only.
 ### Carry-forwards from Phase 3A
 
 - **A language-neutral contract** (JSON Schema export, BUILD-PHASES Phase 3 item 2): session B.
-- **Metering usage events** per external call, and **circuit breakers and bulkheads**: Phase 4.
+- ~~**Metering usage events** per external call, and **circuit breakers and bulkheads**~~: built
+  in Phase 4.
 - **Code that overruns its budget.** A collector over budget is reported UNAVAILABLE, and its
   fetches are aborted, but CPU-bound code keeps running until the worker's own isolation
   (Phase 4) stops it.
@@ -656,3 +659,327 @@ defined in test code only.
 - **Secrets in cited responses.** A collector that cited a token endpoint's response (OAuth) as
   evidence would store the token. Review for this when porting in session B.
 - **Absence is not recorded.** NOT_FOUND is not written as evidence of absence.
+
+## Phase 3, session B record: collector migration
+
+Eleven collectors were ported onto the Phase 3A frame, credential-free, one at a time. Ten are
+registered in `PLATFORM_COLLECTORS`. `news` is written and tested but held back (below).
+
+**Built.**
+
+| id | Verdict | Licence | Tests | Defect fixed (REWRITE) |
+| --- | --- | --- | --- | --- |
+| crtsh | REWRITE | UNVERIFIED | 52 | The HackerTarget and AlienVault OTX fallback is deleted. Legacy ran it on any failure and on a genuine zero result, and labelled the rows `crtsh`. A zero result is NOT_FOUND. |
+| dns | KEEP (Cloudflare DoH) | UNVERIFIED | 32 | — |
+| rdap | KEEP (adapter only) | UNVERIFIED | 23 | — |
+| wayback | KEEP | UNVERIFIED | 50 | — |
+| news (held) | REWRITE (GDELT DOC) | PERMITTED, attribution declared | 30 | GDELT named as the publisher, "Untitled report", "unknown" and `""` placeholders, the outlet's country turned into coordinates, dropped articles, the "conflict" query substitute, no shared limiter, unstated window and cap. |
+| contact.phone | KEEP | PERMITTED (MIT) | 25 | — |
+| wikidata | REWRITE (from the news route) | PERMITTED (CC0) | 21 | The QID as a registration number, an invented "Active" status, the "Undisclosed" address fallback, "Verified" matches, variation probing. |
+| github | KEEP | UNVERIFIED | 20 | — (legacy name variations and swallowed failures not carried over) |
+| hackernews | REWRITE | UNVERIFIED | 19 | Variation probing presented as "Nearest Match", "Verified Active Member", a missing karma defaulted to zero, a keyword search reported as mentions, swallowed failures. |
+| devto | KEEP | UNVERIFIED | 17 | — (swallowed failures and handle rewriting not carried over) |
+| commoncrawl | NEW | UNVERIFIED | 20 | — Every result, and the NOT_FOUND message, says the index is historical and lags by weeks. |
+
+- **Every collector declares** its discipline, target types, mode, source, a Zod result schema
+  and a run budget. Licence, rate limit and attribution live on its catalogue source.
+- **Catalogue:** 50 sources, of which 13 are BLOCKED, 5 PERMITTED (GDELT DOC, GDELT Events,
+  Safecast, Wikidata, libphonenumber-js) and 32 UNVERIFIED.
+  - The rdap source's hosts are rdap.org plus the 376 registry hosts in the IANA bootstrap
+    snapshot (`test/snapshots/iana-rdap-dns.json`, kept byte-exact and excluded from Prettier).
+  - GDELT DOC declares its attribution. It is not used while news is held.
+- **LOCAL_ANALYSIS evidence** (resolves Phase 3A decision 7): `ctx.record(output)` records the
+  analysis, and it is the cited evidence, with no source URL and strength DERIVED.
+- **Offline test harness** (`test/platform/harness.ts`): recorded fixtures on a local https
+  server; exact host and path matching; anything unmatched is answered 599 and listed. Every
+  fixture states its provenance: `recorded`, `recorded-redacted` or `synthetic`, with a source
+  URL, a date and notes. No test reaches the network.
+- **The `derived` rule** (review decision 2): a value the collector computed or stated itself
+  belongs under a `derived` key, and the evidence row keeps its single strength.
+  - The registry refuses a non-local collector whose result schema lacks a top-level `derived`
+    object.
+  - After every FOUND, the runtime checks that each string, number and boolean outside any
+    `derived` key appears as a value in a cited response. Null (absence) is exempt. A breach is
+    COLLECTOR_CONTRACT_VIOLATION, naming the field, never the value (`src/provenance.ts`).
+  - Emptiness is judged without `derived`: a result of derived values only found nothing.
+  - Moved under `derived`:
+    - github: the repositories' partial flag, the requested counts, and whether a key was used;
+    - hackernews: the submitted-item count, the ISO creation time, the item kind, the requested
+      count and the partial flag;
+    - commoncrawl: the query, `limitReached`, the note and the ISO capture time;
+    - rdap: `respondingHost`;
+    - wayback: the query, coverage, the replay URL and the ISO capture time;
+    - news: the search, the counts and the ISO seen date;
+    - wikidata: the search and the note;
+    - crtsh: the per-certificate split names.
+  - Reported as sent instead of converted: GitHub's full commit message, Hacker News's `created`
+    Unix seconds, Common Crawl's status, offset and length strings, crt.sh's `name_value`.
+- **Refused versus rejected** (review decision 4): a 401 or 403 is
+  UPSTREAM_REJECTED_CREDENTIALS only when the run was handed a vault credential. Otherwise it is
+  UPSTREAM_REFUSED. The runtime decides; collectors cannot.
+- **libphonenumber-js pinned to 1.13.14** (review decision 3). A test pairs the installed
+  version with contact.phone's version, so an upgrade fails CI until the collector's version is
+  bumped too.
+
+**Self-review (step 4) findings, fixed with a regression test each.**
+
+- wayback stamped the newest first-capture over the first 200 URLs on its evidence as
+  `observedAt`. That was a derived value, not the archive's date; `observedAt` is now null.
+- github read GitHub's secondary rate limit (403 with Retry-After or the secondary-limit
+  message) as rejected credentials, which are never retried. It is UNAVAILABLE now.
+- dns reported a truncated answer with no A records as NOT_FOUND. It is FAILED now.
+- hackernews used one label for two operators. It is "Hacker News account (HN API and Algolia
+  HN Search)".
+- commoncrawl called a reached cap `partial`; it is `limitReached` now. It also accepted
+  impossible dates such as 31 February; a round-trip check rejects them.
+- wayback's and wikidata's NOT_FOUND messages now state their scope: subdomains not searched,
+  and the search language.
+- Checked and disproved: crt.sh's `%.domain` search includes apex-only certificates (2 in the
+  recording). GitHub's commit search answers an organisation login with 200 and 0, not 422.
+
+**Held: news.** Its NOT_FOUND treats GDELT's `200 {}` as "no coverage". Live, `"ietf.org"`
+answered `200 {}` twice (2026-09-30), and no control query for a domain that is certainly in the
+news got through: GDELT answered 429, then refused connections. So `{}` may mean "query not
+understood", and news's NOT_FOUND may be systematically false. Its found fixture is synthetic
+for the same reason. **What resolves it:** one live, recorded FOUND for a quoted-domain query.
+Then register news, replace the synthetic found fixture, and keep a recorded `{}` for a domain
+with no coverage.
+
+**Verified at the checkpoint.**
+
+- `pnpm turbo lint typecheck test --force`: 43 of 43 tasks, exit 0, 1,018 tests.
+  - By package: core 7, access 55, config 119, db 195, integrations 78, collectors 470,
+    osint-engine 14, api 74, web 4, worker 2.
+  - The fabrication check passed on 218 files; the export check on 81 symbols across 7 entry
+    points.
+- The run before it failed one api test, "fails fast on invalid config". Its spawned server
+  exceeded the test's 20 s limit under the parallel load. It passes alone (74 of 74) and in the
+  rerun. That code was not changed in this phase; see carry-forwards.
+
+### Decisions taken in Phase 3B
+
+1. **news is held unregistered** until a live FOUND for a domain phrase is recorded.
+2. **A mandatory `derived` block, not per-field strength.** It is enforced at registration and
+   on every run.
+3. **libphonenumber-js is pinned exactly.** Every upgrade bumps contact.phone's version.
+4. **A refusal is a credentials failure only when a credential was sent.**
+5. **A fixture that could not be recorded is synthetic and says why.** GDELT's found answer
+   (429s) and Common Crawl's no-captures answer (repeated 504s) are the two that matter.
+6. **Recorded fixtures of real accounts are redacted.** Handles and free text become
+   placeholders; ids, dates and counts stay as recorded. The Hacker News fixtures are
+   `recorded-redacted`, and so is any fixture whose headers were trimmed.
+
+### Open questions and carry-forwards from Phase 3B
+
+- ~~**The label is not checked against the hosts**~~: built in Phase 4. Every source names the
+  operator of each of its hosts, and the registry refuses a collector whose label does not name
+  them all.
+- **GitHub's `derived.repositories.partial` can't be checked from its evidence.** It comes from
+  the Link header, and evidence stores only the body.
+- **rdap for a subdomain answers NOT_FOUND.** The registry's 404 is literal, but the wording
+  could say that subdomains are not registered objects.
+- **Common Crawl's no-captures answer is unrecorded.** If the real answer differs from pywb's
+  documented 404 "No Captures found", absence surfaces as FAILED: never a false NOT_FOUND, but
+  never NOT_FOUND either. Record it when the index server is healthy.
+- **Handles Hacker News can't hold** (core accepts `.` and Unicode letters in usernames) fail
+  as FAILED, not NOT_FOUND. This errs on the safe side.
+- **The value-provenance check matches values, not paths.** It catches a computed value but
+  cannot prove a value came from the right field; the per-collector tests do that.
+- **The flaky api test.** `apps/api/src/server.test.ts`, "fails fast on invalid config", can
+  exceed its 20 s spawn limit under full parallel load.
+- **Still open from Phase 3A:**
+  - the language-neutral contract (JSON Schema export);
+  - metering, circuit breakers and bulkheads (Phase 4);
+  - direct evidence writes;
+  - absence not recorded as evidence.
+
+  Resolved in 3B: LOCAL_ANALYSIS evidence. Secrets in cited responses were reviewed: no ported
+  collector cites a token endpoint, and a test asserts GitHub's key never appears in an
+  evidence URL.
+
+## Phase 4 record: jobs, orchestration and fault isolation
+
+An investigation now runs in the background. The API creates a QUEUED run and returns at once. A
+planning job fans the run out to one collector job per planned collector, each on its source's
+own queue, and fans back in to fusion. Postgres holds every job's state; BullMQ only delivers
+ids. Out of scope by your decision: tool containers and Postgres-backed monitors (see
+carry-forwards).
+
+**Built.**
+
+- **Job flow** (`packages/osint-engine`, BullMQ 6.3.10 on Redis):
+  - `investigations`: one planning job per run (`RunCoordinator.plan`). It records the plan,
+    creates each collector job under its idempotency key, and adds the run's flow.
+  - `collect.<source>`: one queue per upstream source, holding that source's collector jobs
+    (`CollectorJobProcessor`).
+  - `fusion`: the flow's parent, released when every child has finished, succeeded or failed
+    (`RunFusion`).
+  - `dead-letter`: a record of every job that ran out of attempts. Nothing consumes it.
+  - Messages carry ids only, never a target, and are validated on receipt.
+- **One worker codebase** (`apps/worker`), deployed as pools. `WORKER_QUEUES` selects queues by
+  name, by `collect.*`, or `*`. The worker connects to Postgres and Redis, reveals collector
+  credentials from the tenant vault (audited), and shuts down gracefully.
+- **Fault isolation**, each piece with its release-blocking test:
+
+  | Requirement | Mechanism | Test |
+  | --- | --- | --- |
+  | Per-call timeouts | Fetcher timeout per request; the collector's run budget; Redis commands bounded; the planning retry for a run not yet committed is 250 ms | `pipeline.test.ts` hung collector |
+  | Bulkheads | One queue per source; fixed concurrency per queue (`COLLECT_CONCURRENCY`), also set as BullMQ global concurrency so it holds across every worker | hung collector: 3 fast jobs finish while the hung source's jobs wait one at a time |
+  | Circuit breakers | `RedisCircuitBreaker` (`packages/integrations`): per source, shared by every worker, Redis clock, one half-open probe with a lease, fails closed. Counts source faults only (5xx, timeouts, unreachable, invalid answers), never rate limits or refusals. A job refused by an open circuit waits for the cooling period, and nothing is sent | `circuit-breaker.test.ts` (10); pipeline "stops calling the archive" |
+  | Dead-letter queue | The last UNAVAILABLE attempt, or a crash on the last attempt, marks the job DEAD_LETTERED and writes a dead-letter record. Replay: `POST /api/v1/jobs/{id}/replay` | pipeline and API checkpoint tests |
+  | Idempotency | Key = sha256(tenant, run, collector, target, params). Enqueue lands on one row; evidence, usage and the job's state commit in one transaction; a finished job is skipped; result, evidence and fusion are write-once in the database (`JOB01`) | pipeline "replayed job" block (4 tests); `jobs.test.ts` |
+  | Retries by cause | Only UNAVAILABLE is retried, with backoff at least the upstream's Retry-After; FAILED, REFUSED and NEEDS_CREDENTIALS end at once | pipeline "retries distinguish cause" |
+
+- **Metering**: every request a collector sends (redirect hops included) is counted by the
+  fetcher and recorded as `UPSTREAM_REQUEST` usage, once per job attempt (unique on job,
+  attempt and unit). Quotas (`tenant_quotas`, operator-set, read-only to the application) are
+  checked when a run starts (429 `QUOTA_EXCEEDED`) and again before each job is dispatched.
+  `GET /api/v1/usage` shows the day's and month's use beside the quotas.
+- **API** (the API never waits on collection):
+  - `POST /api/v1/investigations/{id}/runs` returns 202 with the QUEUED run.
+  - `GET /api/v1/investigations/{id}/runs` and `GET /api/v1/runs/{id}`.
+  - `GET /api/v1/runs/{id}/events`: server-sent events (`run`, `job`, `end`), read from Postgres
+    in short tenant transactions; no transaction is held open for the stream.
+  - `POST /api/v1/jobs/{id}/replay`.
+  - Scope authorisations (Phase 3B item): create, list and revoke. A signed-in person must be
+    the authoriser, never an API key; the exact normalised target; at most 366 days; audited.
+  - New permissions: `run:start`, `run:read`, `job:replay`, `scope_authorisation:read`,
+    `scope_authorisation:write` (admins and owners) and `usage:read`.
+- **Label names every operator** (Phase 3B item): each catalogue source now declares who
+  operates each of its hosts, and the registry refuses a collector whose label does not name
+  them all (whole-word match). The hackernews case is a regression test.
+- **MFA enrolment token** (Phase 2B item): a first enrolment needs a one-time token.
+  - It is issued with the invitation, returned once in the invite response for the hand-shared
+    link, or issued at provisioning (printed once for the operator).
+  - It is stored only as a SHA-256 (new columns on `auth.invitation` and `auth.user`; no new
+    auth table).
+  - `enable`, `get-totp-uri` and `verify-totp` all require it (header `x-mfa-enrolment-token`)
+    until the user is enrolled; it is spent when verification succeeds.
+  - Re-inviting someone who never enrolled issues a fresh token.
+  - A mutation that removed the guard failed 6 of the 8 tests.
+- **PERSON gating in the worker**: the planner and the job processor both admit through the
+  runtime's `@repo/access` check, the same decision the API applies. A PERSON collector is
+  excluded at planning for a tenant not entitled to it, and refused at dispatch if a job
+  reaches the worker anyway.
+- **Migrations 0009–0012**:
+  - Job and run columns, and job outcomes.
+  - `tenant_quotas`, with row-level security and select-only access for the application.
+  - Per-attempt usage.
+  - Entity identifiers, resolved uniquely; relationships unique.
+  - The write-once trigger.
+  - The auth enrolment-token columns.
+- **`@repo/collectors/testing`**: the fixture harness, exported so the engine and API tests run
+  the real registered collectors offline. A lint rule stops any collector source from importing
+  it.
+
+**Ported from `legacy/src/utils/osint/`.**
+
+| Module | Verdict | Became | Defect fixed (regression test) |
+| --- | --- | --- | --- |
+| query-planner.ts | KEEP | `detectTargetType` (core) and `planRun` (engine) | An empty input was guessed to be a "person"; now `EmptyTargetError`. Exclusions are recorded with their reasons (legacy's list was always empty) |
+| orchestrator.ts | ADAPT | `RunCoordinator`, the queue flow and `RunFusion` | No overall timeout: now per-collector budgets, retries and the dead-letter queue (hung-collector test). The global registry is now injected |
+| jobs.ts | ADAPT | Replaced by BullMQ and the `jobs` table | Process memory: now durable, replayable jobs. No owner: now tenant-scoped rows (API isolation test). Cancellation: not built (carry-forward) |
+| job-store.ts | KEEP | Superseded by the `jobs` table; not ported | — |
+| job-store-sqlite.ts, index.ts | DROP | — | — |
+| merge.ts | KEEP | Exact-key dedupe as database constraints | — |
+| entity-resolution.ts | KEEP | `fusion/identifiers.ts`, resolution at write | Three fixes, each tested: no invented confidence score (legacy's 0.5 + 0.15 per source); usernames keep their case (Hacker News handles are case-sensitive); an unparseable URL gets no identifier |
+| contradictions.ts, timeline.ts, gaps.ts, verification.ts, person-*.ts | various | Not ported this phase | Phase 5 or later |
+
+- ADAPT was handled as you decided: keep the logic, fix the boundary defect INVENTORY names, and
+  add a regression test for it.
+
+**The checkpoint.** A run of `example.com` against four registered collectors (crtsh, dns, rdap,
+wayback), with wayback deliberately failing (its synthetic 503 fixture), as the running API
+reports it:
+
+```
+SSE run:QUEUED | run:RUNNING | job:crtsh=SUCCEEDED | job:wayback=QUEUED | job:rdap=SUCCEEDED |
+    job:dns=SUCCEEDED | run:RUNNING | job:wayback=RUNNING | run:RUNNING | job:wayback=DEAD_LETTERED |
+    job:crtsh=SUCCEEDED | job:rdap=SUCCEEDED | run:PARTIAL | job:dns=SUCCEEDED | end:PARTIAL
+RUN status PARTIAL, settled; counts SUCCEEDED 3, DEAD_LETTERED 1
+  crtsh    crt.sh Certificate Transparency        SUCCEEDED      FOUND        attempts 1, evidence 1
+  wayback  Wayback Machine captures               DEAD_LETTERED  UNAVAILABLE  attempts 3, evidence 0
+           UPSTREAM_UNAVAILABLE: "The upstream is unavailable: the Wayback CDX API answered HTTP 503."
+  rdap     RDAP registration data                 SUCCEEDED      FOUND        attempts 1, evidence 1
+  dns      DNS over HTTPS (Cloudflare resolver)   SUCCEEDED      FOUND        attempts 1, evidence 1
+```
+
+**Verified at the checkpoint.**
+
+- `pnpm turbo lint typecheck test --force`: 44 of 44 tasks, exit 0, 1,156 tests.
+  - By package: core 20, access 55, config 119, db 216, integrations 88, collectors 482,
+    osint-engine 72, api 96, web 4, worker 4.
+  - The fabrication check passed on 244 files; the export check on 102 symbols across 7 entry
+    points.
+- The run before it failed only `@repo/web`: its test worker did not start within 60 s under
+  the parallel load ("Timeout waiting for worker to respond"). It passes alone (4 of 4) and in
+  the rerun. The web code did not change this phase; only its generated client did.
+- Found and fixed while building:
+  - **A timeout reported as a permanent failure** (runtime). At the run budget the runtime
+    aborted the collector before rejecting. A collector that stopped on the abort signal won
+    the race with its own error: FAILED `COLLECTOR_ERROR` (never retried) instead of UNAVAILABLE
+    `COLLECTOR_TIMEOUT`. It now rejects first. The regression test fails without the fix.
+  - **Fusion refuses a collector it has no extractor for.** The run then stays unfinished and the
+    fusion job dead-letters, rather than settling over unfused results. A test checks that every
+    registered collector has one.
+  - **A quota column named `limit`** (a reserved word) was renamed `max_quantity` before
+    shipping.
+  - **A read-only table in the RLS probe.** The release-blocking insert probe had assumed every
+    table is insertable. For a read-only table it now names all columns and is still refused
+    (42501). The check is not weakened.
+  - **Five `?? 0` fallbacks** flagged by the fabrication gate (one in the retry policy, four in
+    tests) were replaced with explicit null handling. The gate was not changed.
+
+### Decisions taken in Phase 4
+
+1. **ADAPT modules keep their logic and fix the named boundary defect** (your decision).
+2. **A tenant with no quota row has no limit on that unit** until Phase 7 ties quotas to plans
+   (your decision). Quotas are operator-set; the application cannot write them.
+3. **Tool containers and monitors are deferred** (your decision).
+4. **The idempotency key includes the run.** A retry or replay of a run's job never runs twice,
+   but a new run of the same investigation (or a monitor's next run) collects again. Without the
+   run in the key, a target could never be re-collected.
+5. **Postgres is the truth for job state; BullMQ only delivers ids.** A replay reuses the job's
+   row and key with a fresh attempt budget. Attempt numbers only ever grow, so usage per attempt
+   is never overwritten.
+6. **An open circuit makes a job wait, not fail.** The job is UNAVAILABLE and retried after the
+   cooling period; the wait counts as an attempt and sends nothing.
+7. **Fusion resolves by identifier as it writes.** One entity per kind and normalised
+   identifier, so no after-the-fact merge needs a score. A person or organisation is resolved
+   only by an external id (`wikidata:Q…`), which the database enforces. Values under `derived`
+   become DERIVED claims. `entity_merges` stays for analysts' reversible merges.
+8. **The worker holds the vault master key, never `AUTH_SECRET`.** It reveals a collector's
+   tenant credential where the collector runs; every reveal is audited.
+9. **The API enqueues in the run's own transaction.** The planner retries `RUN_NOT_READY`
+   quickly until the transaction commits; if it rolled back, the planning job dead-letters,
+   visibly.
+10. **Progress streams by polling Postgres**, not Redis pub/sub, so row-level security isolates
+    tenants. Polling uses short transactions every `RUN_EVENTS_POLL_MS`, and a stream lasts at
+    most an hour.
+11. **The enrolment token lives on existing auth tables.** No new auth-schema table, so the
+    identity exception in CLAUDE.md §2 is unchanged.
+
+### Open questions and carry-forwards from Phase 4
+
+- **Deferred by decision:**
+  - tool containers (SpiderFoot, theHarvester), with the separately audited private-address path
+    from Phase 3A;
+  - monitors materialised from Postgres into repeatable jobs.
+- **Cancelling a run** (legacy `jobs.ts` defect) is not built: there is no cancel endpoint.
+- **CPU-bound collector code** keeps running after its budget (Phase 3A carry-forward). The run
+  is reported UNAVAILABLE and its fetches aborted, but sandboxed processors or worker threads
+  would stop it.
+- **Usage can under-count, never over-count.** An attempt that crashes before recording its
+  outcome is not metered. A duplicate delivery running concurrently is not charged (the
+  platform's duplicate, not the tenant's). Quotas can overshoot by the requests of jobs already
+  in flight. Only `UPSTREAM_REQUEST` is enforced.
+- **Operator views:**
+  - The dead-letter queue is an operator record in Redis; tenants see their DEAD_LETTERED jobs
+    through the API.
+  - Listing across tenants belongs to the cross-tenant operator design (Phase 2A open question).
+  - BullMQ's failed set is kept indefinitely, so it needs a retention policy (Phase 8).
+- **Quotas have no operator tooling;** they are set as the schema owner. Phase 7.
+- **news** still has no extractor; registering it will need one (a test enforces this).
+- **The progress stream polls.** Consider a push signal at scale.
+- **Two load flakes seen:** the api server-spawn test (Phase 3B), and the web test worker start
+  (this phase). Both pass alone and on rerun.

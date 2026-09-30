@@ -66,14 +66,22 @@ try {
     rateLimit: { enabled: false },
     logLevel: env.LOG_LEVEL,
   });
-  const result = await provisionTenant(auth, {
+  const result = await provisionTenant(auth, authStore, {
     name: String(values.name),
     slug: String(values.slug),
     region: TENANT_REGIONS[0],
     owner: { email: String(values["owner-email"]), name: String(values["owner-name"]), password },
     operator: String(values.operator),
   });
-  console.log(JSON.stringify({ tenant_id: result.tenantId, owner_user_id: result.ownerUserId }));
+  // The enrolment token is shown once, here: hand it to the owner with the
+  // password, out of band. Without it the owner cannot enrol MFA.
+  console.log(
+    JSON.stringify({
+      tenant_id: result.tenantId,
+      owner_user_id: result.ownerUserId,
+      owner_mfa_enrolment_token: result.enrolmentToken,
+    }),
+  );
 } finally {
   await Promise.all([db.close(), authStore.close()]);
 }

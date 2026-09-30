@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/",
+    "recordedOn": "2026-09-28",
+    "notes": "HTTP 403. The public resolver takes no credentials and could not be made to refuse a request for real; status only, empty body."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=forbidden.example.org&type=A"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": ""
+  }
+}

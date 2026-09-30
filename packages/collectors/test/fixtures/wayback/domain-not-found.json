@@ -1,0 +1,37 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://web.archive.org/cdx/search/cdx?url=nothing-archived.example%2F*&output=json&fl=timestamp%2Coriginal%2Cstatuscode%2Cmimetype%2Cdigest&collapse=urlkey&limit=201",
+    "recordedOn": "2026-09-28",
+    "notes": "DOMAIN nothing-archived.example (under the IANA-reserved .example TLD, so never a real site). The archive answers a query with no captures with HTTP 200 and the body [] followed by a newline. Header names are lower-cased and repeated headers joined with ', ' as Node's HTTP client presents them. The body is stored decoded; the upstream sent it gzip-encoded."
+  },
+  "request": {
+    "host": "web.archive.org",
+    "path": "/cdx/search/cdx?url=nothing-archived.example%2F*&output=json&fl=timestamp%2Coriginal%2Cstatuscode%2Cmimetype%2Cdigest&collapse=urlkey&limit=201"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "server": "nginx",
+      "date": "Mon, 28 Sep 2026 10:41:11 GMT",
+      "content-type": "application/json",
+      "transfer-encoding": "chunked",
+      "connection": "keep-alive",
+      "server-timing": "exclusion.robots;dur=0.073815, exclusion.robots.policy;dur=0.064547, esindex;dur=0.006652, TR;dur=0,Tw;dur=1272,Tc;dur=0, BYPASS",
+      "x-app-server": "wwwb-app217-dc8",
+      "x-ts": "200",
+      "x-tr": "12666",
+      "set-cookie": "wb-cdx-nomatch-SERVER=wwwb-app217; path=/",
+      "x-location": "cdx",
+      "x-rl": "0",
+      "x-na": "0",
+      "x-page-cache": "BYPASS",
+      "referrer-policy": "no-referrer-when-downgrade",
+      "permissions-policy": "interest-cohort=()",
+      "x-sd": "0",
+      "x-be": "wb_cdx_pygwb_nomatch",
+      "content-encoding": "gzip"
+    },
+    "body": "[]\n"
+  }
+}

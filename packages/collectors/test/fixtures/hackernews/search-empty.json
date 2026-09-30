@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://hn.algolia.com/api",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. An author search with no items."
+  },
+  "request": {
+    "host": "hn.algolia.com",
+    "path": "/api/v1/search_by_date?tags=author_fixture-user&hitsPerPage=20"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"hits\":[],\"nbHits\":0,\"nbPages\":0,\"page\":0,\"hitsPerPage\":20,\"exhaustiveNbHits\":true,\"query\":\"\",\"params\":\"tags=author_fixture-user&hitsPerPage=20\"}"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: a secondary rate limit: 429 with Retry-After in seconds."
+  },
+  "request": {
+    "host": "api.github.com",
+    "path": "/users/octocat"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "retry-after": "60"
+    },
+    "body": "{\"message\":\"[synthetic secondary rate limit message]\"}"
+  }
+}

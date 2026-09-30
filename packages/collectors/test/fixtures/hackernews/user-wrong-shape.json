@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/HackerNews/API",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 200 whose body lacks the documented karma and created fields."
+  },
+  "request": {
+    "host": "hacker-news.firebaseio.com",
+    "path": "/v0/user/fixture-user.json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"id\":\"fixture-user\"}"
+  }
+}

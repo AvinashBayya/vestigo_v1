@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: a 403 that is not a rate limit (requests remain)."
+  },
+  "request": {
+    "host": "api.github.com",
+    "path": "/users/octocat"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": "42"
+    },
+    "body": "{\"message\":\"[synthetic forbidden message]\"}"
+  }
+}

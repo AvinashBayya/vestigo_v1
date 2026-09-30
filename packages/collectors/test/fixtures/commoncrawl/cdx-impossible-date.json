@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://pywb.readthedocs.io/en/latest/manual/cdxserver_api.html",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 200 whose capture timestamp matches the 14-digit form but is not a real date (31 February). Added in the Phase 3B review."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/CC-MAIN-2026-39-index?url=*.iana.org&output=json&limit=100"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/x-ndjson"
+    },
+    "body": "{\"urlkey\":\"org,iana)/\",\"timestamp\":\"20260231044625\",\"url\":\"http://www.iana.org/\",\"mime\":\"text/html\",\"status\":\"200\",\"digest\":\"[digest]\",\"length\":\"2566\",\"offset\":\"24261218\",\"filename\":\"crawl-data/[filename].warc.gz\"}\n"
+  }
+}

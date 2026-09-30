@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "recorded-redacted",
+    "source": "https://dev.to/api/users/by_username?url=qzxwv-placeholder-nonexistent-user",
+    "recordedOn": "2026-09-30",
+    "notes": "Live V1 answer for a placeholder username that does not exist: 404. Body as received; response headers trimmed to the content type."
+  },
+  "request": {
+    "host": "dev.to",
+    "path": "/api/users/by_username?url=qzxwv-placeholder-nonexistent-user"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"error\":\"not found\",\"status\":404}"
+  }
+}

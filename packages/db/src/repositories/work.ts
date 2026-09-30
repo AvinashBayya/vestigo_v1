@@ -5,6 +5,7 @@ import type {
   CollectionMode,
   CollectorDiscipline,
   CommercialUseVerdict,
+  JobOutcome,
   JobStatus,
   RunStatus,
   TargetType,
@@ -365,7 +366,8 @@ export class InvestigationsRepository extends TenantRepository {
 export interface RunTransition {
   readonly status: RunStatus;
   readonly startedAt?: Date;
-  readonly finishedAt?: Date;
+  /** Null reopens a finished run, when a replayed job brings it back to work. */
+  readonly finishedAt?: Date | null;
 }
 
 export class RunsRepository extends TenantRepository {
@@ -373,6 +375,8 @@ export class RunsRepository extends TenantRepository {
     readonly investigationId: string;
     readonly status: RunStatus;
     readonly requestedByUserId: string | null;
+    /** The type the analyst chose, or null to leave it to detection. */
+    readonly requestedTargetType?: TargetType | null;
   }): Promise<Run> {
     return this.run(async (tx) =>
       onlyRow(
@@ -383,9 +387,36 @@ export class RunsRepository extends TenantRepository {
             investigationId: requireUuid(input.investigationId),
             status: input.status,
             requestedByUserId: input.requestedByUserId,
+            requestedTargetType: input.requestedTargetType ?? null,
           })
           .returning(),
       ),
+    );
+  }
+
+  /** The run, locked for update until the transaction ends. Null if it does not exist here. */
+  async lock(id: string): Promise<Run | null> {
+    return this.run(async (tx) =>
+      firstRow(await tx.select().from(runs).where(this.owned(runs, id)).for("update")),
+    );
+  }
+
+  /** Records what the planner decided. */
+  async setPlan(id: string, plan: unknown): Promise<Run | null> {
+    return this.run(async (tx) =>
+      firstRow(await tx.update(runs).set({ plan }).where(this.owned(runs, id)).returning()),
+    );
+  }
+
+  /** The runs of one investigation, oldest first. */
+  async listForInvestigation(investigationId: string, options: ListOptions): Promise<Run[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(runs)
+        .where(and(this.inTenant(runs), eq(runs.investigationId, requireUuid(investigationId))))
+        .orderBy(asc(runs.createdAt), asc(runs.id))
+        .limit(limitOf(options)),
     );
   }
 
@@ -419,6 +450,10 @@ export interface NewJob {
   /** Derived from tenant, target, collector and parameters (CLAUDE.md §5). */
   readonly idempotencyKey: string;
   readonly status: JobStatus;
+  /** The target the job collects, normalised. Absent only for Phase 2A-shaped rows. */
+  readonly targetType?: TargetType;
+  readonly target?: string;
+  readonly params?: Readonly<Record<string, unknown>>;
 }
 
 export interface JobTransition {
@@ -426,7 +461,14 @@ export interface JobTransition {
   readonly attempts?: number;
   readonly lastError?: { readonly code: string; readonly message: string } | null;
   readonly startedAt?: Date;
-  readonly finishedAt?: Date;
+  readonly finishedAt?: Date | null;
+  readonly outcome?: JobOutcome | null;
+  readonly outcomeDetail?: string | null;
+  readonly result?: unknown;
+  readonly evidenceIds?: readonly string[];
+  readonly nextAttemptAt?: Date | null;
+  readonly deadLetteredAt?: Date | null;
+  readonly fusedAt?: Date;
 }
 
 export class JobsRepository extends TenantRepository {
@@ -444,6 +486,49 @@ export class JobsRepository extends TenantRepository {
   async findById(id: string): Promise<Job | null> {
     return this.run(async (tx) =>
       firstRow(await tx.select().from(jobs).where(this.owned(jobs, id))),
+    );
+  }
+
+  /**
+   * Creates the job, or returns the one already recorded under its
+   * idempotency key: a retried or replayed enqueue lands on the same row.
+   */
+  async createOrFind(input: NewJob): Promise<{ readonly job: Job; readonly created: boolean }> {
+    return this.run(async (tx) => {
+      const inserted = firstRow(
+        await tx
+          .insert(jobs)
+          .values({ tenantId: this.tenantId, ...input, runId: requireUuid(input.runId) })
+          .onConflictDoNothing({ target: [jobs.tenantId, jobs.idempotencyKey] })
+          .returning(),
+      );
+      if (inserted !== null) return { job: inserted, created: true };
+      const existing = onlyRow(
+        await tx
+          .select()
+          .from(jobs)
+          .where(and(this.inTenant(jobs), eq(jobs.idempotencyKey, input.idempotencyKey))),
+      );
+      return { job: existing, created: false };
+    });
+  }
+
+  /** The job, locked for update until the transaction ends. Null if it does not exist here. */
+  async lock(id: string): Promise<Job | null> {
+    return this.run(async (tx) =>
+      firstRow(await tx.select().from(jobs).where(this.owned(jobs, id)).for("update")),
+    );
+  }
+
+  /** The jobs of one run, oldest first. */
+  async listForRun(runId: string, options: ListOptions): Promise<Job[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(jobs)
+        .where(and(this.inTenant(jobs), eq(jobs.runId, requireUuid(runId))))
+        .orderBy(asc(jobs.createdAt), asc(jobs.id))
+        .limit(limitOf(options)),
     );
   }
 
@@ -470,7 +555,7 @@ export class JobsRepository extends TenantRepository {
   }
 
   async transition(id: string, change: JobTransition): Promise<Job | null> {
-    const { lastError, ...rest } = change;
+    const { lastError, evidenceIds, ...rest } = change;
     const errorColumns =
       lastError === undefined
         ? {}
@@ -481,7 +566,11 @@ export class JobsRepository extends TenantRepository {
       firstRow(
         await tx
           .update(jobs)
-          .set({ ...rest, ...errorColumns })
+          .set({
+            ...rest,
+            ...errorColumns,
+            ...(evidenceIds === undefined ? {} : { evidenceIds: [...evidenceIds] }),
+          })
           .where(this.owned(jobs, id))
           .returning(),
       ),

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/",
+    "recordedOn": "2026-09-28",
+    "notes": "HTTP 200 with JSON that lacks the documented Status field. Synthetic."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=no-status.example.org&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/dns-json"
+    },
+    "body": "{\"Question\":[{\"name\":\"no-status.example.org\",\"type\":1}]}"
+  }
+}

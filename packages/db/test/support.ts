@@ -85,6 +85,33 @@ export interface TenantFixture {
   readonly credentialId: string;
   readonly usageEventId: string;
   readonly scopeAuthorisationId: string;
+  /** An entity resolved by identifier; both fixtures use the same identifier. */
+  readonly identifiedEntityId: string;
+  /** Written as the schema owner: the application cannot write quotas. */
+  readonly tenantQuotaId: string;
+}
+
+/** The identifier both tenants' fixtures resolve, so a leak would return the other's row. */
+export const SHARED_IDENTIFIER = "shared.example.com";
+
+/** Inserts a quota row as the schema owner, as an operator would. */
+async function insertQuotaAsOwner(tenantId: TenantId): Promise<string> {
+  const client = await rawClient(TEST_DATABASE.ownerUrl);
+  try {
+    await client.query("begin");
+    await client.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
+    const result = await client.query<{ id: string }>(
+      `insert into public.tenant_quotas (tenant_id, unit, period, max_quantity)
+       values ($1, 'UPSTREAM_REQUEST', 'DAY', 1000) returning id`,
+      [tenantId],
+    );
+    await client.query("commit");
+    const id = result.rows[0]?.id;
+    if (id === undefined) throw new Error("quota fixture was not inserted");
+    return id;
+  } finally {
+    await client.end();
+  }
 }
 
 export const FIXTURE_COLLECTOR_ID = "fixture";
@@ -98,7 +125,7 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
   const tenantId = newTenantId();
   await db.provisionTenant({ tenantId, name: `[Tenant ${tag}]`, region: "IN" });
 
-  return db.withTenant(tenantId, async ({ repos }) => {
+  const rows = await db.withTenant(tenantId, async ({ repos }) => {
     const user = await repos.users.create({
       email: `analyst-${tag}@example.com`,
       displayName: `[Analyst ${tag}]`,
@@ -165,6 +192,11 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
     });
     const entity = await repos.entities.create({ kind: "DOMAIN", displayName: "example.com" });
     const other = await repos.entities.create({ kind: "DOMAIN", displayName: "www.example.com" });
+    const identified = await repos.entities.resolveByIdentifier({
+      kind: "DOMAIN",
+      identifier: SHARED_IDENTIFIER,
+      displayName: SHARED_IDENTIFIER,
+    });
     const merged = await repos.entities.create({
       kind: "DOMAIN",
       displayName: "[duplicate example.com]",
@@ -260,6 +292,8 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       credentialId: credential.id,
       usageEventId: usage.id,
       scopeAuthorisationId: scope.id,
+      identifiedEntityId: identified.entity.id,
     };
   });
+  return { ...rows, tenantQuotaId: await insertQuotaAsOwner(tenantId) };
 }

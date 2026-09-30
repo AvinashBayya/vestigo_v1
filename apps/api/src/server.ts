@@ -8,6 +8,8 @@ import {
   FixedWindowRateLimiter,
   MasterKey,
 } from "@repo/integrations";
+import { createPlatformRegistry } from "@repo/collectors";
+import { InvestigationQueue, JobReplayer } from "@repo/osint-engine";
 import { buildApp } from "./app.ts";
 import { createAuth } from "./auth/better-auth.ts";
 
@@ -44,6 +46,17 @@ const redis = createRedisClient({
 await waitForRedisReady(redis, { timeoutMs: 5_000 });
 const trustedOrigins = new Set([env.WEB_ORIGIN, new URL(env.AUTH_BASE_URL).origin]);
 
+// The API only enqueues work; the worker pools do it (ARCHITECTURE-DECISIONS §6).
+const queueConnection = { url: env.REDIS_URL, prefix: env.QUEUE_PREFIX };
+const retry = {
+  maxAttempts: env.JOB_MAX_ATTEMPTS,
+  baseDelayMs: env.JOB_RETRY_BASE_MS,
+  maxDelayMs: env.JOB_RETRY_MAX_MS,
+};
+const registry = createPlatformRegistry();
+const investigations = new InvestigationQueue(queueConnection, retry);
+const replayer = new JobReplayer({ db, registry, connection: queueConnection, retry });
+
 const app = await buildApp({
   logger: { level: env.LOG_LEVEL },
   services: {
@@ -65,6 +78,7 @@ const app = await buildApp({
     rateLimiter: new FixedWindowRateLimiter({ redis, keyPrefix: "rate-limit:" }),
     apiKeyRateLimit: { limit: env.API_KEY_RATE_LIMIT_PER_MINUTE, windowSeconds: 60 },
     trustedOrigins,
+    runs: { investigations, replayer, registry, eventsPollMs: env.RUN_EVENTS_POLL_MS },
   },
 });
 
@@ -73,6 +87,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     app.log.info({ signal }, "shutting down");
     void app
       .close()
+      .then(() => Promise.all([investigations.close(), replayer.close()]))
       .then(() => Promise.all([db.close(), authStore.close(), redis.quit()]))
       .then(() => process.exit(0));
   });

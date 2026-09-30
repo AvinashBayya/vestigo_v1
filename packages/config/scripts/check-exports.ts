@@ -28,6 +28,10 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ClaimStrength",
     "ENTITY_KINDS",
     "NAME_ONLY_AUTOMERGE_FORBIDDEN",
+    "detectTargetType",
+    "EmptyTargetError",
+    "JOB_OUTCOMES",
+    "QUOTA_PERIODS",
   ],
   // Who may do what, for the API and the workers alike.
   "packages/access/src/index.ts": [
@@ -64,12 +68,26 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "Collector",
     "CollectionOutcome",
     "UpstreamRateLimiter",
+    "UsageMeter",
+    "PLATFORM_COLLECTORS",
+    "createPlatformRegistry",
   ],
-  // The one path from a collector's result to evidence rows.
+  // The one path from a collector's result to evidence rows, and the job
+  // system around it: planning, per-source queues, fault isolation, fusion.
   "packages/osint-engine/src/index.ts": [
     "CollectionExecutor",
     "VaultCredentialSource",
     "redisUpstreamRateLimiter",
+    "planRun",
+    "RunCoordinator",
+    "CollectorJobProcessor",
+    "RunFusion",
+    "InvestigationQueue",
+    "JobReplayer",
+    "startWorkerPool",
+    "readRunProgress",
+    "usageSummary",
+    "jobIdempotencyKey",
   ],
   // The only way to tenant data: withTenant() and the repositories it issues.
   "packages/db/src/index.ts": [
@@ -95,6 +113,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "AUTH_TABLE_NAMES",
     "CollectorNotEnabledError",
     "ScopeAuthorisationsRepository",
+    "TenantQuotasRepository",
+    "JobRecordedOnceError",
   ],
   // Secrets, API key storage and rate limits: the only paths to each.
   "packages/integrations/src/index.ts": [
@@ -106,6 +126,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "SlidingLogRateLimiter",
     "RateLimiterUnavailableError",
     "createRedisClient",
+    "RedisCircuitBreaker",
+    "CircuitBreakerUnavailableError",
   ],
 };
 

@@ -1,0 +1,21 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/",
+    "recordedOn": "2026-09-28",
+    "notes": "HTTP 429 with Retry-After as an HTTP date, two minutes after the response's Date header. Could not be provoked for real; both dates are placeholders."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=rate-limited-until.example.org&type=A"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "Content-Type": "text/plain",
+      "Date": "Mon, 28 Sep 2026 10:40:16 GMT",
+      "Retry-After": "Mon, 28 Sep 2026 10:42:16 GMT"
+    },
+    "body": ""
+  }
+}

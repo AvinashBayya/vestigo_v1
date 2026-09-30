@@ -10,9 +10,16 @@ import {
   FixedWindowRateLimiter,
   MasterKey,
 } from "@repo/integrations";
+import { createPlatformRegistry, type CollectorRegistry } from "@repo/collectors";
+import {
+  InvestigationQueue,
+  JobReplayer,
+  type QueueConnection,
+  type RetryPolicy,
+} from "@repo/osint-engine";
 import pg from "pg";
 import { buildApp } from "../src/app.ts";
-import { createAuth, type Auth } from "../src/auth/better-auth.ts";
+import { createAuth, ENROLMENT_TOKEN_HEADER, type Auth } from "../src/auth/better-auth.ts";
 import { provisionTenant } from "../src/auth/provisioning.ts";
 import type { Services } from "../src/services.ts";
 import { TEST_API } from "./config.ts";
@@ -29,8 +36,14 @@ export interface TestApi {
   readonly auth: Auth;
   readonly db: Database;
   readonly authStore: AuthStore;
+  /** This test API's own job queues: a test starts worker pools on the same ones. */
+  readonly queue: QueueConnection;
+  readonly retry: RetryPolicy;
   close(): Promise<void>;
 }
+
+/** Fast retries, so a test sees a failing job dead-letter in well under a second. */
+export const TEST_RETRY: RetryPolicy = { maxAttempts: 3, baseDelayMs: 20, maxDelayMs: 100 };
 
 /** The real app over the test database and Redis, with a random vault key. */
 export async function createTestApi(
@@ -42,6 +55,8 @@ export async function createTestApi(
     readonly waitForRedis?: boolean;
     /** The application's LOG_LEVEL. Defaults to the configuration's own default. */
     readonly logLevel?: Env["LOG_LEVEL"];
+    /** The registry the run routes label jobs from. Defaults to the platform's. */
+    readonly registry?: CollectorRegistry;
   } = {},
 ): Promise<TestApi> {
   const quiet = () => undefined;
@@ -65,6 +80,13 @@ export async function createTestApi(
     rateLimit: { enabled: options.authRateLimit ?? false },
     logLevel: options.logLevel ?? DEFAULT_LOG_LEVEL,
   });
+  const queue: QueueConnection = {
+    url: options.redisUrl ?? TEST_API.redisUrl,
+    prefix: `api-${randomUUID().slice(0, 8)}`,
+  };
+  const registry = options.registry ?? createPlatformRegistry();
+  const investigations = new InvestigationQueue(queue, TEST_RETRY);
+  const replayer = new JobReplayer({ db, registry, connection: queue, retry: TEST_RETRY });
   const services: Services = {
     db,
     authStore,
@@ -76,6 +98,7 @@ export async function createTestApi(
     rateLimiter: new FixedWindowRateLimiter({ redis, keyPrefix: `test:${randomUUID()}:` }),
     apiKeyRateLimit: { limit: options.apiKeyLimit ?? 1000, windowSeconds: 60 },
     trustedOrigins: new Set([WEB_ORIGIN, BASE_URL]),
+    runs: { investigations, replayer, registry, eventsPollMs: 100 },
   };
   const app = await buildApp({ logger: false, services });
   await app.ready();
@@ -85,8 +108,11 @@ export async function createTestApi(
     auth,
     db,
     authStore,
+    queue,
+    retry: TEST_RETRY,
     async close() {
       await app.close();
+      await Promise.all([investigations.close().catch(quiet), replayer.close().catch(quiet)]);
       await Promise.all([db.close(), authStore.close(), redis.quit().catch(quiet)]);
     },
   };
@@ -154,6 +180,15 @@ export class Browser {
       },
       ...(body === undefined ? {} : { payload: JSON.stringify(body) }),
     });
+    // An invitation's enrolment token travels in the hand-shared link; here
+    // it is recorded for the invitee, as the link would deliver it.
+    if (url === "/api/auth/organization/invite-member" && response.statusCode === 200) {
+      const sent = body as { email?: unknown };
+      const token = response.json<{ enrolmentToken?: unknown }>().enrolmentToken;
+      if (typeof sent.email === "string" && typeof token === "string") {
+        rememberEnrolmentToken(sent.email, token);
+      }
+    }
     const setCookie = response.headers["set-cookie"];
     for (const line of setCookie === undefined
       ? []
@@ -197,14 +232,28 @@ export async function provisionTestTenant(
   tag: string,
 ): Promise<{ tenantId: TenantId; owner: Account; ownerUserId: string }> {
   const owner = newAccount(`${tag}-owner`);
-  const provisioned = await provisionTenant(api.auth, {
+  const provisioned = await provisionTenant(api.auth, api.authStore, {
     name: `[Tenant ${tag}]`,
     slug: `${tag}-${randomUUID().slice(0, 8)}`,
     region: "IN",
     owner,
     operator: "[test suite]",
   });
+  rememberEnrolmentToken(owner.email, provisioned.enrolmentToken);
   return { tenantId: provisioned.tenantId, owner, ownerUserId: provisioned.ownerUserId };
+}
+
+/** Enrolment tokens handed to accounts in this test process, by email. */
+const enrolmentTokens = new Map<string, string>();
+
+export function rememberEnrolmentToken(email: string, token: string): void {
+  enrolmentTokens.set(email.toLowerCase(), token);
+}
+
+/** The header an enrolment step carries: the account's token, if it was given one. */
+export function enrolmentHeaders(email: string): Record<string, string> {
+  const token = enrolmentTokens.get(email.toLowerCase());
+  return token === undefined ? {} : { [ENROLMENT_TOKEN_HEADER]: token };
 }
 
 /** TOTP secrets of accounts enrolled in this test process, by email. */
@@ -235,14 +284,21 @@ export async function signInAndEnrol(browser: Browser, account: Account): Promis
     if (second.status !== 200) throw new TypeError(`second factor failed: ${second.body}`);
     return known;
   }
-  const enable = await browser.request("POST", "/api/auth/two-factor/enable", {
-    password: account.password,
-  });
+  const token = enrolmentHeaders(account.email);
+  const enable = await browser.request(
+    "POST",
+    "/api/auth/two-factor/enable",
+    { password: account.password },
+    token,
+  );
   if (enable.status !== 200) throw new TypeError(`2FA enable failed: ${enable.body}`);
   const { totpURI } = enable.json<{ totpURI: string }>();
-  const verify = await browser.request("POST", "/api/auth/two-factor/verify-totp", {
-    code: totpCode(totpURI),
-  });
+  const verify = await browser.request(
+    "POST",
+    "/api/auth/two-factor/verify-totp",
+    { code: totpCode(totpURI) },
+    token,
+  );
   if (verify.status !== 200) throw new TypeError(`TOTP verification failed: ${verify.body}`);
   enrolled.set(account.email, totpURI);
   return totpURI;
@@ -311,4 +367,48 @@ export async function existingUserIds(ids: readonly string[]): Promise<string[]>
 /** Audit rows of a tenant, newest first, read through the repositories. */
 export async function auditRows(api: TestApi, tenantId: TenantId) {
   return api.db.withTenant(tenantId, ({ repos }) => repos.auditLog.recent({ limit: 500 }));
+}
+
+/**
+ * A new member of the tenant with `role`, signed in with MFA enrolled and
+ * the tenant selected: invited by `inviter`, signed up, enrolled, joined.
+ */
+export async function joinAs(
+  api: TestApi,
+  inviter: Browser,
+  tenantId: string,
+  role: "owner" | "admin" | "analyst" | "viewer",
+  tag: string,
+): Promise<Browser> {
+  const account = newAccount(tag);
+  const invite = await inviter.request("POST", "/api/auth/organization/invite-member", {
+    email: account.email,
+    role,
+    organizationId: tenantId,
+  });
+  if (invite.status !== 200) throw new TypeError(`invite failed: ${invite.body}`);
+  const joiner = new Browser(api);
+  await joiner.request("POST", "/api/auth/sign-up/email", account);
+  await signInAndEnrol(joiner, account);
+  const accept = await joiner.request("POST", "/api/auth/organization/accept-invitation", {
+    invitationId: invite.json<{ id: string }>().id,
+  });
+  if (accept.status !== 200) throw new TypeError(`accept failed: ${accept.body}`);
+  const active = await setActiveTenant(joiner, tenantId);
+  if (active.status !== 200) throw new TypeError(`set-active failed: ${active.body}`);
+  return joiner;
+}
+
+/** Runs SQL as the schema owner, in the tenant's context, as an operator would. */
+export async function asOwner(tenantId: string, sql: string, params: unknown[]): Promise<void> {
+  const client = new pg.Client({ connectionString: TEST_API.ownerUrl });
+  await client.connect();
+  try {
+    await client.query("begin");
+    await client.query("select set_config('app.tenant_id', $1, true)", [tenantId]);
+    await client.query(sql, params);
+    await client.query("commit");
+  } finally {
+    await client.end();
+  }
 }

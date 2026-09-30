@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash, randomBytes } from "node:crypto";
 import { PRODUCT_NAME, type Env } from "@repo/config";
 import { parseTenantId, TENANT_REGIONS, type TenantRegion } from "@repo/core";
 import type { AuthStore, Database } from "@repo/db";
@@ -6,6 +7,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { organization, twoFactor } from "better-auth/plugins";
+import { z } from "zod";
 import { accessControl, accessControlRoles } from "./access-control.ts";
 import { auditOrganizationEvent } from "./org-audit.ts";
 
@@ -94,6 +96,39 @@ const ORGANIZATION_PATHS = new Set([
   "/organization/leave",
   "/organization/has-permission",
 ]);
+
+/**
+ * Enrolling a first MFA device needs the one-time enrolment token that came
+ * with the invitation (or with provisioning), sent in this header. The token
+ * travels only in the hand-shared invitation link, so a password stolen
+ * before its owner enrols cannot enrol the thief's device (Phase 2B open
+ * item, built in Phase 4). Every step that could reveal or confirm the new
+ * secret is guarded, not only the first.
+ */
+export const ENROLMENT_TOKEN_HEADER = "x-mfa-enrolment-token";
+const ENROLMENT_GUARDED_PATHS = new Set([
+  "/two-factor/enable",
+  "/two-factor/get-totp-uri",
+  "/two-factor/verify-totp",
+]);
+/** How long a provisioned owner's enrolment token lasts; an invitation's lasts as long as it does. */
+export const PROVISIONING_ENROLMENT_TTL_MS = 48 * 60 * 60 * 1000;
+
+/** A new enrolment token, and the hash that is all the database keeps of it. */
+export function issueEnrolmentToken(): { readonly token: string; readonly hash: string } {
+  const token = `mfa_${randomBytes(32).toString("base64url")}`;
+  return { token, hash: hashEnrolmentToken(token) };
+}
+
+export function hashEnrolmentToken(token: string): string {
+  return `sha256:${createHash("sha256").update(token).digest("hex")}`;
+}
+
+const INVITATION_RESULT = z.object({
+  id: z.string(),
+  email: z.string(),
+  expiresAt: z.coerce.date(),
+});
 
 /** Paths refused outright: MFA can never be switched off. */
 const FORBIDDEN_PATHS = new Set(["/two-factor/disable"]);
@@ -184,6 +219,10 @@ export function createAuth(options: AuthOptions) {
         create: {
           // Sign-up is by invitation only, except while an operator provisions
           // a tenant's first owner.
+          // An invited person takes over the enrolment token issued with the invitation.
+          after: async (user) => {
+            await authStore.adoptInvitationEnrolmentToken(user.id, user.email);
+          },
           before: async (user, context) => {
             // The provisioning bypass needs BOTH the operator context AND a
             // server-side call: an HTTP sign-up always carries a request.
@@ -209,6 +248,31 @@ export function createAuth(options: AuthOptions) {
         if (ctx.path.startsWith("/organization/") && !ORGANIZATION_PATHS.has(ctx.path)) {
           throw new APIError("NOT_FOUND", { code: "ENDPOINT_NOT_EXPOSED", message: "Not found." });
         }
+        if (ENROLMENT_GUARDED_PATHS.has(ctx.path)) {
+          const enrolling = await getSessionFromCtx(ctx);
+          // No session: the sign-in challenge of an enrolled account, which
+          // proves the existing device and enrols nothing.
+          if (enrolling !== null && enrolling.user.twoFactorEnabled !== true) {
+            const token = ctx.headers?.get(ENROLMENT_TOKEN_HEADER) ?? null;
+            if (token === null || token.length === 0) {
+              throw new APIError("FORBIDDEN", {
+                code: "MFA_ENROLMENT_TOKEN_REQUIRED",
+                message: "Enrolling in MFA needs the enrolment token from the invitation link.",
+              });
+            }
+            if (
+              !(await authStore.hasValidEnrolmentToken(
+                enrolling.user.id,
+                hashEnrolmentToken(token),
+              ))
+            ) {
+              throw new APIError("FORBIDDEN", {
+                code: "MFA_ENROLMENT_TOKEN_INVALID",
+                message: "The enrolment token is not valid for this account, or has expired.",
+              });
+            }
+          }
+        }
         if (MFA_EXEMPT_PATHS.has(ctx.path)) return;
         const session = await getSessionFromCtx(ctx);
         if (session !== null && session.user.twoFactorEnabled !== true) {
@@ -220,6 +284,28 @@ export function createAuth(options: AuthOptions) {
       }),
       after: createAuthMiddleware(async (ctx) => {
         await auditOrganizationEvent(db, ctx);
+        if (ctx.path === "/two-factor/verify-totp") {
+          const session = await getSessionFromCtx(ctx);
+          // Once enrolled, the token can never be used again.
+          if (session !== null) await authStore.clearEnrolmentTokenIfEnrolled(session.user.id);
+          return;
+        }
+        if (ctx.path === "/organization/invite-member") {
+          const invitation = INVITATION_RESULT.safeParse(ctx.context.returned);
+          if (!invitation.success) return;
+          const { token, hash } = issueEnrolmentToken();
+          await authStore.setInvitationEnrolmentToken(invitation.data.id, hash);
+          // Re-inviting someone who signed up but never enrolled issues them a fresh token.
+          await authStore.setUnenrolledUserToken(
+            { email: invitation.data.email },
+            hash,
+            invitation.data.expiresAt,
+          );
+          // Shown once, to the inviter, for the hand-shared invitation link.
+          return ctx.json({ ...(ctx.context.returned as object), enrolmentToken: token });
+        }
+        // Every other path: the response stands as the endpoint returned it.
+        return undefined;
       }),
     },
     plugins: [

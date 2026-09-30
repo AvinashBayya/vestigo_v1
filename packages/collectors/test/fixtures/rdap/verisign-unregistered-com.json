@@ -1,0 +1,21 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://rdap.verisign.com/com/v1/domain/rdap-fixture-unregistered-name-2026-09-28.com",
+    "recordedOn": "2026-09-28",
+    "notes": "The .com registry's answer for a name with no registration: HTTP 404 with an empty body."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/rdap-fixture-unregistered-name-2026-09-28.com"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/rdap+json",
+      "access-control-allow-origin": "*",
+      "strict-transport-security": "max-age=15768000; includeSubDomains; preload"
+    },
+    "body": ""
+  }
+}

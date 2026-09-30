@@ -64,6 +64,34 @@
       "when": 1790586273725,
       "tag": "0008_collectors_security",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790763984169,
+      "tag": "0009_phase4_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790763999344,
+      "tag": "0010_phase4_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790765094032,
+      "tag": "0011_phase4_detail_relationships",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790768282686,
+      "tag": "0012_phase4_mfa_enrolment_token",
+      "breakpoints": true
     }
   ]
 }

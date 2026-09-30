@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/HackerNews/API",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. An outage answer; cannot be provoked on demand."
+  },
+  "request": {
+    "host": "hacker-news.firebaseio.com",
+    "path": "/v0/user/fixture-user.json"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "content-type": "text/html; charset=utf-8"
+    },
+    "body": "<html><body>[service unavailable]</body></html>"
+  }
+}

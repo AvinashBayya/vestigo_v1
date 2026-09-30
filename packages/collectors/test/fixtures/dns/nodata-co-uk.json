@@ -1,0 +1,27 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://cloudflare-dns.com/dns-query?name=co.uk&type=A",
+    "recordedOn": "2026-09-28",
+    "notes": "NOERROR (Status 0) with no answer section: the name exists and has no A record. Recorded with curl and the header accept: application/dns-json; body and headers as received."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=co.uk&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Server": "cloudflare",
+      "Date": "Mon, 28 Sep 2026 10:40:21 GMT",
+      "Content-Type": "application/dns-json",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Length": "238",
+      "CF-RAY": "a4222127cebe2b45-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": "{\"Status\":0,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"co.uk\",\"type\":1}],\"Authority\":[{\"name\":\"co.uk\",\"type\":6,\"TTL\":10208,\"data\":\"dns1.nic.uk. hostmaster.nominet.org.uk. 1790591389 900 300 2419200 10800\"}]}"
+  }
+}

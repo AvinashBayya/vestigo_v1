@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc9083#section-5.3",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. An HTTP 200 domain object for a different domain than the one looked up. Not observed live."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/example.com"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/rdap+json"
+    },
+    "body": "{\"objectClassName\":\"domain\",\"ldhName\":\"[A-DIFFERENT-DOMAIN].COM\"}"
+  }
+}

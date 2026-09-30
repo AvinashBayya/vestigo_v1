@@ -128,6 +128,9 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   CREDENTIAL_NOT_FOUND: 404,
   CREDENTIAL_REVOKED: 409,
   INVALID_IDENTIFIER: 404,
+  // Phase 4: runs and replays.
+  JOB_NOT_FOUND: 404,
+  JOB_NOT_REPLAYABLE: 409,
 };
 
 export function registerErrorHandling(app: FastifyInstance): void {

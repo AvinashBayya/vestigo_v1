@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/internetarchive/wayback/blob/master/wayback-cdx-server/README.md",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: not provoked live (provoking it would breach the source's rate limit). HTTP 429 with Retry-After: 120 (delta-seconds) and a placeholder body; tests that the archive's own rate limit is UNAVAILABLE with its retry time."
+  },
+  "request": {
+    "host": "web.archive.org",
+    "path": "/cdx/search/cdx?url=rate-limited.example%2F*&output=json&fl=timestamp%2Coriginal%2Cstatuscode%2Cmimetype%2Cdigest&collapse=urlkey&limit=201"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "text/html",
+      "retry-after": "120"
+    },
+    "body": "[synthetic 429 body]"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc7480#section-5.4",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. The .com registry refusing the query as malformed with HTTP 400 (RFC 7480 section 5.4). Not observed live."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/example.com"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/rdap+json"
+    },
+    "body": "{\"errorCode\":400,\"title\":\"[error title]\"}"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.forem.com/api/v1",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 200 whose body lacks the documented id field."
+  },
+  "request": {
+    "host": "dev.to",
+    "path": "/api/users/by_username?url=thepracticaldev"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"type_of\":\"user\",\"username\":\"thepracticaldev\"}"
+  }
+}

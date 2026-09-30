@@ -140,12 +140,19 @@ export function testSource(
       protocol: "http",
       hosts: [`${id}.test`],
       rateLimit: { requests: 100, intervalSeconds: 1, basis: "SELF_IMPOSED", note: "[test]" },
+      // Every test label is "[fake.…]", so it names this operator.
+      operators: [{ name: "fake", hosts: [`${id}.test`] }],
     },
     attribution: null,
     ...overrides,
   };
 }
 
-export const NAMES_SCHEMA = z.object({ names: z.array(z.string()).min(1) });
+/** A fake collector's result: names read from its source, and an empty derived block (src/provenance.ts). */
+export const NAMES_SCHEMA = z.object({
+  names: z.array(z.string()).min(1),
+  derived: z.object({}).strict(),
+});
+export type Names = z.infer<typeof NAMES_SCHEMA>;
 
 export const ENTITLED = { plan: "TECHINT_AND_PERSON", vettingStatus: "APPROVED" } as const;

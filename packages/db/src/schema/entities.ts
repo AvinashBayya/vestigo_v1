@@ -23,6 +23,13 @@ export const entities = pgTable(
     kind: entityKind("kind").notNull(),
     displayName: text("display_name").notNull(),
     createdAt: createdAtColumn(),
+    /**
+     * The entity's normalised identifier (a domain, an address, platform:handle),
+     * when it has one. Unique per kind, so fusion resolves an identifier to one
+     * entity. Null for kinds identified by name alone (a person, an
+     * organisation), which are never resolved by value (Phase 4).
+     */
+    identifier: text("identifier"),
   },
   (t) => [
     primaryKey({ name: "entities_pk", columns: [t.tenantId, t.id] }),
@@ -34,6 +41,19 @@ export const entities = pgTable(
     // Lets entity_merges prove both sides of a merge are the same kind.
     unique("entities_id_kind_key").on(t.tenantId, t.id, t.kind),
     check("entities_display_name_not_blank", sql`length(btrim(${t.displayName})) > 0`),
+    uniqueIndex("entities_one_per_identifier")
+      .on(t.tenantId, t.kind, t.identifier)
+      .where(sql`${t.identifier} is not null`),
+    check(
+      "entities_identifier_not_blank",
+      sql`${t.identifier} is null or length(btrim(${t.identifier})) > 0`,
+    ),
+    // A person or organisation is never identified by its name: only by a
+    // namespaced external identifier (wikidata:Q42), never a bare value.
+    check(
+      "entities_named_kinds_external_identifier_only",
+      sql`${t.identifier} is null or ${t.kind} not in ('PERSON', 'ORGANIZATION') or ${t.identifier} ~ '^[a-z][a-z0-9_.-]*:[^ ]+$'`,
+    ),
   ],
 );
 
@@ -65,6 +85,13 @@ export const entityRelationships = pgTable(
       foreignColumns: [entities.tenantId, entities.id],
     }),
     check("entity_relationships_not_self", sql`${t.sourceEntityId} <> ${t.targetEntityId}`),
+    // One row per relationship: fusion asserting it again adds a claim, not a duplicate edge.
+    unique("entity_relationships_one_per_kind").on(
+      t.tenantId,
+      t.sourceEntityId,
+      t.targetEntityId,
+      t.kind,
+    ),
     check("entity_relationships_kind_format", sql`${t.kind} ~ '^[a-z][a-z_]*$'`),
   ],
 );

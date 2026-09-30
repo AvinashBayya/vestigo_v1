@@ -1,6 +1,14 @@
-import type { UsageUnit } from "@repo/core";
-import { and, asc, eq, sql } from "drizzle-orm";
-import { alerts, casePins, cases, credentials, monitors, usageEvents } from "../schema/index.ts";
+import type { QuotaPeriod, UsageUnit } from "@repo/core";
+import { and, asc, eq, gte, sql } from "drizzle-orm";
+import {
+  alerts,
+  casePins,
+  cases,
+  credentials,
+  monitors,
+  tenantQuotas,
+  usageEvents,
+} from "../schema/index.ts";
 import {
   firstRow,
   limitOf,
@@ -16,6 +24,7 @@ export type Monitor = typeof monitors.$inferSelect;
 export type Alert = typeof alerts.$inferSelect;
 export type Credential = typeof credentials.$inferSelect;
 export type UsageEvent = typeof usageEvents.$inferSelect;
+export type TenantQuota = typeof tenantQuotas.$inferSelect;
 
 export class CasesRepository extends TenantRepository {
   async create(input: {
@@ -336,6 +345,62 @@ export class UsageEventsRepository extends TenantRepository {
     );
   }
 
+  /**
+   * Records what one attempt of a job consumed, once: a second call for the
+   * same job, attempt and unit records nothing and returns false, so a
+   * replayed job never charges twice (CLAUDE.md §5).
+   */
+  async recordAttempt(input: {
+    readonly unit: UsageUnit;
+    readonly quantity: number;
+    readonly collectorId: string;
+    readonly jobId: string;
+    readonly attempt: number;
+  }): Promise<boolean> {
+    if (!Number.isSafeInteger(input.quantity) || input.quantity < 0) {
+      throw new RangeError("usage quantity must be a non-negative integer");
+    }
+    if (!Number.isSafeInteger(input.attempt) || input.attempt < 1) {
+      throw new RangeError("usage attempt must be a positive integer");
+    }
+    return this.run(async (tx) => {
+      const rows = await tx
+        .insert(usageEvents)
+        .values({
+          tenantId: this.tenantId,
+          unit: input.unit,
+          quantity: input.quantity,
+          collectorId: input.collectorId,
+          jobId: requireUuid(input.jobId),
+          attempt: input.attempt,
+        })
+        .onConflictDoNothing({
+          target: [usageEvents.tenantId, usageEvents.jobId, usageEvents.attempt, usageEvents.unit],
+          where: sql`${usageEvents.jobId} is not null`,
+        })
+        .returning({ id: usageEvents.id });
+      return rows.length === 1;
+    });
+  }
+
+  /** The units of one kind consumed since a moment, by the database's record. */
+  async totalSince(unit: UsageUnit, since: Date): Promise<number> {
+    return this.run(async (tx) => {
+      const [row] = await tx
+        .select({ total: sql<string>`coalesce(sum(${usageEvents.quantity}), 0)` })
+        .from(usageEvents)
+        .where(
+          and(
+            this.inTenant(usageEvents),
+            eq(usageEvents.unit, unit),
+            gte(usageEvents.createdAt, since),
+          ),
+        );
+      // A sum over no rows is a measured zero: nothing was consumed.
+      return Number(row?.total);
+    });
+  }
+
   async findById(id: string): Promise<UsageEvent | null> {
     return this.run(async (tx) =>
       firstRow(await tx.select().from(usageEvents).where(this.owned(usageEvents, id))),
@@ -349,6 +414,38 @@ export class UsageEventsRepository extends TenantRepository {
         .from(usageEvents)
         .where(this.inTenant(usageEvents))
         .orderBy(asc(usageEvents.createdAt))
+        .limit(limitOf(options)),
+    );
+  }
+}
+
+/** Quotas are set by an operator; the application only reads them. */
+export class TenantQuotasRepository extends TenantRepository {
+  /** The tenant's limit on a unit over a period, or null when it has none. */
+  async find(unit: UsageUnit, period: QuotaPeriod): Promise<TenantQuota | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .select()
+          .from(tenantQuotas)
+          .where(
+            and(
+              this.inTenant(tenantQuotas),
+              eq(tenantQuotas.unit, unit),
+              eq(tenantQuotas.period, period),
+            ),
+          ),
+      ),
+    );
+  }
+
+  async list(options: ListOptions): Promise<TenantQuota[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(tenantQuotas)
+        .where(this.inTenant(tenantQuotas))
+        .orderBy(asc(tenantQuotas.unit), asc(tenantQuotas.period))
         .limit(limitOf(options)),
     );
   }

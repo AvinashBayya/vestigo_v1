@@ -1,0 +1,27 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://cloudflare-dns.com/dns-query?name=10.0.0.1.nip.io&type=A",
+    "recordedOn": "2026-09-28",
+    "notes": "A public wildcard DNS service that answers with the private address written in the name. Recorded with curl and the header accept: application/dns-json; body and headers as received."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=10.0.0.1.nip.io&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Server": "cloudflare",
+      "Date": "Mon, 28 Sep 2026 10:40:30 GMT",
+      "Content-Type": "application/dns-json",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Length": "190",
+      "CF-RAY": "a422215bbb7198fe-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": "{\"Status\":0,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"10.0.0.1.nip.io\",\"type\":1}],\"Answer\":[{\"name\":\"10.0.0.1.nip.io\",\"type\":1,\"TTL\":3600,\"data\":\"10.0.0.1\"}]}"
+  }
+}

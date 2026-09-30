@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc9083#section-5.3",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. Ported from the legacy test 'falls back to the registrar entity's handle when vcard carries no fn': a registrar entity with a handle and no vCard, empty events and nameservers. Not observed live."
+  },
+  "request": {
+    "host": "rdap.verisign.com",
+    "path": "/com/v1/domain/example.com"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/rdap+json"
+    },
+    "body": "{\"objectClassName\":\"domain\",\"ldhName\":\"EXAMPLE.COM\",\"entities\":[{\"objectClassName\":\"entity\",\"handle\":\"[registrar handle]\",\"roles\":[\"registrar\"]}],\"events\":[],\"nameservers\":[]}"
+  }
+}

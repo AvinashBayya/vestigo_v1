@@ -42,8 +42,28 @@ export const authUser = authSchema.table(
     twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /**
+     * The one-time token that must accompany a first MFA enrolment, as its
+     * SHA-256 (never the token). Issued with the invitation (or at
+     * provisioning), so a password stolen before enrolment cannot enrol an
+     * attacker's device (Phase 2B open item, built in Phase 4). Cleared once
+     * enrolled. Not part of the identity provider's own schema, so it never
+     * appears in its responses.
+     */
+    mfaEnrolmentTokenHash: text("mfa_enrolment_token_hash"),
+    mfaEnrolmentTokenExpiresAt: at("mfa_enrolment_token_expires_at"),
   },
-  (t) => [check("user_email_normalised", sql`${t.email} = lower(${t.email})`)],
+  (t) => [
+    check("user_email_normalised", sql`${t.email} = lower(${t.email})`),
+    check(
+      "user_mfa_enrolment_token_complete",
+      sql`(${t.mfaEnrolmentTokenHash} is null) = (${t.mfaEnrolmentTokenExpiresAt} is null)`,
+    ),
+    check(
+      "user_mfa_enrolment_token_hashed",
+      sql`${t.mfaEnrolmentTokenHash} is null or ${t.mfaEnrolmentTokenHash} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
+  ],
 );
 
 export const authOrganization = authSchema.table("organization", {
@@ -166,8 +186,14 @@ export const authInvitation = authSchema.table(
       .notNull()
       .references(() => authUser.id, { onDelete: "cascade" }),
     createdAt: createdAt(),
+    /** The SHA-256 of the MFA enrolment token issued with this invitation (never the token). */
+    enrolmentTokenHash: text("enrolment_token_hash"),
   },
   (t) => [
+    check(
+      "invitation_enrolment_token_hashed",
+      sql`${t.enrolmentTokenHash} is null or ${t.enrolmentTokenHash} ~ '^sha256:[0-9a-f]{64}$'`,
+    ),
     index("invitation_organization_idx").on(t.organizationId),
     index("invitation_email_idx").on(t.email),
     check(

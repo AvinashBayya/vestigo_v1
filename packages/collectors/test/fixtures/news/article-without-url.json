@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: an article with a blank url, the one field every GDELT DOC article carries. Placeholder values otherwise."
+  },
+  "request": {
+    "host": "api.gdeltproject.org",
+    "path": "/api/v2/doc/doc?query=%22example.org%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"articles\":[{\"url\":\"\",\"url_mobile\":\"\",\"title\":\"[synthetic headline 1]\",\"seendate\":\"20260927T120000Z\",\"socialimage\":\"\",\"domain\":\"news.example.org\",\"language\":\"[language]\",\"sourcecountry\":\"[outlet country]\"}]}"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.forem.com/api/v1",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 200 for a different username than was asked for, which must never be presented as the asked-for profile."
+  },
+  "request": {
+    "host": "dev.to",
+    "path": "/api/users/by_username?url=thepracticaldev"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"type_of\":\"user\",\"id\":1,\"username\":\"[another-username]\",\"name\":\"[name]\",\"summary\":null,\"location\":null,\"website_url\":null,\"joined_at\":null,\"profile_image\":null}"
+  }
+}

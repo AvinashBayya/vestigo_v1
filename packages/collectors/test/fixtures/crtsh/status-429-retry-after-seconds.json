@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://crt.sh/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: a rate limit cannot be provoked without abusing the upstream. crt.sh publishes no API documentation, so this follows the shape of the recorded fixtures (found-example-com.json, empty-example-invalid.json). The Retry-After value is a placeholder in HTTP's delta-seconds form (RFC 9110 section 10.2.3); the body is a placeholder."
+  },
+  "request": {
+    "host": "crt.sh",
+    "path": "/?q=%25.example.com&output=json"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "text/plain",
+      "retry-after": "60"
+    },
+    "body": "[synthetic 429 body]"
+  }
+}

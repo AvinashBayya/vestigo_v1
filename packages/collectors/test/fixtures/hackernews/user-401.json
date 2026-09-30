@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/HackerNews/API",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. Firebase refusing a read, as it does for a path the rules deny."
+  },
+  "request": {
+    "host": "hacker-news.firebaseio.com",
+    "path": "/v0/user/fixture-user.json"
+  },
+  "response": {
+    "status": 401,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"error\":\"Permission denied\"}"
+  }
+}

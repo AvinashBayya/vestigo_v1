@@ -4,7 +4,7 @@ import {
   type EntityKind,
   type MergeSignal,
 } from "@repo/core";
-import { and, asc, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { MergeRuleViolationError, ReferenceNotFoundError } from "../errors.ts";
 import { entities, entityMerges, entityRelationships } from "../schema/index.ts";
 import {
@@ -33,6 +33,44 @@ export class EntitiesRepository extends TenantRepository {
           .returning(),
       ),
     );
+  }
+
+  /**
+   * The one entity of this kind with this normalised identifier, created if
+   * there is none yet. Concurrent callers land on the same row. The display
+   * name is set only when the entity is created.
+   */
+  async resolveByIdentifier(input: {
+    readonly kind: EntityKind;
+    readonly identifier: string;
+    readonly displayName: string;
+  }): Promise<{ readonly entity: Entity; readonly created: boolean }> {
+    return this.run(async (tx) => {
+      const inserted = firstRow(
+        await tx
+          .insert(entities)
+          .values({ tenantId: this.tenantId, ...input })
+          .onConflictDoNothing({
+            target: [entities.tenantId, entities.kind, entities.identifier],
+            where: sql`${entities.identifier} is not null`,
+          })
+          .returning(),
+      );
+      if (inserted !== null) return { entity: inserted, created: true };
+      const existing = onlyRow(
+        await tx
+          .select()
+          .from(entities)
+          .where(
+            and(
+              this.inTenant(entities),
+              eq(entities.kind, input.kind),
+              eq(entities.identifier, input.identifier),
+            ),
+          ),
+      );
+      return { entity: existing, created: false };
+    });
   }
 
   async findById(id: string): Promise<Entity | null> {
@@ -80,6 +118,43 @@ export class EntityRelationshipsRepository extends TenantRepository {
           .returning(),
       ),
     );
+  }
+
+  /**
+   * The one relationship of this kind between these entities, created if
+   * there is none yet. Concurrent callers land on the same row.
+   */
+  async resolve(input: {
+    readonly sourceEntityId: string;
+    readonly targetEntityId: string;
+    readonly kind: string;
+  }): Promise<{ readonly relationship: EntityRelationship; readonly created: boolean }> {
+    const values = {
+      tenantId: this.tenantId,
+      sourceEntityId: requireUuid(input.sourceEntityId),
+      targetEntityId: requireUuid(input.targetEntityId),
+      kind: input.kind,
+    };
+    return this.run(async (tx) => {
+      const inserted = firstRow(
+        await tx.insert(entityRelationships).values(values).onConflictDoNothing().returning(),
+      );
+      if (inserted !== null) return { relationship: inserted, created: true };
+      const existing = onlyRow(
+        await tx
+          .select()
+          .from(entityRelationships)
+          .where(
+            and(
+              this.inTenant(entityRelationships),
+              eq(entityRelationships.sourceEntityId, values.sourceEntityId),
+              eq(entityRelationships.targetEntityId, values.targetEntityId),
+              eq(entityRelationships.kind, values.kind),
+            ),
+          ),
+      );
+      return { relationship: existing, created: false };
+    });
   }
 
   async findById(id: string): Promise<EntityRelationship | null> {

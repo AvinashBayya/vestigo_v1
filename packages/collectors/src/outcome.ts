@@ -1,5 +1,5 @@
 import type { EvidenceItem } from "./contract.ts";
-import type { CapturedResponse } from "./fetcher/capture.ts";
+import type { Captured } from "./fetcher/capture.ts";
 
 /** Why a collector was not run. Each is decided before the collector's code is reached. */
 export type RefusalReason =
@@ -38,7 +38,8 @@ export type CollectionOutcome =
       readonly status: "NOT_FOUND";
       readonly collectorId: string;
       readonly detail: string;
-      readonly response: CapturedResponse;
+      /** The response (or, for a local analysis, the recorded analysis) that said so. */
+      readonly response: Captured;
     }
   | { readonly status: "FAILED"; readonly collectorId: string; readonly error: OutcomeError }
   | {

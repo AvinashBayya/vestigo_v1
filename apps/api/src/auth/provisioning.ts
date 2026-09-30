@@ -1,5 +1,11 @@
 import { parseTenantId, type TenantId, type TenantRegion } from "@repo/core";
-import { provisioningContext, type Auth } from "./better-auth.ts";
+import type { AuthStore } from "@repo/db";
+import {
+  issueEnrolmentToken,
+  PROVISIONING_ENROLMENT_TTL_MS,
+  provisioningContext,
+  type Auth,
+} from "./better-auth.ts";
 
 export interface ProvisionTenantInput {
   readonly name: string;
@@ -14,6 +20,11 @@ export interface ProvisionTenantInput {
 export interface ProvisionedTenant {
   readonly tenantId: TenantId;
   readonly ownerUserId: string;
+  /**
+   * The owner's one-time MFA enrolment token, shown once to the operator to
+   * hand over with the password. Without it the owner cannot enrol.
+   */
+  readonly enrolmentToken: string;
 }
 
 /**
@@ -28,6 +39,7 @@ export interface ProvisionedTenant {
  */
 export async function provisionTenant(
   auth: Auth,
+  authStore: AuthStore,
   input: ProvisionTenantInput,
 ): Promise<ProvisionedTenant> {
   return provisioningContext.run({ operator: input.operator }, async () => {
@@ -42,6 +54,16 @@ export async function provisionTenant(
         metadata: { region: input.region },
       },
     });
-    return { tenantId: parseTenantId(organization.id), ownerUserId: signUp.user.id };
+    const { token, hash } = issueEnrolmentToken();
+    await authStore.setUnenrolledUserToken(
+      { userId: signUp.user.id },
+      hash,
+      new Date(Date.now() + PROVISIONING_ENROLMENT_TTL_MS),
+    );
+    return {
+      tenantId: parseTenantId(organization.id),
+      ownerUserId: signUp.user.id,
+      enrolmentToken: token,
+    };
   });
 }

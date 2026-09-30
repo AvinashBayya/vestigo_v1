@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "recorded-redacted",
+    "source": "https://index.commoncrawl.org/CC-MAIN-2026-39-index?url=*.qzxwv-placeholder-nonexistent.example&output=json&limit=100",
+    "recordedOn": "2026-09-30",
+    "notes": "Live answer for a placeholder domain: the index server answered 504 on three attempts over two minutes, so no live no-captures answer could be recorded (see cdx-no-captures). Body as received; headers trimmed to the content type."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/CC-MAIN-2026-39-index?url=*.qzxwv-placeholder-nonexistent.example&output=json&limit=100"
+  },
+  "response": {
+    "status": 504,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "<html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>nginx/1.31.6</center>\r\n</body>\r\n</html>\r\n"
+  }
+}

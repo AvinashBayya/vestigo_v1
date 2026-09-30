@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: an explicit empty article list, the other shape a no-match answer could take. Recorded no-match answers are {} (see not-found.json)."
+  },
+  "request": {
+    "host": "api.gdeltproject.org",
+    "path": "/api/v2/doc/doc?query=%22example.org%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"articles\":[]}"
+  }
+}

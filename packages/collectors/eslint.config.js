@@ -26,6 +26,40 @@ const NO_NETWORK = ["http", "https", "net", "tls", "dgram", "http2", "dns"].flat
   { name: module, message: "Outbound calls go through the collector fetcher only." },
 ]);
 
+/**
+ * A failure must never read as "nothing found". The previous codebase's
+ * contact-email module had five `catch { return null }` sites that made a
+ * failed lookup indistinguishable from an empty one (docs/audit/COLLECTORS.md
+ * row 16). No catch block or .catch() handler in collector code may return an
+ * empty value: throw a typed error instead, and the runtime reports it.
+ */
+const EMPTY_VALUES = [
+  "Literal[raw='null']",
+  "Literal[raw='0']",
+  "Literal[raw='false']",
+  "Literal[value='']",
+  "ArrayExpression[elements.length=0]",
+  "ObjectExpression[properties.length=0]",
+  "Identifier[name='undefined']",
+];
+const CATCH_CONTEXTS = [
+  "CatchClause ReturnStatement",
+  "CallExpression[callee.property.name='catch'] > :function ReturnStatement",
+  "CallExpression[callee.property.name='catch'] > ArrowFunctionExpression",
+];
+const NO_EMPTY_ON_FAILURE = [
+  ...CATCH_CONTEXTS.flatMap((context) =>
+    EMPTY_VALUES.map((value) => ({
+      selector: `${context} > ${value}`,
+      message: "A failure is never an empty result: throw a typed error instead.",
+    })),
+  ),
+  {
+    selector: "CatchClause ReturnStatement:not([argument])",
+    message: "A failure is never an empty result: throw a typed error instead.",
+  },
+];
+
 const RESTRICTED_GLOBALS = [
   { name: "Bun", message: "Node only: Bun globals are not available at runtime." },
 ];
@@ -46,15 +80,25 @@ export default [
             "Collectors never read the environment; credentials come only from the tenant vault.",
         },
       ],
+      "no-restricted-syntax": ["error", ...NO_EMPTY_ON_FAILURE],
     },
   },
   {
     files: ["src/**/*.ts"],
-    ignores: ["src/fetcher/**"],
+    ignores: ["src/fetcher/**", "src/testing.ts"],
     rules: {
       "no-restricted-imports": [
         "error",
-        { paths: [...BUN.paths, ...NO_DATABASE, ...NO_NETWORK], patterns: BUN.patterns },
+        {
+          paths: [...BUN.paths, ...NO_DATABASE, ...NO_NETWORK],
+          patterns: [
+            ...BUN.patterns,
+            {
+              group: ["**/testing", "**/testing.ts", "**/testing.js"],
+              message: "The fixture harness is for tests only; nothing in src/ may use it.",
+            },
+          ],
+        },
       ],
       "no-restricted-globals": [
         "error",
@@ -65,6 +109,18 @@ export default [
           message: "Outbound calls go through the collector fetcher only.",
         },
         { name: "WebSocket", message: "Outbound calls go through the collector fetcher only." },
+      ],
+    },
+  },
+  {
+    // The fixture harness (@repo/collectors/testing): a loopback server that
+    // answers tests with recorded fixtures. It contacts nothing; the fetcher
+    // still checks every destination before its socket reaches the server.
+    files: ["src/testing.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { paths: [...BUN.paths, ...NO_DATABASE], patterns: BUN.patterns },
       ],
     },
   },

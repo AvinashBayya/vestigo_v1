@@ -1,0 +1,36 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://rdap.org/domain/nonexistent.example",
+    "recordedOn": "2026-09-28",
+    "notes": "rdap.org's own 404 for a TLD it has no RDAP service for (.example is reserved and has no registry). No registry was asked, so this says nothing about registration."
+  },
+  "request": {
+    "host": "rdap.org",
+    "path": "/domain/nonexistent.example"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "date": "Mon, 28 Sep 2026 10:41:57 GMT",
+      "content-type": "application/rdap+json",
+      "transfer-encoding": "chunked",
+      "connection": "keep-alive",
+      "access-control-allow-origin": "*",
+      "server": "cloudflare",
+      "expires": "Tue, 29 Sep 2026 10:41:56 GMT",
+      "cache-control": "public, max-age=28800",
+      "referrer-policy": "origin",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "via": "1.1 fly.io, 1.1 fly.io",
+      "fly-request-id": "01M3KSPT2M6J95RNXPE4KF64B9-sin",
+      "cf-cache-status": "MISS",
+      "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=VtecgbdXuPX%2FSpYWZ5D0k9GrnSK6%2BkpWUMGpRGYAC3z0j49CDuMp8tJy0o7mlMtyidQMSHMfC92SWb4f4SX9MaEY%2FDjnJrVUUqrYIPRxNehmgRvCQsU2crCvUA%3D%3D\"}]}",
+      "cf-ray": "a42223796fc1e3fd-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": "{\"rdapConformance\":[\"rdap_level_0\"],\"lang\":\"en\",\"errorCode\":404,\"title\":\"No RDAP service is available for this resource\"}"
+  }
+}

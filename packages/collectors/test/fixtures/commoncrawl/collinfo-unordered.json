@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://index.commoncrawl.org/",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. Two entries of the recorded list in reverse order, to show the newest is chosen by its stated end time, not its position."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/collinfo.json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "[{\"id\":\"CC-MAIN-2026-34\",\"name\":\"August 2026 Index\",\"from\":\"2026-08-07T10:18:45\",\"to\":\"2026-08-20T01:52:41\"},{\"id\":\"CC-MAIN-2026-39\",\"name\":\"September 2026 Index\",\"from\":\"2026-09-04T13:16:03\",\"to\":\"2026-09-17T05:59:21\"}]"
+  }
+}

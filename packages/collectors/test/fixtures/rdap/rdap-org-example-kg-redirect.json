@@ -1,0 +1,37 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://rdap.org/domain/example.kg",
+    "recordedOn": "2026-09-28",
+    "notes": "rdap.org's redirect for a .kg name to the .kg registry, whose RDAP server is http only. Only this first hop was recorded; the registry was not contacted."
+  },
+  "request": {
+    "host": "rdap.org",
+    "path": "/domain/example.kg"
+  },
+  "response": {
+    "status": 302,
+    "headers": {
+      "date": "Mon, 28 Sep 2026 10:41:59 GMT",
+      "content-type": "text/html",
+      "transfer-encoding": "chunked",
+      "connection": "keep-alive",
+      "access-control-allow-origin": "*",
+      "server": "cloudflare",
+      "expires": "Tue, 29 Sep 2026 10:41:59 GMT",
+      "cache-control": "public, max-age=28800",
+      "referrer-policy": "origin",
+      "location": "http://rdap.cctld.kg/domain/example.kg",
+      "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+      "via": "1.1 fly.io, 1.1 fly.io",
+      "fly-request-id": "01M3KSPWTSG3GK7EQZ32RRZAS4-sin",
+      "cf-cache-status": "MISS",
+      "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+      "x-content-type-options": "nosniff",
+      "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=6Ypb54fVA6OZ%2BigW2y98Mw2%2FNWowHILfGSrE6As5STNsgsuanbXH%2BAC9XaRFauU4md3Y%2FJCos1C145Hz1rf0%2Bvo6SohNRPHSKVEjacWSdVR2udRrd44sO2t75Q%3D%3D\"}]}",
+      "cf-ray": "a422238aee8fb089-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": ""
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: GDELT DOC refusing the request (403). GDELT needs no credentials; this stands for an address-level refusal, which cannot be provoked on demand. Placeholder body."
+  },
+  "request": {
+    "host": "api.gdeltproject.org",
+    "path": "/api/v2/doc/doc?query=%22example.org%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "text/plain; charset=utf-8"
+    },
+    "body": "[synthetic forbidden body]"
+  }
+}

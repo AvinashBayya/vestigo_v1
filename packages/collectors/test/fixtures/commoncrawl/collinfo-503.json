@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://index.commoncrawl.org/",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. An outage of the index list."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/collinfo.json"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "<html><body>[service unavailable]</body></html>"
+  }
+}

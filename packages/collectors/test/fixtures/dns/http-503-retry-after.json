@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/",
+    "recordedOn": "2026-09-28",
+    "notes": "HTTP 503 with Retry-After in seconds. Could not be provoked for real; status and header only, empty body, Retry-After value is a placeholder."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=unavailable.example.org&type=A"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "Content-Type": "text/plain",
+      "Retry-After": "120"
+    },
+    "body": ""
+  }
+}

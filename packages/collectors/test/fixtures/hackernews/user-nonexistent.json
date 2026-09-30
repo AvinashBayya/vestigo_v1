@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "recorded-redacted",
+    "source": "https://hacker-news.firebaseio.com/v0/user/qzxwv-placeholder-nonexistent.json",
+    "recordedOn": "2026-09-30",
+    "notes": "Live answer for a placeholder handle that does not exist: 200 with the JSON literal null. Headers trimmed to the content type."
+  },
+  "request": {
+    "host": "hacker-news.firebaseio.com",
+    "path": "/v0/user/qzxwv-placeholder-nonexistent.json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "null"
+  }
+}

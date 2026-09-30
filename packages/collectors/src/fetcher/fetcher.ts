@@ -237,6 +237,13 @@ export function createUpstreamFetch(options: {
   readonly signal: AbortSignal;
   /** Credential values, redacted from any recorded URL. */
   readonly secrets: readonly string[];
+  /**
+   * Called once for every request actually sent to the upstream, redirect
+   * hops included, whatever its answer. A request the rate limiter or an
+   * address check stops before sending is not called for: it consumed
+   * nothing upstream.
+   */
+  readonly onRequestSent?: (host: string) => void;
 }): UpstreamFetch {
   const { source, network, run, signal: runSignal } = options;
   const resolver = network.resolver ?? systemResolver;
@@ -405,6 +412,7 @@ export function createUpstreamFetch(options: {
       if (runSignal.aborted || remaining() <= 0) throw timedOut(url.hostname);
       await takeSlot(url.hostname);
       const address = await resolveChecked(url.hostname);
+      options.onRequestSent?.(url.hostname);
       const raw = await send(url, method, hop === 0 ? valid.body : undefined, address);
       const location = raw.headers.location;
       if (

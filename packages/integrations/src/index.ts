@@ -47,3 +47,14 @@ export { SlidingLogRateLimiter } from "./rate-limit/sliding-log.ts";
 export type { IntervalPolicy, SlidingLogDecision } from "./rate-limit/sliding-log.ts";
 export type { RateLimitDecision, RateLimitPolicy } from "./rate-limit/fixed-window.ts";
 export { RateLimiterConfigError, RateLimiterUnavailableError } from "./rate-limit/errors.ts";
+export {
+  CircuitBreakerConfigError,
+  CircuitBreakerUnavailableError,
+  RedisCircuitBreaker,
+} from "./circuit-breaker/circuit-breaker.ts";
+export type {
+  CircuitAdmission,
+  CircuitPolicy,
+  CircuitState,
+  CircuitStatus,
+} from "./circuit-breaker/circuit-breaker.ts";

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://index.commoncrawl.org/",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 200 index list whose entry lacks the documented to field."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/collinfo.json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "[{\"id\":\"CC-MAIN-2026-39\",\"name\":\"September 2026 Index\",\"from\":\"2026-09-04T13:16:03\"}]"
+  }
+}

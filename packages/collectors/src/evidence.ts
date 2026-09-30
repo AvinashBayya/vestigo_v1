@@ -12,15 +12,15 @@ import type { RegistryEntry } from "./registry.ts";
 export interface EvidenceDraft {
   readonly collectorId: string;
   readonly collectorVersion: string;
-  /** The final URL the payload came from, credentials redacted. */
-  readonly sourceUrl: string;
-  /** Exactly the bytes the upstream sent, as the fetcher recorded them. */
+  /** The final URL the payload came from, credentials redacted. Null for a local analysis. */
+  readonly sourceUrl: string | null;
+  /** Exactly the bytes the upstream sent (or the recorded analysis), as captured. */
   readonly payload: Uint8Array;
   /** From the upstream's data; null when it gives none. */
   readonly observedAt: Date | null;
-  /** When the fetcher received the last byte. Measured, never assumed. */
+  /** When the fetcher received the last byte, or the analysis was recorded. Measured, never assumed. */
   readonly collectedAt: Date;
-  readonly claimStrength: "OBSERVED" | "REPORTED";
+  readonly claimStrength: "OBSERVED" | "REPORTED" | "DERIVED";
 }
 
 /** The tenant's copy of a registry entry, shaped for the collectors_registry row. */
@@ -72,13 +72,14 @@ export function evidenceDrafts(entry: RegistryEntry, outcome: FoundOutcome): Evi
         "evidence cites a response the fetcher did not capture",
       );
     }
+    const captured = item.response;
     return {
       collectorId: entry.id,
       collectorVersion: entry.version,
-      sourceUrl: item.response.url,
+      sourceUrl: captured.kind === "NETWORK" ? captured.url : null,
       payload,
       observedAt: item.observedAt,
-      collectedAt: item.response.receivedAt,
+      collectedAt: captured.kind === "NETWORK" ? captured.receivedAt : captured.recordedAt,
       claimStrength: entry.claimStrength,
     };
   });

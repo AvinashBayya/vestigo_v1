@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "recorded-redacted",
+    "source": "https://dev.to/api/users/by_username?url=thepracticaldev",
+    "recordedOn": "2026-09-30",
+    "notes": "Live V1 answer (Accept: application/vnd.forem.api-v1+json) for DEV's own staff account. Body as received; response headers trimmed to the content type."
+  },
+  "request": {
+    "host": "dev.to",
+    "path": "/api/users/by_username?url=thepracticaldev"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"type_of\":\"user\",\"id\":3,\"username\":\"thepracticaldev\",\"name\":\"dev.to staff\",\"twitter_username\":\"ThePracticalDev\",\"github_username\":null,\"email\":null,\"summary\":\"The hardworking team behind dev.to ❤️\",\"location\":\"\",\"website_url\":\"https://dev.to\",\"joined_at\":\"Feb  9, 2016\",\"profile_image\":\"https://media2.dev.to/dynamic/image/width=320,height=320,fit=cover,gravity=auto,format=auto/https%3A%2F%2Fdev-to-uploads.s3.us-east-2.amazonaws.com%2Fuploads%2Fuser%2Fprofile_image%2F3%2F13d3b32a-d381-4549-b95e-ec665768ce8f.png\",\"badge_ids\":[1,2,9,10,11,12,14,16,18,26,75,91,169,212,214,215,218,235,241,279,280,281,418]}"
+  }
+}

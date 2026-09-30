@@ -1,0 +1,21 @@
+{
+  "provenance": {
+    "kind": "recorded-redacted",
+    "source": "https://api.gdeltproject.org/api/v2/doc/doc?query=%22example.com%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc",
+    "recordedOn": "2026-09-28",
+    "notes": "Live GDELT DOC answer: 429, received on the first request from this address (other processes on the same address were also calling GDELT). No Retry-After header was sent. Redacted: the personal e-mail address GDELT names as its contact is replaced with [GDELT contact address]; nothing else changed."
+  },
+  "request": {
+    "host": "api.gdeltproject.org",
+    "path": "/api/v2/doc/doc?query=%22example.com%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "date": "Mon, 28 Sep 2026 10:41:42 GMT",
+      "server": "GDELT Server",
+      "transfer-encoding": "chunked"
+    },
+    "body": "Please limit requests to one every 5 seconds or contact [GDELT contact address] for larger queries. All high-traffic users should switch to our ngrams dataset: https://blog.gdeltproject.org/using-the-new-web-ngrams-dataset-to-find-relevant-coverage/. For trend analysis, please see our daily newsletter briefings: https://blog.gdeltproject.org/announcing-our-new-daily-todays-trends-on-capitol-hill-todays-media-trends-newsletter-briefings/.\n\n"
+  }
+}

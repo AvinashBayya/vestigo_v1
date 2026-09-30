@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://crt.sh/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: valid JSON that is not a list of entries. crt.sh publishes no API documentation, so this follows the shape of the recorded fixtures (found-example-com.json, empty-example-invalid.json). Keys and values are placeholders."
+  },
+  "request": {
+    "host": "crt.sh",
+    "path": "/?q=%25.example.com&output=json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"[synthetic key]\":\"[synthetic value]\"}"
+  }
+}

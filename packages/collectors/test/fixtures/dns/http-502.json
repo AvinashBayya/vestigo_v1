@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/",
+    "recordedOn": "2026-09-28",
+    "notes": "HTTP 502 with no Retry-After. Could not be provoked for real; status only, empty body."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=bad-gateway.example.org&type=A"
+  },
+  "response": {
+    "status": 502,
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": ""
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://pywb.readthedocs.io/en/latest/manual/cdxserver_api.html",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. The pywb CDX server answer for a pattern with no captures (404 with a No Captures found message). The live answer could not be recorded: the index server answered 504 (see cdx-504)."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/CC-MAIN-2026-39-index?url=*.qzxwv-placeholder-nonexistent.example&output=json&limit=100"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"message\":\"No Captures found for: *.qzxwv-placeholder-nonexistent.example\"}"
+  }
+}

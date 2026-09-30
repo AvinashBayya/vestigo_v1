@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://crt.sh/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: an overload cannot be provoked. The previous codebase measured crt.sh answering this search URL with HTTP 404 under load and 200 moments later (legacy/src/utils/recon-sources.ts, crtShFetch). crt.sh publishes no API documentation, so this follows the shape of the recorded fixtures (found-example-com.json, empty-example-invalid.json). The body is a placeholder."
+  },
+  "request": {
+    "host": "crt.sh",
+    "path": "/?q=%25.example.com&output=json"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "<html><body>[synthetic 404 page]</body></html>"
+  }
+}

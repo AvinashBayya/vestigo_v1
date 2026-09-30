@@ -5,14 +5,17 @@ import {
   check,
   customType,
   foreignKey,
+  integer,
   pgTable,
   primaryKey,
   text,
+  unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { collectorsRegistry } from "./collectors.ts";
 import { createdAtColumn, idColumn, optionalTimestamp, tenantIdColumn } from "./columns.ts";
-import { usageUnit } from "./enums.ts";
+import { quotaPeriod, usageUnit } from "./enums.ts";
 import { evidence } from "./evidence.ts";
 import { tenants, users } from "./tenancy.ts";
 import { jobs } from "./work.ts";
@@ -137,6 +140,12 @@ export const usageEvents = pgTable(
     quantity: bigint("quantity", { mode: "number" }).notNull(),
     collectorId: text("collector_id"),
     jobId: uuid("job_id"),
+    /**
+     * Which attempt of the job consumed these units (the job's own attempt
+     * count). With the job and unit, unique: an attempt is recorded once, so a
+     * replay never charges twice (Phase 4).
+     */
+    attempt: integer("attempt"),
     createdAt: createdAtColumn(),
   },
   (t) => [
@@ -157,5 +166,39 @@ export const usageEvents = pgTable(
       foreignColumns: [jobs.tenantId, jobs.id],
     }),
     check("usage_events_quantity_non_negative", sql`${t.quantity} >= 0`),
+    check("usage_events_attempt_positive", sql`${t.attempt} is null or ${t.attempt} >= 1`),
+    check("usage_events_attempt_with_job", sql`${t.attempt} is null or ${t.jobId} is not null`),
+    uniqueIndex("usage_events_one_per_attempt")
+      .on(t.tenantId, t.jobId, t.attempt, t.unit)
+      .where(sql`${t.jobId} is not null`),
+  ],
+);
+
+/**
+ * The most of a unit a tenant may consume in a calendar period (UTC), checked
+ * before a job is dispatched. Set by an operator; the application only reads
+ * it. A tenant with no row for a unit and period has no limit on it until
+ * plans set quotas (Phase 7).
+ */
+export const tenantQuotas = pgTable(
+  "tenant_quotas",
+  {
+    tenantId: tenantIdColumn(),
+    id: idColumn(),
+    unit: usageUnit("unit").notNull(),
+    period: quotaPeriod("period").notNull(),
+    /** Zero is a real limit: nothing of this unit may be consumed. */
+    maxQuantity: bigint("max_quantity", { mode: "number" }).notNull(),
+    createdAt: createdAtColumn(),
+  },
+  (t) => [
+    primaryKey({ name: "tenant_quotas_pk", columns: [t.tenantId, t.id] }),
+    foreignKey({
+      name: "tenant_quotas_tenant_fk",
+      columns: [t.tenantId],
+      foreignColumns: [tenants.tenantId],
+    }),
+    unique("tenant_quotas_one_per_unit_period").on(t.tenantId, t.unit, t.period),
+    check("tenant_quotas_max_quantity_non_negative", sql`${t.maxQuantity} >= 0`),
   ],
 );

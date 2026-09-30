@@ -8,3 +8,6 @@ docs/
 
 # Written by drizzle-kit on every `generate`; formatting them would only churn.
 packages/db/migrations/meta/
+
+# Upstream data recorded as received (IANA RDAP bootstrap); kept byte-exact.
+packages/collectors/test/snapshots/

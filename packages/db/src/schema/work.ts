@@ -3,6 +3,7 @@ import {
   check,
   foreignKey,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -11,7 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { collectorsRegistry } from "./collectors.ts";
 import { createdAtColumn, idColumn, optionalTimestamp, tenantIdColumn } from "./columns.ts";
-import { jobStatus, runStatus } from "./enums.ts";
+import { jobOutcome, jobStatus, runStatus, targetType } from "./enums.ts";
 import { tenants, users } from "./tenancy.ts";
 
 export const investigations = pgTable(
@@ -54,6 +55,16 @@ export const runs = pgTable(
     createdAt: createdAtColumn(),
     startedAt: optionalTimestamp("started_at"),
     finishedAt: optionalTimestamp("finished_at"),
+    /**
+     * The target type the analyst chose for this run, or null when it was
+     * left to detection (Phase 4). Set at creation.
+     */
+    requestedTargetType: targetType("requested_target_type"),
+    /**
+     * What the planner decided: the detected types and the collectors
+     * planned or excluded, each with its reason. Null until planned.
+     */
+    plan: jsonb("plan"),
   },
   (t) => [
     primaryKey({ name: "runs_pk", columns: [t.tenantId, t.id] }),
@@ -100,6 +111,25 @@ export const jobs = pgTable(
     createdAt: createdAtColumn(),
     startedAt: optionalTimestamp("started_at"),
     finishedAt: optionalTimestamp("finished_at"),
+    /** The target this job collects, as its type and normalised value (Phase 4). */
+    targetType: targetType("target_type"),
+    target: text("target"),
+    /** The collector's parameters; part of the idempotency key. */
+    params: jsonb("params").notNull().default({}),
+    /** The last attempt's collection outcome; null until one finished. */
+    outcome: jobOutcome("outcome"),
+    /** What a NOT_FOUND said was not found, as the collector stated it. Only with NOT_FOUND. */
+    outcomeDetail: text("outcome_detail"),
+    /** The FOUND result, exactly as the runtime validated it. Only with FOUND. */
+    result: jsonb("result"),
+    /** The evidence rows the FOUND result cites, in the result's order. Only with FOUND. */
+    evidenceIds: uuid("evidence_ids").array(),
+    /** When the next attempt is due, for a job waiting to retry. */
+    nextAttemptAt: optionalTimestamp("next_attempt_at"),
+    /** When retries ran out and the job went to the dead-letter queue. */
+    deadLetteredAt: optionalTimestamp("dead_lettered_at"),
+    /** When fusion turned this job's result into entities and claims. Only with FOUND. */
+    fusedAt: optionalTimestamp("fused_at"),
   },
   (t) => [
     primaryKey({ name: "jobs_pk", columns: [t.tenantId, t.id] }),
@@ -129,5 +159,13 @@ export const jobs = pgTable(
       "jobs_finished_after_started",
       sql`${t.finishedAt} is null or ${t.startedAt} is null or ${t.finishedAt} >= ${t.startedAt}`,
     ),
+    check("jobs_result_only_found", sql`${t.result} is null or ${t.outcome} = 'FOUND'`),
+    check("jobs_evidence_only_found", sql`${t.evidenceIds} is null or ${t.outcome} = 'FOUND'`),
+    check("jobs_fused_only_found", sql`${t.fusedAt} is null or ${t.outcome} = 'FOUND'`),
+    check(
+      "jobs_detail_only_not_found",
+      sql`${t.outcomeDetail} is null or ${t.outcome} = 'NOT_FOUND'`,
+    ),
+    check("jobs_target_complete", sql`(${t.targetType} is null) = (${t.target} is null)`),
   ],
 );

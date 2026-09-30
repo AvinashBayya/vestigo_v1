@@ -1,0 +1,21 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic. rdap.org answering HTTP 503 with Retry-After as an HTTP-date, two minutes after its own Date header (RFC 9110 section 10.2.3). The Date value is the one rdap.org sent on the recording day. Not observed live."
+  },
+  "request": {
+    "host": "rdap.org",
+    "path": "/domain/example.com"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "content-type": "text/plain",
+      "date": "Mon, 28 Sep 2026 10:41:42 GMT",
+      "retry-after": "Mon, 28 Sep 2026 10:43:42 GMT"
+    },
+    "body": ""
+  }
+}

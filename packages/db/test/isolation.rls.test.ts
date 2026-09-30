@@ -90,6 +90,23 @@ async function insertableColumns(table: string): Promise<string[]> {
   return result.rows.map((row) => row.attname);
 }
 
+/**
+ * The columns an insert probe names: those the application may insert, or,
+ * for a table it may only read (tenant_quotas), every column, so the probe is
+ * still a real insert and is refused on privilege rather than never sent.
+ */
+async function probeColumns(table: string): Promise<string[]> {
+  const insertable = await insertableColumns(table);
+  if (insertable.length > 0) return insertable;
+  const result = await owner.query<{ attname: string }>(
+    `select a.attname from pg_attribute a
+     where a.attrelid = $1::regclass and a.attnum > 0 and not a.attisdropped and a.attgenerated = ''
+     order by a.attnum`,
+    [`public.${table}`],
+  );
+  return result.rows.map((row) => row.attname);
+}
+
 describe("row-level security, raw SQL as the application role (RELEASE-BLOCKING)", () => {
   it("covers every table in the schema, and every table has a repository", () => {
     expect(tables.length).toBeGreaterThan(0);
@@ -166,7 +183,7 @@ describe("row-level security, raw SQL as the application role (RELEASE-BLOCKING)
       // Copy one of A's own rows, change only tenant_id to B, and let every
       // defaulted id regenerate. Row-level security must reject it before any
       // unique or foreign-key check could reveal whether B's rows exist.
-      const columns = (await insertableColumns(table)).filter((column) => column !== "id");
+      const columns = (await probeColumns(table)).filter((column) => column !== "id");
       const select = columns
         .map((column) => (column === "tenant_id" ? "$1::uuid" : q(column)))
         .join(", ");

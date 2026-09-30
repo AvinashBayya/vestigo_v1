@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://pywb.readthedocs.io/en/latest/manual/cdxserver_api.html",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 404 without the no-captures message, e.g. an index id the server does not hold."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/CC-MAIN-2026-39-index?url=*.iana.org&output=json&limit=100"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "<html><body>[not found]</body></html>"
+  }
+}

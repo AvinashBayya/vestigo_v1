@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/internetarchive/wayback/blob/master/wayback-cdx-server/README.md",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: HTTP 200 with a JSON array whose header row lacks the original column the collector asked for; tests that an unexpected shape is FAILED rather than read positionally. Cell values are bracketed placeholders."
+  },
+  "request": {
+    "host": "web.archive.org",
+    "path": "/cdx/search/cdx?url=no-original-column.example%2F*&output=json&fl=timestamp%2Coriginal%2Cstatuscode%2Cmimetype%2Cdigest&collapse=urlkey&limit=201"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "[[\"timestamp\",\"statuscode\",\"mimetype\",\"digest\"],\n[\"[timestamp]\",\"[statuscode]\",\"[mimetype]\",\"[digest]\"]]\n"
+  }
+}

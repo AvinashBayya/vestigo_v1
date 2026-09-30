@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://pywb.readthedocs.io/en/latest/manual/cdxserver_api.html",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 200 whose second line is not JSON."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/CC-MAIN-2026-39-index?url=*.iana.org&output=json&limit=100"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/x-ndjson"
+    },
+    "body": "{\"urlkey\": \"org,iana)/\", \"timestamp\": \"20260905044625\", \"url\": \"http://www.iana.org/\", \"mime\": \"text/html\", \"mime-detected\": \"text/html\", \"status\": \"200\", \"digest\": \"W6VPLMGDVDXMEI3A7VDRIBSUFMVGKUTF\", \"length\": \"2566\", \"offset\": \"24261218\", \"filename\": \"crawl-data/CC-MAIN-2026-39/segments/1788492699549.24/warc/CC-MAIN-20260905043015-20260905073015-00566.warc.gz\", \"languages\": \"eng\", \"recordid\": \"01a06fe3-a5b9-7b29-98cf-11e2cf29932a\", \"encoding\": \"UTF-8\"}\n[not json]\n"
+  }
+}

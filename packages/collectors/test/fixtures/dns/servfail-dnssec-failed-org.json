@@ -1,0 +1,27 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://cloudflare-dns.com/dns-query?name=dnssec-failed.org&type=A",
+    "recordedOn": "2026-09-28",
+    "notes": "SERVFAIL (Status 2) from a domain deliberately published with broken DNSSEC for testing validators. Recorded with curl and the header accept: application/dns-json; body and headers as received."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=dnssec-failed.org&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Server": "cloudflare",
+      "Date": "Mon, 28 Sep 2026 10:40:27 GMT",
+      "Content-Type": "application/dns-json",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Length": "205",
+      "CF-RAY": "a42221472da3b0aa-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": "{\"Status\":2,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"dnssec-failed.org\",\"type\":1}],\"Comment\":[\"EDE(9): DNSKEY Missing no SEP matching the DS found for dnssec-failed.org.\"]}"
+  }
+}

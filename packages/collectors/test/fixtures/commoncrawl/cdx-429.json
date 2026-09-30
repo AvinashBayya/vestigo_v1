@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://pywb.readthedocs.io/en/latest/manual/cdxserver_api.html",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A rate-limited answer with Retry-After in seconds."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/CC-MAIN-2026-39-index?url=*.iana.org&output=json&limit=100"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "text/plain",
+      "retry-after": "10"
+    },
+    "body": "[rate limited]"
+  }
+}

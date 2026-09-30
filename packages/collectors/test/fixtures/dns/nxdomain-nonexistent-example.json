@@ -1,0 +1,27 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://cloudflare-dns.com/dns-query?name=nonexistent.example&type=A",
+    "recordedOn": "2026-09-28",
+    "notes": "NXDOMAIN (Status 3) for a name under the IANA-reserved .example TLD. Recorded with curl and the header accept: application/dns-json; body and headers as received."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=nonexistent.example&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Server": "cloudflare",
+      "Date": "Mon, 28 Sep 2026 10:40:19 GMT",
+      "Content-Type": "application/dns-json",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Length": "250",
+      "CF-RAY": "a42221160c91b0aa-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": "{\"Status\":3,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":true,\"CD\":false,\"Question\":[{\"name\":\"nonexistent.example\",\"type\":1}],\"Authority\":[{\"name\":\"\",\"type\":6,\"TTL\":86400,\"data\":\"a.root-servers.net. nstld.verisign-grs.com. 2026092800 1800 900 604800 86400\"}]}"
+  }
+}

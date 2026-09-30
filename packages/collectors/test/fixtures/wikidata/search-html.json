@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.wikidata.org/w/api.php?action=help&modules=wbsearchentities",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: a 200 whose body is not JSON."
+  },
+  "request": {
+    "host": "www.wikidata.org",
+    "path": "/w/api.php?action=wbsearchentities&search=Internet+Assigned+Numbers+Authority&language=en&uselang=en&type=item&limit=5&format=json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "<html>[synthetic page]</html>"
+  }
+}

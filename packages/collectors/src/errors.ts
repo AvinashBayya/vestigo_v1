@@ -144,12 +144,19 @@ export class UpstreamUnavailableError extends AppError {
   }
 }
 
-/** The upstream refused the credentials (401, 403). Permanent until they change. */
+/**
+ * The upstream refused the request (401, 403). Permanent until something
+ * changes. The runtime reports it as UPSTREAM_REJECTED_CREDENTIALS only when
+ * the run was handed a credential; otherwise as UPSTREAM_REFUSED.
+ */
 export class UpstreamRejectedError extends AppError {
   readonly code = "UPSTREAM_REJECTED_CREDENTIALS";
+  /** What the collector saw, without the credentials framing. */
+  readonly problem: string;
 
   constructor(problem: string) {
     super(`The upstream rejected the request's credentials: ${problem}.`);
+    this.problem = problem;
     this.name = "UpstreamRejectedError";
   }
 }

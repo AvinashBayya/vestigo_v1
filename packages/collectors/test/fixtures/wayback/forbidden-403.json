@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/internetarchive/wayback/blob/master/wayback-cdx-server/README.md",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: not provoked live. HTTP 403 with a placeholder body; tests that a refusal is FAILED, never NOT_FOUND."
+  },
+  "request": {
+    "host": "web.archive.org",
+    "path": "/cdx/search/cdx?url=forbidden.example%2F*&output=json&fl=timestamp%2Coriginal%2Cstatuscode%2Cmimetype%2Cdigest&collapse=urlkey&limit=201"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "[synthetic 403 body]"
+  }
+}

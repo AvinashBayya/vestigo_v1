@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: a 200 missing the documented account fields."
+  },
+  "request": {
+    "host": "api.github.com",
+    "path": "/users/octocat"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"login\":\"octocat\"}"
+  }
+}

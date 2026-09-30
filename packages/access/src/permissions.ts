@@ -22,6 +22,13 @@ export const PERMISSIONS = [
   "api_key:manage",
   "credential:read",
   "credential:write",
+  // Phase 4: runs, replays, active-scan authorisations and usage.
+  "run:start",
+  "run:read",
+  "job:replay",
+  "scope_authorisation:read",
+  "scope_authorisation:write",
+  "usage:read",
 
   "organization:update",
   "organization:delete",
@@ -60,6 +67,12 @@ export const PERMISSION_MODULE: Readonly<Record<Permission, Module | null>> = {
   "api_key:manage": null,
   "credential:read": null,
   "credential:write": null,
+  "run:start": "TECHINT",
+  "run:read": "TECHINT",
+  "job:replay": "TECHINT",
+  "scope_authorisation:read": "TECHINT",
+  "scope_authorisation:write": "TECHINT",
+  "usage:read": null,
   "organization:update": null,
   "organization:delete": null,
   "member:create": null,
@@ -79,6 +92,7 @@ const READ_ONLY: readonly Permission[] = [
   "investigation:read",
   "case:read",
   "evidence:read",
+  "run:read",
 ];
 
 const ANALYST: readonly Permission[] = [
@@ -86,6 +100,9 @@ const ANALYST: readonly Permission[] = [
   "investigation:create",
   "case:write",
   "person:search",
+  "run:start",
+  "job:replay",
+  "scope_authorisation:read",
 ];
 
 const ADMIN: readonly Permission[] = [
@@ -94,6 +111,9 @@ const ADMIN: readonly Permission[] = [
   "api_key:manage",
   "credential:read",
   "credential:write",
+  // Authorising active scanning of a target is an administrative act.
+  "scope_authorisation:write",
+  "usage:read",
   "organization:update",
   "member:create",
   "member:update",

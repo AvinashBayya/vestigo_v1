@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.mediawiki.org/wiki/API:Etiquette",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: a 503 on the entity read, after a successful search."
+  },
+  "request": {
+    "host": "www.wikidata.org",
+    "path": "/w/api.php?action=wbgetentities&ids=Q242540%7CQ47470786%7CQ47472642%7CQ47474617%7CQ47470936&props=labels%7Cdescriptions%7Cclaims%7Cinfo&languages=en&format=json"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "[synthetic server error page]"
+  }
+}

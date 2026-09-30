@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://pywb.readthedocs.io/en/latest/manual/cdxserver_api.html",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A 200 whose capture line lacks the documented filename field."
+  },
+  "request": {
+    "host": "index.commoncrawl.org",
+    "path": "/CC-MAIN-2026-39-index?url=*.iana.org&output=json&limit=100"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/x-ndjson"
+    },
+    "body": "{\"urlkey\":\"org,iana)/\",\"timestamp\":\"20260905044625\",\"url\":\"http://www.iana.org/\",\"status\":\"200\",\"length\":\"2566\",\"offset\":\"24261218\"}\n"
+  }
+}

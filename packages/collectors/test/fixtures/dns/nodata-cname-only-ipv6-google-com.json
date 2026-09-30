@@ -1,0 +1,27 @@
+{
+  "provenance": {
+    "kind": "recorded",
+    "source": "https://cloudflare-dns.com/dns-query?name=ipv6.google.com&type=A",
+    "recordedOn": "2026-09-28",
+    "notes": "NOERROR with only a CNAME in the answer: the alias target has no A record. Recorded with curl and the header accept: application/dns-json; body and headers as received."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=ipv6.google.com&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Server": "cloudflare",
+      "Date": "Mon, 28 Sep 2026 10:40:24 GMT",
+      "Content-Type": "application/dns-json",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Length": "328",
+      "CF-RAY": "a42221375c7b2b45-HYD",
+      "alt-svc": "h3=\":443\"; ma=86400"
+    },
+    "body": "{\"Status\":0,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"ipv6.google.com\",\"type\":1}],\"Answer\":[{\"name\":\"ipv6.google.com\",\"type\":5,\"TTL\":227,\"data\":\"ipv6.l.google.com.\"}],\"Authority\":[{\"name\":\"l.google.com\",\"type\":6,\"TTL\":47,\"data\":\"ns1.google.com. dns-admin.google.com. 989131584 900 900 1800 60\"}]}"
+  }
+}

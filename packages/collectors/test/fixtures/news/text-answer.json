@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: GDELT DOC answers a query it refuses with 200 and a sentence of text instead of JSON. Placeholder text, not GDELT's wording."
+  },
+  "request": {
+    "host": "api.gdeltproject.org",
+    "path": "/api/v2/doc/doc?query=%22example.org%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html; charset=utf-8"
+    },
+    "body": "[synthetic sentence of text in place of JSON]"
+  }
+}

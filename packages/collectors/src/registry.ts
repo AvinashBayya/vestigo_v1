@@ -1,7 +1,6 @@
 import {
   COLLECTION_MODES,
   COLLECTOR_DISCIPLINES,
-  NotImplementedError,
   TARGET_TYPES,
   type CollectionMode,
   type CollectorDiscipline,
@@ -11,7 +10,14 @@ import {
 import type { z } from "zod";
 import { implementationOf, type Collector, type CollectorImplementation } from "./contract.ts";
 import { CollectorDefinitionError, UnknownCollectorError } from "./errors.ts";
-import { validateSource, type Attribution, type Source, type SourceDeclaration } from "./source.ts";
+import { declaresDerivedBlock } from "./provenance.ts";
+import {
+  operatorsMissingFrom,
+  validateSource,
+  type Attribution,
+  type Source,
+  type SourceDeclaration,
+} from "./source.ts";
 
 /**
  * Whether a collector can run, before any per-request check:
@@ -32,7 +38,7 @@ export interface RegistryEntry {
   readonly discipline: CollectorDiscipline;
   readonly targetTypes: readonly TargetType[];
   readonly collectionMode: CollectionMode;
-  readonly claimStrength: "OBSERVED" | "REPORTED";
+  readonly claimStrength: "OBSERVED" | "REPORTED" | "DERIVED";
   readonly timeoutMs: number;
   readonly credentials: { readonly vaultIds: readonly string[]; readonly runsWithout: boolean };
   readonly source: Source;
@@ -44,7 +50,7 @@ export interface RegistryEntry {
   readonly attribution: Attribution | null;
 }
 
-const CLAIM_STRENGTHS_FOR_EVIDENCE = ["OBSERVED", "REPORTED"] as const;
+const CLAIM_STRENGTHS_FOR_EVIDENCE = ["OBSERVED", "REPORTED", "DERIVED"] as const;
 const COLLECTOR_ID = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 const VERSION = /^\d+\.\d+\.\d+$/;
 const VAULT_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -79,6 +85,11 @@ function deepFreezeSource(source: SourceDeclaration): Source {
             protocol: source.network.protocol,
             hosts: Object.freeze([...source.network.hosts]),
             rateLimit: Object.freeze({ ...source.network.rateLimit }),
+            operators: Object.freeze(
+              source.network.operators.map((operator) =>
+                Object.freeze({ name: operator.name, hosts: Object.freeze([...operator.hosts]) }),
+              ),
+            ),
           }),
     attribution: source.attribution === null ? null : Object.freeze({ ...source.attribution }),
   });
@@ -178,6 +189,17 @@ export class CollectorRegistry {
       }
       const source = sources.get(d.source);
       if (source === undefined) fail(subject, `source "${d.source}" is not in the catalogue`);
+      if (source.network !== null) {
+        const missing = operatorsMissingFrom(d.displayName, source.network.operators);
+        if (missing.length > 0) {
+          fail(
+            subject,
+            `displayName must name every operator whose hosts it reads; it does not name ${missing
+              .map((operator) => `"${operator.name}"`)
+              .join(", ")}`,
+          );
+        }
+      }
       for (const vaultId of d.credentials.vaultIds) {
         if (!VAULT_ID.test(vaultId)) fail(subject, `vault id "${vaultId}" is malformed`);
       }
@@ -188,7 +210,12 @@ export class CollectorRegistry {
         fail(subject, "a collector needing no credentials must run without them");
       }
       if (!(CLAIM_STRENGTHS_FOR_EVIDENCE as readonly string[]).includes(d.claimStrength)) {
-        fail(subject, "claimStrength must be OBSERVED or REPORTED");
+        fail(subject, "claimStrength must be OBSERVED, REPORTED or DERIVED");
+      }
+      // A local analysis derives its result; a network collector observes or
+      // relays what the upstream reports. Neither may claim the other.
+      if ((d.collectionMode === "LOCAL_ANALYSIS") !== (d.claimStrength === "DERIVED")) {
+        fail(subject, "claimStrength is DERIVED exactly when collectionMode is LOCAL_ANALYSIS");
       }
       if (
         !Number.isSafeInteger(d.timeoutMs) ||
@@ -198,6 +225,11 @@ export class CollectorRegistry {
         fail(subject, "timeoutMs must be an integer from 1 to 1,800,000");
       }
       if (!isZodSchema(d.resultSchema)) fail(subject, "resultSchema must be a Zod schema");
+      // What the collector computed or stated, rather than read, lives under
+      // `derived`, so Phase 4 never turns it into a claim of the source (src/provenance.ts).
+      if (d.collectionMode !== "LOCAL_ANALYSIS" && !declaresDerivedBlock(d.resultSchema)) {
+        fail(subject, "resultSchema must be an object with a derived object for computed values");
+      }
 
       const implementation = implementationOf(collector);
       if (source.network === null && d.collectionMode !== "LOCAL_ANALYSIS") {
@@ -208,12 +240,6 @@ export class CollectorRegistry {
       }
       if (source.network !== null && d.collectionMode === "LOCAL_ANALYSIS") {
         fail(subject, "LOCAL_ANALYSIS collectors cannot use a networked source");
-      }
-      if (implementation !== null && d.collectionMode === "LOCAL_ANALYSIS") {
-        throw new NotImplementedError(
-          "LOCAL_ANALYSIS collectors",
-          "their evidence basis (the analysed input) is designed with the first one, in Phase 3B",
-        );
       }
 
       const { availability, reason } = availabilityOf(source, implementation !== null);

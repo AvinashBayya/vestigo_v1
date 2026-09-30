@@ -8,8 +8,10 @@ import {
   COMMERCIAL_USE_VERDICTS,
   DECISION_ACTOR_KINDS,
   ENTITY_KINDS,
+  JOB_OUTCOMES,
   JOB_STATUSES,
   MERGE_SIGNALS,
+  QUOTA_PERIODS,
   RUN_STATUSES,
   TARGET_TYPES,
   TENANT_REGIONS,
@@ -44,6 +46,8 @@ export const commercialUseVerdict = pgEnum("commercial_use_verdict", COMMERCIAL_
 export const targetType = pgEnum("target_type", TARGET_TYPES);
 export const runStatus = pgEnum("run_status", RUN_STATUSES);
 export const jobStatus = pgEnum("job_status", JOB_STATUSES);
+export const jobOutcome = pgEnum("job_outcome", JOB_OUTCOMES);
+export const quotaPeriod = pgEnum("quota_period", QUOTA_PERIODS);
 export const usageUnit = pgEnum("usage_unit", USAGE_UNITS);
 export const tenantRegion = pgEnum("tenant_region", TENANT_REGIONS);
 

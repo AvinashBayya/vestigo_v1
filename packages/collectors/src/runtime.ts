@@ -11,14 +11,16 @@ import {
   type RunContext,
 } from "./contract.ts";
 import {
+  CollectorDefinitionError,
   InvalidTargetError,
   RateLimiterUnavailableError,
   UpstreamRateLimitedError,
+  UpstreamRejectedError,
   UpstreamTimeoutError,
   UpstreamUnavailableError,
   UpstreamUnreachableError,
 } from "./errors.ts";
-import { capturingRun, type CapturedResponse } from "./fetcher/capture.ts";
+import { captureLocal, capturedPayload, capturingRun, type Captured } from "./fetcher/capture.ts";
 import { createUpstreamFetch, type NetworkRuntime } from "./fetcher/fetcher.ts";
 import {
   markFound,
@@ -27,6 +29,7 @@ import {
   type RefusedOutcome,
 } from "./outcome.ts";
 import { registryInternals, type CollectorRegistry, type RegistryEntry } from "./registry.ts";
+import { payloadIndex, reportedPart, unreadValuePath } from "./provenance.ts";
 import { parseTarget, type Target } from "./target.ts";
 
 /** A scope authorisation in force for a target, as read from the database. */
@@ -45,9 +48,17 @@ export interface Admission {
   readonly scopeAuthorisation: ScopeClearance | null;
 }
 
+/** Counts what a run consumed upstream, for metering against the tenant. */
+export interface UsageMeter {
+  /** One request sent to the collector's source, redirect hops included. */
+  requestSent(sourceId: string, host: string): void;
+}
+
 export interface DispatchRequest extends Admission {
   /** Revealed tenant credentials, by vault id. */
   readonly credentials: ReadonlyMap<string, CollectorSecret>;
+  /** Told of every request the run sends, whatever its outcome. */
+  readonly meter?: UsageMeter;
 }
 
 type Rejection = RefusedOutcome | FailedOutcome;
@@ -90,7 +101,18 @@ class RunBudgetExceeded extends AppError {
   }
 }
 
-function outcomeOfError(collectorId: string, error: unknown): CollectionOutcome {
+/**
+ * @param credentialsHanded whether this run was handed any of the collector's
+ * vault credentials. A 401 or 403 is a credentials failure only then: from a
+ * source that takes no credentials, or a run that had none, it is the
+ * upstream refusing the request (Phase 3B review: it was reported as
+ * rejected credentials either way).
+ */
+function outcomeOfError(
+  collectorId: string,
+  error: unknown,
+  credentialsHanded: boolean,
+): CollectionOutcome {
   const unavailable = (
     code: string,
     message: string,
@@ -115,6 +137,13 @@ function outcomeOfError(collectorId: string, error: unknown): CollectionOutcome 
     error instanceof RateLimiterUnavailableError
   ) {
     return unavailable(error.code, error.message, null);
+  }
+  if (error instanceof UpstreamRejectedError && !credentialsHanded) {
+    return failed(
+      collectorId,
+      "UPSTREAM_REFUSED",
+      `The upstream refused the request: ${error.problem}. No credential was sent, so this is not a credentials failure.`,
+    );
   }
   // Everything else is permanent for this request: a refused destination,
   // rejected credentials, an unusable response, a collector bug.
@@ -246,26 +275,51 @@ export class CollectorRuntime {
         run,
         signal: controller.signal,
         secrets,
+        onRequestSent: (host) => request.meter?.requestSent(entry.source.id, host),
       }),
       signal: controller.signal,
       found: (result: unknown, evidence: readonly [EvidenceItem, ...EvidenceItem[]]) =>
         makeReturn(run, { kind: "FOUND", result, evidence }),
-      notFound: (response: CapturedResponse, detail: string) =>
+      notFound: (response: Captured, detail: string) =>
         makeReturn(run, { kind: "NOT_FOUND", response, detail }),
+      record: (output: unknown) => {
+        if (entry.collectionMode !== "LOCAL_ANALYSIS") {
+          throw new CollectorDefinitionError(
+            `collector "${entry.id}"`,
+            "only a LOCAL_ANALYSIS collector records an analysis; others cite responses",
+          );
+        }
+        return captureLocal(
+          run,
+          {
+            collector: { id: entry.id, version: entry.version },
+            target: { type: target.type, value: target.value },
+            output,
+          },
+          new Date(),
+        );
+      },
     });
 
     let timer: NodeJS.Timeout | undefined;
     const budget = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
-        controller.abort();
+        // Settle first, then abort: a collector that stops on the abort signal
+        // must not win the race with its own error and turn a timeout
+        // (retryable) into a failure (permanent). Found in Phase 4.
         reject(new RunBudgetExceeded(entry.timeoutMs));
+        controller.abort();
       }, entry.timeoutMs);
     });
     let returned: CollectorReturn<unknown>;
     try {
       returned = await Promise.race([implementation(context), budget]);
     } catch (error) {
-      return outcomeOfError(entry.id, error);
+      return outcomeOfError(
+        entry.id,
+        error,
+        entry.credentials.vaultIds.some((id) => request.credentials.has(id)),
+      );
     } finally {
       clearTimeout(timer);
       // Anything the collector left in flight is cut off.
@@ -294,13 +348,25 @@ export class CollectorRuntime {
         }
       | {
           readonly kind: "NOT_FOUND";
-          readonly response: CapturedResponse;
+          readonly response: Captured;
           readonly detail: string;
         };
+    // A network collector cites what its fetch received; a local analysis
+    // cites its own recorded analysis. Never the other kind.
+    const local = entry.collectionMode === "LOCAL_ANALYSIS";
+    const citable = (captured: Captured, okStatus: (status: number) => boolean) =>
+      capturingRun(captured) === run &&
+      (local
+        ? captured.kind === "LOCAL"
+        : captured.kind === "NETWORK" && okStatus(captured.status));
 
     if (value.kind === "NOT_FOUND") {
-      if (capturingRun(value.response) !== run || !OK_FOR_NOT_FOUND(value.response.status)) {
-        return violation("A not-found must cite a 2xx, 404 or 410 response this run received.");
+      if (!citable(value.response, OK_FOR_NOT_FOUND)) {
+        return violation(
+          local
+            ? "A not-found must cite this run's recorded analysis."
+            : "A not-found must cite a 2xx, 404 or 410 response this run received.",
+        );
       }
       if (value.detail.trim().length === 0)
         return violation("A not-found must say what was not found.");
@@ -315,10 +381,14 @@ export class CollectorRuntime {
     if (value.evidence.length === 0) return violation("A result must cite at least one response.");
     for (const item of value.evidence) {
       if (capturingRun(item.response) !== run) {
-        return violation("Evidence may only cite responses this run received from its own source.");
+        return violation("Evidence may only cite what this run captured from its own source.");
       }
-      if (!OK_FOR_FOUND(item.response.status)) {
-        return violation("Evidence must be a 2xx response; a failed request is not a result.");
+      if (!citable(item.response, OK_FOR_FOUND)) {
+        return violation(
+          local
+            ? "A local analysis cites its recorded analysis, never a network response."
+            : "Evidence must be a 2xx response; a failed request is not a result.",
+        );
       }
       if (item.observedAt !== null && Number.isNaN(item.observedAt.getTime())) {
         return violation("observedAt must be a valid date, or null when the upstream gives none.");
@@ -333,8 +403,20 @@ export class CollectorRuntime {
         "The collector's result did not match its declared schema.",
       );
     }
-    if (isEmptyResult(parsed.data)) {
+    // What the source reported is the result without its derived values: a
+    // result with nothing but derived values found nothing.
+    if (isEmptyResult(local ? parsed.data : reportedPart(parsed.data))) {
       return violation("A FOUND result was empty; report nothing found with notFound().");
+    }
+    if (!local) {
+      const payloads = value.evidence.map((item) => capturedPayload(item.response));
+      const appears = payloadIndex(payloads.filter((p): p is Uint8Array => p !== null));
+      const unread = unreadValuePath(parsed.data, appears);
+      if (unread !== null) {
+        return violation(
+          `The value at ${unread} is not in the responses the result cites; a value the collector computed or stated belongs under "derived".`,
+        );
+      }
     }
     return markFound({
       status: "FOUND",

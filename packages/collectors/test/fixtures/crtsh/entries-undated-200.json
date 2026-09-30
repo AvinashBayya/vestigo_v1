@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://crt.sh/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: entries exercising absent values, which the live recording does not contain: an entry with no dates, issuer id or serial; an entry with null dates and issuer; an entry with a validity end and an entry_timestamp (a field older crt.sh answers carried, which the previous codebase used in place of a missing not_before) but no not_before; an issuer name without O=; a quoted O= containing a comma; an upper-case name with a trailing dot; and a name under a reserved TLD that only starts with the queried domain. crt.sh publishes no API documentation, so this follows the shape of the recorded fixtures (found-example-com.json, empty-example-invalid.json). Ids 1 to 4, the dates and every bracketed value are placeholders, not real crt.sh data."
+  },
+  "request": {
+    "host": "crt.sh",
+    "path": "/?q=%25.example.com&output=json"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "[{\"id\":1,\"common_name\":\"undated.example.com\",\"name_value\":\"undated.example.com\",\"issuer_name\":\"C=[country], CN=[issuer without an organisation]\"},{\"issuer_ca_id\":null,\"issuer_name\":null,\"common_name\":null,\"name_value\":\"mixed.example.com\",\"id\":2,\"not_before\":null,\"not_after\":null,\"serial_number\":null},{\"issuer_ca_id\":3,\"issuer_name\":\"C=[country], O=\\\"[Issuer, organisation]\\\", CN=[issuer]\",\"common_name\":\"mixed.example.com\",\"name_value\":\"mixed.example.com\\nAPI.Example.com.\\nexample.com.invalid\",\"id\":3,\"not_before\":\"2000-02-01T00:00:00\",\"not_after\":\"2000-03-01T00:00:00\",\"serial_number\":\"[serial]\"},{\"id\":4,\"name_value\":\"end-only.example.com\",\"not_after\":\"2000-04-01T00:00:00\",\"entry_timestamp\":\"2000-03-15T00:00:00\"}]"
+  }
+}

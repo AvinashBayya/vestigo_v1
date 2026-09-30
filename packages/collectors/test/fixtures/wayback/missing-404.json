@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/internetarchive/wayback/blob/master/wayback-cdx-server/README.md",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: not provoked live; the recorded no-capture answer is 200 with []. HTTP 404 with a placeholder body; tests that a 404 is FAILED, never read as no captures."
+  },
+  "request": {
+    "host": "web.archive.org",
+    "path": "/cdx/search/cdx?url=missing.example%2F*&output=json&fl=timestamp%2Coriginal%2Cstatuscode%2Cmimetype%2Cdigest&collapse=urlkey&limit=201"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "[synthetic 404 body]"
+  }
+}

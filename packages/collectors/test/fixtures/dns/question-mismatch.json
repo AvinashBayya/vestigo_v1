@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://developers.cloudflare.com/1.1.1.1/encryption/dns-over-https/make-api-requests/dns-json/",
+    "recordedOn": "2026-09-28",
+    "notes": "NOERROR whose question section names a different name from the one asked. Synthetic; the address is from the RFC 5737 documentation range and the TTL is a placeholder."
+  },
+  "request": {
+    "host": "cloudflare-dns.com",
+    "path": "/dns-query?name=asked.example.org&type=A"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/dns-json"
+    },
+    "body": "{\"Status\":0,\"TC\":false,\"RD\":true,\"RA\":true,\"AD\":false,\"CD\":false,\"Question\":[{\"name\":\"[a different name]\",\"type\":1}],\"Answer\":[{\"name\":\"[a different name]\",\"type\":1,\"TTL\":3600,\"data\":\"192.0.2.1\"}]}"
+  }
+}

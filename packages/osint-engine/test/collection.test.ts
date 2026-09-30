@@ -136,6 +136,8 @@ function source(id: string, overrides: Partial<SourceDeclaration> = {}): SourceD
       protocol: "http",
       hosts: [`${id}.test`],
       rateLimit: { requests: 100, intervalSeconds: 1, basis: "SELF_IMPOSED", note: "[test]" },
+      // Every test label is "[Label of fake.…]", so it names this operator.
+      operators: [{ name: "fake", hosts: [`${id}.test`] }],
     },
     attribution: null,
     ...overrides,
@@ -155,6 +157,7 @@ const SOURCES: SourceDeclaration[] = [
         basis: "UPSTREAM_STATED",
         note: "[test: like GDELT]",
       },
+      operators: [{ name: "fake", hosts: ["strict.test"] }],
     },
   }),
   source("blocked", {
@@ -169,7 +172,14 @@ const SOURCES: SourceDeclaration[] = [
   }),
 ];
 
-const NAMES = z.object({ names: z.array(z.string()).min(1), source: z.string().optional() });
+/**
+ * Names read from the source; the collector's own statements live under
+ * `derived` (packages/collectors/src/provenance.ts).
+ */
+const NAMES = z.object({
+  names: z.array(z.string()).min(1),
+  derived: z.object({ source: z.string().optional() }),
+});
 type Names = z.output<typeof NAMES>;
 
 function declaration(
@@ -208,8 +218,8 @@ function namesFrom(host: string, id: string): CollectorImplementation<Names> {
     });
     if (response.status === 404) return ctx.notFound(response, "no names for this target");
     const names = z.array(z.string()).parse(response.json());
-    // The payload even claims another source; the evidence label ignores it.
-    return ctx.found({ names, source: "crtsh" }, [{ response, observedAt: null }]);
+    // The result even claims another source; the evidence label ignores it.
+    return ctx.found({ names, derived: { source: "crtsh" } }, [{ response, observedAt: null }]);
   };
 }
 
@@ -257,7 +267,9 @@ const COLLECTORS: Collector[] = [
   ),
   defineCollector(declaration("fake.errors", "one"), async (ctx) => {
     const response = await ctx.fetch("http://one.test/error", { method: "GET", timeoutMs: 800 });
-    return ctx.found({ names: ["from a failed request"] }, [{ response, observedAt: null }]);
+    return ctx.found({ names: ["from a failed request"], derived: {} }, [
+      { response, observedAt: null },
+    ]);
   }),
 ];
 

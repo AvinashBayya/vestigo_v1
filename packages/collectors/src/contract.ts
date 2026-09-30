@@ -1,6 +1,6 @@
 import type { CollectionMode, CollectorDiscipline, TargetType } from "@repo/core";
 import type { z } from "zod";
-import type { CapturedResponse } from "./fetcher/capture.ts";
+import type { Captured, LocalRecord } from "./fetcher/capture.ts";
 import type { UpstreamFetch } from "./fetcher/fetcher.ts";
 import type { Target } from "./target.ts";
 
@@ -38,17 +38,24 @@ export interface CollectorDeclaration<Schema extends z.ZodType> {
     /** Whether it still runs, with less, when a credential is missing. */
     readonly runsWithout: boolean;
   };
-  /** What its evidence is: OBSERVED directly, or REPORTED by the upstream. */
-  readonly claimStrength: "OBSERVED" | "REPORTED";
+  /**
+   * What its evidence is: OBSERVED directly, REPORTED by the upstream, or
+   * DERIVED by a LOCAL_ANALYSIS collector from its input (and only then).
+   */
+  readonly claimStrength: "OBSERVED" | "REPORTED" | "DERIVED";
   /** The whole run's budget; each fetch also has its own timeout. */
   readonly timeoutMs: number;
   /** Every FOUND result is validated against it before anything is recorded. */
   readonly resultSchema: Schema;
 }
 
-/** One piece of evidence: a response the upstream sent this run, and when the upstream says it happened. */
+/**
+ * One piece of evidence: a response the upstream sent this run (a network
+ * collector), or this run's recorded analysis (a LOCAL_ANALYSIS collector),
+ * and when the upstream says it happened.
+ */
 export interface EvidenceItem {
-  readonly response: CapturedResponse;
+  readonly response: Captured;
   /** From the upstream's own data; null when it gives none. Never filled from the clock. */
   readonly observedAt: Date | null;
 }
@@ -67,7 +74,7 @@ export type CollectorReturn<Result> =
   | {
       readonly [COLLECTOR_RETURN]: Result;
       readonly kind: "NOT_FOUND";
-      readonly response: CapturedResponse;
+      readonly response: Captured;
       readonly detail: string;
     };
 
@@ -93,7 +100,13 @@ export interface RunContext<Result> {
    * response that said so (2xx, 404 or 410). A failure is not "not found":
    * throw, and the SDK reports it as FAILED or UNAVAILABLE.
    */
-  notFound(response: CapturedResponse, detail: string): CollectorReturn<Result>;
+  notFound(response: Captured, detail: string): CollectorReturn<Result>;
+  /**
+   * LOCAL_ANALYSIS collectors only: records this run's analysis (the
+   * collector, the target and `output`) as the evidence to cite. A network
+   * collector's evidence is always a response its fetch received.
+   */
+  record(output: unknown): LocalRecord;
 }
 
 /**
@@ -175,7 +188,7 @@ export function makeReturn<Result>(
         readonly result: Result;
         readonly evidence: readonly EvidenceItem[];
       }
-    | { readonly kind: "NOT_FOUND"; readonly response: CapturedResponse; readonly detail: string },
+    | { readonly kind: "NOT_FOUND"; readonly response: Captured; readonly detail: string },
 ): CollectorReturn<Result> {
   const frozen = Object.freeze(
     value.kind === "FOUND"

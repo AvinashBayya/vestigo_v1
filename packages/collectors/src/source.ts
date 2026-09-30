@@ -40,11 +40,39 @@ export interface SourceRateLimit {
 }
 
 /** Where a source's requests may go. Nothing outside `hosts` is ever contacted. */
+/** Who runs some of a source's hosts: the name a reader would recognise. */
+export interface SourceOperator {
+  readonly name: string;
+  readonly hosts: readonly string[];
+}
+
 export interface SourceNetwork {
   readonly protocol: "https" | "http";
   /** Exact DNS names; redirects may only stay within them. */
   readonly hosts: readonly string[];
   readonly rateLimit: SourceRateLimit;
+  /**
+   * Who operates the hosts: every host belongs to exactly one operator. A
+   * collector's label must name every operator of its source, so data from
+   * a second operator is never shown under the first one's name (Phase 4;
+   * the Phase 3B hackernews label named one operator for data from two).
+   */
+  readonly operators: readonly SourceOperator[];
+}
+
+/**
+ * The operators a label does not name. A name counts only as a whole word
+ * (case-insensitive): "DEV" is named by "DEV Community profile", not by
+ * "DEVICE lookup".
+ */
+export function operatorsMissingFrom(
+  label: string,
+  operators: readonly SourceOperator[],
+): SourceOperator[] {
+  return operators.filter((operator) => {
+    const escaped = operator.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return !new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}($|[^\\p{L}\\p{N}])`, "iu").test(label);
+  });
 }
 
 /** Text and a link that must accompany the source's data wherever it is shown. */
@@ -159,6 +187,23 @@ function validateNetwork(subject: string, network: SourceNetwork): void {
     fail(subject, "network.rateLimit.intervalSeconds must be an integer from 1 to 86400");
   }
   requireText(subject, "network.rateLimit.note", note);
+  if (network.operators.length === 0) fail(subject, "network.operators must name an operator");
+  const operatorNames = network.operators.map((operator) => operator.name.trim().toLowerCase());
+  if (new Set(operatorNames).size !== operatorNames.length) {
+    fail(subject, "network.operators has duplicate names");
+  }
+  const operated = network.operators.flatMap((operator) => {
+    requireText(subject, "network.operators[].name", operator.name);
+    if (operator.hosts.length === 0) fail(subject, `operator "${operator.name}" names no host`);
+    return operator.hosts;
+  });
+  if (
+    operated.length !== network.hosts.length ||
+    new Set(operated).size !== operated.length ||
+    operated.some((host) => !network.hosts.includes(host))
+  ) {
+    fail(subject, "network.operators must assign every host to exactly one operator");
+  }
 }
 
 /** Checks one source declaration against the catalogue rules; throws on the first problem. */

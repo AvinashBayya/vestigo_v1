@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://github.com/internetarchive/wayback/blob/master/wayback-cdx-server/README.md",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: HTTP 200 with an empty body. The previous codebase read an empty body as no captures; the recorded no-capture answer is [], so an empty body is not a recognised answer and must be FAILED."
+  },
+  "request": {
+    "host": "web.archive.org",
+    "path": "/cdx/search/cdx?url=empty-body.example%2F*&output=json&fl=timestamp%2Coriginal%2Cstatuscode%2Cmimetype%2Cdigest&collapse=urlkey&limit=201"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": ""
+  }
+}

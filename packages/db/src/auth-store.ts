@@ -1,5 +1,5 @@
 import { AppError } from "@repo/core";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { authTables } from "./schema/auth.ts";
@@ -19,6 +19,24 @@ export interface AuthStore {
   readonly tables: typeof authTables;
   /** Whether an unexpired, pending invitation exists for this email, in any tenant. */
   hasPendingInvitation(email: string): Promise<boolean>;
+  /** Records the enrolment token issued with an invitation (its hash). */
+  setInvitationEnrolmentToken(invitationId: string, tokenHash: string): Promise<void>;
+  /**
+   * Gives a user a new enrolment token, if the user exists and has not
+   * enrolled in MFA yet (provisioning, or a re-invitation). Returns whether
+   * one was set.
+   */
+  setUnenrolledUserToken(
+    match: { readonly userId: string } | { readonly email: string },
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<boolean>;
+  /** At sign-up: takes over the token of the newest pending invitation for the email. */
+  adoptInvitationEnrolmentToken(userId: string, email: string): Promise<boolean>;
+  /** Whether this is the user's current, unexpired enrolment token, and the user has not enrolled. */
+  hasValidEnrolmentToken(userId: string, tokenHash: string): Promise<boolean>;
+  /** Clears the token once the user has enrolled: it can never be used again. */
+  clearEnrolmentTokenIfEnrolled(userId: string): Promise<void>;
   /** The role string of a membership, or null when the identity is not a member. */
   findMemberRole(organizationId: string, userId: string): Promise<string | null>;
   /** Checks the connecting role before first use; throws UnsafeAuthRoleError. */
@@ -69,6 +87,75 @@ export function createAuthStore(options: AuthStoreOptions): AuthStore {
         )
         .limit(1);
       return rows.length > 0;
+    },
+    async setInvitationEnrolmentToken(invitationId, tokenHash) {
+      await db
+        .update(authTables.invitation)
+        .set({ enrolmentTokenHash: tokenHash })
+        .where(eq(authTables.invitation.id, invitationId));
+    },
+    async setUnenrolledUserToken(match, tokenHash, expiresAt) {
+      const rows = await db
+        .update(authTables.user)
+        .set({ mfaEnrolmentTokenHash: tokenHash, mfaEnrolmentTokenExpiresAt: expiresAt })
+        .where(
+          and(
+            "userId" in match
+              ? eq(authTables.user.id, match.userId)
+              : eq(authTables.user.email, match.email.toLowerCase()),
+            eq(authTables.user.twoFactorEnabled, false),
+          ),
+        )
+        .returning({ id: authTables.user.id });
+      return rows.length === 1;
+    },
+    async adoptInvitationEnrolmentToken(userId, email) {
+      const [invitation] = await db
+        .select({
+          hash: authTables.invitation.enrolmentTokenHash,
+          expiresAt: authTables.invitation.expiresAt,
+        })
+        .from(authTables.invitation)
+        .where(
+          and(
+            eq(authTables.invitation.email, email.toLowerCase()),
+            eq(authTables.invitation.status, "pending"),
+            gt(authTables.invitation.expiresAt, sql`now()`),
+            isNotNull(authTables.invitation.enrolmentTokenHash),
+          ),
+        )
+        .orderBy(desc(authTables.invitation.createdAt))
+        .limit(1);
+      if (invitation?.hash === undefined || invitation.hash === null) return false;
+      await db
+        .update(authTables.user)
+        .set({
+          mfaEnrolmentTokenHash: invitation.hash,
+          mfaEnrolmentTokenExpiresAt: invitation.expiresAt,
+        })
+        .where(and(eq(authTables.user.id, userId), eq(authTables.user.twoFactorEnabled, false)));
+      return true;
+    },
+    async hasValidEnrolmentToken(userId, tokenHash) {
+      const rows = await db
+        .select({ id: authTables.user.id })
+        .from(authTables.user)
+        .where(
+          and(
+            eq(authTables.user.id, userId),
+            eq(authTables.user.twoFactorEnabled, false),
+            eq(authTables.user.mfaEnrolmentTokenHash, tokenHash),
+            gt(authTables.user.mfaEnrolmentTokenExpiresAt, sql`now()`),
+          ),
+        )
+        .limit(1);
+      return rows.length === 1;
+    },
+    async clearEnrolmentTokenIfEnrolled(userId) {
+      await db
+        .update(authTables.user)
+        .set({ mfaEnrolmentTokenHash: null, mfaEnrolmentTokenExpiresAt: null })
+        .where(and(eq(authTables.user.id, userId), eq(authTables.user.twoFactorEnabled, true)));
     },
     async findMemberRole(organizationId, userId) {
       const rows = await db

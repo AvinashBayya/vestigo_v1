@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://crt.sh/",
+    "recordedOn": "2026-09-28",
+    "notes": "Synthetic: a server error cannot be provoked. crt.sh publishes no API documentation, so this follows the shape of the recorded fixtures (found-example-com.json, empty-example-invalid.json). No Retry-After header; the body is a placeholder."
+  },
+  "request": {
+    "host": "crt.sh",
+    "path": "/?q=%25.example.com&output=json"
+  },
+  "response": {
+    "status": 500,
+    "headers": {
+      "content-type": "text/html"
+    },
+    "body": "<html><body>[synthetic 500 page]</body></html>"
+  }
+}

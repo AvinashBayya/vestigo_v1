@@ -17,6 +17,7 @@ import {
   totpCode,
   type Account,
   type TestApi,
+  enrolmentHeaders,
 } from "./support.ts";
 import type { TenantId } from "@repo/core";
 
@@ -53,16 +54,22 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
     expect(blockedOrg.status).toBe(403);
     expect(blockedOrg.body).toContain("MFA_ENROLLMENT_REQUIRED");
 
-    // 2. Enrol TOTP.
-    const enable = await browser.request("POST", "/api/auth/two-factor/enable", {
-      password: owner.password,
-    });
+    // 2. Enrol TOTP, with the enrolment token handed over at provisioning.
+    const enable = await browser.request(
+      "POST",
+      "/api/auth/two-factor/enable",
+      { password: owner.password },
+      enrolmentHeaders(owner.email),
+    );
     expect(enable.status).toBe(200);
     const { totpURI } = enable.json<{ totpURI: string }>();
     expect(totpURI).toMatch(/^otpauth:\/\/totp\//);
-    const enrolled = await browser.request("POST", "/api/auth/two-factor/verify-totp", {
-      code: totpCode(totpURI),
-    });
+    const enrolled = await browser.request(
+      "POST",
+      "/api/auth/two-factor/verify-totp",
+      { code: totpCode(totpURI) },
+      enrolmentHeaders(owner.email),
+    );
     expect(enrolled.status).toBe(200);
     rememberEnrolment(owner.email, totpURI);
 

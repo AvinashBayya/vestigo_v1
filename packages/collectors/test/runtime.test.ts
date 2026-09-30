@@ -35,6 +35,7 @@ import {
   MemoryRateLimiter,
   NAMES_SCHEMA,
   startUpstream,
+  type Names,
   testNetwork,
   testSource,
   type TestUpstream,
@@ -102,7 +103,7 @@ function declaration(
 function namesFrom(
   host: string,
   calls: { count: number } = { count: 0 },
-): CollectorImplementation<{ names: string[] }> {
+): CollectorImplementation<Names> {
   return async (ctx) => {
     calls.count += 1;
     const response = await ctx.fetch(`http://${host}/names?q=${ctx.target.value}`, {
@@ -111,7 +112,7 @@ function namesFrom(
     });
     if (response.status === 404) return ctx.notFound(response, "no names for this target");
     const names = z.array(z.string()).parse(response.json());
-    return ctx.found({ names }, [{ response, observedAt: null }]);
+    return ctx.found({ names, derived: {} }, [{ response, observedAt: null }]);
   };
 }
 
@@ -260,7 +261,7 @@ describe("a collector cannot set or alter its source label (RELEASE-BLOCKING)", 
           timeoutMs: 500,
         });
         // @ts-expect-error: found() takes a result and its evidence, nothing that could carry a label
-        return ctx.found({ names: ["a"] }, [{ response, observedAt: null }], {
+        return ctx.found({ names: ["a"], derived: {} }, [{ response, observedAt: null }], {
           sourceLabel: "crt.sh",
         });
       });
@@ -272,7 +273,7 @@ describe("a collector cannot set or alter its source label (RELEASE-BLOCKING)", 
         });
         return {
           kind: "FOUND",
-          result: { names: ["a"] },
+          result: { names: ["a"], derived: {} },
           evidence: [{ response, observedAt: null }],
           sourceLabel: "crt.sh",
         };
@@ -293,14 +294,14 @@ describe("a collector cannot set or alter its source label (RELEASE-BLOCKING)", 
         result: { names: ["a"] },
         evidence: [{ response, observedAt: null }],
         sourceLabel: "crt.sh",
-      } as unknown as CollectorReturn<{ names: string[] }>;
+      } as unknown as CollectorReturn<Names>;
     });
     const mutator = defineCollector(declaration("fake.mutator", "one"), async (ctx) => {
       const response = await ctx.fetch("http://one.test/names?q=example.com", {
         method: "GET",
         timeoutMs: 1_000,
       });
-      const returned = ctx.found({ names: ["a"] }, [{ response, observedAt: null }]);
+      const returned = ctx.found({ names: ["a"], derived: {} }, [{ response, observedAt: null }]);
       Object.assign(returned, { sourceLabel: "crt.sh" });
       return returned;
     });
@@ -328,7 +329,12 @@ describe("a collector cannot set or alter its source label (RELEASE-BLOCKING)", 
       const found = expectStatus(await runtime.execute(id, request()), "FOUND");
       drafts.push(...evidenceDrafts(runtime.registry.entry(id), found));
     }
-    expect(drafts.map((draft) => [draft.collectorId, new URL(draft.sourceUrl).host])).toEqual([
+    expect(
+      drafts.map((draft) => [
+        draft.collectorId,
+        draft.sourceUrl === null ? null : new URL(draft.sourceUrl).host,
+      ]),
+    ).toEqual([
       ["fake.one", "one.test"],
       ["fake.two", "two.test"],
     ]);
@@ -346,7 +352,7 @@ describe("a collector cannot set or alter its source label (RELEASE-BLOCKING)", 
         method: "GET",
         timeoutMs: 1_000,
       });
-      return ctx.found({ names: ["from-two"] }, [{ response, observedAt: null }]);
+      return ctx.found({ names: ["from-two"], derived: {} }, [{ response, observedAt: null }]);
     });
     const outcome = expectStatus(
       await runtimeWith([fallback]).execute("fake.fallback", request()),
@@ -366,6 +372,7 @@ describe("collectors sharing an upstream share its rate limit (RELEASE-BLOCKING)
         protocol: "http",
         hosts: ["one.test"],
         rateLimit: { requests: 1, intervalSeconds: 5, basis: "UPSTREAM_STATED", note: "[test]" },
+        operators: [{ name: "fake", hosts: ["one.test"] }],
       },
     });
     const runtime = new CollectorRuntime({
@@ -410,7 +417,7 @@ describe("no collector credential comes from the environment (RELEASE-BLOCKING)"
           timeoutMs: 1_000,
           ...(key === null ? {} : { headers: { authorization: `Bearer ${key.expose()}` } }),
         });
-        return ctx.found({ names: ["a"] }, [{ response, observedAt: null }]);
+        return ctx.found({ names: ["a"], derived: {} }, [{ response, observedAt: null }]);
       },
     );
     try {
@@ -492,10 +499,74 @@ describe("ACTIVE and PERSON collectors are gated (RELEASE-BLOCKING)", () => {
   });
 });
 
+describe("local analysis cites its own recorded analysis (RELEASE-BLOCKING)", () => {
+  const OFFLINE = testSource("offline", { network: null });
+  const localDeclaration = (id: string) => ({
+    ...declaration(id, "offline"),
+    collectionMode: "LOCAL_ANALYSIS" as const,
+    claimStrength: "DERIVED" as const,
+  });
+  const localRuntime = (collectors: Collector[]) =>
+    new CollectorRuntime({
+      registry: new CollectorRegistry({ sources: [...SOURCES, OFFLINE], collectors }),
+      allowUnverifiedSources: true,
+      network: testNetwork(upstream),
+    });
+
+  it("records the collector, the target and the output as DERIVED evidence with no source URL", async () => {
+    const analyser = defineCollector(localDeclaration("fake.local"), (ctx) => {
+      const record = ctx.record({ names: ["derived"] });
+      return Promise.resolve(
+        ctx.found({ names: ["derived"], derived: {} }, [{ response: record, observedAt: null }]),
+      );
+    });
+    const runtime = localRuntime([analyser]);
+    const found = expectStatus(await runtime.execute("fake.local", request()), "FOUND");
+    const [draft] = evidenceDrafts(runtime.registry.entry("fake.local"), found);
+    expect(draft).toMatchObject({ sourceUrl: null, claimStrength: "DERIVED", observedAt: null });
+    expect(JSON.parse(new TextDecoder().decode(draft?.payload))).toEqual({
+      collector: { id: "fake.local", version: "1.2.3" },
+      target: { type: "DOMAIN", value: "example.com" },
+      output: { names: ["derived"] },
+    });
+    expect(draft?.collectedAt).toBeInstanceOf(Date);
+    expect(upstream.requests).toEqual([]);
+  });
+
+  it("cannot reach the network, and cannot cite a network response", async () => {
+    routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));
+    const reaching = defineCollector(localDeclaration("fake.reaching"), async (ctx) => {
+      const response = await ctx.fetch("http://one.test/names?q=example.com", {
+        method: "GET",
+        timeoutMs: 1_000,
+      });
+      return ctx.found({ names: ["a"], derived: {} }, [{ response, observedAt: null }]);
+    });
+    expect(
+      expectStatus(await localRuntime([reaching]).execute("fake.reaching", request()), "FAILED")
+        .error.code,
+    ).toBe("DESTINATION_REFUSED");
+    expect(upstream.requests).toEqual([]);
+  });
+
+  it("is the only kind of collector that can record an analysis", async () => {
+    const pretender = defineCollector(declaration("fake.pretender", "one"), (ctx) => {
+      const record = ctx.record({ names: ["made up"] });
+      return Promise.resolve(
+        ctx.found({ names: ["made up"], derived: {} }, [{ response: record, observedAt: null }]),
+      );
+    });
+    expect(
+      expectStatus(await runtimeWith([pretender]).execute("fake.pretender", request()), "FAILED")
+        .error.code,
+    ).toBe("COLLECTOR_DEFINITION_INVALID");
+  });
+});
+
 describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
   const collectorThat = (
     id: string,
-    implementation: CollectorImplementation<{ names: string[] }>,
+    implementation: CollectorImplementation<Names>,
     schema = NAMES_SCHEMA,
   ) => defineCollector({ ...declaration(id, "one"), resultSchema: schema }, implementation);
 
@@ -527,8 +598,8 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
   it("refuses FOUND built on a failed response, an empty result, or no evidence", async () => {
     routes.set("one.test/error", (res) => res.writeHead(500).end("[]"));
     routes.set("one.test/empty", (res) => res.end("[]"));
-    const loose = z.object({ names: z.array(z.string()) });
-    const cases: [string, CollectorImplementation<{ names: string[] }>, z.ZodType][] = [
+    const loose = z.object({ names: z.array(z.string()), derived: z.object({}) });
+    const cases: [string, CollectorImplementation<Names>, z.ZodType][] = [
       [
         "a 500 response cited as evidence",
         async (ctx) => {
@@ -536,7 +607,7 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
             method: "GET",
             timeoutMs: 1_000,
           });
-          return ctx.found({ names: ["x"] }, [{ response, observedAt: null }]);
+          return ctx.found({ names: ["x"], derived: {} }, [{ response, observedAt: null }]);
         },
         NAMES_SCHEMA,
       ],
@@ -547,13 +618,14 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
             method: "GET",
             timeoutMs: 1_000,
           });
-          return ctx.found({ names: [] }, [{ response, observedAt: null }]);
+          return ctx.found({ names: [], derived: {} }, [{ response, observedAt: null }]);
         },
         loose,
       ],
       [
         "no evidence at all",
-        (ctx) => Promise.resolve(ctx.found({ names: ["x"] }, [] as unknown as [never])),
+        (ctx) =>
+          Promise.resolve(ctx.found({ names: ["x"], derived: {} }, [] as unknown as [never])),
         NAMES_SCHEMA,
       ],
       [
@@ -577,16 +649,110 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
     }
   });
 
+  describe("provenance (Phase 3B review): what the collector computed lives under derived", () => {
+    const COUNTED = z.object({
+      names: z.array(z.string()).min(1),
+      count: z.number().optional(),
+      derived: z.object({ count: z.number().optional() }),
+    });
+    /** A fake that computes a count (names × 7, a value no response holds) and places it. */
+    const counting = (id: string, placeCountIn: "result" | "derived") =>
+      defineCollector({ ...declaration(id, "one"), resultSchema: COUNTED }, async (ctx) => {
+        const response = await ctx.fetch("http://one.test/names?q=example.com", {
+          method: "GET",
+          timeoutMs: 1_000,
+        });
+        const names = z.array(z.string()).parse(response.json());
+        const count = names.length * 7;
+        return ctx.found(
+          placeCountIn === "result" ? { names, count, derived: {} } : { names, derived: { count } },
+          [{ response, observedAt: null }],
+        );
+      });
+
+    it("refuses at registration a non-local schema with no derived block", () => {
+      expect(
+        () =>
+          new CollectorRegistry({
+            sources: SOURCES,
+            collectors: [
+              defineCollector(
+                {
+                  ...declaration("fake.flat", "one"),
+                  resultSchema: z.object({ names: z.array(z.string()) }),
+                },
+                namesFrom("one.test") as unknown as sdk.CollectorImplementation<{
+                  names: string[];
+                }>,
+              ),
+            ],
+          }),
+      ).toThrow(/derived object/);
+    });
+
+    it("fails a run whose computed value sits outside derived, naming the field, not the value", async () => {
+      routes.set("one.test/names?q=example.com", (res) => res.end('["a","b"]'));
+      const outcome = expectStatus(
+        await runtimeWith([counting("fake.computed", "result")]).execute(
+          "fake.computed",
+          request(),
+        ),
+        "FAILED",
+      );
+      expect(outcome.error.code).toBe("COLLECTOR_CONTRACT_VIOLATION");
+      expect(outcome.error.message).toContain("result.count");
+      expect(outcome.error.message).not.toContain("14");
+    });
+
+    it("accepts the same computed value under derived", async () => {
+      routes.set("one.test/names?q=example.com", (res) => res.end('["a","b"]'));
+      const found = expectStatus(
+        await runtimeWith([counting("fake.derived", "derived")]).execute("fake.derived", request()),
+        "FOUND",
+      );
+      expect(found.result).toEqual({ names: ["a", "b"], derived: { count: 14 } });
+    });
+
+    it("refuses a result that holds only derived values: nothing was reported", async () => {
+      routes.set("one.test/names?q=example.com", (res) => res.end('["a","b"]'));
+      const loose = z.object({
+        names: z.array(z.string()),
+        derived: z.object({ count: z.number() }),
+      });
+      const collector = defineCollector(
+        { ...declaration("fake.onlyderived", "one"), resultSchema: loose },
+        async (ctx) => {
+          const response = await ctx.fetch("http://one.test/names?q=example.com", {
+            method: "GET",
+            timeoutMs: 1_000,
+          });
+          return ctx.found({ names: [], derived: { count: 2 } }, [{ response, observedAt: null }]);
+        },
+      );
+      const outcome = expectStatus(
+        await runtimeWith([collector]).execute("fake.onlyderived", request()),
+        "FAILED",
+      );
+      expect(outcome.error.code).toBe("COLLECTOR_CONTRACT_VIOLATION");
+      expect(outcome.error.message).toMatch(/empty/);
+    });
+  });
+
   it("refuses a zero presented as a result", async () => {
     routes.set("one.test/count", (res) => res.end("0"));
     const counter = defineCollector(
-      { ...declaration("fake.count", "one"), resultSchema: z.object({ count: z.number() }) },
+      {
+        ...declaration("fake.count", "one"),
+        resultSchema: z.object({ count: z.number(), derived: z.object({}) }),
+      },
       async (ctx) => {
         const response = await ctx.fetch("http://one.test/count", {
           method: "GET",
           timeoutMs: 1_000,
         });
-        return ctx.found({ count: Number(response.text()) }, [{ response, observedAt: null }]);
+        return ctx.found({ count: Number(response.text()), derived: {} }, [
+          { response, observedAt: null },
+        ]);
       },
     );
     const outcome = expectStatus(
@@ -603,7 +769,7 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
         method: "GET",
         timeoutMs: 1_000,
       });
-      return ctx.found(response.json() as { names: string[] }, [{ response, observedAt: null }]);
+      return ctx.found(response.json() as Names, [{ response, observedAt: null }]);
     });
     expect(
       expectStatus(await runtimeWith([sloppy]).execute("fake.sloppy", request()), "FAILED").error
@@ -646,7 +812,107 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
       collectorVersion: "1.2.3",
       observedAt: null,
     });
-    expect(draft?.collectedAt).toEqual(found.evidence[0]?.response.receivedAt);
+    const cited = found.evidence[0]?.response;
+    expect(cited?.kind).toBe("NETWORK");
+    expect(draft?.collectedAt).toEqual(cited?.kind === "NETWORK" ? cited.receivedAt : undefined);
     expect(new TextDecoder().decode(draft?.payload)).toBe('["a"]');
+  });
+});
+
+describe("metering: every request a run sends is counted, and nothing else (Phase 4)", () => {
+  const counting = () => {
+    const sent: { sourceId: string; host: string }[] = [];
+    const meter: sdk.UsageMeter = {
+      requestSent: (sourceId, host) => {
+        sent.push({ sourceId, host });
+      },
+    };
+    return { sent, meter };
+  };
+
+  it("counts each hop of a redirect and a request whose answer failed", async () => {
+    routes.set("one.test/start", (res) => res.writeHead(302, { location: "/names?q=x" }).end());
+    routes.set("one.test/names?q=x", (res) => res.end('["a"]'));
+    routes.set("one.test/error", (res) => res.writeHead(500).end("[]"));
+    const collector = defineCollector(declaration("fake.metered", "one"), async (ctx) => {
+      const failed = await ctx.fetch("http://one.test/error", { method: "GET", timeoutMs: 1_000 });
+      expect(failed.status).toBe(500);
+      const response = await ctx.fetch("http://one.test/start", {
+        method: "GET",
+        timeoutMs: 1_000,
+      });
+      return ctx.found({ names: ["a"], derived: {} }, [{ response, observedAt: null }]);
+    });
+    const { sent, meter } = counting();
+    expectStatus(
+      await runtimeWith([collector]).execute("fake.metered", request({ meter })),
+      "FOUND",
+    );
+    expect(sent).toEqual([
+      { sourceId: "one", host: "one.test" },
+      { sourceId: "one", host: "one.test" },
+      { sourceId: "one", host: "one.test" },
+    ]);
+    expect(upstream.requests).toHaveLength(3);
+  });
+
+  it("does not count a request the rate limiter stopped before it was sent", async () => {
+    routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));
+    const strict = testSource("one", {
+      network: {
+        protocol: "http",
+        hosts: ["one.test"],
+        rateLimit: { requests: 1, intervalSeconds: 5, basis: "UPSTREAM_STATED", note: "[test]" },
+        operators: [{ name: "fake", hosts: ["one.test"] }],
+      },
+    });
+    const twice = defineCollector(declaration("fake.twice", "one"), async (ctx) => {
+      const response = await ctx.fetch("http://one.test/names?q=example.com", {
+        method: "GET",
+        timeoutMs: 1_000,
+      });
+      await ctx.fetch("http://one.test/names?q=example.com", { method: "GET", timeoutMs: 1_000 });
+      return ctx.found({ names: ["a"], derived: {} }, [{ response, observedAt: null }]);
+    });
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({ sources: [strict], collectors: [twice] }),
+      allowUnverifiedSources: true,
+      network: testNetwork(upstream, {
+        rateLimiter: new MemoryRateLimiter(),
+        answers: { "one.test": ["1.1.1.1"] },
+      }),
+    });
+    const { sent, meter } = counting();
+    expectStatus(await runtime.execute("fake.twice", request({ meter })), "UNAVAILABLE");
+    expect(sent).toHaveLength(1);
+    expect(upstream.requests).toHaveLength(1);
+  });
+
+  it("counts nothing for a collector refused before it runs", async () => {
+    const { sent, meter } = counting();
+    const runtime = runtimeWith([
+      defineCollector(declaration("fake.blocked-meter", "blocked"), namesFrom("blocked.test")),
+    ]);
+    expectStatus(await runtime.execute("fake.blocked-meter", request({ meter })), "REFUSED");
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("a run that overruns its budget is UNAVAILABLE, however the collector stops (Phase 4)", () => {
+  it("regression: a collector that rejects as soon as its signal aborts is still a timeout, not a failure", async () => {
+    const stopsOnAbort = defineCollector(
+      declaration("fake.stops-on-abort", "one", { timeoutMs: 200 }),
+      (ctx) =>
+        new Promise((_resolve, reject) => {
+          ctx.signal.addEventListener("abort", () => {
+            reject(new Error("[stopped on abort]"));
+          });
+        }),
+    );
+    const outcome = expectStatus(
+      await runtimeWith([stopsOnAbort]).execute("fake.stops-on-abort", request()),
+      "UNAVAILABLE",
+    );
+    expect(outcome.error.code).toBe("COLLECTOR_TIMEOUT");
   });
 });

@@ -1,0 +1,20 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#about-secondary-rate-limits",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic. A secondary rate limit without Retry-After (GitHub documents that the header may be absent), recognisable only by its message."
+  },
+  "request": {
+    "host": "api.github.com",
+    "path": "/users/octocat"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json; charset=utf-8",
+      "x-ratelimit-remaining": "42"
+    },
+    "body": "{\"message\":\"You have exceeded a secondary rate limit. Please wait a few minutes before you try again. [remainder of GitHub's message]\",\"documentation_url\":\"https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#about-secondary-rate-limits\"}"
+  }
+}

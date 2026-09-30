@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://www.mediawiki.org/wiki/API:Etiquette",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: a 403 refusal on the search."
+  },
+  "request": {
+    "host": "www.wikidata.org",
+    "path": "/w/api.php?action=wbsearchentities&search=Internet+Assigned+Numbers+Authority&language=en&uselang=en&type=item&limit=5&format=json"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "text/plain"
+    },
+    "body": "[synthetic forbidden body]"
+  }
+}
