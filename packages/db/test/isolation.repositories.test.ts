@@ -495,6 +495,15 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
           quantity: 1,
           reportId: v.reportId,
           attempt: 1,
+          modelCalls: [
+            {
+              modelId: "[model]",
+              endpointHost: "[endpoint host]",
+              servedBy: null,
+              regionHeaders: [],
+              quantity: 1,
+            },
+          ],
         }),
     ],
     list: (r) => r.reports.list(page),

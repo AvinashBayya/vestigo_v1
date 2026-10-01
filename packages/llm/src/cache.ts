@@ -8,10 +8,38 @@
  * never trusted: the call goes to the model and is metered as usual.
  */
 import { createHash } from "node:crypto";
+import { z } from "zod";
 import type { ChatMessage } from "./provider.ts";
 
-/** Bumped when the cached entry's shape or the key's inputs change. */
-export const CACHE_FORMAT = "llm-cache-1";
+/**
+ * Bumped when the cached entry's shape or the key's inputs change.
+ * 2: an entry is JSON holding the answer and where it was produced
+ * (CachedAnswer), so a cache hit reports who processed the material: the
+ * endpoint host, the provider it named, and its raw region headers, as they
+ * were when the answer was produced, not as configured now.
+ */
+export const CACHE_FORMAT = "llm-cache-2";
+
+/** What a cache entry holds: an accepted answer, and the provenance of the call that produced it. */
+export const CachedAnswer = z.strictObject({
+  text: z.string(),
+  provenance: z.strictObject({
+    endpointHost: z.string().min(1),
+    servedBy: z.string().nullable(),
+    regionHeaders: z.array(z.strictObject({ name: z.string().min(1), value: z.string() })),
+  }),
+});
+export type CachedAnswer = z.infer<typeof CachedAnswer>;
+
+/** A cache entry's answer, or null when the entry is unreadable (treated as a miss). */
+export function readCachedAnswer(entry: string): CachedAnswer | null {
+  try {
+    const parsed = CachedAnswer.safeParse(JSON.parse(entry));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 export interface ResponseCache {
   get(key: string): Promise<string | null>;

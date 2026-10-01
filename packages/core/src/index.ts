@@ -60,6 +60,7 @@ export {
   type ReportRelationship,
   type ReportSource,
   type ReportStatus,
+  type ReportRegionHeader,
   type ReportSynthesis,
   type SynthesisStatement,
   type SynthesisStrength,

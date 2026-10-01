@@ -6,6 +6,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "../src/database.ts";
+import type { ModelCallUsage } from "../src/repositories/operations.ts";
 import { ConstraintViolationError, ReportRecordedOnceError } from "../src/errors.ts";
 import {
   asTenant,
@@ -137,6 +138,15 @@ describe("report usage", () => {
           quantity: 250,
           reportId: report.id,
           attempt: 1,
+          modelCalls: [
+            {
+              modelId: "[model]",
+              endpointHost: "[endpoint host]",
+              servedBy: "[provider]",
+              regionHeaders: [],
+              quantity: 250,
+            },
+          ],
         }),
       );
     expect(await record()).toBe(true);
@@ -147,9 +157,111 @@ describe("report usage", () => {
         quantity: 90,
         reportId: report.id,
         attempt: 2,
+        modelCalls: [
+          {
+            modelId: "[model]",
+            endpointHost: "[endpoint host]",
+            servedBy: null,
+            regionHeaders: [],
+            quantity: 90,
+          },
+        ],
       }),
     );
     expect(secondAttempt).toBe(true);
+  });
+
+  it("stores each model call's provider and share with the attempt's usage", async () => {
+    const report = await newReport();
+    const modelCalls = [
+      {
+        modelId: "[model]",
+        endpointHost: "[endpoint host]",
+        servedBy: "[provider a]",
+        regionHeaders: [{ name: "x-example-region", value: "[region]" }],
+        quantity: 700,
+      },
+      {
+        modelId: "[model]",
+        endpointHost: "[endpoint host]",
+        servedBy: null,
+        regionHeaders: [],
+        quantity: 300,
+      },
+    ];
+    const rows = await db.withTenant(tenant.tenantId, async ({ repos }) => {
+      await repos.usageEvents.recordReportAttempt({
+        unit: "LLM_INPUT_TOKEN",
+        quantity: 1000,
+        reportId: report.id,
+        attempt: 1,
+        modelCalls,
+      });
+      return repos.usageEvents.list({ limit: 1000 });
+    });
+    const row = rows.find((r) => r.reportId === report.id);
+    expect(row?.quantity).toBe(1000);
+    expect(row?.modelCalls).toEqual(modelCalls);
+  });
+
+  it("refuses model calls that do not account for the quantity exactly, or none at all", async () => {
+    const report = await newReport();
+    const attempt = (quantity: number, modelCalls: ModelCallUsage[]) =>
+      db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.usageEvents.recordReportAttempt({
+          unit: "LLM_INPUT_TOKEN",
+          quantity,
+          reportId: report.id,
+          attempt: 1,
+          modelCalls,
+        }),
+      );
+    await expect(
+      attempt(100, [
+        {
+          modelId: "[model]",
+          endpointHost: "[endpoint host]",
+          servedBy: "[provider]",
+          regionHeaders: [],
+          quantity: 60,
+        },
+      ]),
+    ).rejects.toThrow(/add up to the usage quantity/);
+    await expect(attempt(100, [])).rejects.toThrow(/must list the model calls/);
+    await expect(
+      attempt(100, [
+        {
+          modelId: "[model]",
+          endpointHost: "[endpoint host]",
+          servedBy: "",
+          regionHeaders: [],
+          quantity: 100,
+        },
+      ]),
+    ).rejects.toThrow(/its provider or null/);
+    await expect(
+      attempt(100, [
+        { modelId: "[model]", endpointHost: "", servedBy: null, regionHeaders: [], quantity: 100 },
+      ]),
+    ).rejects.toThrow(/endpoint host/);
+  });
+
+  it("refuses model calls on a usage row that is not a report's", async () => {
+    const runtime = await rawClient(TEST_DATABASE.runtimeUrl);
+    try {
+      const state = await asTenant(runtime, tenant.tenantId, () =>
+        sqlStateOf(() =>
+          runtime.query(
+            `insert into public.usage_events (tenant_id, unit, quantity, job_id, attempt, model_calls)
+             values ($1, 'LLM_INPUT_TOKEN', 1, $2, 1, '[{"modelId":"[model]","servedBy":null,"quantity":1}]')`,
+            [tenant.tenantId, tenant.jobId],
+          ),
+        ),
+      );
+      expect(state).toBe("23514");
+    } finally {
+      await runtime.end();
+    }
   });
 
   it("refuses a usage row naming both a job and a report", async () => {

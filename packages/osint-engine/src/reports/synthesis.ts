@@ -97,7 +97,15 @@ export async function synthesise(
   });
   return {
     status: "GENERATED",
-    model: { id: result.modelId, licence: result.licence, profile: result.profile },
+    model: {
+      id: result.modelId,
+      licence: result.licence,
+      profile: result.profile,
+      endpointHost: result.provenance.endpointHost,
+      servedBy: result.provenance.servedBy,
+      // Raw, as the endpoint sent them: copied, never interpreted.
+      regionHeaders: result.provenance.regionHeaders.map(({ name, value }) => ({ name, value })),
+    },
     statements: result.value.statements.map((statement) => ({
       text: statement.text,
       strength: statement.strength,

@@ -1191,6 +1191,78 @@ They now render as `example.com / www.example.com`.
 1. **No hosted vendor is chosen.** The hosted profile is the default but reports itself NOT
    CONFIGURED until `LLM_HOSTED_BASE_URL` is set. Which provider, under what data-processing
    terms and in which region (India residency, ARCHITECTURE-DECISIONS §10), is your decision.
+   - **OpenRouter, evaluated 2026-10-01: no residency guarantee.** OpenRouter is a router, not a
+     host: each request is forwarded to one of several third-party inference providers, chosen
+     per request, so a prompt (collected content included) may be processed by any of them, in
+     any of their regions, under each one's own data terms. The key's account reports
+     `allowed_data_regions: ["global"]`. Nothing in our provider pins the upstream provider or
+     region. As configured it cannot meet the India-region requirement and is suitable for
+     development and evaluation only, not for tenant data.
+   - Its free tier serves none of the allowlisted models (checked against its model list that
+     day), so it was not wired up.
+   - **Hugging Face Inference Providers, wired up for development 2026-10-01: no residency
+     guarantee either.** `https://router.huggingface.co/v1` is also a router: each request goes
+     to a third-party inference provider (for `openai/gpt-oss-120b` that day: groq, novita,
+     cerebras, nscale, together, fireworks-ai, featherless-ai, scaleway, baseten, ovhcloud,
+     deepinfra), chosen by the router unless a provider is named, under that provider's own data
+     terms and in its own regions. A request, collected content included, may be processed
+     outside India. Development and evaluation only; not for tenant data until a provider and
+     region are pinned and the residency question is decided.
+   - **Which provider served each call is now recorded** (2026-10-01), from the router's
+     `x-inference-provider` response header: per call in `usage_events.model_calls` (a rejected
+     answer's call included, since a provider still processed the material), and for the
+     accepted answer in the report document (`synthesis.model.servedBy`, report format 3). A
+     cache hit reports the provider that produced the answer originally. Null means the endpoint
+     named none, never a guess. Not covered: a call that failed before the endpoint answered
+     (timeout, refused connection) records nothing, though it may have reached a provider.
+     Recording is not pinning: the router still chooses, so this answers "who processed it",
+     not "where it may go".
+   - **Structured output is `json_schema` for this profile.** Probed 2026-10-01 with the
+     production synthesis schema and a prompt demanding prose, a non-`E` reference and an extra
+     field: every one of the 10 providers that answered (cerebras, groq, novita, nscale,
+     together, fireworks-ai, featherless-ai, scaleway, baseten, and the router's default pick,
+     cerebras) returned schema-conforming JSON. The control without a schema could not be run:
+     the account's monthly included credit ran out during the probe (HTTP 402 on every call,
+     ovhcloud and deepinfra included). Schema conformance is shape only: refs may still be
+     empty or unknown, and nscale and scaleway wrote the model's reasoning into a statement's
+     text. The citation validator and output guards remain the gate.
+   - **Groq, direct, from 2026-10-01** (`https://api.groq.com/openai/v1`, `openai/gpt-oss-120b`,
+     `json_schema`), replacing the Hugging Face router for development. **The provider is now
+     known rather than router-chosen:** every request goes to Groq, fixed by configuration,
+     not picked per request from eleven third parties. That narrows the residency question to
+     one provider; it does not answer it. Groq's own data-processing terms have not been
+     reviewed here, so whether it meets the India-region requirement is still open, and it
+     remains development and evaluation only.
+     - Observed 2026-10-01: every response carried the header `x-groq-region: bom` (4 of 4
+       probes, from a development machine). **A region header is evidence of what the provider
+       said, not a residency guarantee.** It is recorded and printed exactly as sent and is never
+       interpreted: no code or document maps a value to a place. It says nothing of where a
+       request from other infrastructure would be served, or of what Groq commits to; that
+       remains for the data-processing terms to settle.
+     - **What every report and model call now records** (report format 3): the configured
+       endpoint's host (`model.endpointHost`, e.g. `api.groq.com`), the upstream provider when
+       the endpoint names one (`model.servedBy`), and every response header whose name
+       contains "region", raw with its name (`model.regionHeaders`); per call, the same in
+       `usage_events.model_calls`. Groq names no upstream provider, so its reports say "Served
+       by: api.groq.com, the endpoint this request was sent to. It named no upstream
+       provider." A region header prints as "The endpoint reported region header
+       x-groq-region: bom. This records what the endpoint said; it is not a guarantee of where
+       the request was processed.", and the line is omitted when the response carried none. A
+       region value that is not printable ASCII or exceeds 200 characters is skipped, never
+       altered.
+     - Rate limits on this key, per its response headers: 8,000 tokens and 1,000 requests.
+       Four eval runs spaced 65 s apart hit no limit.
+     - `json_schema` ON against OFF, eval golden set, two runs each: every call costs exactly
+       196 more input tokens with the schema (781/751/627 against 585/555/431 per case), the
+       schema being sent with the prompt. Output tokens varied run to run in both modes. One
+       case needed a retry in one ON run (1 of 6 case-runs); no OFF case did (0 of 6). With no
+       schema the model returned valid JSON every time. Both modes: citation validity 1.0,
+       hallucination rate 0, nothing rejected. Too small a sample to say the schema changes
+       attempts; it does cost the 196 tokens.
+   - An endpoint's refusal now carries what the endpoint said (an out-of-credit 402 says so),
+     read narrowly: a bounded JSON error body only, the key and token-shaped strings
+     redacted, and any message that repeats the prompt dropped (`packages/llm/src/endpoint-error.ts`).
+     A refusal is still never retried.
 2. **The facts never depend on a model.** Coverage, findings, relationships, sources and
    attribution are assembled from stored data. The model writes only the synthesis, which must
    be asked for.

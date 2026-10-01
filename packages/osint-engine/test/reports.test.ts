@@ -36,7 +36,9 @@ import {
   waitForRedisReady,
 } from "@repo/integrations";
 import {
+  LlmRequestRejectedError,
   LlmUnavailableError,
+  type CallProvenance,
   type CompletionRequest,
   type CompletionResult,
   type LlmClient,
@@ -111,14 +113,31 @@ const ENDPOINT: LlmEndpoint = {
   large: { model: model("Qwen/Qwen3-32B"), servedName: "Qwen/Qwen3-32B" },
 };
 
+/** The host of ENDPOINT's base URL. */
+const ENDPOINT_HOST = "llm-provider.invalid";
+/** A region header as an endpoint might send it; recorded raw. */
+const REGION_HEADER = { name: "x-example-region", value: "[region]" };
+
+/** A call's provenance via ENDPOINT: the provider it names, and its raw region headers. */
+const via = (
+  servedBy: string | null,
+  regionHeaders: readonly { name: string; value: string }[] = [],
+): CallProvenance => ({ endpointHost: ENDPOINT_HOST, servedBy, regionHeaders });
+
 /** A scripted stand-in for a model. Not a model; it answers from a script. */
 class ScriptedProvider implements LlmProvider {
   readonly profile = "hosted";
   readonly requests: CompletionRequest[] = [];
   readonly #script: ((request: CompletionRequest) => string | Error)[];
+  readonly #provenance: CallProvenance[];
 
-  constructor(script: readonly ((request: CompletionRequest) => string | Error)[]) {
+  /** `provenance`: what each answer reports, in turn; `via(null)` once exhausted. */
+  constructor(
+    script: readonly ((request: CompletionRequest) => string | Error)[],
+    provenance: readonly CallProvenance[] = [],
+  ) {
     this.#script = [...script];
+    this.#provenance = [...provenance];
   }
 
   complete(request: CompletionRequest): Promise<CompletionResult> {
@@ -127,7 +146,11 @@ class ScriptedProvider implements LlmProvider {
     if (next === undefined) return Promise.reject(new Error("the script has no more answers"));
     const answer = next(request);
     if (answer instanceof Error) return Promise.reject(answer);
-    return Promise.resolve({ text: answer, usage: { inputTokens: 1200, outputTokens: 80 } });
+    return Promise.resolve({
+      text: answer,
+      usage: { inputTokens: 1200, outputTokens: 80 },
+      provenance: this.#provenance.shift() ?? via(null),
+    });
   }
 }
 
@@ -323,7 +346,12 @@ async function tokenUsage(tenantId: TenantId, reportId: string) {
   );
   return rows
     .filter((row) => row.reportId === reportId)
-    .map((row) => ({ unit: row.unit, attempt: row.attempt, quantity: row.quantity }))
+    .map((row) => ({
+      unit: row.unit,
+      attempt: row.attempt,
+      quantity: row.quantity,
+      modelCalls: row.modelCalls,
+    }))
     .sort((a, b) => `${String(a.attempt)}${a.unit}`.localeCompare(`${String(b.attempt)}${b.unit}`));
 }
 
@@ -381,7 +409,7 @@ describe("a report from a real Phase 4 run with one collector failing (RELEASE-B
       collectors: platform(["crtsh", "dns", "rdap", "wayback"]),
       fixtures: CHECKPOINT_FIXTURES,
     });
-    provider = new ScriptedProvider([compliantAnswer]);
+    provider = new ScriptedProvider([compliantAnswer], [via("[provider a]", [REGION_HEADER])]);
     engine = await startEngine(
       harness.runtime,
       (registry) =>
@@ -476,16 +504,28 @@ describe("a report from a real Phase 4 run with one collector failing (RELEASE-B
 
   it("writes the synthesis from the report's own records, delimited, and meters it once", async () => {
     if (document.synthesis.status !== "GENERATED") return expect.unreachable("synthesis expected");
+    // Where the synthesis was produced: the configured host, the provider the
+    // endpoint named, and its region header exactly as sent.
     expect(document.synthesis.model).toEqual({
       id: "Qwen/Qwen3-32B",
       licence: "Apache-2.0",
       profile: "hosted",
+      endpointHost: ENDPOINT_HOST,
+      servedBy: "[provider a]",
+      regionHeaders: [REGION_HEADER],
     });
     expect(provider.requests).toHaveLength(1);
     expect(provider.requests[0]?.messages[0]?.content).not.toContain("example.com");
+    const call = (quantity: number) => ({
+      modelId: "Qwen/Qwen3-32B",
+      endpointHost: ENDPOINT_HOST,
+      servedBy: "[provider a]",
+      regionHeaders: [REGION_HEADER],
+      quantity,
+    });
     expect(await tokenUsage(tenant.tenantId, reportId)).toEqual([
-      { unit: "LLM_INPUT_TOKEN", attempt: 1, quantity: 1200 },
-      { unit: "LLM_OUTPUT_TOKEN", attempt: 1, quantity: 80 },
+      { unit: "LLM_INPUT_TOKEN", attempt: 1, quantity: 1200, modelCalls: [call(1200)] },
+      { unit: "LLM_OUTPUT_TOKEN", attempt: 1, quantity: 80, modelCalls: [call(80)] },
     ]);
   });
 
@@ -658,7 +698,7 @@ describe("report generation fails honestly, never with a partial answer", () => 
 
   it("fails the report when the model's answer is uncited twice, keeping no document, and meters both calls", async () => {
     const report = await newReport(true);
-    const provider = new ScriptedProvider([uncited, uncited]);
+    const provider = new ScriptedProvider([uncited, uncited], [via("[provider a]"), via(null)]);
     const disposition = await generatorWith(provider).process(tenant.tenantId, report.id, {
       finalAttempt: false,
     });
@@ -676,9 +716,15 @@ describe("report generation fails honestly, never with a partial answer", () => 
       errorCode: "LLM_OUTPUT_REJECTED",
     });
     expect(row?.errorMessage).toContain("CITATION_MISSING");
+    // Both calls, the rejected ones, reached a provider: each is recorded with
+    // the provider it reported, or null where it reported none.
+    const calls = (quantity: number) => [
+      { modelId: "Qwen/Qwen3-32B", ...via("[provider a]"), quantity },
+      { modelId: "Qwen/Qwen3-32B", ...via(null), quantity },
+    ];
     expect(await tokenUsage(tenant.tenantId, report.id)).toEqual([
-      { unit: "LLM_INPUT_TOKEN", attempt: 1, quantity: 2400 },
-      { unit: "LLM_OUTPUT_TOKEN", attempt: 1, quantity: 160 },
+      { unit: "LLM_INPUT_TOKEN", attempt: 1, quantity: 2400, modelCalls: calls(1200) },
+      { unit: "LLM_OUTPUT_TOKEN", attempt: 1, quantity: 160, modelCalls: calls(80) },
     ]);
   });
 
@@ -699,9 +745,11 @@ describe("report generation fails honestly, never with a partial answer", () => 
     expect(waiting).toMatchObject({ status: "QUEUED", errorCode: "LLM_UNAVAILABLE" });
     const second = await generator.process(tenant.tenantId, report.id, { finalAttempt: false });
     expect(second).toEqual({ kind: "COMPLETED", status: "SUCCEEDED", errorCode: null });
+    // The unavailable first call reported no usage and no provider: nothing is recorded for it.
+    const call = (quantity: number) => [{ modelId: "Qwen/Qwen3-32B", ...via(null), quantity }];
     expect(await tokenUsage(tenant.tenantId, report.id)).toEqual([
-      { unit: "LLM_INPUT_TOKEN", attempt: 2, quantity: 1200 },
-      { unit: "LLM_OUTPUT_TOKEN", attempt: 2, quantity: 80 },
+      { unit: "LLM_INPUT_TOKEN", attempt: 2, quantity: 1200, modelCalls: call(1200) },
+      { unit: "LLM_OUTPUT_TOKEN", attempt: 2, quantity: 80, modelCalls: call(80) },
     ]);
   });
 
@@ -715,6 +763,26 @@ describe("report generation fails honestly, never with a partial answer", () => 
       status: "FAILED",
       errorCode: "LLM_UNAVAILABLE",
     });
+  });
+
+  it("fails a refused request at once, with retries left, keeping what the endpoint said", async () => {
+    const report = await newReport(true);
+    const said =
+      'The hosted model endpoint refused the request with HTTP 402. The endpoint said: "[no credit left]".';
+    const generator = generatorWith(
+      new ScriptedProvider([
+        () => new LlmRequestRejectedError(said, 402, { code: null, message: "[no credit left]" }),
+      ]),
+    );
+    expect(await generator.process(tenant.tenantId, report.id, { finalAttempt: false })).toEqual({
+      kind: "COMPLETED",
+      status: "FAILED",
+      errorCode: "LLM_REQUEST_REJECTED",
+    });
+    const row = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.reports.findById(report.id),
+    );
+    expect(row).toMatchObject({ status: "FAILED", errorMessage: said });
   });
 
   it("fails a synthesis request when no provider is configured, through the queue", async () => {

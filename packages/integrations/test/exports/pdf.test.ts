@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { OPS, getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
-import { REPORT_WORDING } from "@repo/core";
+import { REPORT_WORDING, type ReportDocument } from "@repo/core";
 import { beforeAll, describe, expect, it } from "vitest";
 import { renderReportPdf } from "../../src/index.ts";
 import { reportFixture } from "../report-fixture.ts";
@@ -240,6 +240,73 @@ describe("the PDF report", () => {
     expect(text).toContain(
       "[INFERRED] An analytic inference drawn by the analysis model from the cited evidence. No source stated it.",
     );
+  });
+
+  describe("the synthesis provenance", () => {
+    /** The rendered text without page furniture, which can fall inside any passage. */
+    const bodyOf = (read: readonly PageText[]) =>
+      read
+        .map((page) => page.text)
+        .join(" ")
+        .replace(/ *HANDLING: \[TENANT MARKING\] */g, " ")
+        .replace(/ *Report [0-9a-f-]{36} */g, " ")
+        .replace(/ *Page \d+ of \d+ */g, " ")
+        .replace(/\s+/g, " ");
+    /** Everything printed between the model line and the first statement. */
+    const provenanceOf = (text: string) =>
+      text.slice(text.indexOf("Served by:"), text.indexOf("[CORRELATED] [A synthesised")).trim();
+    const withModel = async (
+      model: Partial<Extract<ReportDocument["synthesis"], { status: "GENERATED" }>["model"]>,
+    ) => {
+      const fixture = reportFixture();
+      if (fixture.synthesis.status !== "GENERATED") throw new Error("synthesis expected");
+      return bodyOf(
+        await readPdf(
+          await renderReportPdf(
+            reportFixture({
+              synthesis: { ...fixture.synthesis, model: { ...fixture.synthesis.model, ...model } },
+            }),
+          ),
+        ),
+      );
+    };
+
+    it("names the provider the endpoint named, the endpoint, and the region header as sent", () => {
+      expect(provenanceOf(bodyOf(pages))).toBe(
+        "Served by: [upstream provider], as the endpoint [endpoint host] reported it. " +
+          "The endpoint reported region header x-example-region: [region]. This records what the endpoint said; it is not a guarantee of where the request was processed.",
+      );
+    });
+
+    it("names the endpoint when it named no provider: it is known where the request went", async () => {
+      const text = await withModel({ servedBy: null });
+      expect(provenanceOf(text)).toMatch(
+        /^Served by: \[endpoint host\], the endpoint this request was sent to\. It named no upstream provider\. /,
+      );
+      expect(text).not.toContain("[upstream provider]");
+      expect(text).not.toContain("not reported");
+    });
+
+    it("prints no region line when the response carried no region header", async () => {
+      const text = await withModel({ regionHeaders: [] });
+      expect(provenanceOf(text)).toBe(
+        "Served by: [upstream provider], as the endpoint [endpoint host] reported it.",
+      );
+      expect(text).not.toContain("region header");
+    });
+
+    it("prints a direct endpoint's region header exactly as sent, adding nothing to it", async () => {
+      // As Groq answered on 2026-10-01: no provider header, one region header.
+      const text = await withModel({
+        endpointHost: "api.groq.com",
+        servedBy: null,
+        regionHeaders: [{ name: "x-groq-region", value: "bom" }],
+      });
+      expect(provenanceOf(text)).toBe(
+        "Served by: api.groq.com, the endpoint this request was sent to. It named no upstream provider. " +
+          "The endpoint reported region header x-groq-region: bom. This records what the endpoint said; it is not a guarantee of where the request was processed.",
+      );
+    });
   });
 
   it("ships the vendored fonts unmodified", () => {

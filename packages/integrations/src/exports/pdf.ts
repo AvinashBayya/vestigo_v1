@@ -654,6 +654,33 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
       ],
       { size: SMALL_SIZE },
     );
+    // Where it was produced: the endpoint is always known (configuration); an
+    // upstream provider only when the endpoint named one.
+    const { endpointHost, servedBy, regionHeaders } = synthesis.model;
+    r.paragraph(
+      [
+        {
+          text:
+            servedBy === null
+              ? fillWording(w.synthesis.servedByEndpoint, { endpoint: endpointHost })
+              : fillWording(w.synthesis.servedBy, { provider: servedBy, endpoint: endpointHost }),
+          style: "italic",
+        },
+      ],
+      { size: SMALL_SIZE },
+    );
+    // Region headers exactly as the endpoint sent them, never interpreted; no line without one.
+    for (const header of regionHeaders) {
+      r.paragraph(
+        [
+          {
+            text: fillWording(w.synthesis.regionHeader, { name: header.name, value: header.value }),
+            style: "italic",
+          },
+        ],
+        { size: SMALL_SIZE },
+      );
+    }
     for (const statement of synthesis.statements) {
       r.paragraph(
         [

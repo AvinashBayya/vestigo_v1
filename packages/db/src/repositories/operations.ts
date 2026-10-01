@@ -8,6 +8,7 @@ import {
   monitors,
   tenantQuotas,
   usageEvents,
+  type ModelCallUsage,
 } from "../schema/index.ts";
 import {
   firstRow,
@@ -24,6 +25,7 @@ export type Monitor = typeof monitors.$inferSelect;
 export type Alert = typeof alerts.$inferSelect;
 export type Credential = typeof credentials.$inferSelect;
 export type UsageEvent = typeof usageEvents.$inferSelect;
+export type { ModelCallUsage };
 export type TenantQuota = typeof tenantQuotas.$inferSelect;
 
 export class CasesRepository extends TenantRepository {
@@ -387,18 +389,44 @@ export class UsageEventsRepository extends TenantRepository {
    * Records what one attempt at generating a report consumed (model tokens),
    * once: a second call for the same report, attempt and unit records nothing
    * and returns false, so a retried generation never charges twice.
+   *
+   * `modelCalls` is every model call the attempt made, with the upstream
+   * provider that served it (residency: who processed the material) and its
+   * share of `quantity`. The shares must add up to the quantity exactly.
    */
   async recordReportAttempt(input: {
     readonly unit: UsageUnit;
     readonly quantity: number;
     readonly reportId: string;
     readonly attempt: number;
+    readonly modelCalls: readonly ModelCallUsage[];
   }): Promise<boolean> {
     if (!Number.isSafeInteger(input.quantity) || input.quantity < 0) {
       throw new RangeError("usage quantity must be a non-negative integer");
     }
     if (!Number.isSafeInteger(input.attempt) || input.attempt < 1) {
       throw new RangeError("usage attempt must be a positive integer");
+    }
+    if (input.modelCalls.length === 0) {
+      throw new RangeError("a report attempt's usage must list the model calls it came from");
+    }
+    let share = 0;
+    for (const call of input.modelCalls) {
+      if (!Number.isSafeInteger(call.quantity) || call.quantity < 0) {
+        throw new RangeError("a model call's quantity must be a non-negative integer");
+      }
+      if (call.modelId.length === 0 || call.endpointHost.length === 0 || call.servedBy === "") {
+        throw new RangeError(
+          "a model call names its model and endpoint host, and its provider or null",
+        );
+      }
+      if (call.regionHeaders.some((header) => header.name.length === 0)) {
+        throw new RangeError("a model call's region headers are named");
+      }
+      share += call.quantity;
+    }
+    if (share !== input.quantity) {
+      throw new RangeError("the model calls' quantities must add up to the usage quantity");
     }
     return this.run(async (tx) => {
       const rows = await tx
@@ -409,6 +437,15 @@ export class UsageEventsRepository extends TenantRepository {
           quantity: input.quantity,
           reportId: requireUuid(input.reportId),
           attempt: input.attempt,
+          modelCalls: input.modelCalls.map(
+            ({ modelId, endpointHost, servedBy, regionHeaders, quantity }) => ({
+              modelId,
+              endpointHost,
+              servedBy,
+              regionHeaders: regionHeaders.map(({ name, value }) => ({ name, value })),
+              quantity,
+            }),
+          ),
         })
         .onConflictDoNothing({
           target: [

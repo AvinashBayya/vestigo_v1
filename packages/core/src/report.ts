@@ -17,8 +17,12 @@ export type ReportStatus = (typeof REPORT_STATUSES)[number];
  * 2: the document carries its own wording and producer (Phase 5 follow-up),
  * so a stored report renders the same whenever it is downloaded. No version-1
  * document exists outside the test databases, which each run recreates.
+ * 3: a synthesis records where it was produced: the endpoint host it was
+ * sent to, the upstream provider the endpoint named (model.servedBy), and
+ * every region header the response carried, raw. No version-2 document
+ * exists outside the test databases either.
  */
-export const REPORT_FORMAT_VERSION = 2;
+export const REPORT_FORMAT_VERSION = 3;
 
 /**
  * What happened to one collector, as the coverage section states it. Only
@@ -133,6 +137,12 @@ export interface ReportRelationship {
 export const SYNTHESIS_STRENGTHS = ["CORRELATED", "INFERRED", "HYPOTHESIS"] as const;
 export type SynthesisStrength = (typeof SYNTHESIS_STRENGTHS)[number];
 
+/** A response header as the endpoint sent it: its name and raw value. */
+export interface ReportRegionHeader {
+  readonly name: string;
+  readonly value: string;
+}
+
 export interface SynthesisStatement {
   readonly text: string;
   readonly strength: SynthesisStrength;
@@ -143,7 +153,33 @@ export interface SynthesisStatement {
 export type ReportSynthesis =
   | {
       readonly status: "GENERATED";
-      readonly model: { readonly id: string; readonly licence: string; readonly profile: string };
+      readonly model: {
+        readonly id: string;
+        readonly licence: string;
+        readonly profile: string;
+        /**
+         * The host of the configured endpoint the request was sent to (e.g.
+         * "api.groq.com"), from configuration: known whether or not the
+         * endpoint names itself.
+         */
+        readonly endpointHost: string;
+        /**
+         * The upstream inference provider that produced the accepted answer,
+         * as the endpoint named it. A routing endpoint may send each request
+         * to a different third party, each with its own terms and region.
+         * Null when the endpoint named none: it is then known only that the
+         * request went to `endpointHost`; nothing further is guessed.
+         */
+        readonly servedBy: string | null;
+        /**
+         * Every region header the endpoint's response carried, exactly as
+         * received (HTTP lower-cases the name). Evidence of what the endpoint
+         * said, not a guarantee of where the request was processed, and never
+         * interpreted: a value is printed as sent, not mapped to a place.
+         * Empty when the response carried none.
+         */
+        readonly regionHeaders: readonly ReportRegionHeader[];
+      };
       readonly statements: readonly SynthesisStatement[];
       readonly generatedAt: string;
       /** Attempts the model needed to pass validation: 1, or 2 after one retry. */

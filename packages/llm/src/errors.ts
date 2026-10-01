@@ -11,6 +11,19 @@ export class LlmNotConfiguredError extends AppError {
 }
 
 /**
+ * What an endpoint's error body said, after ./endpoint-error.ts has cleaned
+ * it. Null where the body said nothing usable, or nothing safe to repeat.
+ */
+export interface EndpointErrorDetail {
+  /** The endpoint's own error code or type (e.g. a quota or auth code). */
+  readonly code: string | null;
+  /** The endpoint's own words: bounded, redacted, never an echo of the request. */
+  readonly message: string | null;
+}
+
+const NO_DETAIL: EndpointErrorDetail = { code: null, message: null };
+
+/**
  * The provider could not answer: a timeout, a network failure, a rate limit
  * or a 5xx. Retryable with backoff, like an unavailable collector upstream.
  */
@@ -19,27 +32,39 @@ export class LlmUnavailableError extends AppError {
   /** The provider's own Retry-After, in milliseconds, when it sent one. */
   readonly retryAfterMs: number | null;
   readonly status: number | null;
+  readonly endpoint: EndpointErrorDetail;
 
-  constructor(message: string, options: { status?: number; retryAfterMs?: number | null } = {}) {
+  constructor(
+    message: string,
+    options: {
+      status?: number;
+      retryAfterMs?: number | null;
+      endpoint?: EndpointErrorDetail;
+    } = {},
+  ) {
     super(message);
     this.name = "LlmUnavailableError";
     this.status = options.status ?? null;
     this.retryAfterMs = options.retryAfterMs ?? null;
+    this.endpoint = options.endpoint ?? NO_DETAIL;
   }
 }
 
 /**
  * The provider refused the request (a 4xx other than 429): a bad key, an
- * unknown model, a malformed request. Retrying would fail the same way.
+ * unknown model, a malformed request, no credit left (402). Retrying would
+ * fail the same way.
  */
 export class LlmRequestRejectedError extends AppError {
   readonly code = "LLM_REQUEST_REJECTED";
   readonly status: number;
+  readonly endpoint: EndpointErrorDetail;
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, endpoint: EndpointErrorDetail = NO_DETAIL) {
     super(message);
     this.name = "LlmRequestRejectedError";
     this.status = status;
+    this.endpoint = endpoint;
   }
 }
 

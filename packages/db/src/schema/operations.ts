@@ -6,6 +6,7 @@ import {
   customType,
   foreignKey,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -132,6 +133,18 @@ export const credentials = pgTable(
 );
 
 /** Units consumed against a tenant by one external call. Append-only. */
+/** One model call's share of a usage event (usage_events.model_calls). */
+export interface ModelCallUsage {
+  readonly modelId: string;
+  /** The host of the configured endpoint the call was sent to. */
+  readonly endpointHost: string;
+  /** The upstream provider the endpoint named; null when it named none. */
+  readonly servedBy: string | null;
+  /** Every region header the response carried, raw: what the endpoint said, never a guarantee. */
+  readonly regionHeaders: readonly { readonly name: string; readonly value: string }[];
+  readonly quantity: number;
+}
+
 export const usageEvents = pgTable(
   "usage_events",
   {
@@ -152,6 +165,14 @@ export const usageEvents = pgTable(
      * With the attempt and unit, unique: a generation attempt is charged once.
      */
     reportId: uuid("report_id"),
+    /**
+     * For a report attempt's model tokens: each model call the attempt made,
+     * in order, with the upstream provider that served it and its share of
+     * `quantity`. A rejected answer's call is listed too: a provider still
+     * processed the material. Null on every other row. Validated on write
+     * (UsageEventsRepository.recordReportAttempt).
+     */
+    modelCalls: jsonb("model_calls").$type<ModelCallUsage[]>(),
     createdAt: createdAtColumn(),
   },
   (t) => [
@@ -183,6 +204,10 @@ export const usageEvents = pgTable(
       sql`${t.attempt} is null or ${t.jobId} is not null or ${t.reportId} is not null`,
     ),
     check("usage_events_one_work_item", sql`num_nonnulls(${t.jobId}, ${t.reportId}) <= 1`),
+    check(
+      "usage_events_model_calls_with_report",
+      sql`${t.modelCalls} is null or (${t.reportId} is not null and jsonb_typeof(${t.modelCalls}) = 'array' and jsonb_array_length(${t.modelCalls}) >= 1)`,
+    ),
     uniqueIndex("usage_events_one_per_attempt")
       .on(t.tenantId, t.jobId, t.attempt, t.unit)
       .where(sql`${t.jobId} is not null`),

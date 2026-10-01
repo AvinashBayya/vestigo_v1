@@ -13,7 +13,7 @@ const EVIDENCE = [
 
 export function reportFixture(overrides: Partial<ReportDocument> = {}): ReportDocument {
   return {
-    formatVersion: 2,
+    formatVersion: 3,
     reportId: "00000000-0000-4000-8000-00000000a001",
     title: "[Investigation title]",
     investigationId: "00000000-0000-4000-8000-00000000a002",
@@ -144,7 +144,14 @@ export function reportFixture(overrides: Partial<ReportDocument> = {}): ReportDo
     })),
     synthesis: {
       status: "GENERATED",
-      model: { id: "Qwen/Qwen3-32B", licence: "Apache-2.0", profile: "hosted" },
+      model: {
+        id: "Qwen/Qwen3-32B",
+        licence: "Apache-2.0",
+        profile: "hosted",
+        endpointHost: "[endpoint host]",
+        servedBy: "[upstream provider]",
+        regionHeaders: [{ name: "x-example-region", value: "[region]" }],
+      },
       statements: [
         {
           text: "[A synthesised statement linking two sources.]",

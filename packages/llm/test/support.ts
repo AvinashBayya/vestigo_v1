@@ -5,9 +5,11 @@ import {
   checkOutput,
   trusted,
   validateCitations,
+  type CallProvenance,
   type CompletionRequest,
   type CompletionResult,
   type LlmProvider,
+  type RegionHeader,
   type UntrustedRecord,
   type ValidatedTask,
 } from "../src/index.ts";
@@ -28,6 +30,15 @@ export const ENDPOINT: LlmEndpoint = {
   large: { model: model("Qwen/Qwen3-32B"), servedName: "Qwen/Qwen3-32B" },
 };
 
+/** The host of ENDPOINT's base URL: where the scripted provider "sends" requests. */
+export const ENDPOINT_HOST = "llm-provider.invalid";
+
+/** A call's provenance via ENDPOINT: the upstream provider it names, and its raw region headers. */
+export const via = (
+  servedBy: string | null,
+  regionHeaders: readonly RegionHeader[] = [],
+): CallProvenance => ({ endpointHost: ENDPOINT_HOST, servedBy, regionHeaders });
+
 /**
  * A scripted stand-in for a model: answers each request with the next
  * scripted function's text. It records every request, so tests can check
@@ -38,20 +49,31 @@ export class ScriptedProvider implements LlmProvider {
   readonly requests: CompletionRequest[] = [];
   readonly #script: ((request: CompletionRequest) => string)[];
   readonly #usage: { inputTokens: number; outputTokens: number };
+  readonly #provenance: CallProvenance[];
 
+  /**
+   * `provenance`: what each answer reports, in turn; once exhausted, an
+   * answer names no provider and no region (`via(null)`).
+   */
   constructor(
     script: readonly ((request: CompletionRequest) => string)[],
     usage = { inputTokens: 100, outputTokens: 20 },
+    provenance: readonly CallProvenance[] = [],
   ) {
     this.#script = [...script];
     this.#usage = usage;
+    this.#provenance = [...provenance];
   }
 
   complete(request: CompletionRequest): Promise<CompletionResult> {
     this.requests.push(request);
     const next = this.#script.shift();
     if (next === undefined) return Promise.reject(new Error("the script has no more answers"));
-    return Promise.resolve({ text: next(request), usage: this.#usage });
+    return Promise.resolve({
+      text: next(request),
+      usage: this.#usage,
+      provenance: this.#provenance.shift() ?? via(null),
+    });
   }
 }
 

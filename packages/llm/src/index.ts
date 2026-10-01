@@ -1,4 +1,10 @@
-export { CACHE_FORMAT, cacheKey, RedisResponseCache } from "./cache.ts";
+export {
+  CACHE_FORMAT,
+  CachedAnswer,
+  cacheKey,
+  readCachedAnswer,
+  RedisResponseCache,
+} from "./cache.ts";
 export type { CacheKeyInput, RedisCacheClient, ResponseCache } from "./cache.ts";
 export { assertsCertainty, validateCitations } from "./citations.ts";
 export type { CitationContext, CitedStatement } from "./citations.ts";
@@ -9,7 +15,13 @@ export {
   LlmResponseInvalidError,
   LlmUnavailableError,
 } from "./errors.ts";
-export type { OutputProblem } from "./errors.ts";
+export type { EndpointErrorDetail, OutputProblem } from "./errors.ts";
+export {
+  endpointErrorDetail,
+  ERROR_BODY_LIMIT,
+  MESSAGE_LIMIT,
+  readBounded,
+} from "./endpoint-error.ts";
 export { DATA_POLICY, generateValidated, jsonText } from "./generate.ts";
 export type { LlmClient, ValidatedResult, ValidatedTask } from "./generate.ts";
 export { checkOutput, identifiersIn } from "./guards.ts";
@@ -18,12 +30,21 @@ export { INJECTION_PATTERNS, instructionSpans, revealHidden, scanText } from "./
 export type { InjectionFinding, InjectionPattern } from "./injection.ts";
 export { AccumulatingMeter } from "./metering.ts";
 export type { MeteredCall, TokenMeter } from "./metering.ts";
-export { MeteredResponseError, OpenAiCompatibleProvider } from "./provider.ts";
+export {
+  endpointHostOf,
+  MeteredResponseError,
+  OpenAiCompatibleProvider,
+  regionHeadersOf,
+  SERVED_BY_HEADER,
+  servedByOf,
+} from "./provider.ts";
 export type {
+  CallProvenance,
   ChatMessage,
   CompletionRequest,
   CompletionResult,
   LlmProvider,
+  RegionHeader,
   TokenUsage,
 } from "./provider.ts";
 export { LLM_TASKS, modelFor, TASK_SIZE } from "./router.ts";

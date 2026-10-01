@@ -10,11 +10,13 @@
  * are injected rather than read from the environment; the per-process cache
  * and call log are gone (the cache is Redis, ./cache.ts; usage is metered per
  * tenant, ./metering.ts); a response without token usage is refused, because
- * an unmetered call cannot be charged honestly; error messages never carry
- * the provider's response body, which can echo the prompt.
+ * an unmetered call cannot be charged honestly; an error carries only what
+ * ./endpoint-error.ts keeps of the provider's error body (never an echo of
+ * the prompt, never the key), so a refusal names its cause.
  */
 import type { LlmEndpoint, StructuredOutputMode } from "@repo/config";
 import { z } from "zod";
+import { endpointErrorDetail, readBounded, saidSuffix } from "./endpoint-error.ts";
 import { LlmRequestRejectedError, LlmResponseInvalidError, LlmUnavailableError } from "./errors.ts";
 
 export interface ChatMessage {
@@ -37,9 +39,33 @@ export interface TokenUsage {
   readonly outputTokens: number;
 }
 
+/** A response header, exactly as received (HTTP lower-cases its name). Never interpreted. */
+export interface RegionHeader {
+  readonly name: string;
+  readonly value: string;
+}
+
+/**
+ * Where one call went and what the endpoint said about who processed it
+ * (residency, docs/PLAN.md Phase 5). Every field is either configuration or
+ * the endpoint's own words; nothing is inferred from them.
+ */
+export interface CallProvenance {
+  /** The configured endpoint's host (e.g. "api.groq.com"): where the request was sent. */
+  readonly endpointHost: string;
+  /**
+   * The upstream inference provider the endpoint named (see servedByOf). Null
+   * when it named none, as a direct provider or a self-hosted server does.
+   */
+  readonly servedBy: string | null;
+  /** Every region header the response carried, raw (see regionHeadersOf). Empty when none. */
+  readonly regionHeaders: readonly RegionHeader[];
+}
+
 export interface CompletionResult {
   readonly text: string;
   readonly usage: TokenUsage;
+  readonly provenance: CallProvenance;
 }
 
 export interface LlmProvider {
@@ -68,6 +94,52 @@ const ChatResponse = z.looseObject({
     .nullish(),
 });
 
+/**
+ * The response header a routing endpoint names its upstream provider in.
+ * Hugging Face Inference Providers sends it (observed 2026-10-01: e.g.
+ * `x-inference-provider: cerebras`). Residency depends on it: a router may
+ * send each request to a different third party (docs/PLAN.md, Phase 5).
+ */
+export const SERVED_BY_HEADER = "x-inference-provider";
+
+const PROVIDER_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
+
+/** The provider a response names, or null when it names none or names it unreadably. */
+export function servedByOf(headers: Headers): string | null {
+  const value = headers.get(SERVED_BY_HEADER)?.trim() ?? null;
+  return value !== null && PROVIDER_NAME.test(value) ? value.toLowerCase() : null;
+}
+
+/** At most this many region headers are kept from one response. */
+const MAX_REGION_HEADERS = 8;
+const MAX_REGION_VALUE = 200;
+/** Visible ASCII and spaces only: a value that is not is skipped, never altered. */
+const PRINTABLE = /^[\x20-\x7e]+$/;
+
+/**
+ * Every response header whose name contains "region", as received: e.g.
+ * Groq's `x-groq-region` (observed 2026-10-01). The value is evidence of what
+ * the endpoint said, never a residency guarantee, and is stored and printed
+ * exactly as sent: no code maps a region value to a place. A value that is
+ * not printable ASCII, or longer than MAX_REGION_VALUE, is skipped rather than
+ * altered.
+ */
+export function regionHeadersOf(headers: Headers): RegionHeader[] {
+  const found: RegionHeader[] = [];
+  for (const [name, value] of headers) {
+    if (!name.includes("region")) continue;
+    if (value.length > MAX_REGION_VALUE || !PRINTABLE.test(value)) continue;
+    found.push({ name, value });
+    if (found.length === MAX_REGION_HEADERS) break;
+  }
+  return found;
+}
+
+/** The host a configured base URL sends requests to (no scheme, path or credentials). */
+export function endpointHostOf(baseUrl: string): string {
+  return new URL(baseUrl).host;
+}
+
 /** Retry-After as milliseconds: delta-seconds or an HTTP date. Null when absent or unreadable. */
 function retryAfterMs(header: string | null, now: number): number | null {
   if (header === null) return null;
@@ -93,6 +165,7 @@ function responseFormat(mode: StructuredOutputMode, request: CompletionRequest):
 export class OpenAiCompatibleProvider implements LlmProvider {
   readonly profile: string;
   readonly #baseUrl: string;
+  readonly #endpointHost: string;
   readonly #apiKey: string | null;
   readonly #timeoutMs: number;
   readonly #structuredOutput: StructuredOutputMode;
@@ -107,6 +180,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   ) {
     this.profile = endpoint.profile;
     this.#baseUrl = endpoint.baseUrl;
+    this.#endpointHost = endpointHostOf(endpoint.baseUrl);
     this.#apiKey = endpoint.apiKey;
     this.#timeoutMs = endpoint.timeoutMs;
     this.#structuredOutput = endpoint.structuredOutput;
@@ -147,18 +221,28 @@ export class OpenAiCompatibleProvider implements LlmProvider {
     }
 
     if (!response.ok) {
-      // The body is discarded unread: a provider's error can echo the prompt.
-      await response.body?.cancel();
+      // The body is read narrowly (./endpoint-error.ts): a provider's error can
+      // echo the prompt or the key, so only a cleaned, non-echoing message is kept.
       const status = response.status;
+      const endpoint = endpointErrorDetail(
+        await readBounded(response),
+        request.messages.map((message) => message.content).join("\n"),
+        this.#apiKey,
+      );
       if (status === 429 || status >= 500) {
         throw new LlmUnavailableError(
-          `The ${this.profile} model endpoint answered HTTP ${String(status)}.`,
-          { status, retryAfterMs: retryAfterMs(response.headers.get("retry-after"), Date.now()) },
+          `The ${this.profile} model endpoint answered HTTP ${String(status)}.${saidSuffix(endpoint)}`,
+          {
+            status,
+            retryAfterMs: retryAfterMs(response.headers.get("retry-after"), Date.now()),
+            endpoint,
+          },
         );
       }
       throw new LlmRequestRejectedError(
-        `The ${this.profile} model endpoint refused the request with HTTP ${String(status)}.`,
+        `The ${this.profile} model endpoint refused the request with HTTP ${String(status)}.${saidSuffix(endpoint)}`,
         status,
+        endpoint,
       );
     }
 
@@ -184,6 +268,11 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       inputTokens: parsed.usage.prompt_tokens,
       outputTokens: parsed.usage.completion_tokens,
     };
+    const provenance: CallProvenance = {
+      endpointHost: this.#endpointHost,
+      servedBy: servedByOf(response.headers),
+      regionHeaders: regionHeadersOf(response.headers),
+    };
     const text = choice.message.content;
     if (typeof text !== "string" || text.trim().length === 0) {
       // Reasoning models bill their thinking against max_tokens; a budget
@@ -193,27 +282,35 @@ export class OpenAiCompatibleProvider implements LlmProvider {
           ? "The model spent its token budget reasoning and produced no answer."
           : `The model returned no content (finish reason: ${choice.finish_reason ?? "none given"}).`,
         usage,
+        provenance,
       );
     }
     if (choice.finish_reason === "length") {
       // A truncated answer is not a usable answer: a JSON object missing its
       // closing brace, or a statement cut mid-sentence, must fail loudly.
-      throw new MeteredResponseError("The model's answer was cut off at the token limit.", usage);
+      throw new MeteredResponseError(
+        "The model's answer was cut off at the token limit.",
+        usage,
+        provenance,
+      );
     }
-    return { text, usage };
+    return { text, usage, provenance };
   }
 }
 
 /**
- * An unusable response that still consumed tokens. It carries the usage, so
- * the caller can meter it before treating the call as failed.
+ * An unusable response that still consumed tokens. It carries the usage and
+ * where the call went, so the caller can meter it before treating the call
+ * as failed.
  */
 export class MeteredResponseError extends LlmResponseInvalidError {
   readonly usage: TokenUsage;
+  readonly provenance: CallProvenance;
 
-  constructor(message: string, usage: TokenUsage) {
+  constructor(message: string, usage: TokenUsage, provenance: CallProvenance) {
     super(message);
     this.name = "MeteredResponseError";
     this.usage = usage;
+    this.provenance = provenance;
   }
 }

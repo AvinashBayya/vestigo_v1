@@ -4,14 +4,17 @@
  * tokens were spent either way. A cache hit calls no model and records
  * nothing. A call that failed before the provider reported usage (a timeout,
  * a refused request) has no measured quantity and records nothing; usage is
- * never estimated.
+ * never estimated. Such a call may still have reached an upstream provider,
+ * which then goes unrecorded: the endpoint named none.
  */
-import type { TokenUsage } from "./provider.ts";
+import type { CallProvenance, TokenUsage } from "./provider.ts";
 
 export interface MeteredCall {
   readonly task: string;
   readonly modelId: string;
   readonly usage: TokenUsage;
+  /** Where the call went: the endpoint host, the provider it named, its raw region headers. */
+  readonly provenance: CallProvenance;
 }
 
 export interface TokenMeter {

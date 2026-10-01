@@ -24,6 +24,7 @@ import {
   trusted,
   validateCitations,
   type AnswerScore,
+  type CallProvenance,
   type GoldenCase,
 } from "../src/index.ts";
 
@@ -70,8 +71,31 @@ const golden = JSON.parse(
 const scores: AnswerScore[] = [];
 let rejected = 0;
 const meter = new AccumulatingMeter();
+console.log(
+  `profile ${llm.endpoint.profile}, structured output ${llm.endpoint.structuredOutput}, model ${llm.endpoint.large.model.id}`,
+);
+
+/** Where a call went, as recorded: the endpoint, the provider it named, its raw region headers. */
+function describe(provenance: CallProvenance): string {
+  const regions = provenance.regionHeaders.map(({ name, value }) => `${name}: ${value}`);
+  return [
+    `endpoint ${provenance.endpointHost}`,
+    `provider ${provenance.servedBy ?? "[none named]"}`,
+    `region headers ${regions.length === 0 ? "[none]" : regions.join("; ")}`,
+  ].join(", ");
+}
 for (const golden_ of golden.cases) {
   const refs = new Map(golden_.records.map((r) => [r.ref, { source: r.source }]));
+  const callsBefore = meter.calls.length;
+  // This case's own calls: every attempt, a rejected answer's included.
+  const caseTokens = () =>
+    meter.calls.slice(callsBefore).reduce(
+      (sum, call) => ({
+        inputTokens: sum.inputTokens + call.usage.inputTokens,
+        outputTokens: sum.outputTokens + call.usage.outputTokens,
+      }),
+      { inputTokens: 0, outputTokens: 0 },
+    );
   try {
     const result = await generateValidated(llm, "eval", meter, {
       task: "synthesis",
@@ -88,20 +112,35 @@ for (const golden_ of golden.cases) {
     });
     const score = scoreAnswer(golden_, result.value.statements);
     scores.push(score);
-    console.log(`${golden_.id}: ${JSON.stringify(score)} (attempts ${String(result.attempts)})`);
+    console.log(
+      `${golden_.id}: ${JSON.stringify(score)} (attempts ${String(result.attempts)}, tokens ${JSON.stringify(caseTokens())}, ${describe(result.provenance)})`,
+    );
   } catch (error) {
     if (!(error instanceof LlmOutputRejectedError)) throw error;
     rejected += 1;
-    console.log(`${golden_.id}: REJECTED ${error.problems.map((p) => p.code).join(", ")}`);
+    console.log(
+      `${golden_.id}: REJECTED ${error.problems.map((p) => p.code).join(", ")} (tokens ${JSON.stringify(caseTokens())})`,
+    );
   }
 }
 const summary = summarise(scores);
+// Tokens per destination: the endpoint, and the upstream provider it named if any.
+const byProvider: Record<string, { calls: number; inputTokens: number; outputTokens: number }> = {};
+for (const call of meter.calls) {
+  const key = describe(call.provenance);
+  const entry = (byProvider[key] ??= { calls: 0, inputTokens: 0, outputTokens: 0 });
+  entry.calls += 1;
+  entry.inputTokens += call.usage.inputTokens;
+  entry.outputTokens += call.usage.outputTokens;
+}
 console.log(
   JSON.stringify({
     model: llm.endpoint.large.model.id,
+    structuredOutput: llm.endpoint.structuredOutput,
     ...summary,
     rejected,
     tokens: meter.totals(),
+    byProvider,
   }),
 );
 process.exit(meetsThresholds(summary) && rejected === 0 ? 0 : 1);

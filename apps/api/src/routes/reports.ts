@@ -3,6 +3,7 @@ import {
   CLAIM_STRENGTHS,
   COVERAGE_STATES,
   ENTITY_KINDS,
+  REPORT_FORMAT_VERSION,
   REPORT_STATUSES,
   RUN_STATUSES,
   SYNTHESIS_STRENGTHS,
@@ -67,7 +68,14 @@ const ReportWordingSchema = z.object({
     attempts: text,
     omittedClaims: text,
   }),
-  synthesis: z.object({ model: text, notRequested: text, none: text }),
+  synthesis: z.object({
+    model: text,
+    servedBy: text,
+    servedByEndpoint: text,
+    regionHeader: text,
+    notRequested: text,
+    none: text,
+  }),
   findings: z.object({ none: text, emptyValue: text, shortened: text }),
   untrustedContent: z.object({ intro: text, line: text }),
   evidence: z.object({
@@ -97,7 +105,7 @@ const ReportWordingSchema = z.object({
 });
 
 const ReportDocumentSchema = z.object({
-  formatVersion: z.literal(2),
+  formatVersion: z.literal(REPORT_FORMAT_VERSION),
   reportId: z.uuid(),
   title: z.string(),
   investigationId: z.uuid(),
@@ -181,7 +189,23 @@ const ReportDocumentSchema = z.object({
   synthesis: z.union([
     z.object({
       status: z.literal("GENERATED"),
-      model: z.object({ id: z.string(), licence: z.string(), profile: z.string() }),
+      model: z.object({
+        id: z.string(),
+        licence: z.string(),
+        profile: z.string(),
+        endpointHost: z.string().meta({
+          description:
+            "The host of the configured model endpoint the request was sent to (e.g. api.groq.com), from configuration.",
+        }),
+        servedBy: z.string().nullable().meta({
+          description:
+            "The upstream inference provider that produced the synthesis, as the endpoint named it. A routing endpoint may send each request to a different third party, under its own terms and region. Null: the endpoint named none; it is then known only that the request went to endpointHost.",
+        }),
+        regionHeaders: z.array(z.object({ name: z.string(), value: z.string() })).meta({
+          description:
+            "Every region header the endpoint's response carried, exactly as received and never interpreted. Evidence of what the endpoint said, not a guarantee of where the request was processed. Empty when none was carried.",
+        }),
+      }),
       statements: z.array(
         z.object({
           text: z.string(),

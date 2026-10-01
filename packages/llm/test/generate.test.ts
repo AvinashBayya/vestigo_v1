@@ -9,11 +9,19 @@ import {
   AccumulatingMeter,
   generateValidated,
   LlmOutputRejectedError,
+  readCachedAnswer,
   RedisResponseCache,
   type ResponseCache,
   type UntrustedRecord,
 } from "../src/index.ts";
-import { answer, ENDPOINT, ScriptedProvider, statementsTask } from "./support.ts";
+import {
+  answer,
+  ENDPOINT,
+  ENDPOINT_HOST,
+  ScriptedProvider,
+  statementsTask,
+  via,
+} from "./support.ts";
 
 const REDIS_URL = process.env.TEST_REDIS_URL ?? "redis://127.0.0.1:6379/15";
 
@@ -94,6 +102,52 @@ describe("a validated model call", () => {
     expect(provider.requests[1]?.messages.map((m) => m.role)).toEqual(["system", "user"]);
   });
 
+  it("meters every call with the provider that served it, and returns the accepted answer's", async () => {
+    const provider = new ScriptedProvider(
+      [
+        () => answer({ text: "[finding]", refs: [] }),
+        () => answer({ text: "[finding]", refs: ["E1"] }),
+      ],
+      undefined,
+      [
+        via("[provider a]", [{ name: "x-example-region", value: "[region a]" }]),
+        via("[provider b]", [{ name: "x-example-region", value: "[region b]" }]),
+      ],
+    );
+    const meter = new AccumulatingMeter();
+    const result = await generateValidated(
+      client(provider),
+      "[tenant]",
+      meter,
+      statementsTask(RECORDS),
+    );
+    // The rejected answer was still processed somewhere: residency needs both calls.
+    expect(meter.calls.map((call) => call.provenance)).toEqual([
+      via("[provider a]", [{ name: "x-example-region", value: "[region a]" }]),
+      via("[provider b]", [{ name: "x-example-region", value: "[region b]" }]),
+    ]);
+    expect(result.provenance).toEqual(
+      via("[provider b]", [{ name: "x-example-region", value: "[region b]" }]),
+    );
+  });
+
+  it("reports the endpoint alone when it named no provider and no region", async () => {
+    const provider = new ScriptedProvider([() => answer({ text: "[finding]", refs: ["E1"] })]);
+    const meter = new AccumulatingMeter();
+    const result = await generateValidated(
+      client(provider),
+      "[tenant]",
+      meter,
+      statementsTask(RECORDS),
+    );
+    expect(result.provenance).toEqual({
+      endpointHost: ENDPOINT_HOST,
+      servedBy: null,
+      regionHeaders: [],
+    });
+    expect(meter.calls[0]?.provenance).toEqual(result.provenance);
+  });
+
   it("fails after the second rejection, and still meters both calls", async () => {
     const uncited = () => answer({ text: "[finding]", refs: [] });
     const provider = new ScriptedProvider([uncited, uncited]);
@@ -166,6 +220,63 @@ describe("the response cache", () => {
     expect(meter.calls).toHaveLength(0);
   });
 
+  it("reports where a cached answer was produced originally, region headers included", async () => {
+    const cache = new MapCache();
+    const original = via("[provider a]", [{ name: "x-example-region", value: "[region a]" }]);
+    const first = new ScriptedProvider(
+      [() => answer({ text: "[finding]", refs: ["E1"] })],
+      undefined,
+      [original],
+    );
+    await generateValidated(
+      client(first, cache),
+      "[tenant-a]",
+      new AccumulatingMeter(),
+      statementsTask(RECORDS),
+    );
+    const result = await generateValidated(
+      client(new ScriptedProvider([]), cache),
+      "[tenant-a]",
+      new AccumulatingMeter(),
+      statementsTask(RECORDS),
+    );
+    expect(result).toMatchObject({ cached: true, provenance: original });
+  });
+
+  it("treats an unreadable cache entry as a miss and calls the model", async () => {
+    const cache = new MapCache();
+    const seed = new ScriptedProvider([() => answer({ text: "[finding]", refs: ["E1"] })]);
+    await generateValidated(
+      client(seed, cache),
+      "[tenant]",
+      new AccumulatingMeter(),
+      statementsTask(RECORDS),
+    );
+    // Entries without provenance: the bare answer text (format 1), and an answer
+    // naming only its provider. Neither says where the answer was produced.
+    const [key] = [...cache.entries.keys()];
+    if (key === undefined) throw new Error("the first call cached nothing");
+    for (const stale of [
+      answer({ text: "[finding]", refs: ["E1"] }),
+      JSON.stringify({ text: answer({ text: "[finding]", refs: ["E1"] }), servedBy: null }),
+    ]) {
+      cache.entries.set(key, stale);
+      const provider = new ScriptedProvider(
+        [() => answer({ text: "[finding]", refs: ["E1"] })],
+        undefined,
+        [via("[provider b]")],
+      );
+      const result = await generateValidated(
+        client(provider, cache),
+        "[tenant]",
+        new AccumulatingMeter(),
+        statementsTask(RECORDS),
+      );
+      expect(provider.requests).toHaveLength(1);
+      expect(result).toMatchObject({ cached: false, provenance: via("[provider b]") });
+    }
+  });
+
   it("never serves one tenant's answer to another", async () => {
     const cache = new MapCache();
     const first = new ScriptedProvider([() => answer({ text: "[finding]", refs: ["E1"] })]);
@@ -199,7 +310,9 @@ describe("the response cache", () => {
       statementsTask(RECORDS),
     );
     expect(cache.entries.size).toBe(1);
-    expect([...cache.entries.values()][0]).toContain('"E1"');
+    const stored = readCachedAnswer([...cache.entries.values()][0] ?? "");
+    expect(stored?.text).toContain('"E1"');
+    expect(stored?.provenance).toEqual(via(null));
   });
 
   it("calls the model when the cache cannot be reached, and says so", async () => {

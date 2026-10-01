@@ -11,10 +11,15 @@
  */
 import type { LlmEndpoint } from "@repo/config";
 import { z } from "zod";
-import { cacheKey, type ResponseCache } from "./cache.ts";
+import { cacheKey, readCachedAnswer, type CachedAnswer, type ResponseCache } from "./cache.ts";
 import { LlmOutputRejectedError, type OutputProblem } from "./errors.ts";
 import type { TokenMeter } from "./metering.ts";
-import { MeteredResponseError, type ChatMessage, type LlmProvider } from "./provider.ts";
+import {
+  MeteredResponseError,
+  type CallProvenance,
+  type ChatMessage,
+  type LlmProvider,
+} from "./provider.ts";
 import { modelFor, type LlmTask } from "./router.ts";
 import { joinTrusted, trusted, type TrustedText } from "./trusted.ts";
 import { frameUntrusted, type FramedData, type UntrustedRecord } from "./untrusted.ts";
@@ -55,6 +60,13 @@ export interface ValidatedResult<T> {
   readonly profile: string;
   /** Whether the accepted answer came from the cache. */
   readonly cached: boolean;
+  /**
+   * Where the accepted answer was produced: the endpoint host, the provider
+   * it named, its raw region headers. For a cache hit, as they were when the
+   * answer was produced. Every call's provenance, a rejected answer's
+   * included, is in the meter.
+   */
+  readonly provenance: CallProvenance;
 }
 
 const MAX_ATTEMPTS = 2;
@@ -150,7 +162,7 @@ export async function generateValidated<S extends z.ZodType>(
     // A cached answer was accepted once; it is checked again, since checks can tighten.
     const hit = await readCache(client, key);
     if (hit !== null) {
-      const cached = evaluate(hit);
+      const cached = evaluate(hit.text);
       if (cached.value !== undefined) {
         return {
           value: cached.value,
@@ -159,11 +171,13 @@ export async function generateValidated<S extends z.ZodType>(
           licence: route.model.licence,
           profile: client.endpoint.profile,
           cached: true,
+          provenance: hit.provenance,
         };
       }
     }
 
     let text: string;
+    let provenance: CallProvenance;
     try {
       const result = await client.provider.complete({
         model: route.servedName,
@@ -172,12 +186,23 @@ export async function generateValidated<S extends z.ZodType>(
         temperature: 0,
         responseSchema,
       });
-      meter.record({ task: task.task, modelId: route.model.id, usage: result.usage });
+      meter.record({
+        task: task.task,
+        modelId: route.model.id,
+        usage: result.usage,
+        provenance: result.provenance,
+      });
       text = result.text;
+      provenance = result.provenance;
     } catch (error) {
       if (!(error instanceof MeteredResponseError)) throw error;
       // Unusable, but the tokens were spent: metered, then treated as a failed attempt.
-      meter.record({ task: task.task, modelId: route.model.id, usage: error.usage });
+      meter.record({
+        task: task.task,
+        modelId: route.model.id,
+        usage: error.usage,
+        provenance: error.provenance,
+      });
       problems = [
         {
           statement: null,
@@ -191,7 +216,7 @@ export async function generateValidated<S extends z.ZodType>(
 
     const outcome = evaluate(text);
     if (outcome.value !== undefined) {
-      await writeCache(client, key, text);
+      await writeCache(client, key, { text, provenance });
       return {
         value: outcome.value,
         attempts: attempt,
@@ -199,6 +224,7 @@ export async function generateValidated<S extends z.ZodType>(
         licence: route.model.licence,
         profile: client.endpoint.profile,
         cached: false,
+        provenance,
       };
     }
     problems = outcome.problems;
@@ -206,20 +232,25 @@ export async function generateValidated<S extends z.ZodType>(
   throw new LlmOutputRejectedError(problems);
 }
 
-async function readCache(client: LlmClient, key: string): Promise<string | null> {
+async function readCache(client: LlmClient, key: string): Promise<CachedAnswer | null> {
   if (client.cache === null) return null;
   try {
-    return await client.cache.get(key);
+    const entry = await client.cache.get(key);
+    return entry === null ? null : readCachedAnswer(entry);
   } catch (error) {
     client.onCacheError?.(error);
     return null;
   }
 }
 
-async function writeCache(client: LlmClient, key: string, text: string): Promise<void> {
+async function writeCache(
+  client: LlmClient,
+  key: string,
+  answer: { readonly text: string; readonly provenance: CallProvenance },
+): Promise<void> {
   if (client.cache === null) return;
   try {
-    await client.cache.set(key, text, client.cacheTtlSeconds);
+    await client.cache.set(key, JSON.stringify(answer), client.cacheTtlSeconds);
   } catch (error) {
     client.onCacheError?.(error);
   }

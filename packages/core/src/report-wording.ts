@@ -78,6 +78,12 @@ export interface ReportWording {
   readonly synthesis: {
     /** {id}, {licence}, {profile} */
     readonly model: string;
+    /** {provider}, {endpoint}: the endpoint named an upstream provider. */
+    readonly servedBy: string;
+    /** {endpoint}: the endpoint named no upstream provider. */
+    readonly servedByEndpoint: string;
+    /** {name}, {value}: one region header, raw. Printed only when the response carried one. */
+    readonly regionHeader: string;
     readonly notRequested: string;
     /** {reason} */
     readonly none: string;
@@ -177,6 +183,11 @@ export const REPORT_WORDING: ReportWording = {
   },
   synthesis: {
     model: "Model: {id} ({licence}, {profile} profile).",
+    servedBy: "Served by: {provider}, as the endpoint {endpoint} reported it.",
+    servedByEndpoint:
+      "Served by: {endpoint}, the endpoint this request was sent to. It named no upstream provider.",
+    regionHeader:
+      "The endpoint reported region header {name}: {value}. This records what the endpoint said; it is not a guarantee of where the request was processed.",
     notRequested:
       "No synthesis was requested for this report. Every finding below is as collected.",
     none: "No synthesis: {reason}",

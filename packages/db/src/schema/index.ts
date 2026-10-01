@@ -22,3 +22,4 @@ export { evidence, claims } from "./evidence.ts";
 export { cases, casePins } from "./cases.ts";
 export { reports } from "./reports.ts";
 export { monitors, alerts, credentials, usageEvents, tenantQuotas } from "./operations.ts";
+export type { ModelCallUsage } from "./operations.ts";

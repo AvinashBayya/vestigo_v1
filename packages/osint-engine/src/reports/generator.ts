@@ -10,7 +10,8 @@
  *   2. Outside any transaction's lock: assemble the report from the settled
  *      run, and, if asked for, write the synthesis (metering every call).
  *   3. Record, with the row locked again: the attempt's token usage (once per
- *      attempt, so a retry never charges twice) and the report's new state,
+ *      attempt, so a retry never charges twice), with every model call and
+ *      the upstream provider that served it, and the report's new state,
  *      together or not at all.
  *
  * Retries are by cause, as for collectors: an unavailable model endpoint is
@@ -169,11 +170,23 @@ export class ReportGenerator {
       }
       const totals = meter.totals();
       if (meter.calls.length > 0) {
-        for (const [unit, quantity] of [
-          ["LLM_INPUT_TOKEN", totals.inputTokens],
-          ["LLM_OUTPUT_TOKEN", totals.outputTokens],
+        for (const [unit, quantity, share] of [
+          ["LLM_INPUT_TOKEN", totals.inputTokens, "inputTokens"],
+          ["LLM_OUTPUT_TOKEN", totals.outputTokens, "outputTokens"],
         ] as const) {
-          await repos.usageEvents.recordReportAttempt({ unit, quantity, reportId, attempt });
+          await repos.usageEvents.recordReportAttempt({
+            unit,
+            quantity,
+            reportId,
+            attempt,
+            modelCalls: meter.calls.map((call) => ({
+              modelId: call.modelId,
+              endpointHost: call.provenance.endpointHost,
+              servedBy: call.provenance.servedBy,
+              regionHeaders: call.provenance.regionHeaders,
+              quantity: call.usage[share],
+            })),
+          });
         }
       }
       if ("document" in outcome) {
