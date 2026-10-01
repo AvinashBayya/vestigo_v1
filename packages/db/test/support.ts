@@ -85,6 +85,7 @@ export interface TenantFixture {
   readonly credentialId: string;
   readonly usageEventId: string;
   readonly scopeAuthorisationId: string;
+  readonly reportId: string;
   /** An entity resolved by identifier; both fixtures use the same identifier. */
   readonly identifiedEntityId: string;
   /** Written as the schema owner: the application cannot write quotas. */
@@ -268,6 +269,12 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       validUntil: new Date(Date.parse("2030-01-01T00:00:00Z")),
     });
 
+    const report = await repos.reports.create({
+      runId: run.id,
+      includeSynthesis: false,
+      requestedByUserId: user.id,
+    });
+
     return {
       tenantId,
       userId: user.id,
@@ -292,6 +299,7 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       credentialId: credential.id,
       usageEventId: usage.id,
       scopeAuthorisationId: scope.id,
+      reportId: report.id,
       identifiedEntityId: identified.entity.id,
     };
   });

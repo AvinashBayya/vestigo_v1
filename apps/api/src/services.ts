@@ -1,7 +1,7 @@
 import { NotImplementedError } from "@repo/core";
 import type { CollectorRegistry } from "@repo/collectors";
 import type { CredentialVault } from "@repo/integrations";
-import type { InvestigationQueue, JobReplayer } from "@repo/osint-engine";
+import type { InvestigationQueue, JobReplayer, ReportQueue } from "@repo/osint-engine";
 import type { Auth } from "./auth/better-auth.ts";
 import type { AccessServices } from "./http/access.ts";
 import { resolvePrincipal, type PrincipalServices } from "./http/principal.ts";
@@ -14,6 +14,10 @@ export interface RunServices {
   readonly registry: CollectorRegistry;
   /** How often the progress stream reads a run's state. */
   readonly eventsPollMs: number;
+  /** Enqueues report generation; the worker does it. */
+  readonly reports: ReportQueue;
+  /** Why a model-written synthesis cannot be offered, or null when it can. */
+  readonly synthesisUnavailable: string | null;
 }
 
 /** Everything request handling needs. Constructed once, in server.ts or a test. */

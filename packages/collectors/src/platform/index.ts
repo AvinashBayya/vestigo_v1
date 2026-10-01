@@ -8,6 +8,7 @@ import { devtoCollector } from "./devto.ts";
 import { dnsCollector } from "./dns.ts";
 import { githubCollector } from "./github.ts";
 import { hackernewsCollector } from "./hackernews.ts";
+import { newsCollector } from "./news.ts";
 import { rdapCollector } from "./rdap.ts";
 import { waybackCollector } from "./wayback.ts";
 import { wikidataCollector } from "./wikidata.ts";
@@ -32,6 +33,20 @@ export const PLATFORM_COLLECTORS: readonly Collector[] = [
   hackernewsCollector,
   devtoCollector,
   commoncrawlCollector,
+];
+
+/** A collector built but held off the platform: it never runs, and reports say why. */
+export interface HeldCollector {
+  readonly collector: Collector;
+  readonly reason: string;
+}
+
+export const HELD_PLATFORM_COLLECTORS: readonly HeldCollector[] = [
+  {
+    collector: newsCollector,
+    reason:
+      "Held off the platform until one live FOUND for a domain phrase is recorded: its NOT_FOUND may be systematically false (docs/PLAN.md, Phase 3B).",
+  },
 ];
 
 /** The platform registry: the source catalogue and every platform collector. */

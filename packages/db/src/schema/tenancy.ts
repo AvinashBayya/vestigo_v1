@@ -21,8 +21,19 @@ export const tenants = pgTable(
     plan: tenantPlan("plan").notNull().default("TECHINT"),
     vettingStatus: vettingStatus("vetting_status").notNull().default("NOT_SUBMITTED"),
     createdAt: createdAtColumn(),
+    /**
+     * The handling marking printed on every page of this tenant's reports
+     * (Phase 5), or null to use the platform's. Tenant administrators set it.
+     */
+    reportHandlingMarking: text("report_handling_marking"),
   },
-  (t) => [check("tenants_name_not_blank", sql`length(btrim(${t.name})) > 0`)],
+  (t) => [
+    check("tenants_name_not_blank", sql`length(btrim(${t.name})) > 0`),
+    check(
+      "tenants_report_handling_marking_format",
+      sql`${t.reportHandlingMarking} is null or (${t.reportHandlingMarking} = btrim(${t.reportHandlingMarking}) and length(${t.reportHandlingMarking}) between 1 and 80 and ${t.reportHandlingMarking} !~ '[[:cntrl:]]')`,
+    ),
+  ],
 );
 
 export const users = pgTable(

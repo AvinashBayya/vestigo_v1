@@ -1,0 +1,419 @@
+import { decideDisciplineAccess } from "@repo/access";
+import {
+  CLAIM_STRENGTHS,
+  COVERAGE_STATES,
+  ENTITY_KINDS,
+  REPORT_STATUSES,
+  RUN_STATUSES,
+  SYNTHESIS_STRENGTHS,
+  TARGET_TYPES,
+  type ReportDocument,
+} from "@repo/core";
+import type { Report, Repositories } from "@repo/db";
+import { REPORT_EXPORT_FORMAT_NAMES, REPORT_EXPORT_FORMATS } from "@repo/integrations";
+import { readRunProgress, usageSummary } from "@repo/osint-engine";
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { z } from "zod";
+import { tenantOf, type RequestTenant } from "../http/access.ts";
+import { forbidden, HttpError, notFound, ProblemSchema } from "../http/errors.ts";
+import type { Services } from "../services.ts";
+import {
+  iso,
+  IdParams,
+  isoOrNull,
+  LimitQuery,
+  optionalInstant,
+  page,
+  PROTECTED_ERRORS,
+  SECURITY,
+} from "./schemas.ts";
+
+// ── The report document, as the API serves it (ReportDocument in @repo/core) ──
+
+const Strength = z.enum(CLAIM_STRENGTHS);
+const Endpoint = z.object({
+  entityId: z.uuid(),
+  kind: z.enum(ENTITY_KINDS),
+  displayName: z.string(),
+  identifier: z.string().nullable(),
+});
+
+const ReportDocumentSchema = z.object({
+  formatVersion: z.literal(1),
+  reportId: z.uuid(),
+  title: z.string(),
+  investigationId: z.uuid(),
+  runId: z.uuid(),
+  target: z.object({
+    input: z.string(),
+    types: z.array(z.object({ type: z.enum(TARGET_TYPES), value: z.string() })),
+  }),
+  run: z.object({
+    status: z.enum(RUN_STATUSES),
+    startedAt: optionalInstant,
+    finishedAt: optionalInstant,
+  }),
+  generatedAt: z.iso.datetime(),
+  /** The tenant's marking, or the platform's; null when neither is set. */
+  handlingMarking: z.string().nullable(),
+  coverage: z.object({
+    runStatus: z.enum(RUN_STATUSES),
+    /** True unless every planned collector completed. */
+    partial: z.boolean(),
+    headline: z.string(),
+    entries: z.array(
+      z.object({
+        collectorId: z.string(),
+        sourceLabel: z.string(),
+        state: z.enum(COVERAGE_STATES),
+        targetType: z.enum(TARGET_TYPES).nullable(),
+        reasonCode: z.string().nullable(),
+        detail: z.string().nullable(),
+        evidenceCount: z.number().int().min(0),
+        /** Null when no job existed (excluded or held). */
+        attempts: z.number().int().min(0).nullable(),
+      }),
+    ),
+    notApplicable: z.array(z.object({ collectorId: z.string(), sourceLabel: z.string() })),
+    caveats: z.array(z.string()),
+  }),
+  findings: z.array(
+    z.object({
+      entityId: z.uuid(),
+      kind: z.enum(ENTITY_KINDS),
+      displayName: z.string(),
+      identifier: z.string().nullable(),
+      claims: z.array(
+        z.object({
+          claimId: z.uuid(),
+          attribute: z.string(),
+          /** The value exactly as stored. */
+          value: z.unknown(),
+          display: z.object({ text: z.string(), truncated: z.boolean() }),
+          strength: Strength,
+          citations: z.array(z.number().int().min(1)),
+        }),
+      ),
+    }),
+  ),
+  relationships: z.array(
+    z.object({
+      relationshipId: z.uuid(),
+      from: Endpoint,
+      kind: z.string(),
+      to: Endpoint,
+      strength: Strength,
+      citations: z.array(z.number().int().min(1)),
+    }),
+  ),
+  sources: z.array(
+    z.object({
+      number: z.number().int().min(1),
+      evidenceId: z.uuid(),
+      collectorId: z.string(),
+      sourceLabel: z.string(),
+      sourceUrl: z.string().nullable(),
+      collectedAt: optionalInstant,
+      observedAt: optionalInstant,
+      contentHash: z.string(),
+      strength: Strength,
+      claimCount: z.number().int().min(0),
+    }),
+  ),
+  synthesis: z.union([
+    z.object({
+      status: z.literal("GENERATED"),
+      model: z.object({ id: z.string(), licence: z.string(), profile: z.string() }),
+      statements: z.array(
+        z.object({
+          text: z.string(),
+          strength: z.enum(SYNTHESIS_STRENGTHS),
+          citations: z.array(z.number().int().min(1)).min(1),
+        }),
+      ),
+      generatedAt: z.iso.datetime(),
+      attempts: z.number().int().min(1),
+      notice: z.string(),
+    }),
+    z.object({ status: z.literal("NOT_REQUESTED") }),
+    z.object({ status: z.literal("SKIPPED"), reason: z.string() }),
+  ]),
+  attributions: z.array(
+    z.object({
+      sourceId: z.string(),
+      text: z.string(),
+      url: z.string(),
+      collectorIds: z.array(z.string()),
+    }),
+  ),
+  untrustedContent: z.array(
+    z.object({ sourceNumber: z.number().int().min(1), patterns: z.array(z.string()) }),
+  ),
+  omittedClaims: z.number().int().min(0),
+}) satisfies z.ZodType<ReportDocument>;
+
+const ReportView = z.object({
+  id: z.uuid(),
+  runId: z.uuid(),
+  status: z.enum(REPORT_STATUSES),
+  includeSynthesis: z.boolean(),
+  attempts: z.number().int().min(0),
+  /** Why generation failed, or why the last attempt is being retried; null otherwise. */
+  error: z.object({ code: z.string(), message: z.string() }).nullable(),
+  createdAt: z.iso.datetime(),
+  startedAt: optionalInstant,
+  finishedAt: optionalInstant,
+  /** The report itself; present only when SUCCEEDED. */
+  document: ReportDocumentSchema.nullable(),
+});
+
+function reportView(report: Report): z.infer<typeof ReportView> {
+  return {
+    id: report.id,
+    runId: report.runId,
+    status: report.status,
+    includeSynthesis: report.includeSynthesis,
+    attempts: report.attempts,
+    error:
+      report.errorCode === null || report.errorMessage === null
+        ? null
+        : { code: report.errorCode, message: report.errorMessage },
+    createdAt: iso(report.createdAt),
+    startedAt: isoOrNull(report.startedAt),
+    finishedAt: isoOrNull(report.finishedAt),
+    // Validated on the way out, like every boundary (CLAUDE.md §7).
+    document: report.document === null ? null : ReportDocumentSchema.parse(report.document),
+  };
+}
+
+/**
+ * A run that used a PERSON collector holds person data: generating or reading
+ * a report from it needs the same plan and vetting as running one did, decided
+ * by @repo/access exactly as the planner and the worker decide it. The
+ * discipline is read from the tenant's own registry row, which every job
+ * references, so a collector no longer in the platform registry is still gated.
+ */
+async function requirePersonAccessFor(
+  repos: Repositories,
+  tenant: RequestTenant["tenant"],
+  runId: string,
+): Promise<void> {
+  const jobs = await repos.jobs.listForRun(runId, { limit: 1000 });
+  let person = false;
+  for (const collectorId of new Set(jobs.map((job) => job.collectorId))) {
+    const registration = await repos.collectorsRegistry.find(collectorId);
+    // A job's collector always has a row (a foreign key); a missing one is gated as person data.
+    if (registration === null || registration.discipline === "PERSON") person = true;
+  }
+  if (!person) return;
+  const decision = decideDisciplineAccess(tenant, "PERSON");
+  if (!decision.allowed) {
+    throw forbidden(
+      decision.reason,
+      "This run holds person data; the tenant's plan or vetting does not allow reading it.",
+    );
+  }
+}
+
+const CONFLICT = { 409: ProblemSchema } as const;
+
+export const reportRoutes =
+  (services: () => Services): FastifyPluginAsyncZod =>
+  (app) => {
+    app.post(
+      "/api/v1/runs/:id/reports",
+      {
+        config: { access: { permission: "report:create", action: "report.create" } },
+        schema: {
+          operationId: "createReport",
+          summary: "Generate a report from a settled run, in the background",
+          description:
+            "Returns at once with the QUEUED report. Refused with 409 RUN_NOT_SETTLED until the run has finished and every found result is fused, and with 409 SYNTHESIS_UNAVAILABLE when a synthesis is asked for and no model provider is configured. Every report states what was not collected and why; a synthesis, when asked for, is model-written, cited, and validated.",
+          tags: ["reports"],
+          security: SECURITY,
+          params: IdParams,
+          body: z.object({
+            /** Ask a model to write a cited synthesis section. */
+            synthesis: z.boolean(),
+          }),
+          response: { 202: ReportView, ...PROTECTED_ERRORS, ...CONFLICT },
+        },
+      },
+      async (request, reply) => {
+        const { repos, principal, tenant } = tenantOf(request);
+        const runs = services().runs;
+        const progress = await readRunProgress(repos, request.params.id);
+        if (progress === null) throw notFound("The run");
+        await requirePersonAccessFor(repos, tenant, progress.id);
+        if (!progress.settled) {
+          throw new HttpError(
+            409,
+            "RUN_NOT_SETTLED",
+            "The run has not finished, or is not fully fused yet.",
+          );
+        }
+        if (request.body.synthesis && runs.synthesisUnavailable !== null) {
+          throw new HttpError(409, "SYNTHESIS_UNAVAILABLE", runs.synthesisUnavailable);
+        }
+        if (request.body.synthesis) {
+          for (const unit of ["LLM_INPUT_TOKEN", "LLM_OUTPUT_TOKEN"] as const) {
+            if ((await usageSummary(repos, unit, new Date())).exceeded) {
+              throw new HttpError(
+                429,
+                "QUOTA_EXCEEDED",
+                "A model token quota for this tenant is spent.",
+              );
+            }
+          }
+        }
+        const report = await repos.reports.create({
+          runId: progress.id,
+          includeSynthesis: request.body.synthesis,
+          requestedByUserId: principal.kind === "session" ? principal.userId : null,
+        });
+        request.auditTarget = { type: "report", id: report.id };
+        try {
+          await runs.reports.enqueueReport(principal.tenantId, report.id);
+        } catch {
+          throw new HttpError(503, "QUEUE_UNAVAILABLE", "The job queue could not take the report.");
+        }
+        void reply.code(202);
+        return reportView(report);
+      },
+    );
+
+    app.get(
+      "/api/v1/runs/:id/reports",
+      {
+        config: { access: { permission: "report:read", action: "report.list" } },
+        schema: {
+          operationId: "listReports",
+          summary: "List a run's reports, oldest first",
+          tags: ["reports"],
+          security: SECURITY,
+          params: IdParams,
+          querystring: LimitQuery,
+          response: {
+            200: z.object({ items: z.array(ReportView), hasMore: z.boolean() }),
+            ...PROTECTED_ERRORS,
+          },
+        },
+      },
+      async (request) => {
+        const { repos, tenant } = tenantOf(request);
+        if ((await repos.runs.findById(request.params.id)) === null) throw notFound("The run");
+        await requirePersonAccessFor(repos, tenant, request.params.id);
+        const rows = await repos.reports.listForRun(request.params.id, {
+          limit: request.query.limit + 1,
+        });
+        const result = page(rows, request.query.limit);
+        return { items: result.items.map(reportView), hasMore: result.hasMore };
+      },
+    );
+
+    app.get(
+      "/api/v1/reports/:id",
+      {
+        config: { access: { permission: "report:read", action: "report.read" } },
+        schema: {
+          operationId: "getReport",
+          summary: "Read a report: its generation state and, once generated, the report itself",
+          tags: ["reports"],
+          security: SECURITY,
+          params: IdParams,
+          response: { 200: ReportView, ...PROTECTED_ERRORS },
+        },
+      },
+      async (request) => {
+        const { repos, tenant } = tenantOf(request);
+        request.auditTarget = { type: "report", id: request.params.id };
+        const report = await repos.reports.findById(request.params.id);
+        if (report === null) throw notFound("The report");
+        await requirePersonAccessFor(repos, tenant, report.runId);
+        return reportView(report);
+      },
+    );
+
+    app.get(
+      "/api/v1/reports/:id/export/:format",
+      {
+        config: { access: { permission: "report:read", action: "report.export" } },
+        schema: {
+          operationId: "exportReport",
+          summary: "Download a generated report as PDF, JSON, CSV or a Maltego graph table",
+          description:
+            "pdf: the formatted report. json: the complete report document. csv: one row per claim and relationship. maltego: an edge list for Maltego's Import Graph from Table. Every format carries the handling marking and the attribution its sources require.",
+          tags: ["reports"],
+          security: SECURITY,
+          params: z.object({ id: z.uuid(), format: z.enum(REPORT_EXPORT_FORMAT_NAMES) }),
+          produces: ["application/pdf", "application/json", "text/csv"],
+          response: {
+            200: z.string().describe("The report in the requested format."),
+            ...PROTECTED_ERRORS,
+            ...CONFLICT,
+          },
+        },
+      },
+      async (request, reply) => {
+        const { repos, tenant } = tenantOf(request);
+        request.auditTarget = { type: "report", id: request.params.id };
+        const report = await repos.reports.findById(request.params.id);
+        if (report === null) throw notFound("The report");
+        await requirePersonAccessFor(repos, tenant, report.runId);
+        if (report.status !== "SUCCEEDED" || report.document === null) {
+          throw new HttpError(
+            409,
+            "REPORT_NOT_READY",
+            `The report is ${report.status}; only a generated report can be exported.`,
+          );
+        }
+        const format = REPORT_EXPORT_FORMATS[request.params.format];
+        const bytes = await format.render(ReportDocumentSchema.parse(report.document));
+        // Bytes, not JSON: written directly, after the access check and its audit row.
+        void reply.hijack();
+        reply.raw.writeHead(200, {
+          "content-type": format.contentType,
+          "content-length": String(bytes.byteLength),
+          "content-disposition": `attachment; filename="report-${report.id}.${format.extension}"`,
+          "cache-control": "no-store",
+        });
+        reply.raw.end(Buffer.from(bytes));
+      },
+    );
+
+    app.put(
+      "/api/v1/settings/report-handling-marking",
+      {
+        config: {
+          access: { permission: "organization:update", action: "settings.report_marking" },
+        },
+        schema: {
+          operationId: "setReportHandlingMarking",
+          summary:
+            "Set or clear the handling marking printed on every page of this organisation's reports",
+          description:
+            "Applies to reports generated from now on. Null clears it: the platform's default applies, and when none is set reports say no marking is set.",
+          tags: ["settings"],
+          security: SECURITY,
+          body: z.object({
+            marking: z
+              .string()
+              .trim()
+              .min(1)
+              .max(80)
+              .regex(/^[^\p{Cc}]+$/u, "no control characters")
+              .nullable(),
+          }),
+          response: { 200: z.object({ marking: z.string().nullable() }), ...PROTECTED_ERRORS },
+        },
+      },
+      async (request) => {
+        const { repos, principal } = tenantOf(request);
+        request.auditTarget = { type: "tenant", id: principal.tenantId };
+        const tenant = await repos.tenants.setReportHandlingMarking(request.body.marking);
+        if (tenant === null) throw notFound("The organisation");
+        return { marking: tenant.reportHandlingMarking };
+      },
+    );
+    return Promise.resolve();
+  };

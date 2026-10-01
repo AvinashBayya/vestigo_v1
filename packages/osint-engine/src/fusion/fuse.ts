@@ -19,7 +19,7 @@
 import type { CollectorRegistry } from "@repo/collectors";
 import { AppError, type JobStatus, type RunStatus, type TenantId } from "@repo/core";
 import type { Database, Job } from "@repo/db";
-import { EXTRACTORS, type Extractor } from "./extractors.ts";
+import { EXTRACTORS, resolveClaims, type Extractor } from "./extractors.ts";
 
 export class FusionError extends AppError {
   readonly code = "FUSION_FAILED";
@@ -155,7 +155,9 @@ export class RunFusion {
         });
         relationshipIds.set(draft.key, relationship.id);
       }
-      for (const claim of extraction.claims) {
+      // Values and strengths are read from the result here, never taken from
+      // the extractor: a path through `derived` is DERIVED, whatever it says.
+      for (const claim of resolveClaims(extraction.claims, job.result, evidenceStrength)) {
         const evidenceId = job.evidenceIds[claim.evidence];
         if (evidenceId === undefined) {
           throw new FusionError("A claim cited evidence the job does not have.");
@@ -175,7 +177,7 @@ export class RunFusion {
           subject,
           attribute: claim.attribute,
           value: claim.value,
-          strength: claim.derived ? "DERIVED" : evidenceStrength,
+          strength: claim.strength,
         });
       }
       await repos.jobs.transition(job.id, { status: job.status, fusedAt: this.#clock() });

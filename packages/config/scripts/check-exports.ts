@@ -17,6 +17,10 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "EnvSource",
     "ConfigError",
     "ConfigIssue",
+    "LLM_MODEL_ALLOWLIST",
+    "forbiddenModelReason",
+    "resolveLlmConfiguration",
+    "LlmConfiguration",
   ],
   "packages/core/src/index.ts": [
     "AppError",
@@ -32,6 +36,11 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "EmptyTargetError",
     "JOB_OUTCOMES",
     "QUOTA_PERIODS",
+    "ReportDocument",
+    "REPORT_STATUSES",
+    "COVERAGE_STATES",
+    "SYNTHESIS_STRENGTHS",
+    "CLAIM_STRENGTH_DEFINITIONS",
   ],
   // Who may do what, for the API and the workers alike.
   "packages/access/src/index.ts": [
@@ -71,6 +80,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "UsageMeter",
     "PLATFORM_COLLECTORS",
     "createPlatformRegistry",
+    "HELD_PLATFORM_COLLECTORS",
+    "reportedPart",
   ],
   // The one path from a collector's result to evidence rows, and the job
   // system around it: planning, per-source queues, fault isolation, fusion.
@@ -88,6 +99,27 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "readRunProgress",
     "usageSummary",
     "jobIdempotencyKey",
+    "resolveClaims",
+    "assembleReport",
+    "synthesise",
+    "ReportGenerator",
+    "ReportQueue",
+  ],
+  // Models: provider, routing, cache, metering, untrusted framing, output
+  // guards and the citation validator. The only path to a model.
+  "packages/llm/src/index.ts": [
+    "OpenAiCompatibleProvider",
+    "createLlmClient",
+    "generateValidated",
+    "frameUntrusted",
+    "trusted",
+    "checkOutput",
+    "validateCitations",
+    "scanText",
+    "RedisResponseCache",
+    "AccumulatingMeter",
+    "scoreAnswer",
+    "LlmOutputRejectedError",
   ],
   // The only way to tenant data: withTenant() and the repositories it issues.
   "packages/db/src/index.ts": [
@@ -115,6 +147,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ScopeAuthorisationsRepository",
     "TenantQuotasRepository",
     "JobRecordedOnceError",
+    "ReportsRepository",
+    "ReportRecordedOnceError",
   ],
   // Secrets, API key storage and rate limits: the only paths to each.
   "packages/integrations/src/index.ts": [
@@ -128,6 +162,11 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "createRedisClient",
     "RedisCircuitBreaker",
     "CircuitBreakerUnavailableError",
+    "renderReportPdf",
+    "renderReportCsv",
+    "renderMaltegoCsv",
+    "renderReportJson",
+    "REPORT_EXPORT_FORMATS",
   ],
 };
 

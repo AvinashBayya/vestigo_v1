@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ConfigError, type ConfigIssue } from "./errors.ts";
+import { ALLOWED_MODEL_IDS, LLM_PROFILES, STRUCTURED_OUTPUT_MODES } from "./llm.ts";
 
 /**
  * The environment every server-side process validates at startup.
@@ -170,6 +171,79 @@ export const envSchema = z.object({
     .max(10_000)
     .default(1_000)
     .meta({ description: "How often the run progress stream reads a run's state." }),
+
+  // ── Language models and reports (Phase 5) ──
+  LLM_PROFILE: z.enum(LLM_PROFILES).default("hosted").meta({
+    description:
+      "Which LLM serving profile to use: hosted (an OpenAI-compatible hosted open-weight API) or vllm (self-hosted; disabled unless LLM_VLLM_ENABLED=true).",
+  }),
+  LLM_HOSTED_BASE_URL: z
+    .url({ protocol: /^https$/ })
+    .optional()
+    .meta({
+      description:
+        "Base URL of the hosted open-weight API, up to but not including /chat/completions. Unset: no provider is configured, and report synthesis is unavailable (reports still generate without it). Azure OpenAI endpoints are refused.",
+    }),
+  LLM_HOSTED_API_KEY: z.string().min(1).optional().meta({
+    description:
+      "The platform's API key for the hosted provider. Platform-owned, never a tenant's; never logged or committed.",
+  }),
+  LLM_HOSTED_STRUCTURED_OUTPUT: z.enum(STRUCTURED_OUTPUT_MODES).default("none").meta({
+    description:
+      "How the hosted provider is asked for JSON: json_schema, json_object, or none (prompted only). Every response is schema-validated regardless.",
+  }),
+  LLM_VLLM_ENABLED: z.enum(["true", "false"]).default("false").meta({
+    description:
+      "Switches the self-hosted vLLM profile on. Off by default so no GPU idles; LLM_PROFILE=vllm is refused while it is off.",
+  }),
+  LLM_VLLM_BASE_URL: z
+    .url({ protocol: /^https?$/ })
+    .default("http://127.0.0.1:8000/v1")
+    .meta({
+      description:
+        "Base URL of the vLLM OpenAI-compatible server (docker compose profile llm-selfhosted).",
+    }),
+  LLM_VLLM_API_KEY: z.string().min(1).optional().meta({
+    description: "The key the vLLM server was started with (--api-key), if any.",
+  }),
+  LLM_SMALL_MODEL: z.enum(ALLOWED_MODEL_IDS).default("Qwen/Qwen3-8B").meta({
+    description:
+      "Allowlisted model for extraction and classification (packages/config/src/llm.ts).",
+  }),
+  LLM_LARGE_MODEL: z.enum(ALLOWED_MODEL_IDS).default("Qwen/Qwen3-32B").meta({
+    description: "Allowlisted model for report synthesis (packages/config/src/llm.ts).",
+  }),
+  LLM_MODEL_NAMES: z
+    .string()
+    .min(1)
+    .optional()
+    .meta({
+      description:
+        "Names the endpoint serves allowlisted models under, when they differ from the model id: id=name pairs, comma-separated.",
+      examples: ["Qwen/Qwen3-32B=qwen3-32b"],
+    }),
+  LLM_REQUEST_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(600_000)
+    .default(120_000)
+    .meta({ description: "Longest one model call may take before it is abandoned." }),
+  LLM_CACHE_TTL_SECONDS: z.coerce.number().int().min(1).default(604_800).meta({
+    description:
+      "How long a model response stays in the Redis cache (keyed by tenant, prompt, model and version).",
+  }),
+  REPORT_CONCURRENCY: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .default(2)
+    .meta({ description: "Reports generated at once, across every worker." }),
+  REPORT_HANDLING_MARKING: z.string().trim().min(1).max(80).optional().meta({
+    description:
+      "The handling marking printed on every report page when a tenant has not set its own. Unset: pages say no marking is set. The platform default is undecided.",
+  }),
 
   // No collector credential is ever configured here. Collectors read their
   // credentials only from each tenant's vault, so there is no platform-level

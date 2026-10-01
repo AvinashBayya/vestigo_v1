@@ -24,7 +24,8 @@
     "@repo/db": "workspace:*",
     "@repo/integrations": "workspace:*",
     "bullmq": "6.3.10",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@repo/llm": "workspace:*"
   },
   "devDependencies": {
     "@repo/config": "workspace:*",
@@ -34,6 +35,7 @@
     "ioredis": "^6.0.0",
     "pg": "^8.23.0",
     "typescript": "~6.0.3",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "pdfjs-dist": "6.3.289"
   }
 }

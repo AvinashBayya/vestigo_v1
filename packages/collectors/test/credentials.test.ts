@@ -19,6 +19,8 @@ const VARIABLES = Object.keys(envSchema.shape);
 const PLATFORM_SECRETS: Readonly<Record<string, string>> = {
   AUTH_SECRET: "signs session cookies and encrypts TOTP secrets",
   VAULT_MASTER_KEY: "wraps every tenant vault's data keys",
+  LLM_HOSTED_API_KEY: "the platform's key for its hosted open-weight model provider (Phase 5)",
+  LLM_VLLM_API_KEY: "the key the platform's own vLLM server was started with (Phase 5)",
 };
 
 const SECRET_SHAPED = /(?:API_KEY|TOKEN|SECRET|PASSWORD|PRIVATE_KEY|_KEY)$/;

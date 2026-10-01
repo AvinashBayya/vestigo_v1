@@ -3,7 +3,7 @@
  * WORKER_QUEUES (ARCHITECTURE-DECISIONS §6). Everything here is wiring; the
  * logic lives in @repo/osint-engine and the packages under it.
  */
-import { allowsUnverifiedSources, type Env } from "@repo/config";
+import { allowsUnverifiedSources, resolveLlmConfiguration, type Env } from "@repo/config";
 import { CollectorRuntime, createPlatformRegistry } from "@repo/collectors";
 import { createDatabase, FileSystemContentStore, type Database } from "@repo/db";
 import {
@@ -14,9 +14,11 @@ import {
   SlidingLogRateLimiter,
   waitForRedisReady,
 } from "@repo/integrations";
+import { createLlmClient } from "@repo/llm";
 import {
   CollectionExecutor,
   CollectorJobProcessor,
+  ReportGenerator,
   redisUpstreamRateLimiter,
   RunCoordinator,
   RunFusion,
@@ -49,6 +51,21 @@ export const WORKER_ENV = [
   "CIRCUIT_FAILURE_WINDOW_MS",
   "CIRCUIT_COOLING_MS",
   "CIRCUIT_PROBE_LEASE_MS",
+  // Report synthesis (Phase 5): the platform's model endpoint and key.
+  "LLM_PROFILE",
+  "LLM_HOSTED_BASE_URL",
+  "LLM_HOSTED_API_KEY",
+  "LLM_HOSTED_STRUCTURED_OUTPUT",
+  "LLM_VLLM_ENABLED",
+  "LLM_VLLM_BASE_URL",
+  "LLM_VLLM_API_KEY",
+  "LLM_SMALL_MODEL",
+  "LLM_LARGE_MODEL",
+  "LLM_MODEL_NAMES",
+  "LLM_REQUEST_TIMEOUT_MS",
+  "LLM_CACHE_TTL_SECONDS",
+  "REPORT_CONCURRENCY",
+  "REPORT_HANDLING_MARKING",
 ] as const satisfies readonly (keyof Env)[];
 
 export type WorkerEnv = Pick<Env, (typeof WORKER_ENV)[number]>;
@@ -131,6 +148,27 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
     },
   });
 
+  // Resolved at startup: a vLLM profile selected while disabled stops the worker here.
+  const llmConfiguration = resolveLlmConfiguration(env);
+  if (llmConfiguration.status === "NOT_CONFIGURED") {
+    logger.warn({ reason: llmConfiguration.reason }, "report synthesis is unavailable");
+  }
+  const llm = createLlmClient(llmConfiguration, {
+    redis,
+    keyPrefix: env.QUEUE_PREFIX,
+    cacheTtlSeconds: env.LLM_CACHE_TTL_SECONDS,
+    onCacheError: (error) => {
+      logger.warn({ err: error }, "model response cache unavailable; calling the model");
+    },
+  });
+  const reports = new ReportGenerator({
+    db,
+    registry: runtime.registry,
+    llm,
+    defaultHandlingMarking: env.REPORT_HANDLING_MARKING ?? null,
+    retry,
+  });
+
   const pool = await startWorkerPool({
     connection: { url: env.REDIS_URL, prefix: env.QUEUE_PREFIX },
     queues: env.WORKER_QUEUES.split(",")
@@ -144,6 +182,7 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
     collectConcurrency: () => env.COLLECT_CONCURRENCY,
     investigationConcurrency: 4,
     fusionConcurrency: 4,
+    reports: { generator: reports, concurrency: env.REPORT_CONCURRENCY },
     observer: {
       // Ids and codes only: a job's target can be personal data (CLAUDE.md §8).
       deliveryFailed: (queue, final, error) => {

@@ -131,6 +131,9 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   // Phase 4: runs and replays.
   JOB_NOT_FOUND: 404,
   JOB_NOT_REPLAYABLE: 409,
+  // Phase 5: reports.
+  REPORT_NOT_FOUND: 404,
+  RUN_NOT_SETTLED: 409,
 };
 
 export function registerErrorHandling(app: FastifyInstance): void {

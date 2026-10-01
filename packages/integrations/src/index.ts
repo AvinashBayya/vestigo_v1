@@ -58,3 +58,16 @@ export type {
   CircuitState,
   CircuitStatus,
 } from "./circuit-breaker/circuit-breaker.ts";
+
+export { BODY_SIZE, NO_MARKING_TEXT, renderReportPdf, SMALL_SIZE } from "./exports/pdf.ts";
+export {
+  csvCell,
+  MALTEGO_CSV_HEADERS,
+  MALTEGO_TYPE,
+  renderMaltegoCsv,
+  renderReportCsv,
+  renderReportJson,
+  REPORT_CSV_HEADERS,
+} from "./exports/tabular.ts";
+export { REPORT_EXPORT_FORMAT_NAMES, REPORT_EXPORT_FORMATS } from "./exports/formats.ts";
+export type { ExportFormat, ReportExportFormat } from "./exports/formats.ts";

@@ -53,7 +53,10 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
   tenants: {
     reads: [(r, v) => r.tenants.findById(v.tenantId)],
     // rename() is bound to the current tenant; B is checked unchanged below.
-    writes: [(r) => r.tenants.rename("[renamed by A]").then(() => null)],
+    writes: [
+      (r) => r.tenants.rename("[renamed by A]").then(() => null),
+      (r) => r.tenants.setReportHandlingMarking("[marking by A]").then(() => null),
+    ],
     references: [],
     list: async (r) => {
       const current = await r.tenants.current();
@@ -225,6 +228,7 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     reads: [
       (r, v) => r.evidence.findById(v.evidenceId),
       (r, v) => r.evidence.findByContentHash(v.contentHash).then((rows) => rows[0] ?? null),
+      (r, v) => r.evidence.findByIds([v.evidenceId]).then((rows) => rows[0] ?? null),
     ],
     writes: [], // append-only
     references: [
@@ -246,6 +250,7 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
   entities: {
     reads: [
       (r, v) => r.entities.findById(v.entityId),
+      (r, v) => r.entities.findByIds([v.entityId]).then((rows) => rows[0] ?? null),
       // Both tenants resolved the same identifier; A must only ever get its own.
       (r, _v, a) =>
         r.entities
@@ -261,7 +266,10 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     list: (r) => r.entities.list(page),
   },
   entityRelationships: {
-    reads: [(r, v) => r.entityRelationships.findById(v.relationshipId)],
+    reads: [
+      (r, v) => r.entityRelationships.findById(v.relationshipId),
+      (r, v) => r.entityRelationships.findByIds([v.relationshipId]).then((rows) => rows[0] ?? null),
+    ],
     writes: [], // append-only
     references: [
       (r, v, a) =>
@@ -317,6 +325,7 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     reads: [
       (r, v) => r.claims.findById(v.claimId),
       (r, v) => r.claims.listForEntities([v.entityId]).then((rows) => rows[0] ?? null),
+      (r, v) => r.claims.listForEvidence([v.evidenceId], page).then((rows) => rows[0] ?? null),
     ],
     writes: [], // append-only
     references: [
@@ -460,6 +469,35 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
         }),
     ],
     list: (r) => r.usageEvents.list(page),
+  },
+  reports: {
+    reads: [
+      (r, v) => r.reports.findById(v.reportId),
+      (r, v) => r.reports.lock(v.reportId),
+      (r, v) => r.reports.listForRun(v.runId, page).then((rows) => rows[0] ?? null),
+    ],
+    writes: [
+      (r, v) => r.reports.transition(v.reportId, { status: "RUNNING", attempts: 99 }),
+      (r, v) =>
+        r.reports.transition(v.reportId, {
+          status: "FAILED",
+          error: { code: "HIJACKED", message: "[hijacked]" },
+        }),
+    ],
+    references: [
+      (r, v) =>
+        r.reports.create({ runId: v.runId, includeSynthesis: false, requestedByUserId: null }),
+      (r, v, a) =>
+        r.reports.create({ runId: a.runId, includeSynthesis: false, requestedByUserId: v.userId }),
+      (r, v) =>
+        r.usageEvents.recordReportAttempt({
+          unit: "LLM_INPUT_TOKEN",
+          quantity: 1,
+          reportId: v.reportId,
+          attempt: 1,
+        }),
+    ],
+    list: (r) => r.reports.list(page),
   },
   tenantQuotas: {
     // Both tenants have a quota for the same unit and period; A must only get its own.

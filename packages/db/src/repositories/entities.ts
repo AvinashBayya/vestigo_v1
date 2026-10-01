@@ -4,7 +4,7 @@ import {
   type EntityKind,
   type MergeSignal,
 } from "@repo/core";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { MergeRuleViolationError, ReferenceNotFoundError } from "../errors.ts";
 import { entities, entityMerges, entityRelationships } from "../schema/index.ts";
 import {
@@ -76,6 +76,19 @@ export class EntitiesRepository extends TenantRepository {
   async findById(id: string): Promise<Entity | null> {
     return this.run(async (tx) =>
       firstRow(await tx.select().from(entities).where(this.owned(entities, id))),
+    );
+  }
+
+  /** The entities with these ids. Unknown ids are simply absent. */
+  async findByIds(ids: readonly string[]): Promise<Entity[]> {
+    if (ids.length === 0) return [];
+    if (ids.length > 1000) throw new RangeError("at most 1000 entity ids at once");
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(entities)
+        .where(and(this.inTenant(entities), inArray(entities.id, ids.map(requireUuid))))
+        .orderBy(asc(entities.createdAt), asc(entities.id)),
     );
   }
 
@@ -162,6 +175,24 @@ export class EntityRelationshipsRepository extends TenantRepository {
       firstRow(
         await tx.select().from(entityRelationships).where(this.owned(entityRelationships, id)),
       ),
+    );
+  }
+
+  /** The relationships with these ids. Unknown ids are simply absent. */
+  async findByIds(ids: readonly string[]): Promise<EntityRelationship[]> {
+    if (ids.length === 0) return [];
+    if (ids.length > 1000) throw new RangeError("at most 1000 relationship ids at once");
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(entityRelationships)
+        .where(
+          and(
+            this.inTenant(entityRelationships),
+            inArray(entityRelationships.id, ids.map(requireUuid)),
+          ),
+        )
+        .orderBy(asc(entityRelationships.createdAt), asc(entityRelationships.id)),
     );
   }
 

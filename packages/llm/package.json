@@ -2,7 +2,7 @@
   "name": "@repo/llm",
   "version": "0.1.0",
   "private": true,
-  "description": "LLM provider interface and citation validation.",
+  "description": "LLM provider interface, model routing, response cache, token metering, untrusted-data framing, output guards and citation validation.",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -14,12 +14,20 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "eval:live": "node --env-file-if-exists=../../.env scripts/eval-live.ts"
+  },
+  "dependencies": {
+    "@repo/config": "workspace:*",
+    "@repo/core": "workspace:*",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@repo/config": "workspace:*",
     "@types/node": "^24.0.0",
     "eslint": "^10.11.0",
-    "typescript": "~6.0.3"
+    "ioredis": "^6.0.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
   }
 }

@@ -40,6 +40,32 @@ services:
       start_period: 5s
     restart: unless-stopped
 
+  # Self-hosted open-weight model server (Phase 5). DISABLED: it starts only
+  # with `docker compose --profile llm-selfhosted up`, needs an NVIDIA GPU, and
+  # the platform uses it only with LLM_PROFILE=vllm and LLM_VLLM_ENABLED=true
+  # (packages/config/src/llm.ts). It serves the OpenAI-compatible API the
+  # provider already speaks. The model must be on the allowlist; the default
+  # is the configured large model. Port bound to 127.0.0.1 like the others.
+  vllm:
+    profiles: ["llm-selfhosted"]
+    # vllm/vllm-openai v0.30.0, pinned by digest (Docker Hub, 2026-09-22).
+    image: vllm/vllm-openai@sha256:8a69ffad015f138d7170c4ddc429e230a3bc1c1719f67e14324749df200a4b90
+    command:
+      ["--model", "${LLM_LARGE_MODEL:-Qwen/Qwen3-32B}", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - vllm-models:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   redis-data:
+  vllm-models:

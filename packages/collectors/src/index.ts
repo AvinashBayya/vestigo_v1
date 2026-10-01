@@ -14,12 +14,15 @@ export {
   DNS_RESULT,
   GITHUB_RESULT,
   HACKERNEWS_RESULT,
+  HELD_PLATFORM_COLLECTORS,
   NEWS_RESULT,
   PLATFORM_COLLECTORS,
   RDAP_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
+  type HeldCollector,
 } from "./platform/index.ts";
+export { DERIVED_KEY, reportedPart } from "./provenance.ts";
 export {
   declareCollector,
   defineCollector,

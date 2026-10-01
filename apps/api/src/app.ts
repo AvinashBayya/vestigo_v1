@@ -19,6 +19,7 @@ import { investigationRoutes } from "./routes/investigations.ts";
 import { meRoutes } from "./routes/me.ts";
 import { openapiRoutes } from "./routes/openapi.ts";
 import { personRoutes } from "./routes/person.ts";
+import { reportRoutes } from "./routes/reports.ts";
 import { runRoutes } from "./routes/runs.ts";
 import { scopeAuthorisationRoutes } from "./routes/scope-authorisations.ts";
 import { accessServicesFor, authOf, requireServices, type Services } from "./services.ts";
@@ -101,6 +102,7 @@ export async function buildApp(options: AppOptions) {
   await app.register(credentialRoutes(services));
   await app.register(personRoutes);
   await app.register(runRoutes(services));
+  await app.register(reportRoutes(services));
   await app.register(scopeAuthorisationRoutes);
 
   return app;

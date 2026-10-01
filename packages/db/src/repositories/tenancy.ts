@@ -52,6 +52,19 @@ export class TenantsRepository extends TenantRepository {
     );
   }
 
+  /** Sets the report handling marking, or clears it with null (the platform default applies). */
+  async setReportHandlingMarking(marking: string | null): Promise<Tenant | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .update(tenants)
+          .set({ reportHandlingMarking: marking })
+          .where(eq(tenants.tenantId, this.tenantId))
+          .returning(),
+      ),
+    );
+  }
+
   async rename(name: string): Promise<Tenant | null> {
     return this.run(async (tx) =>
       firstRow(

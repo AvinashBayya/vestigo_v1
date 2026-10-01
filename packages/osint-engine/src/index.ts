@@ -1,5 +1,6 @@
 // Orchestration: planning a run, dispatching its collector jobs through
-// per-source queues with fault isolation, and fusing what they found.
+// per-source queues with fault isolation, fusing what they found, and
+// generating reports from a settled run.
 export {
   CollectionExecutor,
   TenantNotProvisionedError,
@@ -44,6 +45,8 @@ export {
   JobReplayer,
   JobRetryError,
   ReplayTargetNotFoundError,
+  ReportQueue,
+  REPORTS_QUEUE,
   selectQueues,
   startWorkerPool,
   type DeadLetter,
@@ -59,7 +62,17 @@ export {
   runStatusOf,
   type FusionReport,
 } from "./fusion/fuse.ts";
-export { EXTRACTORS, type Extraction, type Extractor } from "./fusion/extractors.ts";
+export {
+  ClaimPathError,
+  EXTRACTORS,
+  isDerivedPath,
+  resolveClaims,
+  type ClaimDraft,
+  type Extraction,
+  type Extractor,
+  type ResolvedClaim,
+  type ResultPath,
+} from "./fusion/extractors.ts";
 export {
   readRunProgress,
   usageSummary,
@@ -67,3 +80,27 @@ export {
   type RunProgress,
   type UsageLine,
 } from "./progress.ts";
+export {
+  assembleReport,
+  COVERAGE_CAVEATS,
+  DEFAULT_ASSEMBLY_LIMITS,
+  displayValue,
+  ReportRunNotFoundError,
+  ReportRunNotSettledError,
+  type AssembledReport,
+  type AssemblyInput,
+  type AssemblyLimits,
+} from "./reports/assemble.ts";
+export {
+  SYNTHESIS_NOTICE,
+  SYNTHESIS_PROMPT_VERSION,
+  SynthesisAnswer,
+  synthesise,
+} from "./reports/synthesis.ts";
+export {
+  ReportGenerator,
+  ReportNotFoundError,
+  ReportQuotaError,
+  type ReportDisposition,
+  type ReportGeneratorOptions,
+} from "./reports/generator.ts";

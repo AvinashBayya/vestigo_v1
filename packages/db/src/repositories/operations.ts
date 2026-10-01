@@ -383,6 +383,47 @@ export class UsageEventsRepository extends TenantRepository {
     });
   }
 
+  /**
+   * Records what one attempt at generating a report consumed (model tokens),
+   * once: a second call for the same report, attempt and unit records nothing
+   * and returns false, so a retried generation never charges twice.
+   */
+  async recordReportAttempt(input: {
+    readonly unit: UsageUnit;
+    readonly quantity: number;
+    readonly reportId: string;
+    readonly attempt: number;
+  }): Promise<boolean> {
+    if (!Number.isSafeInteger(input.quantity) || input.quantity < 0) {
+      throw new RangeError("usage quantity must be a non-negative integer");
+    }
+    if (!Number.isSafeInteger(input.attempt) || input.attempt < 1) {
+      throw new RangeError("usage attempt must be a positive integer");
+    }
+    return this.run(async (tx) => {
+      const rows = await tx
+        .insert(usageEvents)
+        .values({
+          tenantId: this.tenantId,
+          unit: input.unit,
+          quantity: input.quantity,
+          reportId: requireUuid(input.reportId),
+          attempt: input.attempt,
+        })
+        .onConflictDoNothing({
+          target: [
+            usageEvents.tenantId,
+            usageEvents.reportId,
+            usageEvents.attempt,
+            usageEvents.unit,
+          ],
+          where: sql`${usageEvents.reportId} is not null`,
+        })
+        .returning({ id: usageEvents.id });
+      return rows.length === 1;
+    });
+  }
+
   /** The units of one kind consumed since a moment, by the database's record. */
   async totalSince(unit: UsageUnit, since: Date): Promise<number> {
     return this.run(async (tx) => {

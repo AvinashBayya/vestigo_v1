@@ -29,6 +29,9 @@ export const PERMISSIONS = [
   "scope_authorisation:read",
   "scope_authorisation:write",
   "usage:read",
+  // Phase 5: reports and their exports.
+  "report:create",
+  "report:read",
 
   "organization:update",
   "organization:delete",
@@ -73,6 +76,8 @@ export const PERMISSION_MODULE: Readonly<Record<Permission, Module | null>> = {
   "scope_authorisation:read": "TECHINT",
   "scope_authorisation:write": "TECHINT",
   "usage:read": null,
+  "report:create": "TECHINT",
+  "report:read": "TECHINT",
   "organization:update": null,
   "organization:delete": null,
   "member:create": null,
@@ -93,6 +98,7 @@ const READ_ONLY: readonly Permission[] = [
   "case:read",
   "evidence:read",
   "run:read",
+  "report:read",
 ];
 
 const ANALYST: readonly Permission[] = [
@@ -103,6 +109,7 @@ const ANALYST: readonly Permission[] = [
   "run:start",
   "job:replay",
   "scope_authorisation:read",
+  "report:create",
 ];
 
 const ADMIN: readonly Permission[] = [

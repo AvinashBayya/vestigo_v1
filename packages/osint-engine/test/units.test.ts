@@ -19,7 +19,10 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   circuitVerdict,
+  ClaimPathError,
   EXTRACTORS,
+  isDerivedPath,
+  resolveClaims,
   jobIdempotencyKey,
   periodStart,
   planRun,
@@ -381,7 +384,7 @@ describe("extractors", () => {
   });
 
   it.each(FOUND_CASES)(
-    "$collectorId: every claim cites real evidence, asserts a value, and names known entities",
+    "$collectorId: every claim cites real evidence, names known entities, and takes its strength from its path",
     async (testCase) => {
       const harness = await startHarness({
         collectors: PLATFORM_COLLECTORS.filter((c) => c.declaration.id === testCase.collectorId),
@@ -403,11 +406,30 @@ describe("extractors", () => {
           expect(claim.attribute).toMatch(/^[a-z][a-z0-9_]*$/);
           if ("entity" in claim.subject) {
             expect(entityKeys.has(claim.subject.entity)).toBe(true);
-            expect(claim.value).not.toBeNull();
           } else {
             expect(relationshipKeys.has(claim.subject.relationship)).toBe(true);
           }
         }
+        // Resolved as fusion resolves them: every path exists in the result.
+        const resolved = resolveClaims(extraction.claims, outcome.result, "REPORTED");
+        expect(resolved.length).toBeGreaterThan(0);
+        const byDraft = extraction.claims.filter((claim) =>
+          resolved.some((r) => r.subject === claim.subject && r.attribute === claim.attribute),
+        );
+        expect(byDraft.length).toBe(resolved.length);
+        for (const claim of resolved) {
+          if ("entity" in claim.subject) expect(claim.value).not.toBeNull();
+          // A reported value never carries a computed field along with it.
+          if (claim.strength !== "DERIVED")
+            expect(JSON.stringify(claim.value)).not.toContain('"derived"');
+        }
+        extraction.claims.forEach((claim) => {
+          const match = resolved.find(
+            (r) => r.subject === claim.subject && r.attribute === claim.attribute,
+          );
+          if (match !== undefined && isDerivedPath(claim.path))
+            expect(match.strength).toBe("DERIVED");
+        });
         for (const entity of extraction.entities) {
           if (entity.kind === "PERSON" || entity.kind === "ORGANIZATION") {
             // Never a bare name: only an external registry's namespaced id.
@@ -419,4 +441,82 @@ describe("extractors", () => {
       }
     },
   );
+});
+
+// ── Claim strength from the derived contract (Phase 5) ────────────────────
+
+describe("claim strength is decided by where the value is, never by the extractor", () => {
+  const result = {
+    count: 3,
+    captures: [{ timestamp: "[raw timestamp]", derived: { capturedAt: "[parsed date]" } }],
+    derived: { count: 3, note: "[computed note]" },
+  };
+  const subject = { entity: "DOMAIN|example.com" };
+
+  it("makes a value inside `derived` DERIVED, even when it equals a reported value", () => {
+    const [inside, outside] = resolveClaims(
+      [
+        { subject, attribute: "count", path: ["derived", "count"], evidence: 0 },
+        { subject, attribute: "count", path: ["count"], evidence: 0 },
+      ],
+      result,
+      "REPORTED",
+    );
+    expect(inside).toMatchObject({ value: 3, strength: "DERIVED" });
+    expect(outside).toMatchObject({ value: 3, strength: "REPORTED" });
+  });
+
+  it("strips a nested `derived` block from a reported value", () => {
+    const [capture] = resolveClaims(
+      [{ subject, attribute: "capture", path: ["captures", 0], evidence: 0 }],
+      result,
+      "OBSERVED",
+    );
+    expect(capture).toMatchObject({
+      value: { timestamp: "[raw timestamp]" },
+      strength: "OBSERVED",
+    });
+  });
+
+  it("gives a relationship claim no value, and its basis's strength", () => {
+    const [relationship] = resolveClaims(
+      [
+        {
+          subject: { relationship: "a>b" },
+          attribute: "linked",
+          path: ["derived", "note"],
+          evidence: 0,
+        },
+      ],
+      result,
+      "REPORTED",
+    );
+    expect(relationship).toMatchObject({ value: null, strength: "DERIVED" });
+  });
+
+  it("drops a claim whose value is null: absence asserts nothing", () => {
+    expect(
+      resolveClaims(
+        [{ subject, attribute: "gone", path: ["missing"], evidence: 0 }],
+        { missing: null },
+        "REPORTED",
+      ),
+    ).toEqual([]);
+  });
+
+  it("refuses a path the result does not have", () => {
+    expect(() =>
+      resolveClaims(
+        [{ subject, attribute: "x", path: ["captures", 5] }].map((c) => ({ ...c, evidence: 0 })),
+        result,
+        "REPORTED",
+      ),
+    ).toThrow(ClaimPathError);
+  });
+
+  it("offers an extractor no way to supply a value or a strength", () => {
+    // The draft type has no value or strength: resolveClaims is the only source of both.
+    const draft = { subject, attribute: "count", path: ["count"], evidence: 0 } as const;
+    expect(Object.keys(draft).sort()).toEqual(["attribute", "evidence", "path", "subject"]);
+  });
 });

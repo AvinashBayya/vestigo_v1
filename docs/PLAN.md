@@ -15,7 +15,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 2     | Data foundation and tenancy             | **Done, 2026-09-28.** Session A: data layer and tenant isolation. Session B: authentication, MFA, permissions, module gating, API keys, audit, credential vault. See both records below. |
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
-| 5     | AI, fusion and reports                  | Not started                                                                                                                                              |
+| 5     | AI, fusion and reports                  | **Done, 2026-10-01** (no live model yet: no provider chosen). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
 | 6     | Frontend                                | Not started                                                                                                                                              |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
@@ -983,3 +983,256 @@ RUN status PARTIAL, settled; counts SUCCEEDED 3, DEAD_LETTERED 1
 - **The progress stream polls.** Consider a push signal at scale.
 - **Two load flakes seen:** the api server-spawn test (Phase 3B), and the web test worker start
   (this phase). Both pass alone and on rerun.
+
+## Phase 5 record: analysis and reporting
+
+A settled run can now be turned into a report, in the background. Everything a report states as
+fact comes from the run's stored evidence and claims; one optional section, the synthesis, is
+written by an open-weight model, cited, and validated. Every report opens with what was NOT
+collected and why. Reports download as PDF, JSON, CSV and a Maltego graph table.
+
+**Built.**
+
+- **`packages/llm`** (it had no code before this phase):
+  - Provider interface, one implementation: the OpenAI-compatible chat completions format both
+    profiles serve. Every call has a timeout. A 429 or 5xx is retryable (with the provider's
+    Retry-After); any other 4xx is not. Error messages never carry the provider's response
+    body, which can echo the prompt.
+  - **Open-weight allowlist** in `packages/config/src/llm.ts`, reviewed code rather than an
+    environment variable. It holds five Apache-2.0 models: Qwen3-8B, gpt-oss-20b (small),
+    Qwen3-32B, gpt-oss-120b, Mistral-Small-3.1-24B (large). Licence and base model were read
+    from each model's Hugging Face API card on 2026-09-30. A test refuses any entry that is
+    Llama-derived (by id or base model), Gemini, or not permissively licensed. Azure OpenAI
+    endpoints are refused at startup.
+  - **Profiles.** Hosted is the default. vLLM is built and validated but disabled: selecting it
+    without `LLM_VLLM_ENABLED=true` stops startup. Its compose service (`vllm`, image pinned by
+    digest) starts only under the `llm-selfhosted` profile; `docker compose --profile
+    llm-selfhosted config` validates.
+  - **Task routing:** extraction and classification go to the small model, synthesis to the
+    large one.
+  - **Redis response cache**, keyed by prompt, model, served name, profile and prompt version,
+    and namespaced by tenant. Only accepted answers are stored. If the cache is down, the call
+    goes to the model.
+  - **Per-tenant token metering:** every call that consumed tokens is recorded, a rejected one
+    included. A response without token usage is refused, since an unmetered call cannot be
+    charged.
+  - **Prompt-injection defence:**
+    - Collected data reaches a model only as JSON inside one delimited block. Every `<`, `>` and
+      `&` is escaped, and the boundary is a hash of the data, so nothing inside the block can
+      close it.
+    - Instructions can only be `trusted` template literals with no interpolation, enforced by
+      the type system and at runtime.
+    - Every answer is checked against a strict schema.
+    - Output guards reject any answer that:
+      - leaks the instructions' marker or markup;
+      - echoes instruction-like source text;
+      - reads as instructions itself;
+      - names an identifier its cited records do not hold outside instruction-like text;
+      - carries a call to action;
+      - pronounces a safety, trust or risk verdict.
+    - Zero-width characters and Unicode tag characters are decoded before scanning.
+  - **Citation validator** (ported, see below). Every statement cites at least one supplied
+    reference. Corroboration and CORRELATED need two independent sources. Certainty language is
+    rejected unless negated. An answer is retried once with fixed-text corrections, then fails.
+  - **CI injection corpus** (`test/fixtures/injection-corpus.json`, synthetic): 14 payloads, each
+    from a published technique, set in collected content (known payloads, web pages, a news
+    article, profile bios, a commit message, a DNS TXT record, a Wikidata description). For each
+    payload:
+    - the scanner flags it;
+    - it reaches the model only inside the block;
+    - a model that obeys it is rejected twice, by the named guards;
+    - an honest answer passes.
+
+    Nine benign texts about AI are not flagged.
+  - **Evaluation harness** (`eval/golden.json`, `src/eval.ts`): three golden investigations, each
+    with a reference answer and probes, scored for citation validity and hallucination rate.
+    - In CI, the reference answers must score 1.0 and 0, and all 10 probes must be caught.
+    - `pnpm --filter @repo/llm eval:live` scores the configured model through the production
+      pipeline. It exits 2 when there is no provider.
+- **Claims (item 4): strength is now decided by path.** An extractor names where a value is in
+  the result and never supplies the value or the strength. Fusion reads the value: a path
+  through `derived` is DERIVED; any other path takes the evidence's strength, with nested
+  `derived` blocks stripped from the value. A value inside `derived` can no longer be stored as
+  OBSERVED or REPORTED.
+- **Report pipeline** (`packages/osint-engine/src/reports/`):
+  - Assembly from a settled run: findings per entity with labelled, cited claims; relationships;
+    sources numbered in citation order; attributions; and warnings for sources whose content
+    reads as instructions to an AI.
+  - **Coverage and limitations**, per collector:
+    - COLLECTED, NOTHING_FOUND, FAILED, NEEDS_CREDENTIALS, REFUSED or NOT_FINISHED, each from the
+      job's recorded outcome and error;
+    - EXCLUDED, from the run's recorded plan, with its reason (plan, vetting, licence, scope);
+    - HELD, for news;
+    - not applicable, listed separately;
+    - a headline, PARTIAL RUN, FAILED RUN or COMPLETE RUN, stated first;
+    - fixed caveats on every report;
+    - an omitted-claims count at the 2,000-claim limit.
+  - **Synthesis** (optional): written from the report's own claims as untrusted records.
+    Strength is CORRELATED, INFERRED or HYPOTHESIS only.
+  - **Generation job** on a `reports` queue with its own bulkhead (`REPORT_CONCURRENCY`):
+    - claim, then generate outside any lock, then record usage and state together;
+    - an unavailable model is retried with backoff;
+    - a rejected answer, a refused request, an unsettled run, a spent token quota, or a missing
+      provider each fail the report with its reason;
+    - a crash on the last attempt is failed and dead-lettered;
+    - a finished report delivered again does nothing and is not charged.
+  - **Stored write-once**: migration 0014's trigger refuses to replace a document or change a
+    finished report's status (REP01), for every role.
+- **PDF** (`packages/integrations/src/exports/pdf.ts`, pdf-lib with fontkit):
+  - Noto Serif (OFL, vendored with SHA-256s checked by a test) at 12 pt for body text; 10 pt for
+    footnotes, tables, header and footer.
+  - Labels printed as text (`[REPORTED]`), and all text in black.
+  - A numbered superscript per citation, with its footnote on the same page.
+  - Coverage first, a boxed partial-run notice, then a glossary of strengths.
+  - An evidence-basis table with a repeating header, and an attribution section.
+  - The handling marking top and bottom of every page. With no marking it says "NO HANDLING
+    MARKING IS SET FOR THIS ORGANISATION".
+  - Characters outside the font's coverage are shown as `?` and counted in a rendering note.
+- **Exports** (`REPORT_EXPORT_FORMATS`: pdf, json, csv, maltego). Every format carries the
+  handling marking and attribution, and every tabular row carries the strength and citations.
+  - JSON is the whole report document.
+  - CSV has one row per claim or relationship.
+  - The Maltego export is an edge list for Import Graph from Table, keeping the platform's kind
+    beside each Maltego type.
+- **Attribution rule (item 7):**
+  - A test renders every export format for every catalogue source that declares attribution, and
+    fails if the text or URL is missing.
+  - An engine test runs a collector on an attribution-requiring source end to end and finds the
+    attribution in the document and the PDF.
+- **API:**
+  - `POST /api/v1/runs/{id}/reports` returns 202 with `{synthesis: boolean}`. It refuses with:
+    - 409 `RUN_NOT_SETTLED`;
+    - 409 `SYNTHESIS_UNAVAILABLE`, with the reason;
+    - 429 `QUOTA_EXCEEDED` on token quotas.
+  - `GET /api/v1/runs/{id}/reports` and `GET /api/v1/reports/{id}`. The document is validated
+    against its Zod schema on the way out.
+  - `GET /api/v1/reports/{id}/export/{pdf|json|csv|maltego}`, or 409 `REPORT_NOT_READY`.
+  - `PUT /api/v1/settings/report-handling-marking` (`organization:update`).
+  - New permissions: `report:create` (analyst and above) and `report:read` (every role).
+  - A run holding person data gates its reports through `@repo/access`, read from the tenant's
+    own registry rows.
+- **Migrations:**
+  - 0013: the `reports` table, `usage_events.report_id` with a once-per-attempt index, and the
+    tenant's `report_handling_marking`.
+  - 0014: row-level security, column grants, and the write-once trigger.
+  - The new usage key is added `NOT VALID`. The column is new and every row holds null, so there
+    is nothing to validate, and a validating scan is refused by forced row-level security when
+    no tenant is set.
+
+**Ported from legacy.**
+
+| Module | Verdict | Became | Defect fixed (regression test) |
+| --- | --- | --- | --- |
+| llm.ts | ADAPT | `packages/llm` provider, cache, metering | Collected text sat between `"""` inside instructions; a source containing `"""` escaped it (framing.test.ts). Also: keys from env, process-memory cache and log |
+| reports.ts (validateCitations, generateProduct) | ADAPT | `citations.ts`, `generate.ts`, report synthesis | The bottom line was never cited or checked; citations were document numbers; two items from one source counted as corroboration; the retry prompt quoted the model's rejected words; the model labelled its own statements "reported" (citations.test.ts, generate.test.ts) |
+| cases/case-analysis.ts (validateGroundedAnswer) | ADAPT | `citations.ts` | INFERRED and HYPOTHESIS findings could cite nothing (citations.test.ts) |
+| cases/case-report.ts (completeness) | KEEP | `reports/assemble.ts` | Could not tell nothing found from failed; recomputed the plan at report time (reports.test.ts) |
+| report-pdf.ts | ADAPT | `exports/pdf.ts` | Helvetica 9.5 pt, colour-coded labels, a fixed "UNCLASSIFIED" banner, characters silently replaced, product name hard-coded |
+| maltego-export.ts | KEEP | `exports/tabular.ts` | Collected values went into cells unguarded: `=HYPERLINK(...)` ran as a formula (exports.test.ts) |
+| analysis-llm.ts, credibility-llm.ts | ADAPT | Not ported | No consumer this phase |
+
+**The checkpoint.** A report from a real Phase 4 run of `example.com`, through the reports queue
+and worker:
+- crtsh, dns and rdap answered from their recorded fixtures;
+- wayback deliberately failed with its synthetic 503;
+- the tenant's marking was set.
+
+```
+REPORT f5ad5550-5a4e-4aef-a15f-750eb83ec0a4 run 864fc76b-f023-4faa-8bd2-51a616d54924 status PARTIAL
+HEADLINE PARTIAL RUN: 1 of 4 planned collectors did not complete, so this report does not cover
+         what they would have collected (3 found something, 0 found nothing). 1 further
+         collector(s) were excluded or held and did not run.
+  COLLECTED  dns      DNS over HTTPS (Cloudflare resolver) | attempts 1
+  COLLECTED  rdap     RDAP registration data | attempts 1
+  COLLECTED  crtsh    crt.sh Certificate Transparency | attempts 1
+  FAILED     wayback  Wayback Machine captures | UPSTREAM_UNAVAILABLE | The upstream is
+                      unavailable: the Wayback CDX API answered HTTP 503. | attempts 3
+  HELD       news     GDELT news coverage | COLLECTOR_HELD | Held off the platform until one live
+                      FOUND for a domain phrase is recorded (docs/PLAN.md, Phase 3B).
+CLAIMS 114 (all cited), RELATIONSHIPS 9, SOURCES 3, OMITTED 0
+SYNTHESIS GENERATED 2 statements, attempts 1 (scripted provider)
+PDF 926646 bytes
+```
+
+The rendered PDF was read back as text and drawn to PNG for review: 17 pages, with the handling
+marking twice on each. Review found one defect, fixed with a regression test. crt.sh lists names
+one per line, and the renderer dropped the line breaks, printing `example.comwww.example.com`.
+They now render as `example.com / www.example.com`.
+
+**Verified at the checkpoint.**
+
+- `pnpm turbo lint typecheck test --force`: 46 of 46 tasks, exit 0, 1,359 tests.
+  - By package: core 20, access 55, config 133, db 230, integrations 113, collectors 482,
+    llm 115, osint-engine 94, api 109, web 4, worker 4.
+  - The fabrication check passed on 284 files; the export check on 137 symbols across 8 entry
+    points (`@repo/llm` added).
+- Earlier full runs this phase failed on, and were fixed:
+  - root format check (three files);
+  - an unused type import in the config tests;
+  - the release-blocking credentials guard, which lists every secret-shaped variable. The two
+    platform-owned LLM keys were added to it with their reasons, as the test's own comment
+    anticipates. The guard was not weakened.
+- Found and fixed while building:
+  - **The Maltego export lost attribution.** The attribution test caught it: a source cited
+    only by claims about a linked entity had its attribution on no row. Every Maltego row now
+    carries every attribution the report requires.
+  - **Assembly asked for more rows than the repository allows** (2,000 against a 1,000 cap),
+    crashing generation. Queries are now bounded per chunk, and anything left out is counted
+    exactly.
+  - **The person-data gate on reports trusted the platform registry**, so a collector
+    missing from it would pass ungated. It now reads the tenant's own registry rows, and a
+    test covers it.
+  - **pdf-lib font subsetting dropped glyphs** (seen on the rendered pages). Fonts are
+    embedded whole.
+  - **Line breaks inside values were dropped** (the checkpoint defect above).
+
+### Decisions taken in Phase 5
+
+1. **No hosted vendor is chosen.** The hosted profile is the default but reports itself NOT
+   CONFIGURED until `LLM_HOSTED_BASE_URL` is set. Which provider, under what data-processing
+   terms and in which region (India residency, ARCHITECTURE-DECISIONS §10), is your decision.
+2. **The facts never depend on a model.** Coverage, findings, relationships, sources and
+   attribution are assembled from stored data. The model writes only the synthesis, which must
+   be asked for.
+3. **A synthesis that fails validation twice fails the whole report**, with its reason. A report
+   without a synthesis can be requested instead.
+4. **A model may claim only CORRELATED, INFERRED or HYPOTHESIS**, and every statement cites. Safety,
+   trust and risk verdicts are rejected outright.
+5. **The response cache is namespaced by tenant**, beyond the brief's prompt, model and version,
+   so a cache hit cannot reveal another tenant's material.
+6. **An unmetered model response is refused.**
+7. **A report is a stored, write-once document.** Every PDF and export renders from it, so a report
+   always reads the same. The marking is captured at generation.
+8. **Exports are of a report**, so every format carries what the report said: marking, strengths,
+   citations, attribution.
+9. **Body 12 pt; footnotes, tables, header and footer 10 pt.** The brief's minimum is read as
+   applying to the body.
+10. **Fonts are embedded whole, not subset.** pdf-lib's subsetting dropped glyphs from Noto Serif
+    when rendered (seen on the review PNGs), so a PDF is about 0.8 to 0.9 MB.
+11. **The CSV formula guard prefixes an apostrophe** to any cell starting with `=`, `+`, `-`, `@`, a
+    tab or a carriage return. This includes negative numbers; the JSON export is exact.
+12. **Claim-strength definitions** are new wording (`CLAIM_STRENGTH_DEFINITIONS` in core), printed
+    on every report. They need product review.
+
+### Open questions and carry-forwards from Phase 5
+
+- **No live model has run.**
+  - The checkpoint's synthesis came from a scripted test provider that answers like a compliant
+    model, not from a model.
+  - It needs a provider decision and a platform key. Then run `pnpm --filter @repo/llm eval:live`
+    and a live report.
+- **What the guards cannot catch:**
+  - injected steering that uses no instruction words, identifiers, certainty or verdicts (a
+    paraphrased false conclusion);
+  - payloads in languages other than English;
+  - encoded payloads (base64).
+
+  Framing and the citation requirement are the defence there.
+- **Glyph coverage:** Latin, Greek and Cyrillic only. Devanagari and other scripts show as `?`,
+  counted. India-region tenants will need more Noto faces.
+- **PDF rendering happens in the API request.** It is fast for these sizes, but large reports may
+  need rendering in the worker.
+- **The handling marking's platform default is undecided** (`REPORT_HANDLING_MARKING` unset).
+- **Not built:** embeddings into pgvector (ARCHITECTURE-DECISIONS §7) and the
+  extraction/classification tasks. Their routing exists, but no feature calls them yet.
+- **Report generation cannot be cancelled**, like runs.

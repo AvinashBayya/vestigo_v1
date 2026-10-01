@@ -17,6 +17,7 @@ import { collectorsRegistry } from "./collectors.ts";
 import { createdAtColumn, idColumn, optionalTimestamp, tenantIdColumn } from "./columns.ts";
 import { quotaPeriod, usageUnit } from "./enums.ts";
 import { evidence } from "./evidence.ts";
+import { reports } from "./reports.ts";
 import { tenants, users } from "./tenancy.ts";
 import { jobs } from "./work.ts";
 
@@ -146,6 +147,11 @@ export const usageEvents = pgTable(
      * replay never charges twice (Phase 4).
      */
     attempt: integer("attempt"),
+    /**
+     * The report whose generation consumed these units (model tokens, Phase 5).
+     * With the attempt and unit, unique: a generation attempt is charged once.
+     */
+    reportId: uuid("report_id"),
     createdAt: createdAtColumn(),
   },
   (t) => [
@@ -167,10 +173,22 @@ export const usageEvents = pgTable(
     }),
     check("usage_events_quantity_non_negative", sql`${t.quantity} >= 0`),
     check("usage_events_attempt_positive", sql`${t.attempt} is null or ${t.attempt} >= 1`),
-    check("usage_events_attempt_with_job", sql`${t.attempt} is null or ${t.jobId} is not null`),
+    foreignKey({
+      name: "usage_events_report_fk",
+      columns: [t.tenantId, t.reportId],
+      foreignColumns: [reports.tenantId, reports.id],
+    }),
+    check(
+      "usage_events_attempt_with_work",
+      sql`${t.attempt} is null or ${t.jobId} is not null or ${t.reportId} is not null`,
+    ),
+    check("usage_events_one_work_item", sql`num_nonnulls(${t.jobId}, ${t.reportId}) <= 1`),
     uniqueIndex("usage_events_one_per_attempt")
       .on(t.tenantId, t.jobId, t.attempt, t.unit)
       .where(sql`${t.jobId} is not null`),
+    uniqueIndex("usage_events_one_per_report_attempt")
+      .on(t.tenantId, t.reportId, t.attempt, t.unit)
+      .where(sql`${t.reportId} is not null`),
   ],
 );
 

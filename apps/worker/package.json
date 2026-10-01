@@ -17,7 +17,8 @@
     "@repo/core": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/integrations": "workspace:*",
-    "pino": "10.3.1"
+    "pino": "10.3.1",
+    "@repo/llm": "workspace:*"
   },
   "devDependencies": {
     "@repo/osint-engine": "workspace:*",

@@ -13,6 +13,9 @@
  *                     or failing source fills only its own queue: its fixed
  *                     concurrency (the bulkhead) is the most of any worker's
  *                     slots it can ever hold.
+ *   reports           one job per requested report (ReportGenerator, Phase 5):
+ *                     assembly from a settled run, and a model-written
+ *                     synthesis when asked for. Its own bulkhead.
  *   dead-letter       every job that ran out of attempts, as a record to
  *                     inspect and replay. Nothing consumes it.
  *
@@ -26,6 +29,7 @@ import type { Database } from "@repo/db";
 import { z } from "zod";
 import type { RunFusion } from "../fusion/fuse.ts";
 import { RunNotReadyError, type RunCoordinator } from "../runs.ts";
+import type { ReportGenerator } from "../reports/generator.ts";
 import type { CollectorJobProcessor } from "./collector-job.ts";
 import { retryDelayMs, type RetryPolicy } from "./policy.ts";
 
@@ -34,6 +38,7 @@ import { retryDelayMs, type RetryPolicy } from "./policy.ts";
 export const INVESTIGATIONS_QUEUE = "investigations";
 export const FUSION_QUEUE = "fusion";
 export const DEAD_LETTER_QUEUE = "dead-letter";
+export const REPORTS_QUEUE = "reports";
 
 /** The queue for one upstream source's collector jobs. */
 export function collectQueueName(sourceId: string): string {
@@ -42,13 +47,17 @@ export function collectQueueName(sourceId: string): string {
 
 const RUN_MESSAGE = z.strictObject({ tenantId: z.uuid(), runId: z.uuid() });
 const COLLECT_MESSAGE = z.strictObject({ tenantId: z.uuid(), runId: z.uuid(), jobId: z.uuid() });
+const REPORT_MESSAGE = z.strictObject({ tenantId: z.uuid(), reportId: z.uuid() });
 
 export const DEAD_LETTER_MESSAGE = z.strictObject({
-  kind: z.enum(["INVESTIGATION", "COLLECT", "FUSION"]),
+  kind: z.enum(["INVESTIGATION", "COLLECT", "FUSION", "REPORT"]),
   tenantId: z.uuid(),
-  runId: z.uuid(),
+  /** The run, for every kind but REPORT. */
+  runId: z.uuid().nullable(),
   /** The collector job, for kind COLLECT. */
   jobId: z.uuid().nullable(),
+  /** The report, for kind REPORT. */
+  reportId: z.uuid().nullable(),
   queue: z.string(),
   errorCode: z.string(),
 });
@@ -115,6 +124,32 @@ export class InvestigationQueue {
     await this.#queue.add("plan", RUN_MESSAGE.parse({ tenantId, runId }), {
       ...deliveryOptions(this.#retry),
       jobId: `plan-${runId}`,
+    });
+  }
+
+  async close(): Promise<void> {
+    await this.#queue.close();
+  }
+}
+
+/** What the API uses to request a report. It never waits on generation. */
+export class ReportQueue {
+  readonly #queue: Queue;
+  readonly #retry: RetryPolicy;
+
+  constructor(connection: QueueConnection, retry: RetryPolicy) {
+    this.#queue = new Queue(REPORTS_QUEUE, {
+      connection: bullConnection(connection),
+      prefix: connection.prefix,
+    });
+    this.#retry = retry;
+  }
+
+  /** Enqueues the report's generation; enqueueing the same report twice adds it once. */
+  async enqueueReport(tenantId: TenantId, reportId: string): Promise<void> {
+    await this.#queue.add("generate", REPORT_MESSAGE.parse({ tenantId, reportId }), {
+      ...deliveryOptions(this.#retry),
+      jobId: `report-${reportId}`,
     });
   }
 
@@ -280,6 +315,8 @@ export interface WorkerPoolOptions {
   readonly collectConcurrency: (sourceId: string) => number;
   readonly investigationConcurrency: number;
   readonly fusionConcurrency: number;
+  /** Report generation; the reports queue is consumed only when this is given. */
+  readonly reports?: { readonly generator: ReportGenerator; readonly concurrency: number };
   readonly observer?: WorkerPoolObserver;
 }
 
@@ -300,6 +337,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
   const selected = selectQueues(options.queues, [
     INVESTIGATIONS_QUEUE,
     FUSION_QUEUE,
+    ...(options.reports === undefined ? [] : [REPORTS_QUEUE]),
     ...collectQueues.keys(),
   ]);
   const flows = new FlowProducer({ connection, prefix });
@@ -330,11 +368,33 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
       observer.deliveryFailed?.(queue, final, error);
       if (!final) return;
       try {
+        const code = errorCode(error);
+        if (kind === "REPORT") {
+          const report = REPORT_MESSAGE.parse(delivery.data);
+          // A crash on the last attempt: the report is failed here, never left RUNNING.
+          await options.reports?.generator.failUnrecorded(
+            parseTenantId(report.tenantId),
+            report.reportId,
+            { code, message: "The report's last attempt failed without recording an outcome." },
+          );
+          await recordDeadLetter(
+            {
+              kind,
+              tenantId: report.tenantId,
+              runId: null,
+              jobId: null,
+              reportId: report.reportId,
+              queue,
+              errorCode: code,
+            },
+            delivery.id ?? `${queue}-${String(Date.now())}`,
+          );
+          return;
+        }
         const message =
           kind === "COLLECT"
             ? COLLECT_MESSAGE.parse(delivery.data)
             : { ...RUN_MESSAGE.parse(delivery.data), jobId: null };
-        const code = errorCode(error);
         if (kind === "COLLECT" && message.jobId !== null) {
           // A crash or an infrastructure failure on the last attempt: the job
           // has no outcome recorded, so it is dead-lettered here.
@@ -353,6 +413,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
             tenantId: message.tenantId,
             runId: message.runId,
             jobId: message.jobId,
+            reportId: null,
             queue,
             errorCode: code,
           },
@@ -405,6 +466,26 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
           });
         }
         return { jobs: planned.jobs.length };
+      });
+    } else if (queue === REPORTS_QUEUE && options.reports !== undefined) {
+      const { generator, concurrency } = options.reports;
+      // Model calls are expensive: the bulkhead holds across every worker.
+      const handle = new Queue(queue, { connection, prefix });
+      await handle.setGlobalConcurrency(concurrency);
+      await handle.close();
+      start(queue, "REPORT", concurrency, async (delivery) => {
+        const message = REPORT_MESSAGE.safeParse(delivery.data);
+        if (!message.success) throw new UnrecoverableError("MESSAGE_INVALID");
+        const finalAttempt = delivery.attemptsMade + 1 >= (delivery.opts.attempts ?? 1);
+        const disposition = await generator.process(
+          parseTenantId(message.data.tenantId),
+          message.data.reportId,
+          { finalAttempt },
+        );
+        if (disposition.kind === "RETRY") {
+          throw new JobRetryError(disposition.delayMs, disposition.errorCode);
+        }
+        return { disposition: disposition.kind };
       });
     } else if (queue === FUSION_QUEUE) {
       start(queue, "FUSION", options.fusionConcurrency, async (delivery) => {

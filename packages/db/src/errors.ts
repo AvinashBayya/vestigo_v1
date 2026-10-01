@@ -139,6 +139,19 @@ export class JobRecordedOnceError extends AppError {
   }
 }
 
+/**
+ * The database refused to change a report's document once written, or the
+ * status of a finished report (migration 0014).
+ */
+export class ReportRecordedOnceError extends AppError {
+  readonly code = "REPORT_RECORDED_ONCE";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ReportRecordedOnceError";
+  }
+}
+
 export class InvalidIdentifierError extends AppError {
   readonly code = "INVALID_IDENTIFIER";
 
@@ -244,6 +257,8 @@ export function translateDatabaseError(error: unknown): Error {
       return new CollectorNotEnabledError();
     case "JOB01":
       return new JobRecordedOnceError(message);
+    case "REP01":
+      return new ReportRecordedOnceError(message);
     default:
       // Data exceptions (class 22) can echo the offending input value.
       return sqlState?.startsWith("22")

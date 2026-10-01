@@ -13,6 +13,7 @@ import {
 import { createPlatformRegistry, type CollectorRegistry } from "@repo/collectors";
 import {
   InvestigationQueue,
+  ReportQueue,
   JobReplayer,
   type QueueConnection,
   type RetryPolicy,
@@ -57,6 +58,8 @@ export async function createTestApi(
     readonly logLevel?: Env["LOG_LEVEL"];
     /** The registry the run routes label jobs from. Defaults to the platform's. */
     readonly registry?: CollectorRegistry;
+    /** Why synthesis is unavailable; null (the default) offers it. */
+    readonly synthesisUnavailable?: string | null;
   } = {},
 ): Promise<TestApi> {
   const quiet = () => undefined;
@@ -87,6 +90,7 @@ export async function createTestApi(
   const registry = options.registry ?? createPlatformRegistry();
   const investigations = new InvestigationQueue(queue, TEST_RETRY);
   const replayer = new JobReplayer({ db, registry, connection: queue, retry: TEST_RETRY });
+  const reports = new ReportQueue(queue, TEST_RETRY);
   const services: Services = {
     db,
     authStore,
@@ -98,7 +102,14 @@ export async function createTestApi(
     rateLimiter: new FixedWindowRateLimiter({ redis, keyPrefix: `test:${randomUUID()}:` }),
     apiKeyRateLimit: { limit: options.apiKeyLimit ?? 1000, windowSeconds: 60 },
     trustedOrigins: new Set([WEB_ORIGIN, BASE_URL]),
-    runs: { investigations, replayer, registry, eventsPollMs: 100 },
+    runs: {
+      investigations,
+      replayer,
+      registry,
+      eventsPollMs: 100,
+      reports,
+      synthesisUnavailable: options.synthesisUnavailable ?? null,
+    },
   };
   const app = await buildApp({ logger: false, services });
   await app.ready();
@@ -112,7 +123,11 @@ export async function createTestApi(
     retry: TEST_RETRY,
     async close() {
       await app.close();
-      await Promise.all([investigations.close().catch(quiet), replayer.close().catch(quiet)]);
+      await Promise.all([
+        investigations.close().catch(quiet),
+        replayer.close().catch(quiet),
+        reports.close().catch(quiet),
+      ]);
       await Promise.all([db.close(), authStore.close(), redis.quit().catch(quiet)]);
     },
   };
@@ -163,7 +178,7 @@ export class Browser {
   }
 
   async request(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "PUT",
     url: string,
     body?: unknown,
     headers: Record<string, string> = {},

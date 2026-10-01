@@ -14,6 +14,7 @@ import {
   TenantQuotasRepository,
   UsageEventsRepository,
 } from "./operations.ts";
+import { ReportsRepository } from "./reports.ts";
 import { ApiKeysRepository, TenantsRepository, UsersRepository } from "./tenancy.ts";
 import {
   AuditLogRepository,
@@ -47,6 +48,7 @@ export interface Repositories {
   readonly credentials: CredentialsRepository;
   readonly usageEvents: UsageEventsRepository;
   readonly tenantQuotas: TenantQuotasRepository;
+  readonly reports: ReportsRepository;
 }
 
 /** Table each repository owns; the isolation tests check every table is covered. */
@@ -72,6 +74,7 @@ export const REPOSITORY_TABLES: Readonly<Record<keyof Repositories, string>> = {
   credentials: "credentials",
   usageEvents: "usage_events",
   tenantQuotas: "tenant_quotas",
+  reports: "reports",
 };
 
 export function createRepositories(scope: TenantScope): Repositories {
@@ -97,6 +100,7 @@ export function createRepositories(scope: TenantScope): Repositories {
     credentials: new CredentialsRepository(scope),
     usageEvents: new UsageEventsRepository(scope),
     tenantQuotas: new TenantQuotasRepository(scope),
+    reports: new ReportsRepository(scope),
   };
 }
 
@@ -105,4 +109,5 @@ export * from "./entities.ts";
 export * from "./operations.ts";
 export * from "./tenancy.ts";
 export * from "./work.ts";
+export * from "./reports.ts";
 export { TenantRepository, type ListOptions } from "./base.ts";

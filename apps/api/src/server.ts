@@ -1,4 +1,4 @@
-import { ConfigError, loadEnv, type Env } from "@repo/config";
+import { ConfigError, loadEnv, resolveLlmConfiguration, type Env } from "@repo/config";
 import { createAuthStore, createDatabase } from "@repo/db";
 import {
   ApiKeyService,
@@ -9,7 +9,7 @@ import {
   MasterKey,
 } from "@repo/integrations";
 import { createPlatformRegistry } from "@repo/collectors";
-import { InvestigationQueue, JobReplayer } from "@repo/osint-engine";
+import { InvestigationQueue, JobReplayer, ReportQueue } from "@repo/osint-engine";
 import { buildApp } from "./app.ts";
 import { createAuth } from "./auth/better-auth.ts";
 
@@ -56,6 +56,9 @@ const retry = {
 const registry = createPlatformRegistry();
 const investigations = new InvestigationQueue(queueConnection, retry);
 const replayer = new JobReplayer({ db, registry, connection: queueConnection, retry });
+const reports = new ReportQueue(queueConnection, retry);
+// Resolved here as the worker resolves it, so a misconfigured profile stops startup.
+const llm = resolveLlmConfiguration(env);
 
 const app = await buildApp({
   logger: { level: env.LOG_LEVEL },
@@ -78,7 +81,14 @@ const app = await buildApp({
     rateLimiter: new FixedWindowRateLimiter({ redis, keyPrefix: "rate-limit:" }),
     apiKeyRateLimit: { limit: env.API_KEY_RATE_LIMIT_PER_MINUTE, windowSeconds: 60 },
     trustedOrigins,
-    runs: { investigations, replayer, registry, eventsPollMs: env.RUN_EVENTS_POLL_MS },
+    runs: {
+      investigations,
+      replayer,
+      registry,
+      eventsPollMs: env.RUN_EVENTS_POLL_MS,
+      reports,
+      synthesisUnavailable: llm.status === "READY" ? null : llm.reason,
+    },
   },
 });
 
@@ -87,7 +97,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     app.log.info({ signal }, "shutting down");
     void app
       .close()
-      .then(() => Promise.all([investigations.close(), replayer.close()]))
+      .then(() => Promise.all([investigations.close(), replayer.close(), reports.close()]))
       .then(() => Promise.all([db.close(), authStore.close(), redis.quit()]))
       .then(() => process.exit(0));
   });

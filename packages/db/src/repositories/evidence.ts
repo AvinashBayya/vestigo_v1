@@ -1,5 +1,5 @@
 import type { ClaimStrength } from "@repo/core";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { claims, evidence } from "../schema/index.ts";
 import {
   firstRow,
@@ -75,6 +75,19 @@ export class EvidenceRepository extends TenantRepository {
     );
   }
 
+  /** The evidence rows with these ids, in id order. Unknown ids are simply absent. */
+  async findByIds(ids: readonly string[]): Promise<Evidence[]> {
+    if (ids.length === 0) return [];
+    if (ids.length > 1000) throw new RangeError("at most 1000 evidence ids at once");
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(evidence)
+        .where(and(this.inTenant(evidence), inArray(evidence.id, ids.map(requireUuid))))
+        .orderBy(asc(evidence.id)),
+    );
+  }
+
   async list(options: ListOptions): Promise<Evidence[]> {
     return this.run((tx) =>
       tx
@@ -137,6 +150,38 @@ export class ClaimsRepository extends TenantRepository {
         .orderBy(asc(claims.createdAt))
         .limit(limitOf(options)),
     );
+  }
+
+  /**
+   * Claims citing any of the given evidence, oldest first. The limit is
+   * required, so a caller always knows when it did not receive them all.
+   */
+  async listForEvidence(evidenceIds: readonly string[], options: ListOptions): Promise<Claim[]> {
+    if (evidenceIds.length === 0) return [];
+    if (evidenceIds.length > 1000) throw new RangeError("at most 1000 evidence ids at once");
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(claims)
+        .where(and(this.inTenant(claims), inArray(claims.evidenceId, evidenceIds.map(requireUuid))))
+        .orderBy(asc(claims.createdAt), asc(claims.id))
+        .limit(limitOf(options)),
+    );
+  }
+
+  /** How many claims cite any of the given evidence: measured, so zero means none. */
+  async countForEvidence(evidenceIds: readonly string[]): Promise<number> {
+    if (evidenceIds.length === 0) return 0;
+    if (evidenceIds.length > 1000) throw new RangeError("at most 1000 evidence ids at once");
+    return this.run(async (tx) => {
+      const [row] = await tx
+        .select({ total: sql<string>`count(*)` })
+        .from(claims)
+        .where(
+          and(this.inTenant(claims), inArray(claims.evidenceId, evidenceIds.map(requireUuid))),
+        );
+      return Number(row?.total);
+    });
   }
 
   /** Claims about any of the given entities, oldest first. */

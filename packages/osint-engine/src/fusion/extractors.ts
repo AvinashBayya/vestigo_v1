@@ -2,10 +2,17 @@
  * What each collector's recorded result says, as entities, relationships and
  * claims, each claim citing the one evidence item it rests on.
  *
- * The rules every extractor follows:
- *   - A value outside the result's `derived` block is the source's, and its
- *     claim carries the evidence's own strength. A value under `derived` is
- *     this collector's computation, and its claim is DERIVED (Phase 3B).
+ * A claim's strength is decided mechanically, never by the extractor (Phase 5,
+ * on the Phase 3B `derived` contract). An extractor names WHERE in the result
+ * a claim's value is, as a path, and never supplies the value itself.
+ * `resolveClaims` reads the value there and sets the strength:
+ *   - a path through a `derived` block is the collector's computation: DERIVED;
+ *   - any other path is the source's value, with the evidence's own strength,
+ *     and any `derived` block nested inside that value is stripped from it.
+ * So a value inside `derived` can never be stored as OBSERVED or REPORTED, and
+ * a reported value can never carry a computed field along with it.
+ *
+ * The other rules every extractor follows:
  *   - A null value is absence and makes no claim: nothing is asserted about
  *     what was not stated.
  *   - An entity is identified only by an identifier the result states (a
@@ -18,15 +25,23 @@ import {
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
   CRTSH_RESULT,
+  DERIVED_KEY,
   DEVTO_RESULT,
   DNS_RESULT,
   GITHUB_RESULT,
   HACKERNEWS_RESULT,
   RDAP_RESULT,
+  reportedPart,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
 } from "@repo/collectors";
-import { NotImplementedError, type EntityKind, type TargetType } from "@repo/core";
+import {
+  AppError,
+  NotImplementedError,
+  type ClaimStrength,
+  type EntityKind,
+  type TargetType,
+} from "@repo/core";
 import {
   externalIdentifier,
   normaliseDomain,
@@ -51,15 +66,21 @@ export interface RelationshipDraft {
   readonly kind: string;
 }
 
+/** Keys and array indices from the result's root to a value. */
+export type ResultPath = readonly (string | number)[];
+
 export interface ClaimDraft {
   /** An entity key, or a relationship key. */
   readonly subject: { readonly entity: string } | { readonly relationship: string };
   readonly attribute: string;
-  readonly value: unknown;
+  /**
+   * Where the claim's value is in the result. For a relationship claim, the
+   * value that established the relationship: it decides the strength, and the
+   * claim itself stores no value.
+   */
+  readonly path: ResultPath;
   /** Index into the job's evidence list. */
   readonly evidence: number;
-  /** A value under the result's `derived` block: the claim is DERIVED. */
-  readonly derived: boolean;
 }
 
 export interface Extraction {
@@ -75,12 +96,72 @@ export interface ExtractorInput {
 
 export type Extractor = (input: ExtractorInput) => Extraction;
 
-/** The source's own values: everything but the collector's `derived` block. */
-function reported<T extends object>(value: T): Omit<T, "derived"> {
-  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "derived")) as Omit<
-    T,
-    "derived"
-  >;
+/** An extractor pointed at a place the result does not have. A bug, never data. */
+export class ClaimPathError extends AppError {
+  readonly code = "CLAIM_PATH_INVALID";
+
+  constructor(path: ResultPath) {
+    super(`An extractor named a claim path the result does not have: ${path.join(".")}.`);
+    this.name = "ClaimPathError";
+  }
+}
+
+/** A claim with its value read and its strength decided. */
+export interface ResolvedClaim {
+  readonly subject: ClaimDraft["subject"];
+  readonly attribute: string;
+  readonly value: unknown;
+  readonly strength: ClaimStrength;
+  readonly evidence: number;
+}
+
+/** True when the path passes through a `derived` block: the value is computed. */
+export function isDerivedPath(path: ResultPath): boolean {
+  return path.some((segment) => segment === DERIVED_KEY);
+}
+
+function valueAt(result: unknown, path: ResultPath): unknown {
+  let node: unknown = result;
+  for (const segment of path) {
+    if (typeof segment === "number") {
+      if (!Array.isArray(node) || segment < 0 || segment >= node.length) {
+        throw new ClaimPathError(path);
+      }
+      node = node[segment] as unknown;
+    } else {
+      if (typeof node !== "object" || node === null || Array.isArray(node) || !(segment in node)) {
+        throw new ClaimPathError(path);
+      }
+      node = (node as Record<string, unknown>)[segment];
+    }
+  }
+  return node;
+}
+
+/**
+ * Reads each claim's value from the result and decides its strength. A claim
+ * whose value is null is absence and is dropped. A relationship claim stores
+ * no value; its path only decides its strength.
+ */
+export function resolveClaims(
+  claims: readonly ClaimDraft[],
+  result: unknown,
+  evidenceStrength: ClaimStrength,
+): ResolvedClaim[] {
+  const resolved: ResolvedClaim[] = [];
+  for (const claim of claims) {
+    const raw = valueAt(result, claim.path);
+    if (raw === null || raw === undefined) continue;
+    const derived = isDerivedPath(claim.path);
+    resolved.push({
+      subject: claim.subject,
+      attribute: claim.attribute,
+      value: "relationship" in claim.subject ? null : derived ? raw : reportedPart(raw),
+      strength: derived ? "DERIVED" : evidenceStrength,
+      evidence: claim.evidence,
+    });
+  }
+  return resolved;
 }
 
 /** `platform_attribute` in snake case, e.g. ("github", "publicRepositories") → github_public_repositories. */
@@ -89,7 +170,7 @@ function attributeName(prefix: string, field: string): string {
   return snake.startsWith(`${prefix}_`) ? snake : `${prefix}_${snake}`;
 }
 
-/** Collects drafts, keeping one entity per key and dropping claims about absent values. */
+/** Collects drafts, keeping one entity and one relationship per key. */
 class Drafts {
   readonly #entities = new Map<string, EntityDraft>();
   readonly #relationships = new Map<string, RelationshipDraft>();
@@ -103,30 +184,17 @@ class Drafts {
     return key;
   }
 
-  /** A claim about an entity; none when the value is null (absence asserts nothing). */
-  claim(
-    entity: string,
-    attribute: string,
-    value: unknown,
-    evidence: number,
-    derived = false,
-  ): void {
-    if (value === null || value === undefined) return;
-    this.#claims.push({ subject: { entity }, attribute, value, evidence, derived });
+  /** A claim about an entity: its value is whatever the result holds at `path`. */
+  claim(entity: string, attribute: string, path: ResultPath, evidence: number): void {
+    this.#claims.push({ subject: { entity }, attribute, path, evidence });
   }
 
-  /** A relationship, and the claim citing the evidence that asserts it. */
-  relate(from: string, to: string, kind: string, evidence: number, derived = false): void {
+  /** A relationship, and the claim citing the evidence and the value that assert it. */
+  relate(from: string, to: string, kind: string, evidence: number, basis: ResultPath): void {
     if (from === to) return;
     const key = `${from}>${kind}>${to}`;
     if (!this.#relationships.has(key)) this.#relationships.set(key, { key, from, to, kind });
-    this.#claims.push({
-      subject: { relationship: key },
-      attribute: kind,
-      value: null,
-      evidence,
-      derived,
-    });
+    this.#claims.push({ subject: { relationship: key }, attribute: kind, path: basis, evidence });
   }
 
   build(): Extraction {
@@ -165,20 +233,22 @@ const crtsh: Extractor = ({ target, result }) => {
   const r = CRTSH_RESULT.parse(result);
   const d = new Drafts();
   const domain = targetEntity(d, target);
-  for (const certificate of r.certificates)
-    d.claim(domain, "certificate", reported(certificate), 0);
-  for (const host of r.derived.hostnames) {
+  r.certificates.forEach((_certificate, i) => {
+    d.claim(domain, "certificate", ["certificates", i], 0);
+  });
+  r.derived.hostnames.forEach((host, i) => {
+    const at = ["derived", "hostnames", i] as const;
     if (host.wildcard) {
-      d.claim(domain, "wildcard_certificate_name", host, 0, true);
-      continue;
+      d.claim(domain, "wildcard_certificate_name", at, 0);
+      return;
     }
     const name = d.entity("DOMAIN", normaliseDomain(host.name), host.name);
-    d.relate(name, domain, "subdomain_of", 0, true);
-    d.claim(name, "certificate_ids", host.certificateIds, 0, true);
-    d.claim(name, "earliest_not_before", host.earliestNotBefore, 0, true);
-    d.claim(name, "latest_not_after", host.latestNotAfter, 0, true);
-    d.claim(name, "certificate_issuers", host.issuerOrganisations, 0, true);
-  }
+    d.relate(name, domain, "subdomain_of", 0, at);
+    d.claim(name, "certificate_ids", [...at, "certificateIds"], 0);
+    d.claim(name, "earliest_not_before", [...at, "earliestNotBefore"], 0);
+    d.claim(name, "latest_not_after", [...at, "latestNotAfter"], 0);
+    d.claim(name, "certificate_issuers", [...at, "issuerOrganisations"], 0);
+  });
   return d.build();
 };
 
@@ -186,17 +256,17 @@ const dns: Extractor = ({ target, result }) => {
   const r = DNS_RESULT.parse(result);
   const d = new Drafts();
   const domain = targetEntity(d, target);
-  for (const record of r.answer) {
+  r.answer.forEach((record, i) => {
     if (record.type === 1) {
       const ip = d.entity("IP_ADDRESS", record.data.toLowerCase(), record.data);
-      d.relate(domain, ip, "resolves_to", 0);
-      d.claim(ip, "a_record", { name: record.name, ttlSeconds: record.ttlSeconds }, 0);
+      d.relate(domain, ip, "resolves_to", 0, ["answer", i]);
+      d.claim(ip, "a_record", ["answer", i], 0);
     } else {
-      d.claim(domain, "dns_record", record, 0);
+      d.claim(domain, "dns_record", ["answer", i], 0);
     }
-  }
-  d.claim(domain, "dnssec_authenticated", r.authenticatedData, 0);
-  d.claim(domain, "dns_answer_truncated", r.truncated, 0);
+  });
+  d.claim(domain, "dnssec_authenticated", ["authenticatedData"], 0);
+  d.claim(domain, "dns_answer_truncated", ["truncated"], 0);
   return d.build();
 };
 
@@ -204,19 +274,19 @@ const rdap: Extractor = ({ target, result }) => {
   const r = RDAP_RESULT.parse(result);
   const d = new Drafts();
   const domain = targetEntity(d, target);
-  d.claim(domain, "rdap_ldh_name", r.ldhName, 0);
-  d.claim(domain, "rdap_unicode_name", r.unicodeName, 0);
-  d.claim(domain, "rdap_handle", r.handle, 0);
-  d.claim(domain, "rdap_status", r.status, 0);
-  d.claim(domain, "registrar", r.registrar, 0);
-  d.claim(domain, "rdap_events", r.events, 0);
-  d.claim(domain, "delegation_signed", r.delegationSigned, 0);
-  for (const nameserver of r.nameservers ?? []) {
-    if (nameserver.ldhName === null) continue;
+  d.claim(domain, "rdap_ldh_name", ["ldhName"], 0);
+  d.claim(domain, "rdap_unicode_name", ["unicodeName"], 0);
+  d.claim(domain, "rdap_handle", ["handle"], 0);
+  d.claim(domain, "rdap_status", ["status"], 0);
+  d.claim(domain, "registrar", ["registrar"], 0);
+  d.claim(domain, "rdap_events", ["events"], 0);
+  d.claim(domain, "delegation_signed", ["delegationSigned"], 0);
+  (r.nameservers ?? []).forEach((nameserver, i) => {
+    if (nameserver.ldhName === null) return;
     const ns = d.entity("DOMAIN", normaliseDomain(nameserver.ldhName), nameserver.ldhName);
-    d.relate(domain, ns, "uses_nameserver", 0);
-  }
-  d.claim(domain, "rdap_responding_host", r.derived.respondingHost, 0, true);
+    d.relate(domain, ns, "uses_nameserver", 0, ["nameservers", i, "ldhName"]);
+  });
+  d.claim(domain, "rdap_responding_host", ["derived", "respondingHost"], 0);
   return d.build();
 };
 
@@ -224,11 +294,11 @@ const wayback: Extractor = ({ target, result }) => {
   const r = WAYBACK_RESULT.parse(result);
   const d = new Drafts();
   const subject = targetEntity(d, target);
-  for (const capture of r.captures) {
-    d.claim(subject, "archived_capture", reported(capture), 0);
-    d.claim(subject, "archived_capture_time", capture.derived.capturedAt, 0, true);
-  }
-  d.claim(subject, "archive_coverage", r.derived.coverage, 0, true);
+  r.captures.forEach((_capture, i) => {
+    d.claim(subject, "archived_capture", ["captures", i], 0);
+    d.claim(subject, "archived_capture_time", ["captures", i, "derived", "capturedAt"], 0);
+  });
+  d.claim(subject, "archive_coverage", ["derived", "coverage"], 0);
   return d.build();
 };
 
@@ -236,9 +306,9 @@ const contactPhone: Extractor = ({ target, result }) => {
   const r = CONTACT_PHONE_RESULT.parse(result);
   const d = new Drafts();
   const phone = targetEntity(d, target);
-  // A local analysis: every value is derived, and the evidence is DERIVED too.
-  for (const [attribute, value] of Object.entries(r)) {
-    d.claim(phone, attributeName("phone", attribute), value, 0, true);
+  // A local analysis: the evidence itself is DERIVED, so every claim is too.
+  for (const attribute of Object.keys(r)) {
+    d.claim(phone, attributeName("phone", attribute), [attribute], 0);
   }
   return d.build();
 };
@@ -247,7 +317,8 @@ const wikidata: Extractor = ({ target, result }) => {
   const r = WIKIDATA_RESULT.parse(result);
   const d = new Drafts();
   const searched = targetEntity(d, target);
-  for (const candidate of r.candidates) {
+  r.candidates.forEach((candidate, i) => {
+    const at = ["candidates", i] as const;
     // A candidate is the Wikidata item, identified by its QID; the match to
     // the searched name is a relationship, never an identity.
     const item = d.entity(
@@ -255,15 +326,15 @@ const wikidata: Extractor = ({ target, result }) => {
       externalIdentifier("wikidata", candidate.wikidataItemId),
       candidate.label ?? candidate.wikidataItemId,
     );
-    d.relate(searched, item, "wikidata_search_candidate", 0);
-    d.claim(item, "wikidata_item_id", candidate.wikidataItemId, 1);
-    d.claim(item, "wikidata_matched_by", candidate.matchedBy, 0);
-    d.claim(item, "wikidata_matched_text", candidate.matchedText, 0);
-    d.claim(item, "label", candidate.label, 1);
-    d.claim(item, "description", candidate.description, 1);
-    d.claim(item, "wikidata_item_last_edited_at", candidate.itemLastEditedAt, 1);
-    d.claim(item, "wikidata_claims", candidate.claims, 1);
-  }
+    d.relate(searched, item, "wikidata_search_candidate", 0, [...at, "wikidataItemId"]);
+    d.claim(item, "wikidata_item_id", [...at, "wikidataItemId"], 1);
+    d.claim(item, "wikidata_matched_by", [...at, "matchedBy"], 0);
+    d.claim(item, "wikidata_matched_text", [...at, "matchedText"], 0);
+    d.claim(item, "label", [...at, "label"], 1);
+    d.claim(item, "description", [...at, "description"], 1);
+    d.claim(item, "wikidata_item_last_edited_at", [...at, "itemLastEditedAt"], 1);
+    d.claim(item, "wikidata_claims", [...at, "claims"], 1);
+  });
   return d.build();
 };
 
@@ -271,25 +342,21 @@ const github: Extractor = ({ target, result }) => {
   const r = GITHUB_RESULT.parse(result);
   const d = new Drafts();
   const username = targetEntity(d, target);
-  const { login, ...profile } = r.account;
   const account = d.entity(
     "SOCIAL_ACCOUNT",
-    socialAccountIdentifier("github", login),
-    `GitHub: ${login}`,
+    socialAccountIdentifier("github", r.account.login),
+    `GitHub: ${r.account.login}`,
   );
-  d.relate(username, account, "account_with_handle", 0);
-  for (const [attribute, value] of Object.entries(profile)) {
-    d.claim(account, attributeName("github", attribute), value, 0);
+  d.relate(username, account, "account_with_handle", 0, ["account", "login"]);
+  for (const attribute of Object.keys(r.account)) {
+    if (attribute === "login") continue;
+    d.claim(account, attributeName("github", attribute), ["account", attribute], 0);
   }
-  d.claim(account, "github_repositories", r.repositories.items, 1);
-  d.claim(account, "github_repositories_partial", r.derived.repositories.partial, 1, true);
-  d.claim(
-    account,
-    "github_commit_search",
-    { totalCount: r.commits.totalCount, incompleteResults: r.commits.incompleteResults },
-    2,
-  );
-  d.claim(account, "github_recent_commits", r.commits.items, 2);
+  d.claim(account, "github_repositories", ["repositories", "items"], 1);
+  d.claim(account, "github_repositories_partial", ["derived", "repositories", "partial"], 1);
+  d.claim(account, "github_commit_search_total_count", ["commits", "totalCount"], 2);
+  d.claim(account, "github_commit_search_incomplete", ["commits", "incompleteResults"], 2);
+  d.claim(account, "github_recent_commits", ["commits", "items"], 2);
   return d.build();
 };
 
@@ -302,19 +369,14 @@ const hackernews: Extractor = ({ target, result }) => {
     socialAccountIdentifier("hackernews", r.account.handle),
     `Hacker News: ${r.account.handle}`,
   );
-  d.relate(username, account, "account_with_handle", 0);
-  d.claim(account, "hackernews_created_unix_seconds", r.account.created, 0);
-  d.claim(account, "hackernews_karma", r.account.karma, 0);
-  d.claim(account, "hackernews_about", r.account.about, 0);
-  d.claim(account, "hackernews_created_at", r.derived.accountCreatedAt, 0, true);
-  d.claim(account, "hackernews_submitted_item_count", r.derived.submittedItemCount, 0, true);
-  d.claim(account, "hackernews_indexed_item_count", r.recentItems.indexedItemCount, 1);
-  d.claim(
-    account,
-    "hackernews_recent_items",
-    r.recentItems.items.map((item) => reported(item)),
-    1,
-  );
+  d.relate(username, account, "account_with_handle", 0, ["account", "handle"]);
+  d.claim(account, "hackernews_created_unix_seconds", ["account", "created"], 0);
+  d.claim(account, "hackernews_karma", ["account", "karma"], 0);
+  d.claim(account, "hackernews_about", ["account", "about"], 0);
+  d.claim(account, "hackernews_created_at", ["derived", "accountCreatedAt"], 0);
+  d.claim(account, "hackernews_submitted_item_count", ["derived", "submittedItemCount"], 0);
+  d.claim(account, "hackernews_indexed_item_count", ["recentItems", "indexedItemCount"], 1);
+  d.claim(account, "hackernews_recent_items", ["recentItems", "items"], 1);
   return d.build();
 };
 
@@ -322,17 +384,17 @@ const devto: Extractor = ({ target, result }) => {
   const r = DEVTO_RESULT.parse(result);
   const d = new Drafts();
   const username = targetEntity(d, target);
-  const { username: handle, ...profile } = r.account;
   const account = d.entity(
     "SOCIAL_ACCOUNT",
-    socialAccountIdentifier("devto", handle),
-    `DEV: ${handle}`,
+    socialAccountIdentifier("devto", r.account.username),
+    `DEV: ${r.account.username}`,
   );
-  d.relate(username, account, "account_with_handle", 0);
+  d.relate(username, account, "account_with_handle", 0, ["account", "username"]);
   // The Twitter and GitHub handles are claims as the user entered them, not
   // accounts: DEV does not verify them, and neither does fusion.
-  for (const [attribute, value] of Object.entries(profile)) {
-    d.claim(account, attributeName("devto", attribute), value, 0);
+  for (const attribute of Object.keys(r.account)) {
+    if (attribute === "username") continue;
+    d.claim(account, attributeName("devto", attribute), ["account", attribute], 0);
   }
   return d.build();
 };
@@ -341,20 +403,20 @@ const commoncrawl: Extractor = ({ target, result }) => {
   const r = COMMONCRAWL_RESULT.parse(result);
   const d = new Drafts();
   const domain = targetEntity(d, target);
-  d.claim(domain, "commoncrawl_index", r.index, 0);
-  for (const capture of r.captures) {
-    d.claim(domain, "crawled_capture", reported(capture), 1);
-    d.claim(domain, "crawled_capture_time", capture.derived.capturedAt, 1, true);
-  }
-  d.claim(domain, "commoncrawl_limit_reached", r.derived.limitReached, 1, true);
-  d.claim(domain, "commoncrawl_note", r.derived.note, 1, true);
+  d.claim(domain, "commoncrawl_index", ["index"], 0);
+  r.captures.forEach((_capture, i) => {
+    d.claim(domain, "crawled_capture", ["captures", i], 1);
+    d.claim(domain, "crawled_capture_time", ["captures", i, "derived", "capturedAt"], 1);
+  });
+  d.claim(domain, "commoncrawl_limit_reached", ["derived", "limitReached"], 1);
+  d.claim(domain, "commoncrawl_note", ["derived", "note"], 1);
   return d.build();
 };
 
 /**
  * One extractor per platform collector. A collector without one cannot be
- * fused, and fusion refuses to mark its job fused (test/fusion.test.ts checks
- * every registered collector has one).
+ * fused, and fusion refuses to mark its job fused (a test checks every
+ * registered collector has one).
  */
 export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   crtsh,
