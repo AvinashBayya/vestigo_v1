@@ -70,6 +70,8 @@ export interface ReportGeneratorOptions {
   readonly llm: LlmClient | { readonly unavailable: string };
   /** The platform's handling marking, used when a tenant has not set one. */
   readonly defaultHandlingMarking: string | null;
+  /** The product name (PRODUCT_NAME), stored in each report as its producer. */
+  readonly producedBy: string;
   readonly retry: RetryPolicy;
   readonly limits?: AssemblyLimits;
   readonly clock?: () => Date;
@@ -134,7 +136,13 @@ export class ReportGenerator {
         assembleReport(
           repos,
           this.#options.registry,
-          { reportId, runId: report.runId, generatedAt, handlingMarking: claimed.marking },
+          {
+            reportId,
+            runId: report.runId,
+            generatedAt,
+            handlingMarking: claimed.marking,
+            producedBy: this.#options.producedBy,
+          },
           this.#options.limits ?? DEFAULT_ASSEMBLY_LIMITS,
         ),
       );

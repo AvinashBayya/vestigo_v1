@@ -38,8 +38,66 @@ const Endpoint = z.object({
   identifier: z.string().nullable(),
 });
 
+const text = z.string();
+const ReportWordingSchema = z.object({
+  glossary: z.array(z.object({ strength: Strength, definition: text })),
+  headings: z.object({
+    coverage: text,
+    notCollected: text,
+    collected: text,
+    standingLimits: text,
+    glossary: text,
+    synthesis: text,
+    findings: text,
+    relationships: text,
+    untrustedContent: text,
+    evidenceBasis: text,
+    attribution: text,
+    renderingNote: text,
+  }),
+  cover: z.object({ target: text, collectedAs: text, run: text, runValue: text, generated: text }),
+  marking: z.object({ set: text, notSet: text }),
+  footer: z.object({ report: text, page: text }),
+  states: z.record(z.enum(COVERAGE_STATES), text),
+  coverage: z.object({
+    allCollected: text,
+    noneCollected: text,
+    notApplicable: text,
+    evidenceItems: text,
+    attempts: text,
+    omittedClaims: text,
+  }),
+  synthesis: z.object({ model: text, notRequested: text, none: text }),
+  findings: z.object({ none: text, emptyValue: text, shortened: text }),
+  untrustedContent: z.object({ intro: text, line: text }),
+  evidence: z.object({
+    intro: text,
+    none: text,
+    columns: z.object({
+      number: text,
+      source: text,
+      collected: text,
+      strength: text,
+      claims: text,
+    }),
+    notRecorded: text,
+    detail: text,
+    noUrl: text,
+  }),
+  footnote: z.object({
+    line: text,
+    collectedAt: text,
+    collectedUnknown: text,
+    noUrl: text,
+    missing: text,
+  }),
+  attribution: z.object({ none: text }),
+  renderingNote: text,
+  tabular: z.object({ markingNotSet: text, notRecorded: text }),
+});
+
 const ReportDocumentSchema = z.object({
-  formatVersion: z.literal(1),
+  formatVersion: z.literal(2),
   reportId: z.uuid(),
   title: z.string(),
   investigationId: z.uuid(),
@@ -150,6 +208,10 @@ const ReportDocumentSchema = z.object({
     z.object({ sourceNumber: z.number().int().min(1), patterns: z.array(z.string()) }),
   ),
   omittedClaims: z.number().int().min(0),
+  /** Every fixed word the renderers print, as it stood when the report was generated. */
+  wording: ReportWordingSchema,
+  /** The product that generated the report. */
+  producedBy: z.string(),
 }) satisfies z.ZodType<ReportDocument>;
 
 const ReportView = z.object({

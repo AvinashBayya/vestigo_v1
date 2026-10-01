@@ -48,7 +48,9 @@ function sourcesOf(document: ReportDocument, numbers: readonly number[]): Report
 }
 
 const marking = (document: ReportDocument): string =>
-  document.handlingMarking === null ? "not set" : document.handlingMarking;
+  document.handlingMarking === null
+    ? document.wording.tabular.markingNotSet
+    : document.handlingMarking;
 
 export const REPORT_CSV_HEADERS = [
   "report_id",
@@ -78,14 +80,15 @@ export function renderReportCsv(document: ReportDocument): string {
     document.run.status,
     String(document.coverage.partial),
   ];
+  const notRecorded = document.wording.tabular.notRecorded;
   const cited = (numbers: readonly number[]) => {
     const sources = sourcesOf(document, numbers);
     return [
       numbers.join(";"),
       sources.map((s) => s.evidenceId).join(";"),
       sources.map((s) => s.sourceLabel).join(";"),
-      sources.map((s) => (s.sourceUrl === null ? "not recorded" : s.sourceUrl)).join(";"),
-      sources.map((s) => (s.collectedAt === null ? "not recorded" : s.collectedAt)).join(";"),
+      sources.map((s) => (s.sourceUrl === null ? notRecorded : s.sourceUrl)).join(";"),
+      sources.map((s) => (s.collectedAt === null ? notRecorded : s.collectedAt)).join(";"),
       attributionsFor(document, sources),
     ];
   };

@@ -24,6 +24,7 @@ import {
 import {
   AppError,
   REPORT_FORMAT_VERSION,
+  REPORT_WORDING,
   type ClaimStrength,
   type CoverageEntry,
   type ReportAttribution,
@@ -74,6 +75,8 @@ export interface AssemblyInput {
   readonly runId: string;
   readonly generatedAt: Date;
   readonly handlingMarking: string | null;
+  /** The product generating the report, as configured: stored as its producer. */
+  readonly producedBy: string;
 }
 
 /** A report without its synthesis, and the records a synthesis would be written from. */
@@ -481,6 +484,9 @@ export async function assembleReport(
       attributions: [...attributions.values()],
       untrustedContent: warnings,
       omittedClaims: Math.max(0, claimTotal - claims.length),
+      // A copy, taken now: the report keeps this wording whatever the code says later.
+      wording: structuredClone(REPORT_WORDING),
+      producedBy: input.producedBy,
     },
     records,
     refs,

@@ -8,8 +8,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { OPS, getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
+import { REPORT_WORDING } from "@repo/core";
 import { beforeAll, describe, expect, it } from "vitest";
-import { NO_MARKING_TEXT, renderReportPdf } from "../../src/index.ts";
+import { renderReportPdf } from "../../src/index.ts";
 import { reportFixture } from "../report-fixture.ts";
 
 interface TextItem {
@@ -106,7 +107,9 @@ describe("the PDF report", () => {
 
   it("says so when no handling marking is set, rather than inventing one", async () => {
     const unmarked = await readPdf(await renderReportPdf(reportFixture({ handlingMarking: null })));
-    for (const page of unmarked) expect(page.text).toContain(NO_MARKING_TEXT.toUpperCase());
+    for (const page of unmarked) {
+      expect(page.text).toContain("NO HANDLING MARKING IS SET FOR THIS ORGANISATION");
+    }
   });
 
   it("states a partial run on the first page, before any finding", () => {
@@ -190,6 +193,53 @@ describe("the PDF report", () => {
     const text = (await readPdf(await renderReportPdf(document))).map((p) => p.text).join(" ");
     expect(text).toContain("a.example.com / b.example.com");
     expect(text).not.toContain("a.example.comb.example.com");
+  });
+
+  it("renders the same report to the same bytes on every download", async () => {
+    const first = await renderReportPdf(reportFixture());
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const second = await renderReportPdf(reportFixture());
+    expect(Buffer.from(second).equals(Buffer.from(first))).toBe(true);
+  });
+
+  it("prints only the report's stored wording: changing the code's wording changes nothing", async () => {
+    const stored = reportFixture();
+    const before = await renderReportPdf(stored);
+    const mutable = REPORT_WORDING as unknown as {
+      glossary: { strength: string; definition: string }[];
+      headings: Record<string, string>;
+      marking: Record<string, string>;
+    };
+    const original = structuredClone(REPORT_WORDING);
+    try {
+      for (const entry of mutable.glossary) entry.definition = "[changed in code]";
+      mutable.headings.glossary = "[changed heading]";
+      mutable.marking.set = "[changed marking prefix] {marking}";
+      const after = await renderReportPdf(stored);
+      expect(Buffer.from(after).equals(Buffer.from(before))).toBe(true);
+      const text = (await readPdf(after)).map((p) => p.text).join(" ");
+      expect(text).not.toContain("[changed");
+    } finally {
+      Object.assign(REPORT_WORDING, original);
+    }
+  });
+
+  it("prints the glossary as stored, OBSERVED included, with the analysis model named", () => {
+    // A definition can wrap across a page break; read the body without the page furniture.
+    const text = all()
+      .replace(/ *HANDLING: \[TENANT MARKING\] */g, " ")
+      .replace(/ *Report [0-9a-f-]{36} */g, " ")
+      .replace(/ *Page \d+ of \d+ */g, " ")
+      .replace(/\s+/g, " ");
+    expect(text).toContain(
+      "[OBSERVED] Seen directly by the platform, not taken from anyone's statement.",
+    );
+    expect(text).toContain(
+      "[CORRELATED] A link drawn by the analysis model between two or more independent cited sources.",
+    );
+    expect(text).toContain(
+      "[INFERRED] An analytic inference drawn by the analysis model from the cited evidence. No source stated it.",
+    );
   });
 
   it("ships the vendored fonts unmodified", () => {

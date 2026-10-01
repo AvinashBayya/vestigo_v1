@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { envSchema, PRODUCT_NAME } from "@repo/config";
 import react from "@vitejs/plugin-react";
 import { loadEnv, type Plugin } from "vite";
+import { TEST_MAX_WORKERS } from "@repo/config/vitest";
 import { defineConfig } from "vitest/config";
 
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -29,6 +30,7 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       environment: "jsdom",
+      maxWorkers: TEST_MAX_WORKERS,
     },
   };
 });

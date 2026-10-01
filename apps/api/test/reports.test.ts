@@ -140,6 +140,7 @@ beforeAll(async () => {
         registry: runtime.registry,
         llm: { unavailable: NO_PROVIDER },
         defaultHandlingMarking: null,
+        producedBy: "[product]",
         retry: api.retry,
       }),
       concurrency: 1,

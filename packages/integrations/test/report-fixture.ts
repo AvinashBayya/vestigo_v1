@@ -3,7 +3,7 @@
  * section, with bracketed placeholders and reserved example domains. It is
  * not the output of any run; the engine's own tests build real ones.
  */
-import type { ReportDocument } from "@repo/core";
+import { REPORT_WORDING, type ReportDocument } from "@repo/core";
 
 const EVIDENCE = [
   "01900000-0000-7000-8000-000000000001",
@@ -13,7 +13,7 @@ const EVIDENCE = [
 
 export function reportFixture(overrides: Partial<ReportDocument> = {}): ReportDocument {
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     reportId: "00000000-0000-4000-8000-00000000a001",
     title: "[Investigation title]",
     investigationId: "00000000-0000-4000-8000-00000000a002",
@@ -167,6 +167,8 @@ export function reportFixture(overrides: Partial<ReportDocument> = {}): ReportDo
     ],
     untrustedContent: [{ sourceNumber: 3, patterns: ["addressed-to-ai"] }],
     omittedClaims: 0,
+    wording: structuredClone(REPORT_WORDING),
+    producedBy: "[product]",
     ...overrides,
   };
 }

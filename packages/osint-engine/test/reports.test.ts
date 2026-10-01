@@ -25,7 +25,7 @@ import {
 } from "@repo/collectors";
 import { loadFixture, startHarness, type Fixture, type Harness } from "@repo/collectors/testing";
 import { allowedModel, type LlmEndpoint } from "@repo/config";
-import { parseTenantId, type ReportDocument, type TenantId } from "@repo/core";
+import { parseTenantId, REPORT_WORDING, type ReportDocument, type TenantId } from "@repo/core";
 import { createDatabase, FileSystemContentStore, type Database } from "@repo/db";
 import {
   CredentialVault,
@@ -390,6 +390,7 @@ describe("a report from a real Phase 4 run with one collector failing (RELEASE-B
           registry,
           llm: client(provider),
           defaultHandlingMarking: null,
+          producedBy: "[product]",
           retry: FAST_RETRY,
         }),
     );
@@ -494,12 +495,82 @@ describe("a report from a real Phase 4 run with one collector failing (RELEASE-B
       registry: harness.runtime.registry,
       llm: client(new ScriptedProvider([])),
       defaultHandlingMarking: null,
+      producedBy: "[product]",
       retry: FAST_RETRY,
     });
     const disposition = await generator.process(tenant.tenantId, reportId, { finalAttempt: false });
     expect(disposition).toEqual({ kind: "SKIPPED", status: "SUCCEEDED" });
     expect(await tokenUsage(tenant.tenantId, reportId)).toHaveLength(2);
   });
+
+  it("stores the glossary it was generated with, OBSERVED included, the analysis model named", () => {
+    expect(document.wording.glossary).toEqual([
+      {
+        strength: "OBSERVED",
+        definition: "Seen directly by the platform, not taken from anyone's statement.",
+      },
+      {
+        strength: "REPORTED",
+        definition:
+          "Stated by the cited source. The platform recorded the statement; it did not verify the fact.",
+      },
+      {
+        strength: "DERIVED",
+        definition:
+          "Computed by the platform from recorded values (a count, a parsed date, a split list). No source stated it.",
+      },
+      {
+        strength: "CORRELATED",
+        definition:
+          "A link drawn by the analysis model between two or more independent cited sources.",
+      },
+      {
+        strength: "INFERRED",
+        definition:
+          "An analytic inference drawn by the analysis model from the cited evidence. No source stated it.",
+      },
+      {
+        strength: "HYPOTHESIS",
+        definition: "A possibility the cited evidence permits but does not establish.",
+      },
+    ]);
+    expect(document.producedBy).toBe("[product]");
+  });
+
+  // An evidence artefact: downloading a report later must produce the same document.
+  it("renders an already-generated report identically after the glossary text in code changes", async () => {
+    const stored = async () => {
+      const row = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.reports.findById(reportId),
+      );
+      return row?.document as ReportDocument;
+    };
+    const before = await renderReportPdf(await stored());
+    const original = structuredClone(REPORT_WORDING);
+    const inCode = REPORT_WORDING as unknown as {
+      glossary: { strength: string; definition: string }[];
+    };
+    try {
+      // What a later edit to CLAIM_STRENGTH_DEFINITIONS would do to the wording in code.
+      for (const entry of inCode.glossary) entry.definition = `[changed in code] ${entry.strength}`;
+
+      const after = await renderReportPdf(await stored());
+      expect(Buffer.from(after).equals(Buffer.from(before))).toBe(true);
+      expect(await pdfText(after)).not.toContain("[changed in code]");
+
+      // The snapshot is taken at generation: a report generated now carries the new text.
+      const fresh = await requestReport(engine, tenant.tenantId, runId, false);
+      const freshDocument = fresh?.document as ReportDocument;
+      expect(freshDocument.wording.glossary.map((g) => g.definition)).toContain(
+        "[changed in code] CORRELATED",
+      );
+      expect(await pdfText(await renderReportPdf(freshDocument))).toContain(
+        "[changed in code] CORRELATED",
+      );
+    } finally {
+      Object.assign(REPORT_WORDING, original);
+    }
+  }, 120_000);
 
   it("carries the tenant's handling marking", () => {
     expect(document.handlingMarking).toBe("[TENANT HANDLING MARKING]");
@@ -557,6 +628,7 @@ describe("report generation fails honestly, never with a partial answer", () => 
           registry,
           llm: { unavailable: "[not configured]" },
           defaultHandlingMarking: null,
+          producedBy: "[product]",
           retry: FAST_RETRY,
         }),
     );
@@ -575,6 +647,7 @@ describe("report generation fails honestly, never with a partial answer", () => 
       registry: harness.runtime.registry,
       llm: client(provider),
       defaultHandlingMarking: "[PLATFORM MARKING]",
+      producedBy: "[product]",
       retry: FAST_RETRY,
     });
 
@@ -853,6 +926,7 @@ describe("attribution required by a source is carried into the report (RELEASE-B
           registry,
           llm: { unavailable: "[none]" },
           defaultHandlingMarking: null,
+          producedBy: "[product]",
           retry: FAST_RETRY,
         }),
       {

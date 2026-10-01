@@ -7,24 +7,18 @@
  * every value that was not measured is null, and every collector that did not
  * contribute is named in `coverage` with its reason.
  */
+import type { ReportWording } from "./report-wording.ts";
 import type { ClaimStrength, EntityKind, RunStatus, TargetType } from "./vocabulary.ts";
 
 export const REPORT_STATUSES = ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"] as const;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
-export const REPORT_FORMAT_VERSION = 1;
-
-/** What each claim strength means, printed with every report that uses the labels. */
-export const CLAIM_STRENGTH_DEFINITIONS: Readonly<Record<ClaimStrength, string>> = {
-  OBSERVED: "Seen directly by the platform, not taken from anyone's statement.",
-  REPORTED:
-    "Stated by the cited source. The platform recorded the statement; it did not verify the fact.",
-  DERIVED:
-    "Computed by the platform from recorded values (a count, a parsed date, a split list). No source stated it.",
-  CORRELATED: "A link drawn between two or more independent cited sources.",
-  INFERRED: "An analytic inference from the cited evidence. No source stated it.",
-  HYPOTHESIS: "A possibility the cited evidence permits but does not establish.",
-};
+/**
+ * 2: the document carries its own wording and producer (Phase 5 follow-up),
+ * so a stored report renders the same whenever it is downloaded. No version-1
+ * document exists outside the test databases, which each run recreates.
+ */
+export const REPORT_FORMAT_VERSION = 2;
 
 /**
  * What happened to one collector, as the coverage section states it. Only
@@ -201,4 +195,11 @@ export interface ReportDocument {
   readonly untrustedContent: readonly UntrustedContentWarning[];
   /** Claims left out because the report reached its size limit. Zero: none were. */
   readonly omittedClaims: number;
+  /**
+   * Every fixed word the renderers print, glossary included, as it stood when
+   * the report was generated (REPORT_WORDING). Renderers print only this copy.
+   */
+  readonly wording: ReportWording;
+  /** The product that generated it, as configured then: the PDF's creator. */
+  readonly producedBy: string;
 }

@@ -59,7 +59,7 @@ export type {
   CircuitStatus,
 } from "./circuit-breaker/circuit-breaker.ts";
 
-export { BODY_SIZE, NO_MARKING_TEXT, renderReportPdf, SMALL_SIZE } from "./exports/pdf.ts";
+export { BODY_SIZE, renderReportPdf, SMALL_SIZE } from "./exports/pdf.ts";
 export {
   csvCell,
   MALTEGO_CSV_HEADERS,

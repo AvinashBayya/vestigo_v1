@@ -25,13 +25,12 @@
  */
 import { readFile } from "node:fs/promises";
 import fontkit from "@pdf-lib/fontkit";
-import { PRODUCT_NAME } from "@repo/config";
 import {
-  CLAIM_STRENGTH_DEFINITIONS,
-  CLAIM_STRENGTHS,
+  fillWording,
   type CoverageEntry,
   type ReportDocument,
   type ReportSource,
+  type ReportWording,
 } from "@repo/core";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 
@@ -63,14 +62,6 @@ interface Fonts {
   readonly italic: PDFFont;
   readonly bold: PDFFont;
 }
-
-/** What the renderer needs besides the document. */
-export interface PdfOptions {
-  /** Shown on the cover when the report has no handling marking. */
-  readonly noMarkingText?: string;
-}
-
-export const NO_MARKING_TEXT = "No handling marking is set for this organisation";
 
 // ── Text runs and wrapping ────────────────────────────────────────────────
 
@@ -239,13 +230,19 @@ class Renderer {
 
   #noteText(number: number): string {
     const source = this.#sources.get(number);
-    if (source === undefined) return `${String(number)}. Source not found in this report.`;
+    const words = this.#document.wording.footnote;
+    if (source === undefined) return fillWording(words.missing, { number: String(number) });
     const collected =
       source.collectedAt === null
-        ? "collection time not recorded"
-        : `collected ${source.collectedAt}`;
-    const url = source.sourceUrl === null ? "no URL recorded" : source.sourceUrl;
-    return `${String(number)}. ${source.sourceLabel}, ${collected}. ${url}. Evidence ${source.evidenceId}.`;
+        ? words.collectedUnknown
+        : fillWording(words.collectedAt, { at: source.collectedAt });
+    return fillWording(words.line, {
+      number: String(number),
+      label: source.sourceLabel,
+      collected,
+      url: source.sourceUrl === null ? words.noUrl : source.sourceUrl,
+      evidenceId: source.evidenceId,
+    });
   }
 
   #noteLines(number: number): Line[] {
@@ -445,9 +442,10 @@ class Renderer {
 
   /** Header, footer and footnotes on every page, now that the page count is known. */
   finish(): void {
-    const marking = this.#document.handlingMarking;
-    const markingText =
-      marking === null ? NO_MARKING_TEXT.toUpperCase() : `HANDLING: ${marking.toUpperCase()}`;
+    const { wording, handlingMarking: marking } = this.#document;
+    const markingText = (
+      marking === null ? wording.marking.notSet : fillWording(wording.marking.set, { marking })
+    ).toUpperCase();
     const total = this.#pages.length;
     this.#pages.forEach(({ page, notes }, index) => {
       const bold = this.#fonts.bold;
@@ -468,9 +466,15 @@ class Renderer {
         font: bold,
         color: INK,
       });
-      const left = this.#drawable(`Report ${this.#document.reportId}`, regular);
+      const left = this.#drawable(
+        fillWording(wording.footer.report, { reportId: this.#document.reportId }),
+        regular,
+      );
       page.drawText(left, { x: MARGIN_X, y: 44, size: SMALL_SIZE, font: regular, color: INK });
-      const right = `Page ${String(index + 1)} of ${String(total)}`;
+      const right = this.#drawable(
+        fillWording(wording.footer.page, { page: String(index + 1), pages: String(total) }),
+        regular,
+      );
       page.drawText(right, {
         x: MARGIN_X + WIDTH - regular.widthOfTextAtSize(right, SMALL_SIZE),
         y: 44,
@@ -506,26 +510,19 @@ class Renderer {
 
 // ── The document ──────────────────────────────────────────────────────────
 
-const STATE_LABELS: Readonly<Record<CoverageEntry["state"], string>> = {
-  COLLECTED: "COLLECTED",
-  NOTHING_FOUND: "NOTHING FOUND",
-  FAILED: "FAILED",
-  NEEDS_CREDENTIALS: "NEEDS CREDENTIALS",
-  REFUSED: "REFUSED",
-  NOT_FINISHED: "NOT FINISHED",
-  EXCLUDED: "EXCLUDED",
-  HELD: "HELD",
-};
-
 const words = (attribute: string) => attribute.replace(/_/g, " ");
 
-function coverageLine(entry: CoverageEntry): Span[] {
-  const parts: Span[] = [{ text: `[${STATE_LABELS[entry.state]}]`, style: "bold" }];
+function coverageLine(wording: ReportWording, entry: CoverageEntry): Span[] {
+  const parts: Span[] = [{ text: `[${wording.states[entry.state]}]`, style: "bold" }];
   const facts: string[] = [];
-  if (entry.state === "COLLECTED") facts.push(`${String(entry.evidenceCount)} evidence item(s)`);
+  if (entry.state === "COLLECTED") {
+    facts.push(fillWording(wording.coverage.evidenceItems, { count: String(entry.evidenceCount) }));
+  }
   if (entry.reasonCode !== null) facts.push(entry.reasonCode);
   if (entry.detail !== null) facts.push(entry.detail);
-  if (entry.attempts !== null) facts.push(`${String(entry.attempts)} attempt(s)`);
+  if (entry.attempts !== null) {
+    facts.push(fillWording(wording.coverage.attempts, { count: String(entry.attempts) }));
+  }
   const sentence = facts.map((fact) => fact.replace(/\.+$/, "")).join(". ");
   return facts.length === 0
     ? [...parts, { text: entry.sourceLabel, style: "bold" }]
@@ -549,31 +546,45 @@ async function loadFonts(doc: PDFDocument): Promise<Fonts> {
   };
 }
 
-/** Renders a report document as PDF bytes. Pure layout: no network, no database. */
+/**
+ * Renders a report document as PDF bytes. Pure layout: no network, no
+ * database, and no wording of its own. Every word comes from the stored
+ * document (its wording snapshot, its producer, its generation time), so the
+ * same report renders to the same bytes whenever it is downloaded.
+ */
 export async function renderReportPdf(document: ReportDocument): Promise<Uint8Array> {
+  const w = document.wording;
   const doc = await PDFDocument.create();
+  const generated = new Date(document.generatedAt);
   doc.setTitle(document.title);
-  doc.setSubject(`Report ${document.reportId}`);
-  doc.setCreator(PRODUCT_NAME);
-  doc.setProducer(PRODUCT_NAME);
+  doc.setSubject(fillWording(w.footer.report, { reportId: document.reportId }));
+  doc.setCreator(document.producedBy);
+  doc.setProducer(document.producedBy);
+  // The report's own time, never the download's: the file must not differ per download.
+  doc.setCreationDate(generated);
+  doc.setModificationDate(generated);
   const fonts = await loadFonts(doc);
   const r = new Renderer(doc, fonts, document);
 
   // ── Cover ──
   r.paragraph([{ text: document.title, style: "bold" }], { size: H1, leading: H1 * 1.3, after: 8 });
   const types = document.target.types.map((t) => `${t.type} ${t.value}`).join("; ");
-  r.paragraph([{ text: "Target: ", style: "bold" }, { text: document.target.input }], { after: 0 });
+  r.paragraph([{ text: w.cover.target, style: "bold" }, { text: document.target.input }], {
+    after: 0,
+  });
   if (types.length > 0) {
-    r.paragraph([{ text: "Collected as: ", style: "bold" }, { text: types }], { after: 0 });
+    r.paragraph([{ text: w.cover.collectedAs, style: "bold" }, { text: types }], { after: 0 });
   }
   r.paragraph(
     [
-      { text: "Run: ", style: "bold" },
-      { text: `${document.runId}, status ${document.run.status}` },
+      { text: w.cover.run, style: "bold" },
+      {
+        text: fillWording(w.cover.runValue, { runId: document.runId, status: document.run.status }),
+      },
     ],
     { after: 0 },
   );
-  r.paragraph([{ text: "Generated: ", style: "bold" }, { text: document.generatedAt }], {
+  r.paragraph([{ text: w.cover.generated, style: "bold" }, { text: document.generatedAt }], {
     after: 10,
   });
   if (document.coverage.partial) {
@@ -584,58 +595,60 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
   r.rule();
 
   // ── Coverage and limitations: first, before any finding ──
-  r.heading("Coverage and limitations", H2);
+  r.heading(w.headings.coverage, H2);
   r.paragraph([{ text: document.coverage.headline }]);
   const notCollected = document.coverage.entries.filter((e) => e.state !== "COLLECTED");
   const collected = document.coverage.entries.filter((e) => e.state === "COLLECTED");
-  r.heading("What was not collected, and why", H3);
+  r.heading(w.headings.notCollected, H3);
   if (notCollected.length === 0) {
-    r.paragraph([{ text: "Every collector planned for this target collected something." }]);
+    r.paragraph([{ text: w.coverage.allCollected }]);
   }
-  for (const entry of notCollected) r.paragraph(coverageLine(entry), { indent: 12, after: 3 });
-  r.heading("What was collected", H3);
-  if (collected.length === 0)
-    r.paragraph([{ text: "No collector found anything for this target." }]);
-  for (const entry of collected) r.paragraph(coverageLine(entry), { indent: 12, after: 3 });
+  for (const entry of notCollected) {
+    r.paragraph(coverageLine(w, entry), { indent: 12, after: 3 });
+  }
+  r.heading(w.headings.collected, H3);
+  if (collected.length === 0) r.paragraph([{ text: w.coverage.noneCollected }]);
+  for (const entry of collected) r.paragraph(coverageLine(w, entry), { indent: 12, after: 3 });
   if (document.coverage.notApplicable.length > 0) {
     r.paragraph([
-      { text: "Not applicable to this target's type: ", style: "italic" },
+      { text: w.coverage.notApplicable, style: "italic" },
       { text: document.coverage.notApplicable.map((n) => n.sourceLabel).join("; ") },
     ]);
   }
-  r.heading("Standing limits of this report", H3);
+  r.heading(w.headings.standingLimits, H3);
   for (const caveat of document.coverage.caveats)
     r.paragraph([{ text: `- ${caveat}` }], { indent: 12, after: 3 });
   if (document.omittedClaims > 0) {
     r.paragraph([
       {
-        text: `${String(document.omittedClaims)} further claim(s) were left out of this report at its size limit; the run holds them.`,
+        text: fillWording(w.coverage.omittedClaims, { count: String(document.omittedClaims) }),
         style: "bold",
       },
     ]);
   }
 
   // ── How to read the labels ──
-  r.heading("How to read the claim labels", H2);
-  for (const strength of CLAIM_STRENGTHS) {
-    r.paragraph(
-      [{ text: `[${strength}]`, style: "bold" }, { text: CLAIM_STRENGTH_DEFINITIONS[strength] }],
-      {
-        indent: 12,
-        after: 3,
-      },
-    );
+  r.heading(w.headings.glossary, H2);
+  for (const { strength, definition } of w.glossary) {
+    r.paragraph([{ text: `[${strength}]`, style: "bold" }, { text: definition }], {
+      indent: 12,
+      after: 3,
+    });
   }
 
   // ── Synthesis ──
-  r.heading("Synthesis", H2);
+  r.heading(w.headings.synthesis, H2);
   const synthesis = document.synthesis;
   if (synthesis.status === "GENERATED") {
     r.paragraph([{ text: synthesis.notice, style: "italic" }], { size: SMALL_SIZE });
     r.paragraph(
       [
         {
-          text: `Model: ${synthesis.model.id} (${synthesis.model.licence}, ${synthesis.model.profile} profile).`,
+          text: fillWording(w.synthesis.model, {
+            id: synthesis.model.id,
+            licence: synthesis.model.licence,
+            profile: synthesis.model.profile,
+          }),
           style: "italic",
         },
       ],
@@ -654,18 +667,20 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
   } else if (synthesis.status === "NOT_REQUESTED") {
     r.paragraph([
       {
-        text: "No synthesis was requested for this report. Every finding below is as collected.",
+        text: w.synthesis.notRequested,
         style: "italic",
       },
     ]);
   } else {
-    r.paragraph([{ text: `No synthesis: ${synthesis.reason}`, style: "italic" }]);
+    r.paragraph([
+      { text: fillWording(w.synthesis.none, { reason: synthesis.reason }), style: "italic" },
+    ]);
   }
 
   // ── Findings ──
-  r.heading("Findings", H2);
+  r.heading(w.headings.findings, H2);
   if (document.findings.length === 0) {
-    r.paragraph([{ text: "The run recorded no claims.", style: "italic" }]);
+    r.paragraph([{ text: w.findings.none, style: "italic" }]);
   }
   for (const entity of document.findings) {
     const id =
@@ -678,11 +693,11 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
         [
           { text: `[${claim.strength}]`, style: "bold" },
           { text: `${words(claim.attribute)}:`, style: "italic" },
-          { text: claim.display.text.length === 0 ? "(empty)" : claim.display.text },
+          { text: claim.display.text.length === 0 ? w.findings.emptyValue : claim.display.text },
           ...(claim.display.truncated
             ? [
                 {
-                  text: "[shortened; the JSON export holds the full value]",
+                  text: w.findings.shortened,
                   style: "italic",
                 } as const,
               ]
@@ -695,7 +710,7 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
   }
 
   if (document.relationships.length > 0) {
-    r.heading("Relationships", H2);
+    r.heading(w.headings.relationships, H2);
     for (const relationship of document.relationships) {
       r.paragraph(
         [
@@ -711,16 +726,21 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
   }
 
   if (document.untrustedContent.length > 0) {
-    r.heading("Content that resembles instructions to an AI system", H2);
+    r.heading(w.headings.untrustedContent, H2);
     r.paragraph([
       {
-        text: "These sources contain text addressed to AI systems, a common form of prompt injection. It was treated as data throughout: it is reported below as collected and was never followed.",
+        text: w.untrustedContent.intro,
       },
     ]);
     for (const warning of document.untrustedContent) {
       r.paragraph(
         [
-          { text: `Source ${String(warning.sourceNumber)}: ${warning.patterns.join(", ")}` },
+          {
+            text: fillWording(w.untrustedContent.line, {
+              number: String(warning.sourceNumber),
+              patterns: warning.patterns.join(", "),
+            }),
+          },
           { cite: [warning.sourceNumber] },
         ],
         { indent: 12, after: 3 },
@@ -729,37 +749,41 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
   }
 
   // ── Evidence basis ──
-  r.heading("Evidence basis", H2);
+  r.heading(w.headings.evidenceBasis, H2);
   r.paragraph(
     [
       {
-        text: "Every evidence item this report rests on. Numbers match the citations. The content hash identifies the stored raw response.",
+        text: w.evidence.intro,
       },
     ],
     { size: SMALL_SIZE },
   );
   if (document.sources.length === 0) {
-    r.paragraph([{ text: "The run recorded no evidence.", style: "italic" }]);
+    r.paragraph([{ text: w.evidence.none, style: "italic" }]);
   } else {
     r.table(
       [
-        { title: "No.", width: 32 },
-        { title: "Source", width: 150 },
-        { title: "Collected", width: 144 },
-        { title: "Strength", width: 86 },
-        { title: "Claims", width: WIDTH - 32 - 150 - 144 - 86 },
+        { title: w.evidence.columns.number, width: 32 },
+        { title: w.evidence.columns.source, width: 150 },
+        { title: w.evidence.columns.collected, width: 144 },
+        { title: w.evidence.columns.strength, width: 86 },
+        { title: w.evidence.columns.claims, width: WIDTH - 32 - 150 - 144 - 86 },
       ],
       document.sources.map((source) => ({
         cells: [
           [{ text: String(source.number), style: "bold" }],
           [{ text: source.sourceLabel }],
-          [{ text: source.collectedAt ?? "not recorded" }],
+          [{ text: source.collectedAt === null ? w.evidence.notRecorded : source.collectedAt }],
           [{ text: `[${source.strength}]`, style: "bold" }],
           [{ text: String(source.claimCount) }],
         ],
         detail: [
           {
-            text: `Evidence ${source.evidenceId}. ${source.contentHash}. ${source.sourceUrl === null ? "No URL recorded." : source.sourceUrl}`,
+            text: fillWording(w.evidence.detail, {
+              evidenceId: source.evidenceId,
+              contentHash: source.contentHash,
+              url: source.sourceUrl === null ? w.evidence.noUrl : source.sourceUrl,
+            }),
           },
         ],
       })),
@@ -767,9 +791,9 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
   }
 
   // ── Attribution ──
-  r.heading("Attribution", H2);
+  r.heading(w.headings.attribution, H2);
   if (document.attributions.length === 0) {
-    r.paragraph([{ text: "No source used in this report requires attribution." }]);
+    r.paragraph([{ text: w.attribution.none }]);
   }
   for (const attribution of document.attributions) {
     r.paragraph([{ text: attribution.text, style: "bold" }, { text: attribution.url }], {
@@ -781,10 +805,10 @@ export async function renderReportPdf(document: ReportDocument): Promise<Uint8Ar
   // ── Rendering notes: always last, so the count covers everything above ──
   if (r.unrenderable > 0) {
     const count = r.unrenderable;
-    r.heading("Rendering note", H2);
+    r.heading(w.headings.renderingNote, H2);
     r.paragraph([
       {
-        text: `${String(count)} character(s) in this report are outside the embedded font's coverage and are shown as "?". The JSON export holds the exact text.`,
+        text: fillWording(w.renderingNote, { count: String(count) }),
       },
     ]);
   }

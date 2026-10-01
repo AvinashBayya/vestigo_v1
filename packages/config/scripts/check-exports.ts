@@ -41,6 +41,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "COVERAGE_STATES",
     "SYNTHESIS_STRENGTHS",
     "CLAIM_STRENGTH_DEFINITIONS",
+    "REPORT_WORDING",
+    "fillWording",
   ],
   // Who may do what, for the API and the workers alike.
   "packages/access/src/index.ts": [

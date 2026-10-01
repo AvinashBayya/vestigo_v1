@@ -1201,8 +1201,10 @@ They now render as `example.com / www.example.com`.
 5. **The response cache is namespaced by tenant**, beyond the brief's prompt, model and version,
    so a cache hit cannot reveal another tenant's material.
 6. **An unmetered model response is refused.**
-7. **A report is a stored, write-once document.** Every PDF and export renders from it, so a report
-   always reads the same. The marking is captured at generation.
+7. **A report is a stored, write-once document, and renders only from what it stores.** Every PDF
+   and export renders from it. As first committed this was only partly true: the glossary, every
+   heading and notice, and the product name were read from code at download time. The follow-up
+   below fixed that. The marking is captured at generation.
 8. **Exports are of a report**, so every format carries what the report said: marking, strengths,
    citations, attribution.
 9. **Body 12 pt; footnotes, tables, header and footer 10 pt.** The brief's minimum is read as
@@ -1211,8 +1213,9 @@ They now render as `example.com / www.example.com`.
     when rendered (seen on the review PNGs), so a PDF is about 0.8 to 0.9 MB.
 11. **The CSV formula guard prefixes an apostrophe** to any cell starting with `=`, `+`, `-`, `@`, a
     tab or a carriage return. This includes negative numbers; the JSON export is exact.
-12. **Claim-strength definitions** are new wording (`CLAIM_STRENGTH_DEFINITIONS` in core), printed
-    on every report. They need product review.
+12. **Claim-strength definitions** (`CLAIM_STRENGTH_DEFINITIONS` in core) were reviewed by you after
+    commit 7de5145. CORRELATED and INFERRED now name the analysis model as the one drawing them.
+    OBSERVED stays in the glossary although nothing produces it yet.
 
 ### Open questions and carry-forwards from Phase 5
 
@@ -1236,3 +1239,88 @@ They now render as `example.com / www.example.com`.
 - **Not built:** embeddings into pgvector (ARCHITECTURE-DECISIONS §7) and the
   extraction/classification tasks. Their routing exists, but no feature calls them yet.
 - **Report generation cannot be cancelled**, like runs.
+
+### Phase 5 follow-up: reports render only from what they store
+
+An evidence artefact must read the same whenever it is downloaded. As committed in 7de5145, the
+PDF read the glossary from code at download time, so a later wording change would have altered
+reports already generated. Checking for anything else read live found more:
+
+- every heading, notice and label it prints, including the no-marking sentence, the coverage state
+  labels, footnote phrasing, table headings, and the "not requested", "shortened", injection,
+  attribution and rendering notes;
+- the order of the glossary (`CLAIM_STRENGTHS`);
+- the product name, read from configuration into the PDF's Creator and Producer;
+- the PDF's creation and modification dates, set to the download time, so no two downloads were
+  byte-identical;
+- the CSV and Maltego exports' absence markers ("not set", "not recorded").
+
+**Fixed.**
+
+- All of that wording is now `REPORT_WORDING` in core (`report-wording.ts`). Each report stores a
+  copy taken at generation (`ReportDocument.wording`), with the product name (`producedBy`).
+- The renderers print only the stored copy. The PDF's dates are the report's generation time.
+- `REPORT_FORMAT_VERSION` is now 2. No version-1 document exists outside the test databases,
+  which each run recreates.
+- The glossary text you approved: CORRELATED and INFERRED are "drawn by the analysis model";
+  OBSERVED is kept.
+
+**What still comes from code.** The layout (positions, sizes, page breaks), the fonts (vendored,
+hash-checked) and the CSV and Maltego column headers (the exports' schema). A change to any of
+these would change how an old report looks, never what it says. A byte-for-byte guarantee across
+renderer changes would need the rendered PDF stored at generation; that is not built.
+
+**Tests.**
+
+- *Engine, on a real generated report stored in the database:* the report renders to identical
+  bytes after the glossary in code is changed. A report generated after the change carries the new
+  text, so the snapshot is real. Mutation-checked: pointing the renderer back at the code's
+  glossary fails this test.
+- *Integrations:* the same report renders to the same bytes on two downloads a second apart, and
+  changing the code's glossary, headings and marking wording leaves a stored report's PDF
+  unchanged.
+- *Glossary text:* the stored glossary text is asserted verbatim.
+
+### Phase 5 follow-up: test timeouts under parallel load
+
+**Found.**
+
+- Four tests timed out in different full runs:
+  - the web test worker's start;
+  - the new report-snapshot engine test;
+  - the API's config-spawn test;
+  - the export checker's own test, which takes about 2 s alone but hit its 5 s limit.
+- A baseline run also failed two rate-limiter tests, which measure real-time intervals.
+- All of them are startup, spawn or timer steps, not slow assertions.
+- The cause was CPU oversubscription on the development laptop (i7-1165G7, 4 cores, 8 logical
+  CPUs):
+  - turbo ran up to 10 tasks at once (its default);
+  - vitest started `availableParallelism() - 1` = 7 workers per package (read from vitest 5's
+    source);
+  - a full run reached a peak of 34 node processes, sampled every 2 s, with none running at idle.
+
+**Changed.** Only concurrency; no timeout raised, no test moved or weakened.
+
+- `turbo.json`: `"concurrency": "4"`.
+- `@repo/config/vitest` exports `TEST_MAX_WORKERS`, default 2. A larger CI runner overrides it
+  with the `TEST_MAX_WORKERS` environment variable, declared in turbo's `globalEnv`.
+- Every package's vitest config uses `TEST_MAX_WORKERS`. `core`, `access` and `config` gained a
+  vitest config for this.
+- The engine report-snapshot test's 120 s budget, set in the previous follow-up, stays. That test
+  does three 17-page renders and a generation through the queue, like the suite's other heavy
+  steps, which already carry budgets of 60 to 90 s.
+
+**Measured** (`pnpm turbo lint typecheck test --force`, wall time):
+
+| | Wall time | Peak node processes | Result |
+| --- | --- | --- | --- |
+| Before (two baseline runs) | 157 s, 153 s | 34 | One red (two rate-limiter timing tests), one green: flaky |
+| After (calibration run) | 151 s | 13 | Green |
+| After (three consecutive runs) | 142 s, 148 s, 160 s | not sampled | Green, 46 of 46 each |
+
+The suite takes the same time with a third of the processes: the extra parallelism had been
+contention, not throughput. Separating the report and PDF tests (option 2) was not needed.
+
+Per-package counts on the last run: core 20, access 55, config 133, db 230, integrations 116,
+collectors 482, llm 115, osint-engine 96, api 109, web 4, worker 4 (1,360). The fabrication check
+passed on 290 files; the export check on 139 symbols.

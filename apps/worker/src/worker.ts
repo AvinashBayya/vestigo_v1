@@ -3,7 +3,12 @@
  * WORKER_QUEUES (ARCHITECTURE-DECISIONS §6). Everything here is wiring; the
  * logic lives in @repo/osint-engine and the packages under it.
  */
-import { allowsUnverifiedSources, resolveLlmConfiguration, type Env } from "@repo/config";
+import {
+  allowsUnverifiedSources,
+  PRODUCT_NAME,
+  resolveLlmConfiguration,
+  type Env,
+} from "@repo/config";
 import { CollectorRuntime, createPlatformRegistry } from "@repo/collectors";
 import { createDatabase, FileSystemContentStore, type Database } from "@repo/db";
 import {
@@ -166,6 +171,7 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
     registry: runtime.registry,
     llm,
     defaultHandlingMarking: env.REPORT_HANDLING_MARKING ?? null,
+    producedBy: PRODUCT_NAME,
     retry,
   });
 

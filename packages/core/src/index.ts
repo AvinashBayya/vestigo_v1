@@ -40,6 +40,11 @@ export {
 } from "./vocabulary.ts";
 export {
   CLAIM_STRENGTH_DEFINITIONS,
+  fillWording,
+  REPORT_WORDING,
+  type ReportWording,
+} from "./report-wording.ts";
+export {
   COVERAGE_STATES,
   REPORT_FORMAT_VERSION,
   REPORT_STATUSES,
