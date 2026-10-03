@@ -418,6 +418,72 @@ export async function auditRows(api: TestApi, tenantId: TenantId) {
   return api.db.withTenant(tenantId, ({ repos }) => repos.auditLog.recent({ limit: 500 }));
 }
 
+/** The events of a closed server-sent event stream, in order. */
+export function sseEvents(body: string): { event: string; data: Record<string, unknown> }[] {
+  return body
+    .split("\n\n")
+    .filter((block) => block.startsWith("event: "))
+    .map((block) => {
+      const [eventLine = "", dataLine = ""] = block.split("\n");
+      return {
+        event: eventLine.slice("event: ".length),
+        data: JSON.parse(dataLine.slice("data: ".length)) as Record<string, unknown>,
+      };
+    });
+}
+
+/** `promise`, or a failure after `ms`: a stream that never closes must fail the test, not hang it. */
+export async function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new TypeError(`${what} did not happen within ${String(ms)} ms`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** How many progress streams of this run have been opened (audited ALLOWED). */
+export async function runWatches(api: TestApi, tenantId: TenantId, runId: string): Promise<number> {
+  const rows = await auditRows(api, tenantId);
+  return rows.filter(
+    (row) => row.action === "run.watch" && row.targetId === runId && row.outcome === "ALLOWED",
+  ).length;
+}
+
+/**
+ * Starts a request for a run's progress stream and resolves once the stream is
+ * open (its access check and audit row have committed), with the response
+ * still pending. The stream's first events are written before the audit row
+ * commits.
+ */
+export async function openRunStream<T>(
+  api: TestApi,
+  tenantId: TenantId,
+  runId: string,
+  request: () => Promise<T>,
+): Promise<{ readonly response: Promise<T> }> {
+  const before = await runWatches(api, tenantId, runId);
+  const response = request();
+  await within(
+    (async () => {
+      while ((await runWatches(api, tenantId, runId)) === before) {
+        await new Promise((done) => setTimeout(done, 25));
+      }
+    })(),
+    10_000,
+    "the stream opening",
+  );
+  // Wrapped: an async function returning the promise itself would wait for it.
+  return { response };
+}
+
 /**
  * A new member of the tenant with `role`, signed in with MFA enrolled and
  * the tenant selected: invited by `inviter`, signed up, enrolled, joined.

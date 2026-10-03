@@ -107,6 +107,46 @@ export function afterCommit(request: FastifyRequest, work: () => Promise<unknown
   request.afterCommit = work;
 }
 
+/** Why a principal may not exercise a permission in its tenant right now. */
+export interface AccessDenial {
+  readonly code:
+    "MEMBER_INACTIVE" | "PERMISSION_DENIED" | "MODULE_NOT_IN_PLAN" | "VETTING_NOT_APPROVED";
+  readonly message: string;
+}
+
+/**
+ * The access decision after authentication: the member's profile is active,
+ * the permission is held, and the tenant's plan and vetting allow the
+ * permission's module. Every protected request makes it once (enforceRouteAccess),
+ * and the run progress stream makes it again on every read, so the two can
+ * never disagree about what is allowed.
+ */
+export function accessDenial(input: {
+  readonly tenant: Pick<Tenant, "plan" | "vettingStatus">;
+  /** Whether the member's profile in this tenant is active; true for an API key, which has none. */
+  readonly profileActive: boolean;
+  readonly permissions: ReadonlySet<Permission>;
+  readonly permission: Permission;
+}): AccessDenial | null {
+  if (!input.profileActive) {
+    return { code: "MEMBER_INACTIVE", message: "This account is not active in this tenant." };
+  }
+  if (!input.permissions.has(input.permission)) {
+    return {
+      code: "PERMISSION_DENIED",
+      message: `This action requires the ${input.permission} permission.`,
+    };
+  }
+  const decision = decidePermissionModuleAccess(input.tenant, input.permission);
+  if (decision.allowed) return null;
+  return decision.reason === "VETTING_NOT_APPROVED"
+    ? {
+        code: "VETTING_NOT_APPROVED",
+        message: "This module requires the tenant's vetting to be approved.",
+      }
+    : { code: "MODULE_NOT_IN_PLAN", message: "This module is not included in the tenant's plan." };
+}
+
 function methods(route: RouteOptions): string {
   return Array.isArray(route.method) ? route.method.join(",") : String(route.method);
 }
@@ -220,37 +260,16 @@ function protect(
           throw forbidden("TENANT_NOT_PROVISIONED", "This tenant has not been provisioned.");
         }
 
-        let denial: { code: string; message: string } | null = null;
-        if (principal.kind === "session") {
-          const profile = await context.repos.users.findById(principal.userId);
-          if (profile === null || profile.status !== "ACTIVE") {
-            denial = {
-              code: "MEMBER_INACTIVE",
-              message: "This account is not active in this tenant.",
-            };
-          }
-        }
-        if (denial === null && !principal.permissions.has(access.permission)) {
-          denial = {
-            code: "PERMISSION_DENIED",
-            message: `This action requires the ${access.permission} permission.`,
-          };
-        }
-        if (denial === null) {
-          const decision = decidePermissionModuleAccess(tenant, access.permission);
-          if (!decision.allowed) {
-            denial =
-              decision.reason === "VETTING_NOT_APPROVED"
-                ? {
-                    code: "VETTING_NOT_APPROVED",
-                    message: "This module requires the tenant's vetting to be approved.",
-                  }
-                : {
-                    code: "MODULE_NOT_IN_PLAN",
-                    message: "This module is not included in the tenant's plan.",
-                  };
-          }
-        }
+        const profileActive =
+          principal.kind === "session"
+            ? (await context.repos.users.findById(principal.userId))?.status === "ACTIVE"
+            : true;
+        const denial = accessDenial({
+          tenant,
+          profileActive,
+          permissions: principal.permissions,
+          permission: access.permission,
+        });
         if (denial !== null) {
           await context.repos.auditLog.append({
             ...base,

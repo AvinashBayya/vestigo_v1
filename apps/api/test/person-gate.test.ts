@@ -10,9 +10,12 @@ import type { TenantId } from "@repo/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createTestApi,
+  openRunStream,
   provisionTestTenant,
   readyBrowser,
   setEntitlement,
+  sseEvents,
+  within,
   type Browser,
   type TestApi,
 } from "./support.ts";
@@ -519,64 +522,24 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
   });
 });
 
-/** The events of a closed server-sent event stream, in order. */
-function eventsOf(body: string): { event: string; data: Record<string, unknown> }[] {
-  return body
-    .split("\n\n")
-    .filter((block) => block.startsWith("event: "))
-    .map((block) => {
-      const [eventLine = "", dataLine = ""] = block.split("\n");
-      return {
-        event: eventLine.slice("event: ".length),
-        data: JSON.parse(dataLine.slice("data: ".length)) as Record<string, unknown>,
-      };
-    });
-}
-
-/** `promise`, or a failure after `ms`: a stream that never closes must fail the test, not hang it. */
-async function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(new TypeError(`${what} did not happen within ${String(ms)} ms`));
-        }, ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-describe("the run progress stream re-checks access while open (RELEASE-BLOCKING)", () => {
-  it("closes with a locked event, stating the re-check interval, when vetting is suspended mid-run", async () => {
+describe("the run progress stream re-checks person-data access while open (RELEASE-BLOCKING)", () => {
+  /** Opens the person run's stream while allowed, applies `change`, and returns its events. */
+  async function streamThrough(change: () => Promise<void>) {
     await setEntitlement(tenantId, { plan: "TECHINT_AND_PERSON", vettingStatus: "APPROVED" });
-    const watches = async () =>
-      (
-        await api.db.withTenant(tenantId, ({ repos }) => repos.auditLog.recent({ limit: 500 }))
-      ).filter(
-        (row) =>
-          row.action === "run.watch" && row.targetId === ids.personRun && row.outcome === "ALLOWED",
-      ).length;
-    const before = await watches();
-
     // The person run is unsettled (QUEUED), so the stream stays open and keeps reading.
-    const stream = browser.request("GET", `/api/v1/runs/${ids.personRun}/events`);
-    // Open once its access check and audit row have committed.
-    await within(
-      (async () => {
-        while ((await watches()) === before) await new Promise((done) => setTimeout(done, 25));
-      })(),
-      10_000,
-      "the stream opening",
+    const stream = await openRunStream(api, tenantId, ids.personRun, () =>
+      browser.request("GET", `/api/v1/runs/${ids.personRun}/events`),
     );
-    await setEntitlement(tenantId, { vettingStatus: "SUSPENDED" });
-    const response = await within(stream, 10_000, "the stream closing after suspension");
-
+    await change();
+    const response = await within(stream.response, 10_000, "the stream closing after the change");
     expect(response.status).toBe(200);
-    const events = eventsOf(response.body);
+    return sseEvents(response.body);
+  }
+
+  it("closes with a locked event, reason VETTING_NOT_APPROVED, when vetting is suspended mid-run", async () => {
+    const events = await streamThrough(() =>
+      setEntitlement(tenantId, { vettingStatus: "SUSPENDED" }),
+    );
     // While allowed, it streamed the run and its person job.
     expect(events[0]?.event).toBe("run");
     expect(events.some((event) => event.event === "job")).toBe(true);
@@ -585,6 +548,7 @@ describe("the run progress stream re-checks access while open (RELEASE-BLOCKING)
     expect(last?.event).toBe("locked");
     expect(events.some((event) => event.event === "end")).toBe(false);
     expect(last?.data).toMatchObject({
+      reason: "VETTING_NOT_APPROVED",
       code: "VETTING_NOT_APPROVED",
       // The test API reads progress every 100 ms, and access is re-checked with every read.
       recheckIntervalMs: 100,
@@ -597,5 +561,18 @@ describe("the run progress stream re-checks access while open (RELEASE-BLOCKING)
     });
     expect(String(last?.data["detail"])).toMatch(/policy decision, not a dropped connection/);
     expect(Number.isNaN(Date.parse(String(last?.data["checkedAt"])))).toBe(false);
+  });
+
+  it("closes with a locked event, reason MODULE_NOT_IN_PLAN, when the plan loses the module mid-run", async () => {
+    const events = await streamThrough(() => setEntitlement(tenantId, { plan: "TECHINT" }));
+    const last = events.at(-1);
+    expect(last?.event).toBe("locked");
+    expect(last?.data).toMatchObject({
+      reason: "MODULE_NOT_IN_PLAN",
+      code: "MODULE_NOT_IN_PLAN",
+      recheckIntervalMs: 100,
+      locked: { reason: "MODULE_NOT_IN_PLAN", plan: "TECHINT", vettingStatus: "APPROVED" },
+    });
+    expect(String(last?.data["detail"])).toMatch(/policy decision, not a dropped connection/);
   });
 });

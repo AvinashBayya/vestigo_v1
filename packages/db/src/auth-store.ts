@@ -45,9 +45,25 @@ export interface AuthStore {
   clearEnrolmentTokenIfEnrolled(userId: string): Promise<void>;
   /** The role string of a membership, or null when the identity is not a member. */
   findMemberRole(organizationId: string, userId: string): Promise<string | null>;
+  /**
+   * A signed-in person's standing now, in one read: whether the session still
+   * exists and has not expired, and the membership (null when no longer a
+   * member). For re-checking access while a long-lived response is open.
+   */
+  findSessionStanding(input: {
+    readonly sessionId: string;
+    readonly userId: string;
+    readonly organizationId: string;
+  }): Promise<SessionStanding>;
   /** Checks the connecting role before first use; throws UnsafeAuthRoleError. */
   verifyRole(): Promise<void>;
   close(): Promise<void>;
+}
+
+export interface SessionStanding {
+  readonly sessionLive: boolean;
+  /** The membership's roles, or null when the person is no longer a member. */
+  readonly membership: { readonly roles: string } | null;
 }
 
 export interface PendingInvitation {
@@ -196,6 +212,25 @@ export function createAuthStore(options: AuthStoreOptions): AuthStore {
         .update(authTables.user)
         .set({ mfaEnrolmentTokenHash: null, mfaEnrolmentTokenExpiresAt: null })
         .where(and(eq(authTables.user.id, userId), eq(authTables.user.twoFactorEnabled, true)));
+    },
+    async findSessionStanding({ sessionId, userId, organizationId }) {
+      const result = await db.execute<{ session_live: boolean; roles: string | null }>(sql`
+        select
+          exists (
+            select 1 from ${authTables.session} s
+            where s.id = ${sessionId} and s.user_id = ${userId} and s.expires_at > now()
+          ) as session_live,
+          (
+            select m.role from ${authTables.member} m
+            where m.organization_id = ${organizationId} and m.user_id = ${userId}
+          ) as roles`);
+      const [row] = result.rows;
+      // A read that returned nothing is no standing at all: fail closed.
+      if (row === undefined) return { sessionLive: false, membership: null };
+      return {
+        sessionLive: row.session_live,
+        membership: row.roles === null ? null : { roles: row.roles },
+      };
     },
     async findMemberRole(organizationId, userId) {
       const rows = await db

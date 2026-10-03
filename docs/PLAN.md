@@ -1731,12 +1731,93 @@ collected data.
   - without the stream re-check, the mid-run test fails (no close within 10 s);
   - with a run scope covering evidence only, 6 tests fail.
 
-**Noted, not changed:** the stream re-checks person access on every read, but not membership or
-permissions. A member removed, or a role lowered, while a stream is open keeps receiving that
+**Noted, not changed** (resolved in the next follow-up): the stream re-checks person access on every
+read, but not membership or permissions. A member removed, or a role lowered, while a stream is open keeps receiving that
 run's progress until it settles or the stream reaches its one-hour limit. The same re-check point
 could check both; that needs a decision.
 
 **Checkpoint** (`pnpm turbo lint typecheck test --force`, 46 of 46 tasks, fabrication check clean):
 core 20, access 56, config 161, db 261, integrations 122, collectors 482, llm 130, osint-engine 104,
 api 154, web 4, worker 4 (1,498 tests).
+
+### Phase 6a follow-up: the stream re-checks the reader's whole access (2026-10-03)
+
+**Owner's decision:** extend the stream's re-check to membership and permissions, on the same read
+as the person-data check. Close with the same `locked` event, its `reason` telling the causes apart;
+test each cause. (Both earlier judgement calls were confirmed: run scopes cover jobs; the re-check
+interval is the poll interval.)
+
+**Built:**
+- **One access decision** (`accessDenial`, `apps/api/src/http/access.ts`). The checks every
+  request makes after authentication (profile active, permission held, module allowed) moved out
+  of the access layer into one function. Codes and messages are unchanged. The access layer and
+  the stream both call it, so they cannot drift.
+- **The re-check** (`apps/api/src/http/recheck.ts`). On every read the stream re-derives the
+  principal's standing from what it recorded, not from the request:
+  - **session:** the session still exists and has not expired; still a member; role → permissions;
+    profile active;
+  - **API key:** still usable (not revoked or expired); its issuer still a member; scope capped by
+    the issuer's current role;
+  - then `accessDenial` for `run:read`, then the person-data gate.
+
+  Rate limits are not consumed.
+- **Identity store first.** The identity half is one new read, `AuthStore.findSessionStanding`
+  (session live plus role), or `findMemberRole` for a key's issuer. It runs before the tenant
+  transaction opens: the identity store is a separate database role, and a slow one must never
+  hold a tenant connection.
+  - So the cost per read is one indexed identity lookup more, not literally unchanged.
+- **The `locked` event** gains `reason`, the first failing check in this order:
+  1. `CREDENTIAL_REVOKED`
+  2. `MEMBERSHIP_REVOKED`
+  3. `PERMISSION_LOST`
+  4. `MODULE_NOT_IN_PLAN`
+  5. `VETTING_NOT_APPROVED`
+
+  `code` is what a fresh request now gets, and the tests assert they match: `NOT_A_MEMBER`,
+  `MEMBER_INACTIVE`, `UNAUTHENTICATED`, `API_KEY_INVALID`, `PERMISSION_DENIED`, or the plan and
+  vetting codes. The Locked block is present only when the person-data gate refused (null
+  otherwise). Validated by Zod on the way out.
+- **Judgement call, flagged:** `CREDENTIAL_REVOKED` is a fifth reason beyond the three causes
+  asked for. A signed-out session or a revoked API key holding a stream is the same class of
+  exposure as a removed member.
+- **Not re-checked:** the session's active tenant. Switching tenants in another tab does not end
+  access to this tenant: the reader is still a member.
+
+**Reachability, stated plainly:** every role (viewer included) holds `run:read`, and every plan
+includes the technical module. So no role change can remove this stream's permission today, and the
+module check for `run:read` cannot fail. Lowering a role keeps the stream open because the lowered
+role may still read runs. The re-check still derives permissions from the current role on every
+read, so a future catalogue that removes `run:read` from a role closes the stream with
+`PERMISSION_LOST`.
+
+**Tests** (`apps/api/test/stream-access.test.ts`, release-blocking):
+- A member removed mid-stream: `MEMBERSHIP_REVOKED` / `NOT_A_MEMBER`.
+- A session signed out mid-stream: `CREDENTIAL_REVOKED` / `UNAUTHENTICATED`.
+- An API key revoked mid-stream: `CREDENTIAL_REVOKED` / `API_KEY_INVALID`.
+- An API key's issuer removed mid-stream: `MEMBERSHIP_REVOKED` / `API_KEY_INVALID`.
+- Each of those is checked against a fresh request's code.
+- A role lowered mid-stream keeps the stream exactly while the new role grants `run:read`; the
+  expectation is computed from the catalogue, so it tracks a change. Removing the member then
+  closes it.
+- `PERMISSION_LOST` through the same function the stream calls, for a session and for an API key
+  whose issuer is lowered (`run:start` lost, `run:read` kept), and a fresh request agrees.
+- Plan and vetting (`person-gate.test.ts`): `VETTING_NOT_APPROVED` (vetting suspended mid-run) and
+  `MODULE_NOT_IN_PLAN` (plan downgraded mid-run), both with the Locked block.
+- Checked by breaking it:
+  - with the re-check neutered, all 7 stream-access tests fail;
+  - with the session-liveness check alone removed, exactly the sign-out test fails.
+
+**Caught on the way:** the release-blocking route-access guard ("authorisation is by permission,
+never by role name") flagged the first draft's null check on a membership's role. It was a
+membership check, not a role-name comparison, but the guard was not weakened: the identity store now
+returns `membership: { roles } | null`, so nothing compares a role field.
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 46 of 46 tasks, fabrication check clean):
+core 20, access 56, config 161, db 261, integrations 122, collectors 482, llm 130, osint-engine 104,
+api 162, web 4, worker 4 (1,506 tests).
+
+**For 6b:** server-sent event payloads (`run`, `job`, `end`, `locked`, `timeout`, `error`) are
+described in the stream's OpenAPI description only, not as schemas, so the generated client does
+not type them. The UI will need a typed reader for them. Describing them as components is the
+follow-up if 6b needs it.
 

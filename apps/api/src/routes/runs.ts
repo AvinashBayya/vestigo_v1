@@ -10,15 +10,15 @@ import type { FastifyBaseLogger } from "fastify";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { tenantOf } from "../http/access.ts";
-import {
-  forbidden,
-  HttpError,
-  LockedSchema,
-  notFound,
-  ProblemSchema,
-  type LockedError,
-} from "../http/errors.ts";
+import { forbidden, HttpError, LockedSchema, notFound, ProblemSchema } from "../http/errors.ts";
 import { personLockFor, requirePersonAccess } from "../http/person-gate.ts";
+import {
+  ACCESS_REFUSAL_REASONS,
+  identityStanding,
+  recheckAccess,
+  refusalFromLock,
+  type AccessRefusal,
+} from "../http/recheck.ts";
 import type { RunServices, Services } from "../services.ts";
 import {
   iso,
@@ -169,19 +169,26 @@ const RUN_WITHHELD =
   "This run's progress: each collector's outcome, its errors and the evidence it recorded.";
 
 /**
- * Sent when the stream's access re-check finds the run locked, just before the
- * stream closes. It says the close is a policy decision, not a dropped
- * connection, and how often access was being re-checked.
+ * Sent when the stream's access re-check refuses access, just before the
+ * stream closes. It says why, that the close is a policy decision rather than
+ * a dropped connection, and how often access was being re-checked.
  */
 const LockedEvent = z.object({
+  /** Which check refused: the credential, membership, permission, plan or vetting. */
+  reason: z.enum(ACCESS_REFUSAL_REASONS),
+  /** The code a fresh request would now be refused with. */
   code: z.string(),
   detail: z.string(),
-  locked: LockedSchema,
+  /** The Locked block when the person-data gate refused; null for every other reason. */
+  locked: LockedSchema.nullable(),
   /** Access is re-checked with every progress read, so this is the poll interval. */
   recheckIntervalMs: z.number().int().min(1),
   /** When the re-check that refused access ran. */
   checkedAt: z.iso.datetime(),
 });
+
+/** The permission the progress stream needs, re-checked on every read as at connect. */
+const STREAM_PERMISSION = "run:read" as const;
 /** A progress stream ends after this long even if the run is still going; the client reconnects. */
 const MAX_STREAM_MS = 60 * 60 * 1000;
 const HEARTBEAT_MS = 15_000;
@@ -311,12 +318,12 @@ export const runRoutes =
     app.get(
       "/api/v1/runs/:id/events",
       {
-        config: { access: { permission: "run:read", action: "run.watch" } },
+        config: { access: { permission: STREAM_PERMISSION, action: "run.watch" } },
         schema: {
           operationId: "watchRun",
           summary: "Stream a run's progress as server-sent events",
           description:
-            "text/event-stream. Events: `run` (the run's state, sent first and on every change), `job` (one job, on every change), `end` (the run is settled; the stream closes), `timeout` (the stream reached its maximum length; reconnect), `error` (the stream failed), and `locked`. Access to a run that used a person collector is checked when the stream opens (403 with the Locked detail) and re-checked with every progress read, every RUN_EVENTS_POLL_MS milliseconds. If a re-check refuses it, a `locked` event carries the same Locked detail, the re-check interval (`recheckIntervalMs`) and when the check ran, and the stream closes: a policy decision, not a dropped connection. A comment line is sent every 15 s to keep the connection open.",
+            "text/event-stream. Events: `run` (the run's state, sent first and on every change), `job` (one job, on every change), `end` (the run is settled; the stream closes), `timeout` (the stream reached its maximum length; reconnect), `error` (the stream failed), and `locked`. Access is checked when the stream opens, as for any request, and re-checked with every progress read, every RUN_EVENTS_POLL_MS milliseconds: the session or API key is still valid, the person (or the key's issuer) is still a member, the current role still grants run:read, and the plan and vetting still allow the run's data. If a re-check refuses, a `locked` event says why (`reason`: CREDENTIAL_REVOKED, MEMBERSHIP_REVOKED, PERMISSION_LOST, MODULE_NOT_IN_PLAN or VETTING_NOT_APPROVED), with the code a fresh request would get, the Locked detail when person data is the reason, the re-check interval (`recheckIntervalMs`) and when the check ran, and the stream closes: a policy decision, not a dropped connection. A comment line is sent every 15 s to keep the connection open.",
           tags: ["runs"],
           security: SECURITY,
           params: IdParams,
@@ -351,17 +358,29 @@ export const runRoutes =
           raw: reply.raw,
           runs: all.runs,
           initial,
-          // Access is re-checked in the same transaction as every progress read.
-          read: () =>
-            all.db.withTenant(tenantId, async (ctx): Promise<StreamRead> => {
+          // Every read re-checks what connect checked: the credential, membership and
+          // permission (identity store first, outside the tenant transaction), then
+          // plan, vetting and person data in the same transaction as the progress read.
+          read: async () => {
+            const identity = await identityStanding(principal, all.authStore);
+            return all.db.withTenant(tenantId, async (ctx): Promise<StreamRead> => {
               const tenant = await ctx.repos.tenants.current();
               if (tenant === null) {
                 throw forbidden("TENANT_NOT_PROVISIONED", "This tenant has not been provisioned.");
               }
+              const refused = await recheckAccess({
+                principal,
+                identity,
+                context: ctx,
+                tenant,
+                permission: STREAM_PERMISSION,
+              });
+              if (refused !== null) return { kind: "refused", refusal: refused };
               const lock = await personLockFor(tenant, ctx.reads, { runJobs: runId }, RUN_WITHHELD);
-              if (lock !== null) return { kind: "locked", lock };
+              if (lock !== null) return { kind: "refused", refusal: refusalFromLock(lock) };
               return { kind: "progress", progress: await readRunProgress(ctx.repos, runId) };
-            }),
+            });
+          },
           log: request.log,
         });
       },
@@ -419,10 +438,10 @@ export const runRoutes =
     return Promise.resolve();
   };
 
-/** One read of the stream: the run's progress (null once it is gone), or the Locked refusal. */
+/** One read of the stream: the run's progress (null once it is gone), or why access is refused. */
 type StreamRead =
   | { readonly kind: "progress"; readonly progress: RunProgress | null }
-  | { readonly kind: "locked"; readonly lock: LockedError };
+  | { readonly kind: "refused"; readonly refusal: AccessRefusal };
 
 /**
  * Writes a run's progress as server-sent events until it is settled, the
@@ -488,13 +507,15 @@ function streamRun(options: {
       await new Promise((resolve) => setTimeout(resolve, runs.eventsPollMs));
       if (!isOpen()) return;
       const read = await options.read();
-      if (read.kind === "locked") {
+      if (read.kind === "refused") {
+        const { refusal } = read;
         send(
           "locked",
           LockedEvent.parse({
-            code: read.lock.code,
-            detail: `Access to this run was re-checked and is now refused, so the stream is closed: a policy decision, not a dropped connection. Access is re-checked with every progress read, every ${String(accessRecheckMs)} ms.`,
-            locked: read.lock.locked,
+            reason: refusal.reason,
+            code: refusal.code,
+            detail: `${refusal.message} Access to this run was re-checked and is now refused, so the stream is closed: a policy decision, not a dropped connection. Access is re-checked with every progress read, every ${String(accessRecheckMs)} ms.`,
+            locked: refusal.locked,
             recheckIntervalMs: accessRecheckMs,
             checkedAt: new Date().toISOString(),
           }),
