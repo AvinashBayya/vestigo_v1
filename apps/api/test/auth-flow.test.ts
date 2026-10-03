@@ -2,13 +2,23 @@
  * RELEASE-BLOCKING. The sign-in flow: password, then TOTP, then a tenant, and
  * only then any action; and every action lands in the tenant's audit log with
  * who, what, when and under what authorisation.
+ *
+ * Browsers sign in through the documented session routes (/api/v1/session/*).
+ * Most of the identity provider's own endpoints are not reachable over HTTP
+ * at all (test/identity-surface.test.ts); where a test here pins one of the
+ * provider's own guards, it checks both that the endpoint is closed over HTTP
+ * and that the provider still refuses the call in-process, where the API's
+ * own calls to it run.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   auditRows,
   Browser,
+  callProvider,
   createTestApi,
+  enrolmentTokenOf,
   existingUserIds,
+  invite,
   newAccount,
   provisionTestTenant,
   rememberEnrolment,
@@ -17,7 +27,6 @@ import {
   totpCode,
   type Account,
   type TestApi,
-  enrolmentHeaders,
 } from "./support.ts";
 import type { TenantId } from "@repo/core";
 
@@ -40,51 +49,48 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
     const browser = new Browser(api);
 
     // 1. Password only: signed in, but nothing works until TOTP is enrolled.
-    const signIn = await browser.request("POST", "/api/auth/sign-in/email", {
+    const signIn = await browser.request("POST", "/api/v1/session/sign-in", {
       email: owner.email,
       password: owner.password,
     });
     expect(signIn.status).toBe(200);
+    expect(signIn.json()).toEqual({ next: "MFA_ENROLMENT" });
     expect((await browser.request("GET", "/api/v1/me")).json()).toMatchObject({
       code: "MFA_ENROLLMENT_REQUIRED",
     });
-    const blockedOrg = await browser.request("POST", "/api/auth/organization/set-active", {
-      organizationId: tenantId,
-    });
+    const blockedOrg = await setActiveTenant(browser, tenantId);
     expect(blockedOrg.status).toBe(403);
-    expect(blockedOrg.body).toContain("MFA_ENROLLMENT_REQUIRED");
+    expect(blockedOrg.json()).toMatchObject({ code: "MFA_ENROLLMENT_REQUIRED" });
 
     // 2. Enrol TOTP, with the enrolment token handed over at provisioning.
-    const enable = await browser.request(
-      "POST",
-      "/api/auth/two-factor/enable",
-      { password: owner.password },
-      enrolmentHeaders(owner.email),
-    );
+    const enrolmentToken = enrolmentTokenOf(owner.email);
+    const enable = await browser.request("POST", "/api/v1/session/mfa/enrolment", {
+      password: owner.password,
+      enrolmentToken,
+    });
     expect(enable.status).toBe(200);
-    const { totpURI } = enable.json<{ totpURI: string }>();
-    expect(totpURI).toMatch(/^otpauth:\/\/totp\//);
-    const enrolled = await browser.request(
-      "POST",
-      "/api/auth/two-factor/verify-totp",
-      { code: totpCode(totpURI) },
-      enrolmentHeaders(owner.email),
-    );
+    const { totpUri } = enable.json<{ totpUri: string }>();
+    expect(totpUri).toMatch(/^otpauth:\/\/totp\//);
+    const enrolled = await browser.request("POST", "/api/v1/session/mfa/enrolment/confirm", {
+      code: totpCode(totpUri),
+      enrolmentToken,
+    });
     expect(enrolled.status).toBe(200);
-    rememberEnrolment(owner.email, totpURI);
+    rememberEnrolment(owner.email, totpUri);
 
     // 3. A fresh sign-in now stops at the second factor: no session yet.
-    await browser.request("POST", "/api/auth/sign-out", {});
+    await browser.request("POST", "/api/v1/session/sign-out");
     const fresh = new Browser(api);
-    const password = await fresh.request("POST", "/api/auth/sign-in/email", {
+    const password = await fresh.request("POST", "/api/v1/session/sign-in", {
       email: owner.email,
       password: owner.password,
     });
-    expect(password.json()).toMatchObject({ twoFactorRedirect: true });
+    expect(password.json()).toEqual({ next: "MFA_CHALLENGE" });
     expect((await fresh.request("GET", "/api/v1/me")).status).toBe(401);
 
-    const secondFactor = await fresh.request("POST", "/api/auth/two-factor/verify-totp", {
-      code: totpCode(totpURI),
+    const secondFactor = await fresh.request("POST", "/api/v1/session/mfa/verify", {
+      method: "TOTP",
+      code: totpCode(totpUri),
     });
     expect(secondFactor.status).toBe(200);
 
@@ -133,8 +139,8 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
     expect(switched?.requestId).toMatch(UUID);
     const spoofed = await fresh.request(
       "POST",
-      "/api/auth/organization/set-active",
-      { organizationId: tenantId },
+      "/api/v1/session/tenant",
+      { tenantId },
       { "x-request-id": "chosen-by-the-client" },
     );
     expect(spoofed.status).toBe(200);
@@ -147,16 +153,17 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
   it("refuses a wrong TOTP code", async () => {
     const { owner: freshOwner } = await provisionTestTenant(api, "wrong-code");
     const browser = new Browser(api);
-    const totpURI = await signInAndEnrol(browser, freshOwner);
-    await browser.request("POST", "/api/auth/sign-out", {});
+    const totpUri = await signInAndEnrol(browser, freshOwner);
+    await browser.request("POST", "/api/v1/session/sign-out");
     const again = new Browser(api);
-    await again.request("POST", "/api/auth/sign-in/email", {
+    await again.request("POST", "/api/v1/session/sign-in", {
       email: freshOwner.email,
       password: freshOwner.password,
     });
-    const good = totpCode(totpURI);
+    const good = totpCode(totpUri);
     const wrong = String((Number(good) + 1) % 1_000_000).padStart(6, "0");
-    const refused = await again.request("POST", "/api/auth/two-factor/verify-totp", {
+    const refused = await again.request("POST", "/api/v1/session/mfa/verify", {
+      method: "TOTP",
       code: wrong,
     });
     expect(refused.status).toBe(401);
@@ -166,11 +173,17 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
   it("MFA can never be switched off", async () => {
     const browser = new Browser(api);
     await signInAndEnrol(browser, (await provisionTestTenant(api, "no-disable")).owner);
-    const disable = await browser.request("POST", "/api/auth/two-factor/disable", {
+    // Not reachable over HTTP at all…
+    const overHttp = await browser.request("POST", "/api/auth/two-factor/disable", {
       password: "irrelevant-password",
     });
-    expect(disable.status).toBe(403);
-    expect(disable.body).toContain("MFA_REQUIRED");
+    expect(overHttp.status).toBe(404);
+    // …and the identity provider itself still refuses it.
+    const inProcess = await callProvider(api, browser, "POST", "/two-factor/disable", {
+      password: "irrelevant-password",
+    });
+    expect(inProcess.status).toBe(403);
+    expect(inProcess.body).toContain("MFA_REQUIRED");
   });
 
   it("sign-up needs an invitation, and a refusal does not reveal whether the email exists", async () => {
@@ -179,7 +192,7 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
     // The identity provider answers a refused sign-up exactly like an accepted
     // one (anti-enumeration), so the proof is that no account was created.
     await browser.request("POST", "/api/auth/sign-up/email", outsider);
-    const signIn = await browser.request("POST", "/api/auth/sign-in/email", {
+    const signIn = await browser.request("POST", "/api/v1/session/sign-in", {
       email: outsider.email,
       password: outsider.password,
     });
@@ -218,7 +231,7 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
     expect(ids).not.toContain(ownerUserId);
     expect(await existingUserIds(ids)).toEqual([]);
     // The existing account is untouched: its own password still signs in.
-    const ownerSignIn = await new Browser(api).request("POST", "/api/auth/sign-in/email", {
+    const ownerSignIn = await new Browser(api).request("POST", "/api/v1/session/sign-in", {
       email: owner.email,
       password: owner.password,
     });
@@ -242,20 +255,32 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
   it("an organisation endpoint that has not been reviewed is not exposed", async () => {
     const browser = new Browser(api);
     await signInAndEnrol(browser, owner);
-    const response = await browser.request("POST", "/api/auth/organization/check-slug", {
+    const overHttp = await browser.request("POST", "/api/auth/organization/check-slug", {
       slug: "anything",
     });
-    expect(response.status).toBe(404);
+    expect(overHttp.status).toBe(404);
+    // The provider's own allowlist refuses it too, for any call the API makes.
+    const inProcess = await callProvider(api, browser, "POST", "/organization/check-slug", {
+      slug: "anything",
+    });
+    expect(inProcess.status).toBe(404);
+    expect(inProcess.body).toContain("ENDPOINT_NOT_EXPOSED");
   });
 
   it("nobody can create a tenant through the API", async () => {
     const browser = new Browser(api);
     await signInAndEnrol(browser, owner);
-    const response = await browser.request("POST", "/api/auth/organization/create", {
+    const overHttp = await browser.request("POST", "/api/auth/organization/create", {
       name: "[Self-made tenant]",
       slug: "self-made",
     });
-    expect(response.status).toBe(403);
+    expect(overHttp.status).toBe(404);
+    // The provider refuses an organisation created by anyone but provisioning.
+    const inProcess = await callProvider(api, browser, "POST", "/organization/create", {
+      name: "[Self-made tenant]",
+      slug: "self-made",
+    });
+    expect(inProcess.status).toBe(403);
   });
 
   it("an invited analyst can join, enrol, act, and is limited to the analyst's permissions", async () => {
@@ -263,13 +288,9 @@ describe("sign-in, MFA and the first action (RELEASE-BLOCKING)", () => {
     await signInAndEnrol(admin, owner);
     await setActiveTenant(admin, tenantId);
     const analyst = newAccount("analyst");
-    const invite = await admin.request("POST", "/api/auth/organization/invite-member", {
-      email: analyst.email,
-      role: "analyst",
-      organizationId: tenantId,
-    });
-    expect(invite.status).toBe(200);
-    const invitationId = invite.json<{ id: string }>().id;
+    const invited = await invite(admin, analyst.email, "analyst");
+    expect(invited.status).toBe(201);
+    const { invitationId } = invited.json<{ invitationId: string }>();
 
     const joiner = new Browser(api);
     expect((await joiner.request("POST", "/api/auth/sign-up/email", analyst)).status).toBe(200);

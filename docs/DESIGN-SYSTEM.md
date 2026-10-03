@@ -67,6 +67,15 @@ Inferred content also carries a lighter treatment in context: a dashed edge in t
 | `status-failed-ink` | `#7A2E1E` | `#E9A48F` | Failure text, including the reason |
 | `status-failed-mark` | `#A33F27` | `#C4644A` | Failure dot, error icon |
 
+### QR code (added in Phase 6b)
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `qr-module` | `#15171C` | `#15171C` | The dark modules of the MFA enrolment QR code |
+| `qr-ground` | `#FFFFFF` | `#FFFFFF` | Its background and quiet zone |
+
+The same in both themes, deliberately: authenticator apps scan dark-on-light reliably and an inverted code unreliably.
+
 ### Colour discipline
 
 Chrome is neutral. Colour means **claim strength, collector status, or entity class in the graph** — nothing else. Anything decorative that borrows a semantic colour is a bug.
@@ -141,6 +150,16 @@ Monospace is a signal that a value is literal data. Use it deliberately.
 | `shadow-card` | `0 1px 2px rgba(21,23,28,0.05)` | The search bar and floating graph controls. Nothing else is raised |
 | `shadow-overlay` | `0 8px 24px rgba(21,23,28,0.12)` | Command palette, popovers, provenance drawer |
 
+**Sizes** (added in Phase 6b, for the first screens):
+
+| Token | Value | Use |
+|---|---|---|
+| `target-min` | 44px | Smallest dimension of any interactive control (§7). Buttons and inputs are at least this tall |
+| `focus-ring-width` | 2px | The focus outline (§7) |
+| `focus-ring-offset` | 2px | Gap between a control and its focus outline (§7) |
+| `layout-form-width` | 400px | Maximum width of a single-column form: sign-in, MFA |
+| `qr-size` | 176px | The MFA enrolment QR code, large enough to scan from a screen |
+
 **Density.** Two modes. *Comfortable*: `space-5` card padding, 11px row padding, `body` in tables. *Compact*: `space-3`, 7px, `small` in tables. All spacing comes from tokens, so the swap is mechanical. Compact is the default in the Evidence grid.
 
 ---
@@ -155,7 +174,7 @@ Line icons, 1.9px stroke, 24px grid, rendered at 15–19px, inheriting `currentC
 
 - Body and caption text meet 4.5:1 against their surface in both themes. `ink-muted` is the lightest permitted text colour.
 - Interactive targets are at least 44px in their smallest dimension.
-- Focus is visible on every control: `accent`, 2px, with offset.
+- Focus is visible on every control: `accent`, `focus-ring-width`, with `focus-ring-offset`.
 - Every control is a real `<button>`, `<a href>` or labelled `<input>`. Nothing interactive is a `div`.
 - Entity and status distinctions differ in lightness, not hue alone.
 - Every form input has a label, visible or screen-reader-only.

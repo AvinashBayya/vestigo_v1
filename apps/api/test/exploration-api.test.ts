@@ -11,6 +11,7 @@ import type { TenantId } from "@repo/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   Browser,
+  callProvider,
   createTestApi,
   asOwner,
   auditRows,
@@ -514,7 +515,9 @@ describe("members", () => {
       roles: ["analyst"],
     });
 
-    const cancelled = await a.request("POST", "/api/auth/organization/cancel-invitation", {
+    // No documented route cancels an invitation yet, and the identity provider's
+    // own endpoint is not reachable over HTTP: the fixture cancels it in-process.
+    const cancelled = await callProvider(api, a, "POST", "/organization/cancel-invitation", {
       invitationId: cancel.invitationId,
     });
     expect(cancelled.status).toBe(200);

@@ -1,0 +1,136 @@
+/*
+ * The Tailwind theme, built from the design tokens and nothing else.
+ *
+ * Every default scale is reset first (`initial`), so a colour, spacing,
+ * radius, shadow, font or type size that is not a design token has no utility
+ * at all: `bg-red-500`, `p-7` or `rounded-xl` produce nothing. Utilities read
+ * the tokens at run time (`inline`), so the dark theme ([data-theme="dark"])
+ * applies without rebuilding.
+ *
+ * Import after Tailwind itself: @import "tailwindcss"; @import "@repo/ui/theme.css";
+ */
+@import "./tokens.css";
+
+@theme inline {
+  --color-*: initial;
+  --color-surface-page: var(--ds-surface-page);
+  --color-surface-raised: var(--ds-surface-raised);
+  --color-surface-sunken: var(--ds-surface-sunken);
+  --color-surface-hover: var(--ds-surface-hover);
+  --color-border-subtle: var(--ds-border-subtle);
+  --color-border-default: var(--ds-border-default);
+  --color-border-strong: var(--ds-border-strong);
+  --color-ink-primary: var(--ds-ink-primary);
+  --color-ink-secondary: var(--ds-ink-secondary);
+  --color-ink-muted: var(--ds-ink-muted);
+  --color-accent: var(--ds-accent);
+  --color-accent-soft: var(--ds-accent-soft);
+  --color-accent-ink: var(--ds-accent-ink);
+  --color-on-accent: var(--ds-on-accent);
+  --color-claim-observed-fill: var(--ds-claim-observed-fill);
+  --color-claim-observed-ink: var(--ds-claim-observed-ink);
+  --color-claim-observed-mark: var(--ds-claim-observed-mark);
+  --color-claim-reported-fill: var(--ds-claim-reported-fill);
+  --color-claim-reported-ink: var(--ds-claim-reported-ink);
+  --color-claim-reported-mark: var(--ds-claim-reported-mark);
+  --color-claim-derived-fill: var(--ds-claim-derived-fill);
+  --color-claim-derived-ink: var(--ds-claim-derived-ink);
+  --color-claim-derived-mark: var(--ds-claim-derived-mark);
+  --color-claim-correlated-fill: var(--ds-claim-correlated-fill);
+  --color-claim-correlated-ink: var(--ds-claim-correlated-ink);
+  --color-claim-inferred-fill: var(--ds-claim-inferred-fill);
+  --color-claim-inferred-ink: var(--ds-claim-inferred-ink);
+  --color-claim-inferred-mark: var(--ds-claim-inferred-mark);
+  --color-claim-hypothesis-fill: var(--ds-claim-hypothesis-fill);
+  --color-claim-hypothesis-ink: var(--ds-claim-hypothesis-ink);
+  --color-status-failed-fill: var(--ds-status-failed-fill);
+  --color-status-failed-ink: var(--ds-status-failed-ink);
+  --color-status-failed-mark: var(--ds-status-failed-mark);
+  --color-qr-module: var(--ds-qr-module);
+  --color-qr-ground: var(--ds-qr-ground);
+
+  --font-*: initial;
+  --font-sans: var(--ds-font-sans);
+  --font-mono: var(--ds-font-mono);
+
+  --text-*: initial;
+  --text-display: var(--ds-type-display-size);
+  --text-display--line-height: var(--ds-type-display-line);
+  --text-display--font-weight: var(--ds-type-display-weight);
+  --text-display--letter-spacing: var(--ds-type-display-tracking);
+  --text-title: var(--ds-type-title-size);
+  --text-title--line-height: var(--ds-type-title-line);
+  --text-title--font-weight: var(--ds-type-title-weight);
+  --text-body: var(--ds-type-body-size);
+  --text-body--line-height: var(--ds-type-body-line);
+  --text-body--font-weight: var(--ds-type-body-weight);
+  --text-body-strong: var(--ds-type-body-strong-size);
+  --text-body-strong--line-height: var(--ds-type-body-strong-line);
+  --text-body-strong--font-weight: var(--ds-type-body-strong-weight);
+  --text-small: var(--ds-type-small-size);
+  --text-small--line-height: var(--ds-type-small-line);
+  --text-small--font-weight: var(--ds-type-small-weight);
+  --text-caption: var(--ds-type-caption-size);
+  --text-caption--line-height: var(--ds-type-caption-line);
+  --text-caption--font-weight: var(--ds-type-caption-weight);
+  --text-eyebrow: var(--ds-type-eyebrow-size);
+  --text-eyebrow--line-height: var(--ds-type-eyebrow-line);
+  --text-eyebrow--font-weight: var(--ds-type-eyebrow-weight);
+  --text-eyebrow--letter-spacing: var(--ds-type-eyebrow-tracking);
+  --text-mono-body: var(--ds-type-mono-body-size);
+  --text-mono-body--line-height: var(--ds-type-mono-body-line);
+  --text-mono-body--font-weight: var(--ds-type-mono-body-weight);
+  --text-mono-caption: var(--ds-type-mono-caption-size);
+  --text-mono-caption--line-height: var(--ds-type-mono-caption-line);
+  --text-mono-caption--font-weight: var(--ds-type-mono-caption-weight);
+  --text-metric: var(--ds-type-metric-size);
+  --text-metric--line-height: var(--ds-type-metric-line);
+  --text-metric--font-weight: var(--ds-type-metric-weight);
+
+  --spacing: initial;
+  --spacing-*: initial;
+  --spacing-1: var(--ds-space-1);
+  --spacing-2: var(--ds-space-2);
+  --spacing-3: var(--ds-space-3);
+  --spacing-4: var(--ds-space-4);
+  --spacing-5: var(--ds-space-5);
+  --spacing-6: var(--ds-space-6);
+  --spacing-8: var(--ds-space-8);
+  --spacing-10: var(--ds-space-10);
+  --spacing-target: var(--ds-target-min);
+  --spacing-qr: var(--ds-qr-size);
+
+  --container-*: initial;
+  --container-form: var(--ds-layout-form-width);
+
+  --radius-*: initial;
+  --radius-sm: var(--ds-radius-sm);
+  --radius-md: var(--ds-radius-md);
+  --radius-lg: var(--ds-radius-lg);
+  --radius-pill: var(--ds-radius-pill);
+
+  --shadow-*: initial;
+  --shadow-card: var(--ds-shadow-card);
+  --shadow-overlay: var(--ds-shadow-overlay);
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  [data-theme="dark"] {
+    color-scheme: dark;
+  }
+  body {
+    background-color: var(--ds-surface-page);
+    color: var(--ds-ink-primary);
+    font-family: var(--ds-font-sans);
+    font-size: var(--ds-type-body-size);
+    line-height: var(--ds-type-body-line);
+  }
+  /* §7: focus is visible on every control. */
+  :focus-visible {
+    outline: var(--ds-focus-ring-width) solid var(--ds-accent);
+    outline-offset: var(--ds-focus-ring-offset);
+  }
+}

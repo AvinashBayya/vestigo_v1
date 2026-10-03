@@ -4,11 +4,13 @@ import { PRODUCT_NAME } from "@repo/config";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import {
   jsonSchemaTransform,
+  jsonSchemaTransformObject,
   serializerCompiler,
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import { enforceRouteAccess, type DeclaredRoute } from "./http/access.ts";
+import { withoutUnusedSchemas } from "./http/openapi-components.ts";
 import { registerErrorHandling } from "./http/errors.ts";
 import { apiKeyRoutes } from "./routes/api-keys.ts";
 import { auditLogRoutes } from "./routes/audit-log.ts";
@@ -29,6 +31,7 @@ import { personRoutes } from "./routes/person.ts";
 import { reportRoutes } from "./routes/reports.ts";
 import { runRoutes } from "./routes/runs.ts";
 import { scopeAuthorisationRoutes } from "./routes/scope-authorisations.ts";
+import { sessionRoutes } from "./routes/session.ts";
 import { accessServicesFor, authOf, requireServices, type Services } from "./services.ts";
 
 /** Version of the public contract described by the OpenAPI document. */
@@ -96,12 +99,16 @@ export async function buildApp(options: AppOptions) {
       },
     },
     transform: jsonSchemaTransform,
+    // Schemas given an id (`.meta({ id })`) become named components, so the
+    // generated client types them by name; unreferenced ones are dropped.
+    transformObject: (document) => withoutUnusedSchemas(jsonSchemaTransformObject(document)),
   });
 
   const services = () => requireServices(options.services);
   await app.register(healthRoutes);
   await app.register(openapiRoutes);
   await app.register(authRoutes(authOf(options.services)));
+  await app.register(sessionRoutes(services));
   await app.register(meRoutes);
   await app.register(investigationRoutes);
   await app.register(auditLogRoutes);

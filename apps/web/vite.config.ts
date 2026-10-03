@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { envSchema, PRODUCT_NAME } from "@repo/config";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { loadEnv, type Plugin } from "vite";
 import { TEST_MAX_WORKERS } from "@repo/config/vitest";
@@ -24,7 +25,7 @@ export default defineConfig(({ mode }) => {
   const apiOrigin = `http://127.0.0.1:${String(apiPort)}`;
 
   return {
-    plugins: [react(), productName],
+    plugins: [react(), tailwindcss(), productName],
     server: {
       proxy: { "/health": apiOrigin, "/api": apiOrigin },
     },

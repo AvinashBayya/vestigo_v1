@@ -1,0 +1,156 @@
+/*
+ * Design tokens: docs/DESIGN-SYSTEM.md, as CSS custom properties. Each is the
+ * design system's token name prefixed `--ds-`, so none collides with the
+ * variables Tailwind's theme defines (theme.css maps these into it).
+ *
+ * The only file in the web app that holds a raw colour, size or font stack.
+ * Everything else uses these, through the Tailwind theme (theme.css).
+ * packages/config/scripts/design-system-guard.test.ts fails if this file and
+ * the design system document disagree, or if a raw value appears anywhere
+ * else.
+ */
+
+:root {
+  /* §2 Surfaces and chrome */
+  --ds-surface-page: #f5f5f1;
+  --ds-surface-raised: #ffffff;
+  --ds-surface-sunken: #fcfcfa;
+  --ds-surface-hover: #f8f8f5;
+  --ds-border-subtle: #efeee8;
+  --ds-border-default: #e3e2db;
+  --ds-border-strong: #d6d5cc;
+  --ds-ink-primary: #15171c;
+  --ds-ink-secondary: #3c3e45;
+  --ds-ink-muted: #5e6066;
+  --ds-accent: #22355b;
+  --ds-accent-soft: #e8ecf4;
+  --ds-accent-ink: #22355b;
+  --ds-on-accent: #ffffff;
+
+  /* §2 Claim strength: fill, ink, mark */
+  --ds-claim-observed-fill: #e7f1ea;
+  --ds-claim-observed-ink: #17543a;
+  --ds-claim-observed-mark: #1f6f4a;
+  --ds-claim-reported-fill: #e8ecf4;
+  --ds-claim-reported-ink: #1e4577;
+  --ds-claim-reported-mark: #2b5c9e;
+  --ds-claim-derived-fill: #efe9f6;
+  --ds-claim-derived-ink: #523579;
+  --ds-claim-derived-mark: #6a4a9e;
+  --ds-claim-correlated-fill: #e7efef;
+  --ds-claim-correlated-ink: #0f4f4f;
+  --ds-claim-inferred-fill: #f6eedd;
+  --ds-claim-inferred-ink: #6b4510;
+  --ds-claim-inferred-mark: #8a5a12;
+  --ds-claim-hypothesis-fill: #ecebe4;
+  --ds-claim-hypothesis-ink: #4a4c52;
+
+  /* §2 Failure */
+  --ds-status-failed-fill: #f6e6e1;
+  --ds-status-failed-ink: #7a2e1e;
+  --ds-status-failed-mark: #a33f27;
+
+  /* §2 QR code: the same in both themes, so it always scans */
+  --ds-qr-module: #15171c;
+  --ds-qr-ground: #ffffff;
+
+  /* §4 Typography */
+  --ds-font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --ds-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --ds-type-display-size: 30px;
+  --ds-type-display-line: 36px;
+  --ds-type-display-weight: 600;
+  --ds-type-display-tracking: -0.5px;
+  --ds-type-title-size: 20px;
+  --ds-type-title-line: 26px;
+  --ds-type-title-weight: 600;
+  --ds-type-body-size: 14px;
+  --ds-type-body-line: 21px;
+  --ds-type-body-weight: 400;
+  --ds-type-body-strong-size: 14px;
+  --ds-type-body-strong-line: 21px;
+  --ds-type-body-strong-weight: 600;
+  --ds-type-small-size: 12.5px;
+  --ds-type-small-line: 19px;
+  --ds-type-small-weight: 400;
+  --ds-type-caption-size: 11.5px;
+  --ds-type-caption-line: 17px;
+  --ds-type-caption-weight: 400;
+  --ds-type-eyebrow-size: 11px;
+  --ds-type-eyebrow-line: 14px;
+  --ds-type-eyebrow-weight: 600;
+  --ds-type-eyebrow-tracking: 0.5px;
+  --ds-type-mono-body-size: 13px;
+  --ds-type-mono-body-line: 20px;
+  --ds-type-mono-body-weight: 400;
+  --ds-type-mono-caption-size: 11.5px;
+  --ds-type-mono-caption-line: 17px;
+  --ds-type-mono-caption-weight: 400;
+  --ds-type-metric-size: 21px;
+  --ds-type-metric-line: 26px;
+  --ds-type-metric-weight: 500;
+
+  /* §5 Spacing, radius, shadow */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-8: 32px;
+  --ds-space-10: 40px;
+  --ds-radius-sm: 6px;
+  --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
+  --ds-radius-pill: 999px;
+  --ds-shadow-card: 0 1px 2px rgba(21, 23, 28, 0.05);
+  --ds-shadow-overlay: 0 8px 24px rgba(21, 23, 28, 0.12);
+
+  /* §5 Sizes */
+  --ds-target-min: 44px;
+  --ds-focus-ring-width: 2px;
+  --ds-focus-ring-offset: 2px;
+  --ds-layout-form-width: 400px;
+  --ds-qr-size: 176px;
+}
+
+[data-theme="dark"] {
+  /* §2 Surfaces and chrome */
+  --ds-surface-page: #14161b;
+  --ds-surface-raised: #1a1d23;
+  --ds-surface-sunken: #1f232b;
+  --ds-surface-hover: #22262e;
+  --ds-border-subtle: #24282f;
+  --ds-border-default: #2a2e36;
+  --ds-border-strong: #333944;
+  --ds-ink-primary: #ecece7;
+  --ds-ink-secondary: #c4c6cc;
+  --ds-ink-muted: #9a9da5;
+  --ds-accent: #7b94c8;
+  --ds-accent-soft: #26303f;
+  --ds-accent-ink: #c8d8f2;
+  --ds-on-accent: #14161b;
+
+  /* §2 Claim strength: fill, ink, mark */
+  --ds-claim-observed-fill: #1d3227;
+  --ds-claim-observed-ink: #8fd5ae;
+  --ds-claim-observed-mark: #55b183;
+  --ds-claim-reported-fill: #232c3a;
+  --ds-claim-reported-ink: #a8bee4;
+  --ds-claim-reported-mark: #7b94c8;
+  --ds-claim-derived-fill: #2a2338;
+  --ds-claim-derived-ink: #c3aee4;
+  --ds-claim-derived-mark: #9a7bd0;
+  --ds-claim-correlated-fill: #1b2c2c;
+  --ds-claim-correlated-ink: #84caca;
+  --ds-claim-inferred-fill: #33291a;
+  --ds-claim-inferred-ink: #e0b872;
+  --ds-claim-inferred-mark: #c79a4e;
+  --ds-claim-hypothesis-fill: #272b33;
+  --ds-claim-hypothesis-ink: #b6b8bf;
+
+  /* §2 Failure */
+  --ds-status-failed-fill: #33211c;
+  --ds-status-failed-ink: #e9a48f;
+  --ds-status-failed-mark: #c4644a;
+}

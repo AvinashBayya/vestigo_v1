@@ -146,7 +146,7 @@ describe("an open stream closes when the reader's access ends (RELEASE-BLOCKING)
     const events = await closeThrough(
       () => viewer.request("GET", eventsPath()),
       async () => {
-        expect((await viewer.request("POST", "/api/auth/sign-out", {})).status).toBe(200);
+        expect((await viewer.request("POST", "/api/v1/session/sign-out")).status).toBe(200);
       },
     );
     expectClosedBy(events, { reason: "CREDENTIAL_REVOKED", code: "UNAUTHENTICATED" });

@@ -8,6 +8,7 @@ import {
   auditRows,
   Browser,
   createTestApi,
+  invite,
   newAccount,
   signInAndEnrol,
   setActiveTenant,
@@ -210,16 +211,13 @@ describe("API keys (RELEASE-BLOCKING)", () => {
   it("can never do more than its issuer can do today", async () => {
     // Owner A invites an admin, who issues a key that may read and create.
     const admin = newAccount("keys-admin");
-    const invite = await ownerA.request("POST", "/api/auth/organization/invite-member", {
-      email: admin.email,
-      role: "admin",
-      organizationId: tenantA,
-    });
+    const invited = await invite(ownerA, admin.email, "admin");
+    expect(invited.status).toBe(201);
     const adminBrowser = new Browser(api);
     await adminBrowser.request("POST", "/api/auth/sign-up/email", admin);
     await signInAndEnrol(adminBrowser, admin);
     await adminBrowser.request("POST", "/api/auth/organization/accept-invitation", {
-      invitationId: invite.json<{ id: string }>().id,
+      invitationId: invited.json<{ invitationId: string }>().invitationId,
     });
     await setActiveTenant(adminBrowser, tenantA);
     const { plaintext } = await issue(adminBrowser, ["investigation:read", "investigation:create"]);
@@ -231,18 +229,13 @@ describe("API keys (RELEASE-BLOCKING)", () => {
     expect((await create()).statusCode).toBe(201);
 
     // The admin is demoted to viewer: the key loses what the viewer lacks.
-    const members = await ownerA.request(
-      "GET",
-      `/api/auth/organization/list-members?organizationId=${tenantA}`,
-    );
+    const members = await ownerA.request("GET", "/api/v1/members");
     const member = members
-      .json<{ members: { id: string; user: { email: string } }[] }>()
-      .members.find((entry) => entry.user.email === admin.email);
-    expect(member).toBeDefined();
-    const demote = await ownerA.request("POST", "/api/auth/organization/update-member-role", {
-      memberId: member?.id,
+      .json<{ items: { userId: string; email: string }[] }>()
+      .items.find((entry) => entry.email === admin.email);
+    if (member === undefined) return expect.fail("the admin is not listed as a member");
+    const demote = await ownerA.request("PATCH", `/api/v1/members/${member.userId}`, {
       role: "viewer",
-      organizationId: tenantA,
     });
     expect(demote.status).toBe(200);
     expect((await create()).statusCode).toBe(403);
@@ -251,11 +244,8 @@ describe("API keys (RELEASE-BLOCKING)", () => {
     );
 
     // The admin leaves: the key stops working altogether.
-    const removal = await ownerA.request("POST", "/api/auth/organization/remove-member", {
-      memberIdOrEmail: member?.id,
-      organizationId: tenantA,
-    });
-    expect(removal.status).toBe(200);
+    const removal = await ownerA.request("DELETE", `/api/v1/members/${member.userId}`);
+    expect(removal.status).toBe(204);
     expect((await withKey(api.app, plaintext, "GET", "/api/v1/investigations")).statusCode).toBe(
       401,
     );

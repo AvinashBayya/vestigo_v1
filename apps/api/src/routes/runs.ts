@@ -187,6 +187,62 @@ const LockedEvent = z.object({
   checkedAt: z.iso.datetime(),
 });
 
+/**
+ * The run progress stream's events, as schemas: each is sent as
+ * `event: <event>` and `data: <JSON of data>`, validated on the way out, and
+ * named in the OpenAPI document so the generated client types them.
+ */
+export const RunStreamEvent = z
+  .discriminatedUnion("event", [
+    z
+      .object({
+        event: z.literal("run"),
+        /** The run's state without its jobs, which come as `job` events. */
+        data: RunView.omit({ jobs: true }),
+      })
+      .meta({
+        id: "RunStreamRunEvent",
+        description: "The run's state: sent first, and again whenever it changes.",
+      }),
+    z.object({ event: z.literal("job"), data: JobView }).meta({
+      id: "RunStreamJobEvent",
+      description: "One collector job: sent first for every job, and again whenever it changes.",
+    }),
+    z
+      .object({
+        event: z.literal("end"),
+        data: z.object({
+          /** The settled run's status; null when the run no longer exists. */
+          status: z.enum(RUN_STATUSES).nullable(),
+        }),
+      })
+      .meta({
+        id: "RunStreamEndEvent",
+        description: "The run is settled (or gone); the stream closes.",
+      }),
+    z.object({ event: z.literal("locked"), data: LockedEvent }).meta({
+      id: "RunStreamLockedEvent",
+      description:
+        "A re-check of access refused it; the stream closes. A policy decision, not a dropped connection.",
+    }),
+    z.object({ event: z.literal("timeout"), data: z.object({ reconnect: z.literal(true) }) }).meta({
+      id: "RunStreamTimeoutEvent",
+      description: "The stream reached its maximum length while the run goes on; reconnect.",
+    }),
+    z
+      .object({ event: z.literal("error"), data: z.object({ code: z.literal("STREAM_FAILED") }) })
+      .meta({
+        id: "RunStreamErrorEvent",
+        description: "The stream failed; the run itself is unaffected. Reconnect to resume.",
+      }),
+  ])
+  .meta({
+    id: "RunStreamEvent",
+    description:
+      "One server-sent event of a run's progress stream, parsed: `event` is the SSE event name and `data` its JSON payload.",
+  });
+export type RunStreamEventType = z.infer<typeof RunStreamEvent>;
+
 /** The permission the progress stream needs, re-checked on every read as at connect. */
 const STREAM_PERMISSION = "run:read" as const;
 /** A progress stream ends after this long even if the run is still going; the client reconnects. */
@@ -327,9 +383,12 @@ export const runRoutes =
           tags: ["runs"],
           security: SECURITY,
           params: IdParams,
-          produces: ["text/event-stream"],
           response: {
-            200: z.string().describe("A stream of server-sent events: run, job and end."),
+            200: {
+              description:
+                "A stream of server-sent events. Each is written as `event: <event>` and `data: <JSON>`; the schema is one event, parsed.",
+              content: { "text/event-stream": { schema: RunStreamEvent } },
+            },
             ...PROTECTED_ERRORS,
           },
         },
@@ -468,8 +527,10 @@ function streamRun(options: {
   let lastRun = "";
   const lastJobs = new Map<string, string>();
 
-  const send = (event: string, data: unknown) => {
-    raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  /** Validated on the way out, so the wire never differs from the documented schema. */
+  const send = (message: RunStreamEventType) => {
+    const event = RunStreamEvent.parse(message);
+    raw.write(`event: ${event.event}\ndata: ${JSON.stringify(event.data)}\n\n`);
   };
   const emit = (progress: RunProgress) => {
     const view = runView(runs, progress);
@@ -477,13 +538,13 @@ function streamRun(options: {
     const runJson = JSON.stringify(run);
     if (runJson !== lastRun) {
       lastRun = runJson;
-      send("run", run);
+      send({ event: "run", data: run });
     }
     for (const job of jobs) {
       const jobJson = JSON.stringify(job);
       if (lastJobs.get(job.id) !== jobJson) {
         lastJobs.set(job.id, jobJson);
-        send("job", job);
+        send({ event: "job", data: job });
       }
     }
     return progress.settled;
@@ -499,7 +560,7 @@ function streamRun(options: {
 
   const loop = async () => {
     if (emit(options.initial)) {
-      send("end", { status: options.initial.status });
+      send({ event: "end", data: { status: options.initial.status } });
       close();
       return;
     }
@@ -509,28 +570,28 @@ function streamRun(options: {
       const read = await options.read();
       if (read.kind === "refused") {
         const { refusal } = read;
-        send(
-          "locked",
-          LockedEvent.parse({
+        send({
+          event: "locked",
+          data: {
             reason: refusal.reason,
             code: refusal.code,
             detail: `${refusal.message} Access to this run was re-checked and is now refused, so the stream is closed: a policy decision, not a dropped connection. Access is re-checked with every progress read, every ${String(accessRecheckMs)} ms.`,
             locked: refusal.locked,
             recheckIntervalMs: accessRecheckMs,
             checkedAt: new Date().toISOString(),
-          }),
-        );
+          },
+        });
         close();
         return;
       }
       const progress = read.progress;
       if (progress === null) {
-        send("end", { status: null });
+        send({ event: "end", data: { status: null } });
         close();
         return;
       }
       if (emit(progress)) {
-        send("end", { status: progress.status });
+        send({ event: "end", data: { status: progress.status } });
         close();
         return;
       }
@@ -539,7 +600,7 @@ function streamRun(options: {
         raw.write(": keep-alive\n\n");
       }
       if (Date.now() - started >= MAX_STREAM_MS) {
-        send("timeout", { reconnect: true });
+        send({ event: "timeout", data: { reconnect: true } });
         close();
         return;
       }
@@ -548,7 +609,7 @@ function streamRun(options: {
   loop().catch((error: unknown) => {
     options.log.error({ err: error }, "run progress stream failed");
     if (stream.open) {
-      send("error", { code: "STREAM_FAILED" });
+      send({ event: "error", data: { code: "STREAM_FAILED" } });
       close();
     }
   });

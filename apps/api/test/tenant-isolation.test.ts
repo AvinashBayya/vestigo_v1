@@ -8,6 +8,7 @@ import {
   auditRows,
   Browser,
   createTestApi,
+  invite,
   newAccount,
   provisionTestTenant,
   readyBrowser,
@@ -101,14 +102,10 @@ describe("a session is confined to its tenant (RELEASE-BLOCKING)", () => {
 
   it("a member of both tenants sees only the active tenant's data, and can switch", async () => {
     // Owner B invites owner A's identity into B as a viewer.
-    const invite = await browserB.request("POST", "/api/auth/organization/invite-member", {
-      email: ownerA.email,
-      role: "viewer",
-      organizationId: tenantB,
-    });
-    expect(invite.status).toBe(200);
+    const invited = await invite(browserB, ownerA.email, "viewer");
+    expect(invited.status).toBe(201);
     const accepted = await browserA.request("POST", "/api/auth/organization/accept-invitation", {
-      invitationId: invite.json<{ id: string }>().id,
+      invitationId: invited.json<{ invitationId: string }>().invitationId,
     });
     expect(accepted.status).toBe(200);
 
@@ -143,28 +140,24 @@ describe("a session is confined to its tenant (RELEASE-BLOCKING)", () => {
 
   it("a removed member loses access immediately", async () => {
     const viewer = newAccount("removed");
-    const invite = await browserB.request("POST", "/api/auth/organization/invite-member", {
-      email: viewer.email,
-      role: "viewer",
-      organizationId: tenantB,
-    });
+    const invited = await invite(browserB, viewer.email, "viewer");
+    expect(invited.status).toBe(201);
     const joiner = new Browser(api);
     await joiner.request("POST", "/api/auth/sign-up/email", viewer);
-    const ready = await readyBrowserAfterInvite(joiner, viewer, invite.json<{ id: string }>().id);
+    const ready = await readyBrowserAfterInvite(
+      joiner,
+      viewer,
+      invited.json<{ invitationId: string }>().invitationId,
+    );
     expect((await ready.request("GET", "/api/v1/investigations")).status).toBe(200);
 
-    const members = await browserB.request(
-      "GET",
-      `/api/auth/organization/list-members?organizationId=${tenantB}`,
-    );
+    const members = await browserB.request("GET", "/api/v1/members");
     const member = members
-      .json<{ members: { id: string; user: { email: string } }[] }>()
-      .members.find((entry) => entry.user.email === viewer.email);
-    const removal = await browserB.request("POST", "/api/auth/organization/remove-member", {
-      memberIdOrEmail: member?.id,
-      organizationId: tenantB,
-    });
-    expect(removal.status).toBe(200);
+      .json<{ items: { userId: string; email: string }[] }>()
+      .items.find((entry) => entry.email === viewer.email);
+    if (member === undefined) return expect.fail("the viewer is not listed as a member");
+    const removal = await browserB.request("DELETE", `/api/v1/members/${member.userId}`);
+    expect(removal.status).toBe(204);
     expect((await ready.request("GET", "/api/v1/investigations")).status).toBe(403);
   });
 });

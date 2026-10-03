@@ -41,6 +41,7 @@ import {
   joinAs,
   provisionTestTenant,
   readyBrowser,
+  sseEvents,
   type TestApi,
 } from "./support.ts";
 
@@ -238,16 +239,8 @@ describe("an investigation through the API: partial completion, the failure surf
     );
     expect(streamed.status).toBe(200);
     expect(String(streamed.headers["content-type"])).toMatch(/^text\/event-stream/);
-    const events = streamed.body
-      .split("\n\n")
-      .filter((block) => block.startsWith("event: "))
-      .map((block) => {
-        const [eventLine = "", dataLine = ""] = block.split("\n");
-        return {
-          event: eventLine.slice(7),
-          data: JSON.parse(dataLine.slice(6)) as Record<string, unknown>,
-        };
-      });
+    // Parsed and checked against the documented event schema.
+    const events = sseEvents(streamed.body);
     expect(events[0]?.event).toBe("run");
     expect(events.at(-1)).toEqual({ event: "end", data: { status: "PARTIAL" } });
     const jobEvents = events.filter((e) => e.event === "job").map((e) => JobShape.parse(e.data));

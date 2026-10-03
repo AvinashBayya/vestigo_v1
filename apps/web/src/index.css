@@ -1,0 +1,6 @@
+/* Tailwind, restricted to the design tokens (packages/ui/src/theme.css). */
+@import "tailwindcss";
+@import "@repo/ui/theme.css";
+
+/* Components in packages/ui are scanned for class names too. */
+@source "../../../packages/ui/src";

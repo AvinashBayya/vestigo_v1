@@ -40,6 +40,49 @@ describe(`GET ${OPENAPI_PATH}`, () => {
     expect(spec.openapi).toBe("3.1.0");
   });
 
+  it("documents the progress stream's events as named schemas, and keeps no unused one", async () => {
+    const spec = z
+      .object({
+        paths: z.record(z.string(), z.record(z.string(), z.unknown())),
+        components: z.object({ schemas: z.record(z.string(), z.unknown()) }),
+      })
+      .parse(await fetchSpec());
+    const events = z
+      .object({
+        get: z.object({
+          responses: z.object({
+            "200": z.object({
+              content: z.object({
+                "text/event-stream": z.object({ schema: z.object({ $ref: z.string() }) }),
+              }),
+            }),
+          }),
+        }),
+      })
+      .parse(spec.paths["/api/v1/runs/{id}/events"]);
+    expect(events.get.responses["200"].content["text/event-stream"].schema.$ref).toBe(
+      "#/components/schemas/RunStreamEvent",
+    );
+    const union = z
+      .object({ oneOf: z.array(z.object({ $ref: z.string() })) })
+      .parse(spec.components.schemas["RunStreamEvent"]);
+    expect(union.oneOf.map((member) => member.$ref.split("/").at(-1))).toEqual([
+      "RunStreamRunEvent",
+      "RunStreamJobEvent",
+      "RunStreamEndEvent",
+      "RunStreamLockedEvent",
+      "RunStreamTimeoutEvent",
+      "RunStreamErrorEvent",
+    ]);
+    // The Locked block is one schema, shared by every 403 and the stream's locked event.
+    expect(spec.components.schemas).toHaveProperty("Locked");
+    // Every component is referenced: no unused input twins.
+    const text = JSON.stringify(spec);
+    for (const name of Object.keys(spec.components.schemas)) {
+      expect(text, name).toContain(`"#/components/schemas/${name}"`);
+    }
+  });
+
   it("takes its title from PRODUCT_NAME", async () => {
     const spec = await fetchSpec();
     expect(spec.info).toMatchObject({ title: `${PRODUCT_NAME} API` });

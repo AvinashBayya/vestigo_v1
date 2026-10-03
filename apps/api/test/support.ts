@@ -32,6 +32,7 @@ import {
 } from "@repo/osint-engine";
 import pg from "pg";
 import { buildApp } from "../src/app.ts";
+import { RunStreamEvent } from "../src/routes/runs.ts";
 import { createAuth, ENROLMENT_TOKEN_HEADER, type Auth } from "../src/auth/better-auth.ts";
 import { provisionTenant } from "../src/auth/provisioning.ts";
 import type { Services } from "../src/services.ts";
@@ -230,7 +231,7 @@ export class Browser {
     });
     // An invitation's enrolment token travels in the hand-shared link; here
     // it is recorded for the invitee, as the link would deliver it.
-    if (url === "/api/auth/organization/invite-member" && response.statusCode === 200) {
+    if (url === "/api/v1/members/invitations" && method === "POST" && response.statusCode === 201) {
       const sent = body as { email?: unknown };
       const token = response.json<{ enrolmentToken?: unknown }>().enrolmentToken;
       if (typeof sent.email === "string" && typeof token === "string") {
@@ -305,6 +306,13 @@ export function enrolmentHeaders(email: string): Record<string, string> {
   return token === undefined ? {} : { [ENROLMENT_TOKEN_HEADER]: token };
 }
 
+/** The account's enrolment token, as its link would carry it; throws when none was issued. */
+export function enrolmentTokenOf(email: string): string {
+  const token = enrolmentTokens.get(email.toLowerCase());
+  if (token === undefined) throw new TypeError(`no enrolment token was issued to ${email}`);
+  return token;
+}
+
 /** TOTP secrets of accounts enrolled in this test process, by email. */
 const enrolled = new Map<string, string>();
 
@@ -314,11 +322,12 @@ export function rememberEnrolment(email: string, totpURI: string): void {
 }
 
 /**
- * Signs in with MFA: enrols TOTP on first use, and on later sign-ins answers
- * the second-factor challenge. Returns the otpauth URI.
+ * Signs in with MFA through the documented session routes, as the web app
+ * does: enrols TOTP on first use (with the account's enrolment token), and on
+ * later sign-ins answers the second-factor challenge. Returns the otpauth URI.
  */
 export async function signInAndEnrol(browser: Browser, account: Account): Promise<string> {
-  const signIn = await browser.request("POST", "/api/auth/sign-in/email", {
+  const signIn = await browser.request("POST", "/api/v1/session/sign-in", {
     email: account.email,
     password: account.password,
   });
@@ -327,34 +336,82 @@ export async function signInAndEnrol(browser: Browser, account: Account): Promis
   }
   const known = enrolled.get(account.email);
   if (known !== undefined) {
-    const second = await browser.request("POST", "/api/auth/two-factor/verify-totp", {
+    const second = await browser.request("POST", "/api/v1/session/mfa/verify", {
+      method: "TOTP",
       code: totpCode(known),
     });
     if (second.status !== 200) throw new TypeError(`second factor failed: ${second.body}`);
     return known;
   }
-  const token = enrolmentHeaders(account.email);
-  const enable = await browser.request(
-    "POST",
-    "/api/auth/two-factor/enable",
-    { password: account.password },
-    token,
-  );
-  if (enable.status !== 200) throw new TypeError(`2FA enable failed: ${enable.body}`);
-  const { totpURI } = enable.json<{ totpURI: string }>();
-  const verify = await browser.request(
-    "POST",
-    "/api/auth/two-factor/verify-totp",
-    { code: totpCode(totpURI) },
-    token,
-  );
+  const enrolmentToken = enrolmentHeaders(account.email)[ENROLMENT_TOKEN_HEADER];
+  if (enrolmentToken === undefined) {
+    throw new TypeError(`no enrolment token was issued to ${account.email}`);
+  }
+  const enable = await browser.request("POST", "/api/v1/session/mfa/enrolment", {
+    password: account.password,
+    enrolmentToken,
+  });
+  if (enable.status !== 200) throw new TypeError(`2FA enrolment failed: ${enable.body}`);
+  const { totpUri } = enable.json<{ totpUri: string }>();
+  const verify = await browser.request("POST", "/api/v1/session/mfa/enrolment/confirm", {
+    code: totpCode(totpUri),
+    enrolmentToken,
+  });
   if (verify.status !== 200) throw new TypeError(`TOTP verification failed: ${verify.body}`);
-  enrolled.set(account.email, totpURI);
-  return totpURI;
+  enrolled.set(account.email, totpUri);
+  return totpUri;
 }
 
+/** Chooses the session's tenant through the documented route. */
 export async function setActiveTenant(browser: Browser, tenantId: string): Promise<Reply> {
-  return browser.request("POST", "/api/auth/organization/set-active", { organizationId: tenantId });
+  return browser.request("POST", "/api/v1/session/tenant", { tenantId });
+}
+
+/** Invites a person through the documented members route; the enrolment token is remembered. */
+export async function invite(
+  inviter: Browser,
+  email: string,
+  role: "owner" | "admin" | "analyst" | "viewer",
+): Promise<Reply> {
+  return inviter.request("POST", "/api/v1/members/invitations", { email, role });
+}
+
+/**
+ * Calls an identity-provider endpoint in-process, with a browser's cookies.
+ * No HTTP route reaches most of the provider any more; its own guards (MFA,
+ * enrolment tokens, the endpoint allowlist) still protect the calls the API
+ * makes to it, and are tested through this. It is never something a client
+ * can do.
+ */
+export async function callProvider(
+  api: TestApi,
+  browser: Browser | null,
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+  headers: Record<string, string> = {},
+): Promise<{ readonly status: number; readonly body: string; readonly setCookies: string[] }> {
+  const cookie =
+    browser === null
+      ? ""
+      : [...browser.cookies].map(([name, value]) => `${name}=${value}`).join("; ");
+  const response = await api.auth.handler(
+    new Request(`${BASE_URL}/api/auth${path}`, {
+      method,
+      headers: {
+        origin: WEB_ORIGIN,
+        ...(cookie === "" ? {} : { cookie }),
+        ...(body === undefined ? {} : { "content-type": "application/json" }),
+        ...headers,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    }),
+  );
+  return {
+    status: response.status,
+    body: await response.text(),
+    setCookies: response.headers.getSetCookie(),
+  };
 }
 
 /** A browser signed in with MFA enrolled and the tenant selected. */
@@ -418,17 +475,23 @@ export async function auditRows(api: TestApi, tenantId: TenantId) {
   return api.db.withTenant(tenantId, ({ repos }) => repos.auditLog.recent({ limit: 500 }));
 }
 
-/** The events of a closed server-sent event stream, in order. */
+/**
+ * The events of a closed server-sent event stream, in order. Each is checked
+ * against the documented event schema, so every stream test also proves the
+ * wire matches the contract the client is generated from.
+ */
 export function sseEvents(body: string): { event: string; data: Record<string, unknown> }[] {
   return body
     .split("\n\n")
     .filter((block) => block.startsWith("event: "))
     .map((block) => {
       const [eventLine = "", dataLine = ""] = block.split("\n");
-      return {
+      const event = {
         event: eventLine.slice("event: ".length),
         data: JSON.parse(dataLine.slice("data: ".length)) as Record<string, unknown>,
       };
+      RunStreamEvent.parse(event);
+      return event;
     });
 }
 
@@ -496,17 +559,13 @@ export async function joinAs(
   tag: string,
 ): Promise<Browser> {
   const account = newAccount(tag);
-  const invite = await inviter.request("POST", "/api/auth/organization/invite-member", {
-    email: account.email,
-    role,
-    organizationId: tenantId,
-  });
-  if (invite.status !== 200) throw new TypeError(`invite failed: ${invite.body}`);
+  const invited = await invite(inviter, account.email, role);
+  if (invited.status !== 201) throw new TypeError(`invite failed: ${invited.body}`);
   const joiner = new Browser(api);
   await joiner.request("POST", "/api/auth/sign-up/email", account);
   await signInAndEnrol(joiner, account);
   const accept = await joiner.request("POST", "/api/auth/organization/accept-invitation", {
-    invitationId: invite.json<{ id: string }>().id,
+    invitationId: invited.json<{ invitationId: string }>().invitationId,
   });
   if (accept.status !== 200) throw new TypeError(`accept failed: ${accept.body}`);
   const active = await setActiveTenant(joiner, tenantId);

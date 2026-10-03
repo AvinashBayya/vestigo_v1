@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03** (API surface the UI needs, no frontend). 6b (screens) not started. See the Phase 6a record below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, awaiting the owner's look; steps 2 to 4 not started. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -1816,8 +1816,165 @@ returns `membership: { roles } | null`, so nothing compares a role field.
 core 20, access 56, config 161, db 261, integrations 122, collectors 482, llm 130, osint-engine 104,
 api 162, web 4, worker 4 (1,506 tests).
 
-**For 6b:** server-sent event payloads (`run`, `job`, `end`, `locked`, `timeout`, `error`) are
-described in the stream's OpenAPI description only, not as schemas, so the generated client does
-not type them. The UI will need a typed reader for them. Describing them as components is the
-follow-up if 6b needs it.
+**For 6b:** ~~server-sent event payloads are described in text only~~: done as the 6b
+prerequisite (below).
+
+## Phase 6b record: the core web flow
+
+Four steps, each stopped for the owner to look at: (1) auth, (2) search dashboard, (3) run view,
+(4) results. Not in 6b: graph, timeline, map, media tabs, admin screens.
+
+### Prerequisite: the progress stream's events as schemas (done)
+
+- **Named events.** The six events (`run`, `job`, `end`, `locked`, `timeout`, `error`) are Zod
+  schemas with ids. They are emitted as named components (`RunStreamEvent`, a union of
+  `RunStream…Event`) and are the stream's `text/event-stream` response schema.
+- **One `Locked` schema** is shared by every 403's `locked` block and the stream's `locked`
+  event.
+- **Validated on the way out.** Every event is checked against its schema before it is written.
+  The shared test parser (`sseEvents`) checks every event every stream test receives.
+- **No unused twins.** The Zod transform also emits an unused `…Input` twin of each named schema;
+  `withoutUnusedSchemas` drops component schemas nothing references.
+- **Tests:** a spec test checks the reference, the six members and that every component is
+  referenced. `apps/web/src/stream-types.test.ts` asserts the generated types at type level, so
+  the web build fails if an event stops being documented (checked by breaking it).
+
+### Step 1: auth (done; awaiting the owner's look)
+
+**Decisions taken with the owner (2026-10-03):**
+1. **Product session routes** instead of exposing the identity provider. Its own sign-in and
+   verify responses carry the session token in the JSON body (proved by a control test), so the
+   web app uses new documented routes that never return one.
+2. **The whole approved stack, installed now:**
+   - in `apps/web`: tailwindcss 4 with `@tailwindcss/vite`, `@tanstack/react-router`,
+     `@tanstack/react-query`, zustand;
+   - shadcn/ui's pieces in `packages/ui`: radix-ui, class-variance-authority, clsx,
+     tailwind-merge.
+3. **Extras approved:** lucide-react (installed, not used yet); IBM Plex Sans and Mono,
+   self-hosted from `@fontsource`; uqr for the enrolment QR code.
+4. **Existing accounts only.** With no sign-up screen, a new invitee cannot get an account in the
+   UI. Step 1 serves operator-provisioned owners (enrolling with their provisioning token) and
+   anyone who already has an account.
+
+**API** (`apps/api/src/routes/session.ts`):
+- **The routes:**
+  - `GET /api/v1/session`: `SessionState`, one of SIGNED_OUT, MFA_ENROLMENT_REQUIRED or SIGNED_IN
+    (with tenants and the active one);
+  - `POST /api/v1/session/sign-in`: returns `next`, either MFA_CHALLENGE or MFA_ENROLMENT;
+  - `POST /api/v1/session/mfa/verify`: TOTP or a backup code;
+  - `POST /api/v1/session/mfa/enrolment`: password plus the link's token; returns the otpauth URI,
+    the secret and the backup codes;
+  - `POST /api/v1/session/mfa/enrolment/confirm`;
+  - `POST /api/v1/session/tenant`;
+  - `POST /api/v1/session/sign-out`.
+- **How they work:** each calls the identity provider server-side through one helper,
+  `callIdentityProvider`, which the old `/api/auth/*` pass-through now uses too. The provider's
+  rules all apply and it still sets the cookies; its answers are parsed with Zod at the boundary.
+- **Checks:** POSTs require a trusted Origin. The provider's 429 becomes `RATE_LIMITED`, with
+  `Retry-After`.
+- **Tests:** `test/session.test.ts` (12, release-blocking) covers every route and refusal, a
+  backup code working once, an untrusted origin, and a tenant the person does not belong to. It
+  also checks that no session-route body contains the session token, with a control showing the
+  provider's own body does.
+
+**Design system** (additions to `docs/DESIGN-SYSTEM.md`, each told to the owner):
+- `target-min` (44px), `focus-ring-width` and `focus-ring-offset` (2px each),
+  `layout-form-width` (400px), `qr-size` (176px);
+- `qr-module` and `qr-ground`, fixed dark-on-light in both themes so the code always scans.
+
+**UI foundation** (`packages/ui`, built with tsc like `packages/core`):
+- **Tokens.** `tokens.css` is the only file with raw values. Every token is `--ds-` plus its
+  design-system name; the prefix avoids collisions with Tailwind's own variables.
+- **Theme.** `theme.css` resets every Tailwind default scale (colour, spacing, radius, shadow,
+  font, type, container), so only token utilities exist. Checked with a real build: `p-7`,
+  `bg-red-500`, `rounded-xl`, `text-sm`, `shadow-lg` and `font-serif` generate nothing even when
+  used.
+- **Components:** Button, Field and Input, Notice, Panel and Skeleton, plus `cn`
+  (tailwind-merge told the token names).
+- **Guard** (`packages/config/scripts/design-system-guard.test.ts`, release-blocking):
+  - `tokens.css` equals the document value for value: 88 tokens, both themes, nothing extra. It
+    caught the slip that motivated it: a Cyrillic letter typed into a hex value, found and fixed
+    before the guard existed, and checked by breaking a value afterwards.
+  - Neither `apps/web/src` nor `packages/ui/src` contains a raw colour, length, font stack,
+    Tailwind arbitrary value or inline style.
+
+**Web** (`apps/web/src`):
+- **Routing.** TanStack Router, code-based. Each route's guard reads the session fresh and sends
+  it to the screen its state belongs on. Pending state is a skeleton; failure is a plain reason
+  with a retry, never "signed out".
+- **Screens:** sign-in; MFA challenge, with a backup-code option and an expired-challenge link;
+  enrolment; tenant choice (a single tenant is chosen automatically); a minimal signed-in shell
+  (tenant, email, switch, sign out, API health).
+- **Enrolment link.** The token travels in the link's fragment (`/enrol#token=…`), which never
+  reaches a server or a log. It is kept in sessionStorage for the tab only, and removed once
+  enrolment succeeds.
+- **Messages.** Every call has a 15 s timeout, and failures map to plain messages with the code
+  shown small.
+- **Tests:** `auth-flow.test.tsx` (10) runs the real router and screens over a fetch stub.
+
+**Smoke test against the real stack** (dev API, Vite, dev database), through the Vite proxy:
+- signed out, then sign-in reports MFA_ENROLMENT;
+- the session reads MFA_ENROLMENT_REQUIRED;
+- a wrong token is refused with `MFA_ENROLMENT_TOKEN_INVALID`;
+- the link's token returns the otpauth URI, the secret and 10 backup codes;
+- the session token stays in the cookie.
+
+It stopped before confirming, so nothing was enrolled. It left one provisioned tenant in the dev
+database, `[6b smoke 6982a3]` (owner `smoke-6b-6982a3@example.com`), which is unused and can be
+ignored. Its one-time token was printed once in the session transcript by a redaction slip; it is
+a local dev account.
+
+**The identity provider's pass-through, restricted** (owner's request, 2026-10-03). The
+`/api/auth/*` wildcard is gone. Two explicit routes remain, listed with their reasons in
+`OPEN_IDENTITY_ENDPOINTS` (`apps/api/src/routes/auth.ts`):
+- **`POST /api/auth/sign-up/email`:** how an invited person creates an account.
+  - No documented route can replace it: no sign-up ships before email sending, and CLAUDE.md §1
+    pins its decoy behaviour by this path.
+  - The provider never signs the new account in (`autoSignIn` off), so its body's token is always
+    null and no session cookie is set.
+- **`POST /api/auth/organization/accept-invitation`:** how an invited person joins a tenant. There
+  is no documented route yet. Its body is the invitation and the membership, never a token.
+- **Everything else is closed over HTTP,** about 60 endpoints, including every one whose body
+  carries a session token: sign-in, the MFA verifications, get-session, list-sessions,
+  change-password.
+- **The provider's own guards stay in force** for the API's in-process calls: the MFA and
+  enrolment-token hooks, the organisation allowlist, no tenant creation.
+
+**Closed without a documented replacement** (no UI uses them; each needs a route when its screen
+is built): cancelling and rejecting an invitation, viewing one, listing a person's invitations,
+leaving a tenant, renaming a tenant, change-password, and the session list and revocation.
+
+**Tests:**
+- `test/identity-surface.test.ts` (5, release-blocking) takes every endpoint the provider
+  defines, read from the provider itself so a library upgrade's additions are covered. Each is
+  tried over HTTP, signed in and signed out:
+  - only the two listed routes answer;
+  - no body carries the session token;
+  - no session is created, checked against the database's session count;
+  - sign-in and the second factor are refused even with valid credentials;
+  - the two open routes work without handing out a token;
+  - a control shows the provider's own `get-session` body does carry it.
+- Checked by breaking it: restoring the old wildcard fails two of its tests.
+- The test harness and nine suites now sign in, enrol, choose tenants and manage members through
+  the documented routes. Where a suite pinned one of the provider's own guards (MFA can never be
+  switched off, the enrolment token on every step, the organisation allowlist, no tenant
+  creation), it now checks two things: the endpoint is closed over HTTP, and the provider still
+  refuses the call in-process. No assertion was dropped.
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 50 of 50 tasks, fabrication check
+clean): core 20, access 56, config 180, db 261, integrations 122, collectors 482, llm 130,
+osint-engine 104, api 180, ui 5, web 17, worker 4 (1,561 tests).
+
+### Handover for step 2 (a fresh session)
+
+- **Read first:** this record, the design-system additions above, `packages/ui/src` and
+  `apps/web/src/{api,session,router}.ts`.
+- **Step 2:** the search dashboard. One input; `POST /api/v1/estimates` gives the detected type,
+  alternates, collectors with credentials needs, exclusions with reasons, and
+  `estimatedCredits: null` with its reason, to show as an em dash with that reason, never a
+  number. Then `POST /api/v1/investigations` and `POST /api/v1/investigations/{id}/runs` to start.
+- **Still needed:** an em-dash-with-tooltip component (Radix Tooltip from radix-ui; already
+  installed) and a status chip. Both go in `packages/ui`.
+- **Keep:** the fetch stub runs before the generated client is imported (`vi.hoisted`); every
+  call goes through `unwrap(...)` with `timed()`.
 

@@ -37,15 +37,18 @@ export const notFound = (what: string) => new HttpError(404, "NOT_FOUND", `${wha
  * What the design system's Locked state needs: what the module is, what was
  * withheld, why it is off (plan or vetting status), and the next step.
  */
-export const LockedSchema = z.object({
-  module: z.literal("PERSON_INVESTIGATION"),
-  moduleSummary: z.string().describe("What the module is, for the Locked state."),
-  withheld: z.string().describe("What this request would have returned. None of it was."),
-  reason: z.enum(["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"]),
-  plan: z.enum(PLANS),
-  vettingStatus: z.enum(VETTING_STATUSES),
-  nextStep: z.string(),
-});
+export const LockedSchema = z
+  .object({
+    module: z.literal("PERSON_INVESTIGATION"),
+    moduleSummary: z.string().describe("What the module is, for the Locked state."),
+    withheld: z.string().describe("What this request would have returned. None of it was."),
+    reason: z.enum(["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"]),
+    plan: z.enum(PLANS),
+    vettingStatus: z.enum(VETTING_STATUSES),
+    nextStep: z.string(),
+  })
+  // Named, so a 403's `locked` block and the progress stream's share one type.
+  .meta({ id: "Locked" });
 export type Locked = z.infer<typeof LockedSchema>;
 
 /**

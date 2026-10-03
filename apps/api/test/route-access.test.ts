@@ -51,8 +51,16 @@ describe("route access declarations (RELEASE-BLOCKING)", () => {
     const publicRoutes = routes.filter((route) => "public" in route.access);
     expect(publicRoutes.map((route) => `${route.method} ${route.url}`).sort()).toEqual([
       "GET /api/v1/openapi.json",
+      "GET /api/v1/session",
       "GET /health",
-      "GET,POST /api/auth/*",
+      "POST /api/auth/organization/accept-invitation",
+      "POST /api/auth/sign-up/email",
+      "POST /api/v1/session/mfa/enrolment",
+      "POST /api/v1/session/mfa/enrolment/confirm",
+      "POST /api/v1/session/mfa/verify",
+      "POST /api/v1/session/sign-in",
+      "POST /api/v1/session/sign-out",
+      "POST /api/v1/session/tenant",
     ]);
     for (const route of routes) {
       if ("permission" in route.access) expect(isPermission(route.access.permission)).toBe(true);
