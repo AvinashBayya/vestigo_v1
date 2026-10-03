@@ -20,6 +20,6 @@ export { investigations, runs, jobs } from "./work.ts";
 export { entities, entityRelationships, entityMerges } from "./entities.ts";
 export { evidence, claims } from "./evidence.ts";
 export { cases, casePins } from "./cases.ts";
-export { reports } from "./reports.ts";
+export { reportPdfs, reports } from "./reports.ts";
 export { monitors, alerts, credentials, usageEvents, tenantQuotas } from "./operations.ts";
 export type { ModelCallUsage } from "./operations.ts";

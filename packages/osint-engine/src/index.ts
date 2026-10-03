@@ -45,7 +45,9 @@ export {
   JobReplayer,
   JobRetryError,
   ReplayTargetNotFoundError,
+  REPORT_RENDERS_QUEUE,
   ReportQueue,
+  ReportRenderQueue,
   REPORTS_QUEUE,
   selectQueues,
   startWorkerPool,
@@ -104,3 +106,11 @@ export {
   type ReportDisposition,
   type ReportGeneratorOptions,
 } from "./reports/generator.ts";
+export {
+  ReportNotRenderableError,
+  ReportPdfStorageError,
+  ReportRenderer,
+  ReportRenderFailedError,
+  type ReportRenderDisposition,
+  type ReportRendererOptions,
+} from "./reports/renderer.ts";

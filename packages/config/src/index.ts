@@ -8,6 +8,7 @@ export {
   type EnvSource,
 } from "./env.ts";
 export { ConfigError, type ConfigIssue } from "./errors.ts";
+export { resolveContentStoreDir } from "./paths.ts";
 export {
   ALLOWED_MODEL_IDS,
   allowedModel,

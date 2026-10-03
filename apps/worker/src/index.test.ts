@@ -55,7 +55,7 @@ describe("the worker, deployed as pools selected by queue", () => {
     contentDir = await mkdtemp(join(tmpdir(), "worker-content-"));
     db = createDatabase({
       connectionString: TEST_WORKER.databaseUrl,
-      onIdleClientError: () => undefined,
+      onConnectionError: () => undefined,
     });
   });
 

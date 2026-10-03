@@ -3,7 +3,8 @@ import { AppError, parseTenantId, type TenantId, type TenantRegion } from "@repo
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { translateDatabaseError } from "./errors.ts";
+import { reportConnectionErrors } from "./connection-errors.ts";
+import { connectionLostAsTyped, translateDatabaseError } from "./errors.ts";
 import { createRepositories, type Repositories, type Tenant } from "./repositories/index.ts";
 import { closeScope, openScope, type TenantScope } from "./scope.ts";
 
@@ -11,11 +12,13 @@ export interface DatabaseOptions {
   /** Must be the application role. A superuser or BYPASSRLS role is refused. */
   readonly connectionString: string;
   /**
-   * Receives errors from idle pooled connections (for example a server
-   * restart). The pool discards the broken connection either way; this is
-   * where the host process logs it.
+   * Receives an error from any pooled connection that fails outside a query:
+   * idle in the pool (a server restart), or checked out between statements
+   * (the server ending an idle transaction, a terminated backend). The pool
+   * discards the broken connection, only the work using it fails, and the
+   * process carries on; this is where the host process logs it.
    */
-  readonly onIdleClientError: (error: Error) => void;
+  readonly onConnectionError: (error: Error) => void;
   readonly maxConnections?: number;
   /** Server-side cap on any single statement. Default 15 s. */
   readonly statementTimeoutMs?: number;
@@ -69,7 +72,7 @@ export function createDatabase(options: DatabaseOptions): Database {
     idle_in_transaction_session_timeout: options.statementTimeoutMs ?? DEFAULT_STATEMENT_TIMEOUT_MS,
     application_name: "app-runtime",
   });
-  pool.on("error", options.onIdleClientError);
+  reportConnectionErrors(pool, options.onConnectionError);
   const db = drizzle({ client: pool });
 
   let roleChecked: Promise<void> | null = null;
@@ -90,19 +93,25 @@ export function createDatabase(options: DatabaseOptions): Database {
     });
     await roleChecked;
 
-    return db.transaction(async (tx) => {
-      try {
-        await tx.execute(sql`select set_config('app.tenant_id', ${id}, true)`);
-      } catch (error) {
-        throw translateDatabaseError(error);
-      }
-      const scope = openScope(id, tx);
-      try {
-        return await work({ tenantId: id, scope, repos: createRepositories(scope) });
-      } finally {
-        closeScope(scope);
-      }
-    });
+    try {
+      return await db.transaction(async (tx) => {
+        try {
+          await tx.execute(sql`select set_config('app.tenant_id', ${id}, true)`);
+        } catch (error) {
+          throw translateDatabaseError(error);
+        }
+        const scope = openScope(id, tx);
+        try {
+          return await work({ tenantId: id, scope, repos: createRepositories(scope) });
+        } finally {
+          closeScope(scope);
+        }
+      });
+    } catch (error) {
+      // A lost connection also fails the rollback, and that driver error is
+      // what leaves the transaction: it is typed here like any other.
+      throw connectionLostAsTyped(error);
+    }
   };
 
   return {

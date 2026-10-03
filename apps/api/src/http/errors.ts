@@ -125,6 +125,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   API_KEY_NOT_FOUND: 404,
   API_KEY_INVALID: 401,
   RATE_LIMITER_UNAVAILABLE: 503,
+  // The request's database connection was lost mid-request; only it failed. Retryable.
+  DB_CONNECTION_LOST: 503,
   CREDENTIAL_NOT_FOUND: 404,
   CREDENTIAL_REVOKED: 409,
   INVALID_IDENTIFIER: 404,

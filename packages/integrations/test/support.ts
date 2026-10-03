@@ -7,8 +7,8 @@ import { TEST_CONFIG } from "./config.ts";
 export function openDatabase(): Database {
   return createDatabase({
     connectionString: TEST_CONFIG.databaseUrl,
-    onIdleClientError: (error) => {
-      console.error("idle database client error", error);
+    onConnectionError: (error) => {
+      console.error("database connection error", error);
     },
   });
 }

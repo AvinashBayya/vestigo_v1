@@ -470,6 +470,25 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     ],
     list: (r) => r.usageEvents.list(page),
   },
+  reportPdfs: {
+    reads: [
+      (r, v) => r.reportPdfs.findByReportId(v.reportId),
+      (r, v) => r.reportPdfs.lock(v.reportId),
+    ],
+    writes: [
+      (r, v) => r.reportPdfs.transition(v.reportId, { status: "RENDERING", attempts: 99 }),
+      (r, v) =>
+        r.reportPdfs.transition(v.reportId, {
+          status: "FAILED",
+          error: { code: "HIJACKED", message: "[hijacked]" },
+        }),
+    ],
+    references: [
+      (r, v) => r.reportPdfs.create(v.reportId),
+      (r, v) => r.reportPdfs.ensure(v.reportId),
+    ],
+    list: (r) => r.reportPdfs.list(page),
+  },
   reports: {
     reads: [
       (r, v) => r.reports.findById(v.reportId),

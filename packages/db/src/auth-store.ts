@@ -2,6 +2,7 @@ import { AppError } from "@repo/core";
 import { and, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
+import { reportConnectionErrors } from "./connection-errors.ts";
 import { authTables } from "./schema/auth.ts";
 
 export class UnsafeAuthRoleError extends AppError {
@@ -47,7 +48,7 @@ export interface AuthStore {
 export interface AuthStoreOptions {
   /** The identity role (app_auth): the auth schema only. */
   readonly connectionString: string;
-  readonly onIdleClientError: (error: Error) => void;
+  readonly onConnectionError: (error: Error) => void;
   readonly maxConnections?: number;
   readonly statementTimeoutMs?: number;
   readonly connectionTimeoutMs?: number;
@@ -68,7 +69,7 @@ export function createAuthStore(options: AuthStoreOptions): AuthStore {
     idle_in_transaction_session_timeout: options.statementTimeoutMs ?? 10_000,
     application_name: "app-auth",
   });
-  pool.on("error", options.onIdleClientError);
+  reportConnectionErrors(pool, options.onConnectionError);
 
   const db = drizzle({ client: pool, schema: authTables });
   return {

@@ -5,7 +5,7 @@
  * once; and a tenant's handling marking stays within its bounds.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { Database } from "../src/database.ts";
+import type { Database, TenantContext } from "../src/database.ts";
 import type { ModelCallUsage } from "../src/repositories/operations.ts";
 import { ConstraintViolationError, ReportRecordedOnceError } from "../src/errors.ts";
 import {
@@ -304,6 +304,117 @@ describe("the tenant's handling marking", () => {
         ),
         JSON.stringify(marking),
       ).rejects.toBeInstanceOf(ConstraintViolationError);
+    }
+  });
+});
+
+describe("a report's stored PDF", () => {
+  const HASH = `sha256:${"a".repeat(64)}`;
+  const inTenant = <T>(work: (context: TenantContext) => Promise<T>): Promise<T> =>
+    db.withTenant(tenant.tenantId, work);
+
+  it("is created PENDING, once per report, and rendered to READY with its file", async () => {
+    const report = await succeeded();
+    const created = await inTenant(({ repos }) => repos.reportPdfs.create(report.id));
+    expect(created).toMatchObject({
+      status: "PENDING",
+      attempts: 0,
+      contentHash: null,
+      byteLength: null,
+      errorCode: null,
+    });
+    // ensure() returns the existing row unchanged rather than creating a second.
+    const ensured = await inTenant(({ repos }) => repos.reportPdfs.ensure(report.id));
+    expect(ensured).toEqual(created);
+
+    await inTenant(({ repos }) =>
+      repos.reportPdfs.transition(report.id, {
+        status: "RENDERING",
+        attempts: 1,
+        startedAt: new Date(),
+      }),
+    );
+    const ready = await inTenant(({ repos }) =>
+      repos.reportPdfs.transition(report.id, {
+        status: "READY",
+        file: { contentHash: HASH, byteLength: 1234 },
+        finishedAt: new Date(),
+      }),
+    );
+    expect(ready).toMatchObject({ status: "READY", contentHash: HASH, byteLength: 1234 });
+  });
+
+  it("REGRESSION guard: keeps a stored file and a finished status, whatever a retry writes", async () => {
+    const report = await succeeded();
+    await inTenant(async ({ repos }) => {
+      await repos.reportPdfs.create(report.id);
+      await repos.reportPdfs.transition(report.id, {
+        status: "READY",
+        file: { contentHash: HASH, byteLength: 10 },
+      });
+    });
+    await expect(
+      inTenant(({ repos }) =>
+        repos.reportPdfs.transition(report.id, {
+          file: { contentHash: `sha256:${"b".repeat(64)}`, byteLength: 10 },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ReportRecordedOnceError);
+    await expect(
+      inTenant(({ repos }) =>
+        repos.reportPdfs.transition(report.id, {
+          status: "FAILED",
+          error: { code: "[code]", message: "[message]" },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(ReportRecordedOnceError);
+
+    const failed = await succeeded();
+    await inTenant(async ({ repos }) => {
+      await repos.reportPdfs.create(failed.id);
+      await repos.reportPdfs.transition(failed.id, {
+        status: "FAILED",
+        error: { code: "[code]", message: "[message]" },
+      });
+    });
+    await expect(
+      inTenant(({ repos }) =>
+        repos.reportPdfs.transition(failed.id, { status: "PENDING", error: null }),
+      ),
+    ).rejects.toBeInstanceOf(ReportRecordedOnceError);
+  });
+
+  it("holds a file exactly when READY, and an error exactly when FAILED", async () => {
+    const report = await succeeded();
+    await inTenant(({ repos }) => repos.reportPdfs.create(report.id));
+    for (const change of [
+      { status: "READY" as const },
+      { status: "RENDERING" as const, file: { contentHash: HASH, byteLength: 10 } },
+      { status: "FAILED" as const },
+      { status: "READY" as const, file: { contentHash: "sha256:not-a-hash", byteLength: 10 } },
+      { status: "READY" as const, file: { contentHash: HASH, byteLength: 0 } },
+    ]) {
+      await expect(
+        inTenant(({ repos }) => repos.reportPdfs.transition(report.id, change)),
+      ).rejects.toBeInstanceOf(ConstraintViolationError);
+    }
+  });
+
+  it("lets the application move only the render lifecycle columns", async () => {
+    const report = await succeeded();
+    await inTenant(({ repos }) => repos.reportPdfs.create(report.id));
+    const runtime = await rawClient(TEST_DATABASE.runtimeUrl);
+    try {
+      const state = await asTenant(runtime, tenant.tenantId, () =>
+        sqlStateOf(() =>
+          runtime.query("update public.report_pdfs set report_id = $1 where report_id = $1", [
+            report.id,
+          ]),
+        ),
+      );
+      expect(state).toBe("42501");
+    } finally {
+      await runtime.end();
     }
   });
 });

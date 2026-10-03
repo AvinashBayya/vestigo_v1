@@ -33,6 +33,8 @@ declare module "fastify" {
     tenant: RequestTenant | null;
     /** What the handler acted on, for its audit row. */
     auditTarget: { readonly type: string; readonly id: string } | null;
+    /** Work the handler deferred until its transaction committed (see afterCommit). */
+    afterCommit: (() => Promise<unknown>) | null;
   }
 }
 
@@ -69,6 +71,26 @@ export function tenantOf(request: FastifyRequest): RequestTenant {
   return request.tenant;
 }
 
+/**
+ * Runs `work` once the request's tenant transaction has committed (its audit
+ * row included), and answers the request with `work`'s result instead of the
+ * handler's. For work that needs no database and can take time, such as
+ * rendering an export or sending a stored file: holding the transaction open
+ * through it leaves the connection idle in transaction until the server ends
+ * it (Phase 5 live checkpoint). `work` has no tenant transaction: tenantOf
+ * throws inside it. If `work` fails, the failure is audited in a transaction
+ * of its own, after the ALLOWED row the handler's transaction recorded.
+ */
+export function afterCommit(request: FastifyRequest, work: () => Promise<unknown>): void {
+  if (request.tenant === null) {
+    throw new NotImplementedError("tenant", "afterCommit is for protected handlers only");
+  }
+  if (request.afterCommit !== null) {
+    throw new NotImplementedError("afterCommit", "a handler defers at most one piece of work");
+  }
+  request.afterCommit = work;
+}
+
 function methods(route: RouteOptions): string {
   return Array.isArray(route.method) ? route.method.join(",") : String(route.method);
 }
@@ -95,7 +117,9 @@ function auditAuthorization(principal: Principal, permission: Permission) {
  *   - the permission check, then the plan and vetting gate for the
  *     permission's module;
  *   - an audit row: DENIED, or ALLOWED in the same transaction as the action,
- *     or FAILED in its own transaction if the handler threw.
+ *     or FAILED in its own transaction if the handler threw;
+ *   - any work the handler deferred with afterCommit, run once the
+ *     transaction has committed (and audited FAILED if it throws).
  */
 export function enforceRouteAccess(
   app: FastifyInstance,
@@ -105,6 +129,7 @@ export function enforceRouteAccess(
   app.decorateRequest("principal", null);
   app.decorateRequest("tenant", null);
   app.decorateRequest("auditTarget", null);
+  app.decorateRequest("afterCommit", null);
 
   app.addHook("onRoute", (route) => {
     const access = route.config?.access;
@@ -238,8 +263,14 @@ function protect(
         }
       });
       if ("denied" in result) throw forbidden(result.denied.code, result.denied.message);
-      return result.value;
+      // Committed. Deferred work runs now, outside any transaction.
+      const deferred = request.afterCommit;
+      if (deferred === null) return result.value;
+      request.afterCommit = null;
+      return await deferred();
     } catch (error) {
+      // Work deferred by a handler whose transaction failed never runs.
+      request.afterCommit = null;
       if (progress.handlerStarted) {
         // The action's transaction rolled back; record the attempt on its own.
         const code = error instanceof AppError ? error.code : "INTERNAL_ERROR";

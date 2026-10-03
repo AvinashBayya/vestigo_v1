@@ -14,6 +14,15 @@ export const REPORT_STATUSES = ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"] as c
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 
 /**
+ * A generated report's PDF: rendered once, in the background, from the stored
+ * document, and stored, so every download is the same file. PENDING: waiting
+ * to render; RENDERING: a render is under way; READY: stored; FAILED: it
+ * could not be rendered, with the reason recorded.
+ */
+export const REPORT_PDF_STATUSES = ["PENDING", "RENDERING", "READY", "FAILED"] as const;
+export type ReportPdfStatus = (typeof REPORT_PDF_STATUSES)[number];
+
+/**
  * 2: the document carries its own wording and producer (Phase 5 follow-up),
  * so a stored report renders the same whenever it is downloaded. No version-1
  * document exists outside the test databases, which each run recreates.

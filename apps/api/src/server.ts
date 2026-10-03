@@ -1,5 +1,11 @@
-import { ConfigError, loadEnv, resolveLlmConfiguration, type Env } from "@repo/config";
-import { createAuthStore, createDatabase } from "@repo/db";
+import {
+  ConfigError,
+  loadEnv,
+  resolveContentStoreDir,
+  resolveLlmConfiguration,
+  type Env,
+} from "@repo/config";
+import { createAuthStore, createDatabase, FileSystemContentStore } from "@repo/db";
 import {
   ApiKeyService,
   CredentialVault,
@@ -9,7 +15,12 @@ import {
   MasterKey,
 } from "@repo/integrations";
 import { createPlatformRegistry } from "@repo/collectors";
-import { InvestigationQueue, JobReplayer, ReportQueue } from "@repo/osint-engine";
+import {
+  InvestigationQueue,
+  JobReplayer,
+  ReportQueue,
+  ReportRenderQueue,
+} from "@repo/osint-engine";
 import { buildApp } from "./app.ts";
 import { createAuth } from "./auth/better-auth.ts";
 
@@ -26,14 +37,17 @@ function loadEnvOrExit(): Env {
 }
 
 const env = loadEnvOrExit();
-const logIdleError = (error: Error) => {
-  process.stderr.write(`idle database connection error: ${error.message}\n`);
+const logConnectionError = (error: Error) => {
+  process.stderr.write(`database connection error: ${error.message}\n`);
 };
 
-const db = createDatabase({ connectionString: env.DATABASE_URL, onIdleClientError: logIdleError });
+const db = createDatabase({
+  connectionString: env.DATABASE_URL,
+  onConnectionError: logConnectionError,
+});
 const authStore = createAuthStore({
   connectionString: env.DATABASE_AUTH_URL,
-  onIdleClientError: logIdleError,
+  onConnectionError: logConnectionError,
 });
 // Refuse to start on an identity role that could reach tenant data.
 await authStore.verifyRole();
@@ -57,6 +71,14 @@ const registry = createPlatformRegistry();
 const investigations = new InvestigationQueue(queueConnection, retry);
 const replayer = new JobReplayer({ db, registry, connection: queueConnection, retry });
 const reports = new ReportQueue(queueConnection, retry);
+const renders = new ReportRenderQueue(queueConnection, retry);
+// Report PDFs are served from the store the worker renders them into.
+if (env.CONTENT_STORE_DIR === undefined) {
+  throw new ConfigError([
+    { variable: "CONTENT_STORE_DIR", problem: "required by the API, to serve stored report PDFs" },
+  ]);
+}
+const contentStore = new FileSystemContentStore(resolveContentStoreDir(env.CONTENT_STORE_DIR));
 // Resolved here as the worker resolves it, so a misconfigured profile stops startup.
 const llm = resolveLlmConfiguration(env);
 
@@ -87,6 +109,8 @@ const app = await buildApp({
       registry,
       eventsPollMs: env.RUN_EVENTS_POLL_MS,
       reports,
+      renders,
+      contentStore,
       synthesisUnavailable: llm.status === "READY" ? null : llm.reason,
     },
   },
@@ -97,7 +121,9 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     app.log.info({ signal }, "shutting down");
     void app
       .close()
-      .then(() => Promise.all([investigations.close(), replayer.close(), reports.close()]))
+      .then(() =>
+        Promise.all([investigations.close(), replayer.close(), reports.close(), renders.close()]),
+      )
       .then(() => Promise.all([db.close(), authStore.close(), redis.quit()]))
       .then(() => process.exit(0));
   });

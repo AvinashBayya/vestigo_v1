@@ -47,6 +47,7 @@ export {
 export {
   COVERAGE_STATES,
   REPORT_FORMAT_VERSION,
+  REPORT_PDF_STATUSES,
   REPORT_STATUSES,
   SYNTHESIS_STRENGTHS,
   type CoverageEntry,
@@ -59,6 +60,7 @@ export {
   type ReportEntity,
   type ReportRelationship,
   type ReportSource,
+  type ReportPdfStatus,
   type ReportStatus,
   type ReportRegionHeader,
   type ReportSynthesis,

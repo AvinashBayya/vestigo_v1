@@ -1,6 +1,6 @@
-import type { ReportStatus } from "@repo/core";
+import type { ReportPdfStatus, ReportStatus } from "@repo/core";
 import { and, asc, eq } from "drizzle-orm";
-import { reports } from "../schema/index.ts";
+import { reportPdfs, reports } from "../schema/index.ts";
 import {
   firstRow,
   limitOf,
@@ -105,5 +105,99 @@ export class ReportsRepository extends TenantRepository {
           .returning(),
       ),
     );
+  }
+}
+
+export type ReportPdf = typeof reportPdfs.$inferSelect;
+
+/**
+ * A change to a report PDF's render state. Only the lifecycle columns can be
+ * written; the database refuses to change a stored file once written, or the
+ * status of a finished render (REP01).
+ */
+export interface ReportPdfTransition {
+  readonly status?: ReportPdfStatus;
+  readonly attempts?: number;
+  readonly file?: { readonly contentHash: string; readonly byteLength: number };
+  readonly error?: { readonly code: string; readonly message: string } | null;
+  readonly startedAt?: Date | null;
+  readonly finishedAt?: Date | null;
+}
+
+export class ReportPdfsRepository extends TenantRepository {
+  /** The report's PDF, PENDING, with no attempts made. */
+  async create(reportId: string): Promise<ReportPdf> {
+    return this.run(async (tx) =>
+      onlyRow(
+        await tx
+          .insert(reportPdfs)
+          .values({ tenantId: this.tenantId, reportId: requireUuid(reportId), status: "PENDING" })
+          .returning(),
+      ),
+    );
+  }
+
+  /** The report's PDF, created PENDING if it has none; an existing row is returned as it is. */
+  async ensure(reportId: string): Promise<ReportPdf> {
+    return this.run(async (tx) => {
+      const inserted = await tx
+        .insert(reportPdfs)
+        .values({ tenantId: this.tenantId, reportId: requireUuid(reportId), status: "PENDING" })
+        .onConflictDoNothing({ target: [reportPdfs.tenantId, reportPdfs.reportId] })
+        .returning();
+      return (
+        firstRow(inserted) ??
+        onlyRow(await tx.select().from(reportPdfs).where(this.#forReport(reportId)))
+      );
+    });
+  }
+
+  async findByReportId(reportId: string): Promise<ReportPdf | null> {
+    return this.run(async (tx) =>
+      firstRow(await tx.select().from(reportPdfs).where(this.#forReport(reportId))),
+    );
+  }
+
+  /** The report's PDF, locked for update until the transaction ends. Null if it has none here. */
+  async lock(reportId: string): Promise<ReportPdf | null> {
+    return this.run(async (tx) =>
+      firstRow(await tx.select().from(reportPdfs).where(this.#forReport(reportId)).for("update")),
+    );
+  }
+
+  async list(options: ListOptions): Promise<ReportPdf[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(reportPdfs)
+        .where(this.inTenant(reportPdfs))
+        .orderBy(asc(reportPdfs.createdAt), asc(reportPdfs.reportId))
+        .limit(limitOf(options)),
+    );
+  }
+
+  async transition(reportId: string, change: ReportPdfTransition): Promise<ReportPdf | null> {
+    const { error, file, ...rest } = change;
+    const errorColumns =
+      error === undefined
+        ? {}
+        : error === null
+          ? { errorCode: null, errorMessage: null }
+          : { errorCode: error.code, errorMessage: error.message };
+    const fileColumns =
+      file === undefined ? {} : { contentHash: file.contentHash, byteLength: file.byteLength };
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .update(reportPdfs)
+          .set({ ...rest, ...errorColumns, ...fileColumns })
+          .where(this.#forReport(reportId))
+          .returning(),
+      ),
+    );
+  }
+
+  #forReport(reportId: string) {
+    return and(this.inTenant(reportPdfs), eq(reportPdfs.reportId, requireUuid(reportId)));
   }
 }

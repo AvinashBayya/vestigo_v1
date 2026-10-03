@@ -1,7 +1,16 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { envSchema, type Env } from "@repo/config";
 import { parseTenantId, type TenantId } from "@repo/core";
-import { createAuthStore, createDatabase, type AuthStore, type Database } from "@repo/db";
+import {
+  createAuthStore,
+  createDatabase,
+  FileSystemContentStore,
+  type AuthStore,
+  type Database,
+} from "@repo/db";
 import {
   ApiKeyService,
   CredentialVault,
@@ -14,6 +23,7 @@ import { createPlatformRegistry, type CollectorRegistry } from "@repo/collectors
 import {
   InvestigationQueue,
   ReportQueue,
+  ReportRenderQueue,
   JobReplayer,
   type QueueConnection,
   type RetryPolicy,
@@ -63,10 +73,10 @@ export async function createTestApi(
   } = {},
 ): Promise<TestApi> {
   const quiet = () => undefined;
-  const db = createDatabase({ connectionString: TEST_API.runtimeUrl, onIdleClientError: quiet });
+  const db = createDatabase({ connectionString: TEST_API.runtimeUrl, onConnectionError: quiet });
   const authStore = createAuthStore({
     connectionString: TEST_API.authUrl,
-    onIdleClientError: quiet,
+    onConnectionError: quiet,
   });
   const redis = createRedisClient({
     url: options.redisUrl ?? TEST_API.redisUrl,
@@ -91,6 +101,8 @@ export async function createTestApi(
   const investigations = new InvestigationQueue(queue, TEST_RETRY);
   const replayer = new JobReplayer({ db, registry, connection: queue, retry: TEST_RETRY });
   const reports = new ReportQueue(queue, TEST_RETRY);
+  const renders = new ReportRenderQueue(queue, TEST_RETRY);
+  const contentDir = await mkdtemp(join(tmpdir(), "api-content-"));
   const services: Services = {
     db,
     authStore,
@@ -108,6 +120,8 @@ export async function createTestApi(
       registry,
       eventsPollMs: 100,
       reports,
+      renders,
+      contentStore: new FileSystemContentStore(contentDir),
       synthesisUnavailable: options.synthesisUnavailable ?? null,
     },
   };
@@ -127,7 +141,9 @@ export async function createTestApi(
         investigations.close().catch(quiet),
         replayer.close().catch(quiet),
         reports.close().catch(quiet),
+        renders.close().catch(quiet),
       ]);
+      await rm(contentDir, { recursive: true, force: true });
       await Promise.all([db.close(), authStore.close(), redis.quit().catch(quiet)]);
     },
   };
@@ -160,6 +176,8 @@ type InjectResponse = Awaited<ReturnType<TestApi["app"]["inject"]>>;
 interface Reply {
   readonly status: number;
   readonly body: string;
+  /** The response bytes as sent: for binary bodies, which `body` decodes lossily. */
+  readonly raw: Buffer;
   readonly headers: InjectResponse["headers"];
   /** The HTTP library's own typed JSON accessor. */
   readonly json: InjectResponse["json"];
@@ -222,6 +240,7 @@ export class Browser {
     return {
       status: response.statusCode,
       body: response.body,
+      raw: response.rawPayload,
       headers: response.headers,
       json: response.json.bind(response),
     };

@@ -12,8 +12,8 @@ export function newTenantId(): TenantId {
 export function openDatabase(connectionString: string = TEST_DATABASE.runtimeUrl): Database {
   return createDatabase({
     connectionString,
-    onIdleClientError: (error) => {
-      console.error("idle database client error", error);
+    onConnectionError: (error) => {
+      console.error("database connection error", error);
     },
   });
 }
@@ -274,6 +274,8 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       includeSynthesis: false,
       requestedByUserId: user.id,
     });
+    // Its PDF row, so cross-tenant probes of report PDFs aim at a row that exists.
+    await repos.reportPdfs.create(report.id);
 
     return {
       tenantId,

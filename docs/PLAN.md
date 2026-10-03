@@ -15,7 +15,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 2     | Data foundation and tenancy             | **Done, 2026-09-28.** Session A: data layer and tenant isolation. Session B: authentication, MFA, permissions, module gating, API keys, audit, credential vault. See both records below. |
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
-| 5     | AI, fusion and reports                  | **Done, 2026-10-01** (no live model yet: no provider chosen). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
+| 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
 | 6     | Frontend                                | Not started                                                                                                                                              |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
@@ -1291,11 +1291,9 @@ They now render as `example.com / www.example.com`.
 
 ### Open questions and carry-forwards from Phase 5
 
-- **No live model has run.**
-  - The checkpoint's synthesis came from a scripted test provider that answers like a compliant
-    model, not from a model.
-  - It needs a provider decision and a platform key. Then run `pnpm --filter @repo/llm eval:live`
-    and a live report.
+- ~~**No live model has run.**~~ Resolved 2026-10-03: the checkpoint ran live against Groq
+  (`openai/gpt-oss-120b`, development only) — see the follow-up below. The provider decision
+  for production, and the residency question, remain open (decision 1 above).
 - **What the guards cannot catch:**
   - injected steering that uses no instruction words, identifiers, certainty or verdicts (a
     paraphrased false conclusion);
@@ -1305,8 +1303,8 @@ They now render as `example.com / www.example.com`.
   Framing and the citation requirement are the defence there.
 - **Glyph coverage:** Latin, Greek and Cyrillic only. Devanagari and other scripts show as `?`,
   counted. India-region tenants will need more Noto faces.
-- **PDF rendering happens in the API request.** It is fast for these sizes, but large reports may
-  need rendering in the worker.
+- ~~**PDF rendering happens in the API request.**~~ Resolved 2026-10-03: rendered once in the
+  worker and stored — see the follow-up below.
 - **The handling marking's platform default is undecided** (`REPORT_HANDLING_MARKING` unset).
 - **Not built:** embeddings into pgvector (ARCHITECTURE-DECISIONS §7) and the
   extraction/classification tasks. Their routing exists, but no feature calls them yet.
@@ -1396,3 +1394,73 @@ contention, not throughput. Separating the report and PDF tests (option 2) was n
 Per-package counts on the last run: core 20, access 55, config 133, db 230, integrations 116,
 collectors 482, llm 115, osint-engine 96, api 109, web 4, worker 4 (1,360). The fabrication check
 passed on 290 files; the export check on 139 symbols.
+
+### Phase 5 follow-up: the live checkpoint, and what it broke (2026-10-03)
+
+The checkpoint ran live for the first time: a real run of `example.com` through the running API
+and worker (password + TOTP sign-in, tenant marking set, report with a live Groq synthesis). The
+report generated — 615 claims, all cited; coverage accurate (crt.sh was genuinely down, HTTP 502,
+dead-lettered after 5 attempts) — and then the PDF export took the whole API down. Three defects,
+each now fixed with a regression test, plus the architectural change they forced:
+
+1. **An unhandled connection error ended the process** (bulkhead violation, CLAUDE.md §5).
+   pg-pool listens for a connection's errors only while it is idle in the pool; the export held
+   its transaction past the server's 15 s idle-in-transaction timeout, the server ended the
+   connection (SQLSTATE 25P03), and the 'error' event had no listener. Every pooled connection
+   now carries a listener for its whole life (`packages/db/src/connection-errors.ts`), the work
+   using it fails alone with `DatabaseConnectionLostError` (`DB_CONNECTION_LOST`, HTTP 503,
+   retryable), and the pool serves the next request. Tests: db kills a checked-out connection;
+   the API test terminates a request's backend mid-transaction and asserts that request fails
+   503 while the same tenant and another are still served.
+2. **The export rendered inside the request's transaction.** Handlers can now defer work until
+   their transaction (audit row included) has committed (`afterCommit`, apps/api access layer);
+   deferred work runs outside any transaction, is never run if the transaction failed, and is
+   audited FAILED in its own transaction if it throws.
+3. **Rendering a 615-claim report took ~150 s.** The renderer re-wrapped every footnote on the
+   page for each line placed, re-shaping the text with fontkit every time, and the re-wrapping
+   also re-counted undrawable characters (the rendering note printed hundreds of times the real
+   number). Widths are now measured once per font/size/text and footnotes wrapped once.
+   Measured on the 600-claim synthetic fixture (shaped like the live report):
+   **573 s before, 5–7 s after**; pdf-lib measurements ~2,200 per claim before, ~6 after; output
+   byte-identical to the old renderer on the existing fixtures. `pdf-performance.test.ts` pins
+   both the measurement count (deterministic) and a generous wall-clock bound.
+4. **The PDF is now rendered once, in the worker, and stored** (your decision: inherits the
+   worker's timeouts, retries and dead-lettering; keeps slow work off the request path; makes
+   every download byte-identical, closing the artefact-stability question).
+   - `report_pdfs` (migrations 0016 + 0017): one row per generated report, PENDING →
+     RENDERING → READY (content hash + size, written once, trigger-enforced like the report
+     document) or FAILED (reason recorded). RLS forced, lifecycle columns only.
+   - `ReportRenderer` on the new `report-renders` queue (own bulkhead,
+     `REPORT_RENDER_CONCURRENCY`, default 1): render failures fail at once (the same document
+     renders the same way), storage failures retry with backoff, a crashed last attempt is
+     failed by the pool, never left RENDERING. The reports worker enqueues the render when a
+     report succeeds; the PENDING row is created in the report's own success transaction.
+   - The PDF is stored in the tenant's content store (content-addressed, shared with evidence;
+     `CONTENT_STORE_DIR` now resolves relative paths from the repo root so API, worker and seed
+     share one store, and the API requires it at startup).
+   - `GET /api/v1/reports/:id/export/pdf` serves the stored file (re-hashed on read), answers
+     **202 + Retry-After while PENDING/RENDERING** (and resumes a lost render idempotently —
+     this also backfills reports generated before PDFs were stored), and **409
+     REPORT_PDF_FAILED** with the reason if it could not be rendered. The report view carries
+     `pdf: { status, byteLength, contentHash, error }`. JSON/CSV/Maltego still render in the
+     request, after commit — they are milliseconds.
+
+**The checkpoint, re-run live after the fixes** (tenant `cp5b-*`, report
+`1bece818-df11-47d0-80ef-438ba2f31856`): run PARTIAL in 135 s (4 found, crt.sh dead-lettered);
+synthesis GENERATED, attempts 1, provenance recorded (`api.groq.com`, no provider named,
+`x-groq-region: bom` raw). PDF export: `202 (Retry-After 5)` at 58 ms → `200` at 3.0 s;
+54 pages; marking on every page; coverage, provenance lines and evidence basis all present; no
+unrenderable characters; second download byte-identical (`sha256:c63393ffdbce…`, 1,099,755
+bytes, matching the recorded hash and size); `/health` stayed ≤ 19 ms throughout the render.
+JSON/CSV/Maltego exported 200.
+
+Full suite after the changes: `pnpm typecheck && pnpm lint && pnpm test --force`, 23 of 23
+tasks, 1,415 tests (core 20, access 55, config 136, db 242, integrations 122, collectors 482,
+llm 130, osint-engine 104, api 116, web 4, worker 4). Migrations 0016 and 0017 applied to the
+dev database.
+
+Carried forward: rendering is CPU-bound on the worker's event loop (concurrency 1 per worker by
+default; a worker thread is the next step if render latency ever matters); stored PDFs are not
+yet deleted with a tenant's other data (the content store's tenant namespace covers them when
+deletion lands); the `cp5-`/`cp5b-` checkpoint tenants remain in the dev database by design
+(append-only audit).

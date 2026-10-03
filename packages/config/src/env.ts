@@ -100,7 +100,7 @@ export const envSchema = z.object({
     .optional()
     .meta({
       description:
-        "Directory for the local content-addressed payload store (development). Relative paths resolve from the working directory.",
+        "Directory for the local content-addressed store of evidence payloads and report PDFs, shared by the API and the worker. A relative path resolves from the repository root, so every process uses the same one; deployments set an absolute path.",
       examples: ["./data/content-store"],
     }),
 
@@ -240,6 +240,10 @@ export const envSchema = z.object({
     .max(20)
     .default(2)
     .meta({ description: "Reports generated at once, across every worker." }),
+  REPORT_RENDER_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(1).meta({
+    description:
+      "Report PDFs rendered at once, across every worker. Rendering is CPU-bound: one per worker core at most.",
+  }),
   REPORT_HANDLING_MARKING: z.string().trim().min(1).max(80).optional().meta({
     description:
       "The handling marking printed on every report page when a tenant has not set its own. Unset: pages say no marking is set. The platform default is undecided.",

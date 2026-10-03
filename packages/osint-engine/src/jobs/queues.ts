@@ -15,7 +15,11 @@
  *                     slots it can ever hold.
  *   reports           one job per requested report (ReportGenerator, Phase 5):
  *                     assembly from a settled run, and a model-written
- *                     synthesis when asked for. Its own bulkhead.
+ *                     synthesis when asked for. Its own bulkhead. A report
+ *                     that succeeds hands its PDF on to:
+ *   report-renders    one job per generated report (ReportRenderer): its PDF,
+ *                     rendered once from the stored document and stored.
+ *                     CPU-heavy, so its own bulkhead.
  *   dead-letter       every job that ran out of attempts, as a record to
  *                     inspect and replay. Nothing consumes it.
  *
@@ -30,6 +34,7 @@ import { z } from "zod";
 import type { RunFusion } from "../fusion/fuse.ts";
 import { RunNotReadyError, type RunCoordinator } from "../runs.ts";
 import type { ReportGenerator } from "../reports/generator.ts";
+import { ReportNotRenderableError, type ReportRenderer } from "../reports/renderer.ts";
 import type { CollectorJobProcessor } from "./collector-job.ts";
 import { retryDelayMs, type RetryPolicy } from "./policy.ts";
 
@@ -39,6 +44,7 @@ export const INVESTIGATIONS_QUEUE = "investigations";
 export const FUSION_QUEUE = "fusion";
 export const DEAD_LETTER_QUEUE = "dead-letter";
 export const REPORTS_QUEUE = "reports";
+export const REPORT_RENDERS_QUEUE = "report-renders";
 
 /** The queue for one upstream source's collector jobs. */
 export function collectQueueName(sourceId: string): string {
@@ -50,13 +56,13 @@ const COLLECT_MESSAGE = z.strictObject({ tenantId: z.uuid(), runId: z.uuid(), jo
 const REPORT_MESSAGE = z.strictObject({ tenantId: z.uuid(), reportId: z.uuid() });
 
 export const DEAD_LETTER_MESSAGE = z.strictObject({
-  kind: z.enum(["INVESTIGATION", "COLLECT", "FUSION", "REPORT"]),
+  kind: z.enum(["INVESTIGATION", "COLLECT", "FUSION", "REPORT", "REPORT_PDF"]),
   tenantId: z.uuid(),
   /** The run, for every kind but REPORT. */
   runId: z.uuid().nullable(),
   /** The collector job, for kind COLLECT. */
   jobId: z.uuid().nullable(),
-  /** The report, for kind REPORT. */
+  /** The report, for kinds REPORT and REPORT_PDF. */
   reportId: z.uuid().nullable(),
   queue: z.string(),
   errorCode: z.string(),
@@ -156,6 +162,41 @@ export class ReportQueue {
   async close(): Promise<void> {
     await this.#queue.close();
   }
+}
+
+/** Enqueues a generated report's PDF render. Used by the reports worker, and by the API to resume one. */
+export class ReportRenderQueue {
+  readonly #queue: Queue;
+  readonly #retry: RetryPolicy;
+
+  constructor(connection: QueueConnection, retry: RetryPolicy) {
+    this.#queue = new Queue(REPORT_RENDERS_QUEUE, {
+      connection: bullConnection(connection),
+      prefix: connection.prefix,
+    });
+    this.#retry = retry;
+  }
+
+  /** Enqueues the report's render; enqueueing the same report twice adds it once. */
+  async enqueueRender(tenantId: TenantId, reportId: string): Promise<void> {
+    await enqueueRender(this.#queue, this.#retry, tenantId, reportId);
+  }
+
+  async close(): Promise<void> {
+    await this.#queue.close();
+  }
+}
+
+async function enqueueRender(
+  queue: Queue,
+  retry: RetryPolicy,
+  tenantId: string,
+  reportId: string,
+): Promise<void> {
+  await queue.add("render", REPORT_MESSAGE.parse({ tenantId, reportId }), {
+    ...deliveryOptions(retry),
+    jobId: `render-${reportId}`,
+  });
 }
 
 /** Adds a run's flow: its collector jobs on their source queues, under one fusion parent. */
@@ -317,6 +358,8 @@ export interface WorkerPoolOptions {
   readonly fusionConcurrency: number;
   /** Report generation; the reports queue is consumed only when this is given. */
   readonly reports?: { readonly generator: ReportGenerator; readonly concurrency: number };
+  /** PDF rendering; the report-renders queue is consumed only when this is given. */
+  readonly renders?: { readonly renderer: ReportRenderer; readonly concurrency: number };
   readonly observer?: WorkerPoolObserver;
 }
 
@@ -338,10 +381,13 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
     INVESTIGATIONS_QUEUE,
     FUSION_QUEUE,
     ...(options.reports === undefined ? [] : [REPORTS_QUEUE]),
+    ...(options.renders === undefined ? [] : [REPORT_RENDERS_QUEUE]),
     ...collectQueues.keys(),
   ]);
   const flows = new FlowProducer({ connection, prefix });
   const deadLetters = new Queue(DEAD_LETTER_QUEUE, { connection, prefix });
+  // Where a generated report's PDF render is enqueued.
+  const renderQueue = new Queue(REPORT_RENDERS_QUEUE, { connection, prefix });
   const settings = { backoffStrategy: backoffStrategy(options.retry) };
   const observer = options.observer ?? {};
 
@@ -369,6 +415,28 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
       if (!final) return;
       try {
         const code = errorCode(error);
+        if (kind === "REPORT_PDF") {
+          const report = REPORT_MESSAGE.parse(delivery.data);
+          // A crash on the last attempt: the render is failed here, never left RENDERING.
+          await options.renders?.renderer.failUnrecorded(
+            parseTenantId(report.tenantId),
+            report.reportId,
+            { code, message: "The PDF render's last attempt failed without recording an outcome." },
+          );
+          await recordDeadLetter(
+            {
+              kind,
+              tenantId: report.tenantId,
+              runId: null,
+              jobId: null,
+              reportId: report.reportId,
+              queue,
+              errorCode: code,
+            },
+            delivery.id ?? `${queue}-${String(Date.now())}`,
+          );
+          return;
+        }
         if (kind === "REPORT") {
           const report = REPORT_MESSAGE.parse(delivery.data);
           // A crash on the last attempt: the report is failed here, never left RUNNING.
@@ -485,6 +553,44 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
         if (disposition.kind === "RETRY") {
           throw new JobRetryError(disposition.delayMs, disposition.errorCode);
         }
+        // A generated report's PDF is rendered next. Enqueued on a redelivery
+        // too: a delivery that crashed after recording success, before this,
+        // is delivered again and enqueues it then.
+        if (disposition.status === "SUCCEEDED") {
+          await enqueueRender(
+            renderQueue,
+            options.retry,
+            message.data.tenantId,
+            message.data.reportId,
+          );
+        }
+        return { disposition: disposition.kind };
+      });
+    } else if (queue === REPORT_RENDERS_QUEUE && options.renders !== undefined) {
+      const { renderer, concurrency } = options.renders;
+      // Rendering is CPU-heavy: the bulkhead holds across every worker.
+      const handle = new Queue(queue, { connection, prefix });
+      await handle.setGlobalConcurrency(concurrency);
+      await handle.close();
+      start(queue, "REPORT_PDF", concurrency, async (delivery) => {
+        const message = REPORT_MESSAGE.safeParse(delivery.data);
+        if (!message.success) throw new UnrecoverableError("MESSAGE_INVALID");
+        const finalAttempt = delivery.attemptsMade + 1 >= (delivery.opts.attempts ?? 1);
+        let disposition;
+        try {
+          disposition = await renderer.process(
+            parseTenantId(message.data.tenantId),
+            message.data.reportId,
+            { finalAttempt },
+          );
+        } catch (error) {
+          // Nothing to render, now or on any retry: dead-letter it at once.
+          if (error instanceof ReportNotRenderableError) throw new UnrecoverableError(error.code);
+          throw error;
+        }
+        if (disposition.kind === "RETRY") {
+          throw new JobRetryError(disposition.delayMs, disposition.errorCode);
+        }
         return { disposition: disposition.kind };
       });
     } else if (queue === FUSION_QUEUE) {
@@ -533,6 +639,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
       await Promise.all(workers.map((worker) => worker.close()));
       await flows.close();
       await deadLetters.close();
+      await renderQueue.close();
     },
   };
 }

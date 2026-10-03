@@ -161,6 +161,70 @@ export class InvalidIdentifierError extends AppError {
   }
 }
 
+/**
+ * The connection was lost mid-work: the server ended it (an idle transaction
+ * past its timeout, an operator terminating the backend, a restart) or the
+ * network dropped. Only the work on that connection fails; the pool discards
+ * the connection and serves the next work on a new one. Retryable.
+ */
+export class DatabaseConnectionLostError extends AppError {
+  readonly code = "DB_CONNECTION_LOST";
+  /** The SQLSTATE the server ended the connection with, when it sent one. */
+  readonly sqlState: string | null;
+
+  constructor(sqlState: string | null) {
+    super(
+      sqlState === null
+        ? "The database connection was lost before the work completed."
+        : `The database connection was lost before the work completed (SQLSTATE ${sqlState}).`,
+    );
+    this.name = "DatabaseConnectionLostError";
+    this.sqlState = sqlState;
+  }
+}
+
+/**
+ * Server-side reasons a connection ends: connection exceptions (class 08),
+ * operator intervention (an administrator or crash shutdown, a terminated
+ * backend, an idle-session timeout) and the idle-in-transaction timeout.
+ */
+const CONNECTION_LOST_SQLSTATES = new Set(["57P01", "57P02", "57P03", "57P05", "25P03"]);
+
+/** node-postgres's own errors for a connection that is gone; they carry no SQLSTATE. */
+const CONNECTION_LOST_MESSAGES = new Set([
+  "Connection terminated unexpectedly",
+  "Connection terminated",
+  "Client has encountered a connection error and is not queryable",
+  "Client was closed and is not queryable",
+]);
+
+/** The SQLSTATE (or null) of a lost connection anywhere in an error's cause chain; undefined if none was lost. */
+function connectionLostSqlState(error: unknown): string | null | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && typeof current === "object" && current !== null; depth++) {
+    const candidate = current as PgErrorShape;
+    const code = text(candidate.code);
+    if (code !== null && (code.startsWith("08") || CONNECTION_LOST_SQLSTATES.has(code))) {
+      return code;
+    }
+    const message = text(candidate.message);
+    if (message !== null && CONNECTION_LOST_MESSAGES.has(message)) return null;
+    current = candidate.cause;
+  }
+  return undefined;
+}
+
+/**
+ * A lost connection as a typed error, or the error unchanged. Used where an
+ * error can come from the driver directly, outside a repository's
+ * translation (a transaction's commit or rollback).
+ */
+export function connectionLostAsTyped(error: unknown): unknown {
+  if (error instanceof AppError) return error;
+  const sqlState = connectionLostSqlState(error);
+  return sqlState === undefined ? error : new DatabaseConnectionLostError(sqlState);
+}
+
 /** Any other database failure. Carries the SQLSTATE for diagnosis. */
 export class DatabaseError extends AppError {
   readonly code = "DATABASE_ERROR";
@@ -201,6 +265,8 @@ const MERGE_UNIQUE = "entity_merges_one_active_per_merged";
 /** Maps a driver error to a typed error. Errors that are already typed pass through. */
 export function translateDatabaseError(error: unknown): Error {
   if (error instanceof AppError) return error;
+  const lost = connectionLostSqlState(error);
+  if (lost !== undefined) return new DatabaseConnectionLostError(lost);
   const pg = pgErrorOf(error);
   if (pg === null) {
     // Drizzle's own query errors put the bound parameter values in the message,

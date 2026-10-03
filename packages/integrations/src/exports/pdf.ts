@@ -94,8 +94,26 @@ class Renderer {
   readonly #document: ReportDocument;
   readonly #sources: Map<number, ReportSource>;
   readonly #pages: { readonly page: PDFPage; readonly notes: number[] }[] = [];
+  /**
+   * Text widths, measured once per font, size and text. pdf-lib shapes the
+   * text with fontkit on every widthOfTextAtSize call, and a report measures
+   * the same words, spaces and footnotes over and over: at the Phase 5 live
+   * checkpoint that shaping was most of a 150 s render of 615 claims. Each
+   * cached width is pdf-lib's own result for that exact input, so the layout
+   * is unchanged.
+   */
+  readonly #widths = new Map<PDFFont, Map<string, number>>();
+  /**
+   * Each footnote's lines, wrapped once (a footnote's text is fixed for the
+   * document), and how many of its characters the font cannot draw.
+   */
+  readonly #notes = new Map<number, { readonly lines: Line[]; readonly unrenderable: number }>();
   #y = 0;
-  /** Characters the font has no glyph for, shown as "?". Counted, and reported. */
+  /**
+   * Characters the font has no glyph for, shown as "?". Counted once for
+   * every time they are printed, a footnote's once per page it appears on,
+   * and reported.
+   */
   unrenderable = 0;
 
   constructor(doc: PDFDocument, fonts: Fonts, document: ReportDocument) {
@@ -146,6 +164,22 @@ class Renderer {
     return out;
   }
 
+  /** The width of `text` in `font` at `size`: pdf-lib's measurement, made once per input. */
+  #width(font: PDFFont, text: string, size: number): number {
+    let widths = this.#widths.get(font);
+    if (widths === undefined) {
+      widths = new Map();
+      this.#widths.set(font, widths);
+    }
+    const key = `${String(size)} ${text}`;
+    let width = widths.get(key);
+    if (width === undefined) {
+      width = font.widthOfTextAtSize(text, size);
+      widths.set(key, width);
+    }
+    return width;
+  }
+
   #font(style: Style | undefined): PDFFont {
     return style === "bold"
       ? this.#fonts.bold
@@ -167,7 +201,7 @@ class Renderer {
           font,
           size: MARK_SIZE,
           rise: MARK_RISE,
-          width: font.widthOfTextAtSize(text, MARK_SIZE),
+          width: this.#width(font, text, MARK_SIZE),
           glued: true,
           cites: span.cite,
         });
@@ -191,9 +225,9 @@ class Renderer {
       used = 0;
     };
     for (const atom of atoms) {
-      const space = current.length === 0 || atom.glued ? 0 : atom.font.widthOfTextAtSize(" ", size);
+      const space = current.length === 0 || atom.glued ? 0 : this.#width(atom.font, " ", size);
       if (used + space + atom.width > width && current.length > 0 && !atom.glued) flush();
-      const gap = current.length === 0 || atom.glued ? 0 : atom.font.widthOfTextAtSize(" ", size);
+      const gap = current.length === 0 || atom.glued ? 0 : this.#width(atom.font, " ", size);
       current.push(atom);
       used += gap + atom.width;
     }
@@ -208,15 +242,15 @@ class Renderer {
       font,
       size,
       rise: 0,
-      width: font.widthOfTextAtSize(text, size),
+      width: this.#width(font, text, size),
       glued: false,
       cites: [],
     });
-    if (font.widthOfTextAtSize(word, size) <= width) return [atom(word)];
+    if (this.#width(font, word, size) <= width) return [atom(word)];
     const parts: Atom[] = [];
     let chunk = "";
     for (const char of word) {
-      if (chunk.length > 0 && font.widthOfTextAtSize(chunk + char, size) > width) {
+      if (chunk.length > 0 && this.#width(font, chunk + char, size) > width) {
         parts.push(atom(chunk));
         chunk = "";
       }
@@ -245,8 +279,29 @@ class Renderer {
     });
   }
 
+  /**
+   * A footnote, wrapped once and kept: it is asked for on every line placed,
+   * to keep room for the page's footnotes. REGRESSION (Phase 5 live
+   * checkpoint): it was wrapped again each time, which was most of a 150 s
+   * render, and each wrap counted its undrawable characters again, so the
+   * rendering note printed hundreds of times their number.
+   */
+  #note(number: number): { readonly lines: Line[]; readonly unrenderable: number } {
+    let note = this.#notes.get(number);
+    if (note === undefined) {
+      // Wrapping counts undrawable characters; a footnote's are counted where
+      // it is printed instead, once per page (see line()).
+      const counted = this.unrenderable;
+      const lines = this.wrap([{ text: this.#noteText(number) }], SMALL_SIZE, WIDTH);
+      note = { lines, unrenderable: this.unrenderable - counted };
+      this.unrenderable = counted;
+      this.#notes.set(number, note);
+    }
+    return note;
+  }
+
   #noteLines(number: number): Line[] {
-    return this.wrap([{ text: this.#noteText(number) }], SMALL_SIZE, WIDTH);
+    return this.#note(number).lines;
   }
 
   #notesHeight(numbers: readonly number[]): number {
@@ -274,10 +329,12 @@ class Renderer {
     }
     const { current, fresh } = placement;
     current.notes.push(...fresh);
+    // Each footnote new to this page is printed on it: its undrawable characters count here.
+    for (const number of fresh) this.unrenderable += this.#note(number).unrenderable;
     this.#y -= options.leading;
     let x = MARGIN_X + indent;
     line.atoms.forEach((atom, index) => {
-      if (index > 0 && !atom.glued) x += atom.font.widthOfTextAtSize(" ", options.size);
+      if (index > 0 && !atom.glued) x += this.#width(atom.font, " ", options.size);
       current.page.drawText(atom.text, {
         x,
         y: this.#y + atom.rise,
@@ -378,7 +435,7 @@ class Renderer {
           y -= SMALL_LEADING;
           let cx = x + pad;
           line.atoms.forEach((atom, i) => {
-            if (i > 0 && !atom.glued) cx += atom.font.widthOfTextAtSize(" ", SMALL_SIZE);
+            if (i > 0 && !atom.glued) cx += this.#width(atom.font, " ", SMALL_SIZE);
             page.drawText(atom.text, {
               x: cx,
               y,
@@ -398,7 +455,7 @@ class Renderer {
           y -= SMALL_LEADING;
           let cx = MARGIN_X + pad + 12;
           line.atoms.forEach((atom, i) => {
-            if (i > 0 && !atom.glued) cx += atom.font.widthOfTextAtSize(" ", SMALL_SIZE);
+            if (i > 0 && !atom.glued) cx += this.#width(atom.font, " ", SMALL_SIZE);
             page.drawText(atom.text, { x: cx, y, size: atom.size, font: atom.font, color: INK });
             cx += atom.width;
           });
@@ -451,7 +508,7 @@ class Renderer {
       const bold = this.#fonts.bold;
       const regular = this.#fonts.regular;
       const text = this.#drawable(markingText, bold);
-      const width = bold.widthOfTextAtSize(text, SMALL_SIZE);
+      const width = this.#width(bold, text, SMALL_SIZE);
       page.drawText(text, {
         x: (PAGE[0] - width) / 2,
         y: PAGE[1] - 40,
@@ -476,7 +533,7 @@ class Renderer {
         regular,
       );
       page.drawText(right, {
-        x: MARGIN_X + WIDTH - regular.widthOfTextAtSize(right, SMALL_SIZE),
+        x: MARGIN_X + WIDTH - this.#width(regular, right, SMALL_SIZE),
         y: 44,
         size: SMALL_SIZE,
         font: regular,
@@ -498,7 +555,7 @@ class Renderer {
           y -= SMALL_LEADING;
           let x = MARGIN_X;
           line.atoms.forEach((atom, i) => {
-            if (i > 0 && !atom.glued) x += atom.font.widthOfTextAtSize(" ", SMALL_SIZE);
+            if (i > 0 && !atom.glued) x += this.#width(atom.font, " ", SMALL_SIZE);
             page.drawText(atom.text, { x, y, size: atom.size, font: atom.font, color: INK });
             x += atom.width;
           });

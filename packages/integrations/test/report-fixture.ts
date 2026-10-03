@@ -179,3 +179,57 @@ export function reportFixture(overrides: Partial<ReportDocument> = {}): ReportDo
     ...overrides,
   };
 }
+
+/**
+ * A large report for the renderer's performance test. SYNTHETIC, shaped like
+ * the Phase 5 live checkpoint's report of example.com (615 claims, almost all
+ * archive captures on one entity): two claim shapes of about 145 and 330
+ * characters, alternating between two sources whose footnotes carry long query
+ * URLs. Bracketed placeholders throughout; no value is a real capture.
+ */
+export function largeReportFixture(claimCount: number): ReportDocument {
+  const base = reportFixture();
+  const pad = (n: number) => String(n).padStart(4, "0");
+  const sources = [1, 2, 3].map((number) => ({
+    number,
+    evidenceId: `01900000-0000-7000-8000-${String(number).padStart(12, "0")}`,
+    collectorId: `[collector-${String(number)}]`,
+    sourceLabel: `[Source ${String(number)} label]`,
+    sourceUrl: `https://source.example/[query-${String(number)}]?url=example.com&output=json&fl=[fields-a],[fields-b],[fields-c]&limit=[limit]&from=[from-time]&to=[to-time]&page=[page]`,
+    collectedAt: "2026-01-01T00:00:30.000Z",
+    observedAt: null,
+    contentHash: `sha256:${"0".repeat(63)}${String(number)}`,
+    strength: "REPORTED" as const,
+    claimCount: number === 1 ? 1 : Math.ceil(claimCount / 2),
+  }));
+  const claims = Array.from({ length: claimCount }, (_, index) => {
+    const n = pad(index + 1);
+    const archived = index % 2 === 0;
+    const text = archived
+      ? `digest: [digest-${n}-ABCDEFGHIJKLMNOPQRSTUV]; mimeType: [mime-type]; timestamp: [timestamp-${n}]; originalUrl: https://example.com/[path-${n}]; statusCode: [status]; length: [length-${n}]`
+      : `url: https://example.com/[path-${n}]; mime: [mime-type]; digest: [digest-${n}-ABCDEFGHIJKLMNOPQRSTUV]; status: [status]; languages: [languages]; timestamp: [timestamp-${n}]; length: [length-${n}]; offset: [offset-${n}]; filename: [crawl-segment]/[segment-${n}]/warc/[file-${n}].warc.gz; encoding: [encoding]; truncated: [truncated]`;
+    return {
+      claimId: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+      attribute: archived ? "archived_capture" : "crawled_capture",
+      value: text,
+      display: { text, truncated: false },
+      strength: "REPORTED" as const,
+      citations: [archived ? 2 : 3],
+    };
+  });
+  return {
+    ...base,
+    findings: [
+      {
+        entityId: "00000000-0000-4000-8000-00000000e001",
+        kind: "DOMAIN",
+        displayName: "example.com",
+        identifier: "example.com",
+        claims: [...(base.findings[0]?.claims.slice(0, 1) ?? []), ...claims],
+      },
+    ],
+    sources,
+    attributions: [],
+    untrustedContent: [],
+  };
+}

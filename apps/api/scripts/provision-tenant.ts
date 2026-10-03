@@ -49,11 +49,11 @@ const env = loadEnvSubset([
   "WEB_ORIGIN",
   "LOG_LEVEL",
 ]);
-const onIdleClientError = (error: Error) => {
-  process.stderr.write(`idle database connection error: ${error.message}\n`);
+const onConnectionError = (error: Error) => {
+  process.stderr.write(`database connection error: ${error.message}\n`);
 };
-const db = createDatabase({ connectionString: env.DATABASE_URL, onIdleClientError });
-const authStore = createAuthStore({ connectionString: env.DATABASE_AUTH_URL, onIdleClientError });
+const db = createDatabase({ connectionString: env.DATABASE_URL, onConnectionError });
+const authStore = createAuthStore({ connectionString: env.DATABASE_AUTH_URL, onConnectionError });
 
 try {
   await authStore.verifyRole();

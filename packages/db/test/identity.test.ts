@@ -107,7 +107,7 @@ describe("the three database roles have disjoint reach (RELEASE-BLOCKING)", () =
   it("the identity store accepts app_auth", async () => {
     const store = createAuthStore({
       connectionString: TEST_DATABASE.authUrl,
-      onIdleClientError: () => undefined,
+      onConnectionError: () => undefined,
     });
     try {
       await expect(store.verifyRole()).resolves.toBeUndefined();
@@ -120,7 +120,7 @@ describe("the three database roles have disjoint reach (RELEASE-BLOCKING)", () =
     ["the application role, which can reach tenant data", TEST_DATABASE.runtimeUrl],
     ["a superuser", TEST_DATABASE.superuserUrl],
   ])("the identity store refuses %s", async (_label, url) => {
-    const store = createAuthStore({ connectionString: url, onIdleClientError: () => undefined });
+    const store = createAuthStore({ connectionString: url, onConnectionError: () => undefined });
     try {
       await expect(store.verifyRole()).rejects.toBeInstanceOf(UnsafeAuthRoleError);
     } finally {

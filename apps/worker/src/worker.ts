@@ -6,6 +6,7 @@
 import {
   allowsUnverifiedSources,
   PRODUCT_NAME,
+  resolveContentStoreDir,
   resolveLlmConfiguration,
   type Env,
 } from "@repo/config";
@@ -24,6 +25,7 @@ import {
   CollectionExecutor,
   CollectorJobProcessor,
   ReportGenerator,
+  ReportRenderer,
   redisUpstreamRateLimiter,
   RunCoordinator,
   RunFusion,
@@ -70,6 +72,7 @@ export const WORKER_ENV = [
   "LLM_REQUEST_TIMEOUT_MS",
   "LLM_CACHE_TTL_SECONDS",
   "REPORT_CONCURRENCY",
+  "REPORT_RENDER_CONCURRENCY",
   "REPORT_HANDLING_MARKING",
 ] as const satisfies readonly (keyof Env)[];
 
@@ -93,8 +96,8 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
   }
   const db: Database = createDatabase({
     connectionString: env.DATABASE_URL,
-    onIdleClientError: (error) => {
-      logger.error({ err: error }, "idle database client error");
+    onConnectionError: (error) => {
+      logger.error({ err: error }, "database connection error");
     },
   });
   const redis = createRedisClient({
@@ -116,10 +119,12 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
       ),
     },
   });
+  // Shared with the API, which serves the PDFs stored here.
+  const contentStore = new FileSystemContentStore(resolveContentStoreDir(env.CONTENT_STORE_DIR));
   const executor = new CollectionExecutor({
     db,
     runtime,
-    contentStore: new FileSystemContentStore(env.CONTENT_STORE_DIR),
+    contentStore,
     credentials: new VaultCredentialSource(
       new CredentialVault(
         new MasterKey({ keyId: env.VAULT_MASTER_KEY_ID, keyBase64: env.VAULT_MASTER_KEY }),
@@ -189,6 +194,11 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
     investigationConcurrency: 4,
     fusionConcurrency: 4,
     reports: { generator: reports, concurrency: env.REPORT_CONCURRENCY },
+    // A generated report's PDF, rendered once and stored in the content store.
+    renders: {
+      renderer: new ReportRenderer({ db, contentStore, retry }),
+      concurrency: env.REPORT_RENDER_CONCURRENCY,
+    },
     observer: {
       // Ids and codes only: a job's target can be personal data (CLAUDE.md §8).
       deliveryFailed: (queue, final, error) => {

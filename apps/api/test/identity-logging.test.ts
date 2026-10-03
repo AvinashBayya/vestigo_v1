@@ -43,8 +43,8 @@ const EXPECTED: Readonly<Record<LogLevel, readonly string[]>> = {
 };
 
 const quiet = () => undefined;
-const db = createDatabase({ connectionString: TEST_API.runtimeUrl, onIdleClientError: quiet });
-const authStore = createAuthStore({ connectionString: TEST_API.authUrl, onIdleClientError: quiet });
+const db = createDatabase({ connectionString: TEST_API.runtimeUrl, onConnectionError: quiet });
+const authStore = createAuthStore({ connectionString: TEST_API.authUrl, onConnectionError: quiet });
 
 afterAll(async () => {
   await Promise.all([db.close(), authStore.close()]);

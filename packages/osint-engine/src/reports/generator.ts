@@ -12,7 +12,8 @@
  *   3. Record, with the row locked again: the attempt's token usage (once per
  *      attempt, so a retry never charges twice), with every model call and
  *      the upstream provider that served it, and the report's new state,
- *      together or not at all.
+ *      together or not at all. A generated report's PDF is recorded PENDING
+ *      in the same transaction; the report-renders queue renders and stores it.
  *
  * Retries are by cause, as for collectors: an unavailable model endpoint is
  * retried with backoff; a rejected answer, a refused request, a run that is
@@ -196,6 +197,9 @@ export class ReportGenerator {
           error: null,
           finishedAt: this.#clock(),
         });
+        // Its PDF, to be rendered from the stored document (ReportRenderer):
+        // recorded with the success, so a generated report always has one.
+        await repos.reportPdfs.ensure(reportId);
         return { kind: "COMPLETED", status: "SUCCEEDED", errorCode: null };
       }
       if (retryMs !== null) {

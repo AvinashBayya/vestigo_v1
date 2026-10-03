@@ -12,6 +12,7 @@ import {
   JOB_STATUSES,
   MERGE_SIGNALS,
   QUOTA_PERIODS,
+  REPORT_PDF_STATUSES,
   REPORT_STATUSES,
   RUN_STATUSES,
   TARGET_TYPES,
@@ -50,6 +51,7 @@ export const jobStatus = pgEnum("job_status", JOB_STATUSES);
 export const jobOutcome = pgEnum("job_outcome", JOB_OUTCOMES);
 export const quotaPeriod = pgEnum("quota_period", QUOTA_PERIODS);
 export const reportStatus = pgEnum("report_status", REPORT_STATUSES);
+export const reportPdfStatus = pgEnum("report_pdf_status", REPORT_PDF_STATUSES);
 export const usageUnit = pgEnum("usage_unit", USAGE_UNITS);
 export const tenantRegion = pgEnum("tenant_region", TENANT_REGIONS);
 

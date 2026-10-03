@@ -4,18 +4,19 @@ import {
   COVERAGE_STATES,
   ENTITY_KINDS,
   REPORT_FORMAT_VERSION,
+  REPORT_PDF_STATUSES,
   REPORT_STATUSES,
   RUN_STATUSES,
   SYNTHESIS_STRENGTHS,
   TARGET_TYPES,
   type ReportDocument,
 } from "@repo/core";
-import type { Report, Repositories } from "@repo/db";
+import type { Report, ReportPdf, Repositories } from "@repo/db";
 import { REPORT_EXPORT_FORMAT_NAMES, REPORT_EXPORT_FORMATS } from "@repo/integrations";
 import { readRunProgress, usageSummary } from "@repo/osint-engine";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { tenantOf, type RequestTenant } from "../http/access.ts";
+import { afterCommit, tenantOf, type RequestTenant } from "../http/access.ts";
 import { forbidden, HttpError, notFound, ProblemSchema } from "../http/errors.ts";
 import type { Services } from "../services.ts";
 import {
@@ -251,9 +252,37 @@ const ReportView = z.object({
   finishedAt: optionalInstant,
   /** The report itself; present only when SUCCEEDED. */
   document: ReportDocumentSchema.nullable(),
+  pdf: z
+    .object({
+      status: z.enum(REPORT_PDF_STATUSES),
+      /** The stored file's size, once READY. */
+      byteLength: z.number().int().min(1).nullable(),
+      /** The stored file's hash (`sha256:<hex>`), once READY: every download is this file. */
+      contentHash: z.string().nullable(),
+      /** Why it could not be rendered, when FAILED. */
+      error: z.object({ code: z.string(), message: z.string() }).nullable(),
+    })
+    .nullable()
+    .meta({
+      description:
+        "The report's PDF, rendered once in the background from the stored document and stored. Null until the report has succeeded; a report generated before PDFs were stored has none until its PDF is first requested.",
+    }),
 });
 
-function reportView(report: Report): z.infer<typeof ReportView> {
+function pdfView(pdf: ReportPdf | null): z.infer<typeof ReportView>["pdf"] {
+  if (pdf === null) return null;
+  return {
+    status: pdf.status,
+    byteLength: pdf.byteLength,
+    contentHash: pdf.contentHash,
+    error:
+      pdf.errorCode === null || pdf.errorMessage === null
+        ? null
+        : { code: pdf.errorCode, message: pdf.errorMessage },
+  };
+}
+
+function reportView(report: Report, pdf: ReportPdf | null): z.infer<typeof ReportView> {
   return {
     id: report.id,
     runId: report.runId,
@@ -269,6 +298,7 @@ function reportView(report: Report): z.infer<typeof ReportView> {
     finishedAt: isoOrNull(report.finishedAt),
     // Validated on the way out, like every boundary (CLAUDE.md §7).
     document: report.document === null ? null : ReportDocumentSchema.parse(report.document),
+    pdf: pdfView(pdf),
   };
 }
 
@@ -302,6 +332,9 @@ async function requirePersonAccessFor(
 }
 
 const CONFLICT = { 409: ProblemSchema } as const;
+
+/** How long a client waits before asking again for a PDF that is still rendering. */
+const PDF_RETRY_AFTER_SECONDS = 5;
 
 export const reportRoutes =
   (services: () => Services): FastifyPluginAsyncZod =>
@@ -364,7 +397,7 @@ export const reportRoutes =
           throw new HttpError(503, "QUEUE_UNAVAILABLE", "The job queue could not take the report.");
         }
         void reply.code(202);
-        return reportView(report);
+        return reportView(report, null);
       },
     );
 
@@ -393,7 +426,11 @@ export const reportRoutes =
           limit: request.query.limit + 1,
         });
         const result = page(rows, request.query.limit);
-        return { items: result.items.map(reportView), hasMore: result.hasMore };
+        const items = [];
+        for (const report of result.items) {
+          items.push(reportView(report, await repos.reportPdfs.findByReportId(report.id)));
+        }
+        return { items, hasMore: result.hasMore };
       },
     );
 
@@ -416,7 +453,7 @@ export const reportRoutes =
         const report = await repos.reports.findById(request.params.id);
         if (report === null) throw notFound("The report");
         await requirePersonAccessFor(repos, tenant, report.runId);
-        return reportView(report);
+        return reportView(report, await repos.reportPdfs.findByReportId(report.id));
       },
     );
 
@@ -428,20 +465,26 @@ export const reportRoutes =
           operationId: "exportReport",
           summary: "Download a generated report as PDF, JSON, CSV or a Maltego graph table",
           description:
-            "pdf: the formatted report. json: the complete report document. csv: one row per claim and relationship. maltego: an edge list for Maltego's Import Graph from Table. Every format carries the handling marking and the attribution its sources require.",
+            "pdf: the formatted report, rendered once in the background and stored, so every download is the same file; 202 while it is still rendering (retry after the Retry-After seconds), 409 REPORT_PDF_FAILED if it could not be rendered. json: the complete report document. csv: one row per claim and relationship. maltego: an edge list for Maltego's Import Graph from Table. Every format carries the handling marking and the attribution its sources require.",
           tags: ["reports"],
           security: SECURITY,
           params: z.object({ id: z.uuid(), format: z.enum(REPORT_EXPORT_FORMAT_NAMES) }),
           produces: ["application/pdf", "application/json", "text/csv"],
           response: {
             200: z.string().describe("The report in the requested format."),
+            202: z
+              .object({
+                status: z.enum(["PENDING", "RENDERING"]),
+                detail: z.string(),
+              })
+              .describe("The PDF is still rendering; request it again after Retry-After seconds."),
             ...PROTECTED_ERRORS,
             ...CONFLICT,
           },
         },
       },
       async (request, reply) => {
-        const { repos, tenant } = tenantOf(request);
+        const { repos, tenant, tenantId } = tenantOf(request);
         request.auditTarget = { type: "report", id: request.params.id };
         const report = await repos.reports.findById(request.params.id);
         if (report === null) throw notFound("The report");
@@ -453,17 +496,69 @@ export const reportRoutes =
             `The report is ${report.status}; only a generated report can be exported.`,
           );
         }
+
+        if (request.params.format === "pdf") {
+          // The PDF is rendered once, in the worker, and stored: served as
+          // stored, never rendered here. A report generated before PDFs were
+          // stored gets its row now, PENDING.
+          const pdf = await repos.reportPdfs.ensure(report.id);
+          if (pdf.status === "FAILED") {
+            throw new HttpError(
+              409,
+              "REPORT_PDF_FAILED",
+              `The report's PDF could not be rendered: ${pdf.errorMessage ?? "no reason was recorded"}`,
+            );
+          }
+          const { contentStore, renders } = services().runs;
+          if (pdf.status === "READY" && pdf.contentHash !== null) {
+            const contentHash = pdf.contentHash;
+            // Read after the transaction commits: the store is not the database.
+            afterCommit(request, async () => {
+              // Re-hashed on read: a stored file that no longer matches is refused.
+              const bytes = await contentStore.get(tenantId, contentHash);
+              void reply.hijack();
+              reply.raw.writeHead(200, {
+                "content-type": "application/pdf",
+                "content-length": String(bytes.byteLength),
+                "content-disposition": `attachment; filename="report-${report.id}.pdf"`,
+                "cache-control": "no-store",
+              });
+              reply.raw.end(Buffer.from(bytes));
+            });
+            return;
+          }
+          // Still to render. Enqueued again after the commit, so the worker
+          // always finds the row: enqueueing is idempotent, and this resumes a
+          // render whose enqueue was lost.
+          const status = pdf.status === "RENDERING" ? "RENDERING" : "PENDING";
+          afterCommit(request, async () => {
+            await renders.enqueueRender(tenantId, report.id);
+            void reply.code(202).header("retry-after", String(PDF_RETRY_AFTER_SECONDS));
+            return {
+              status,
+              detail: "The report's PDF is still rendering. Request it again shortly.",
+            };
+          });
+          return;
+        }
+
         const format = REPORT_EXPORT_FORMATS[request.params.format];
-        const bytes = await format.render(ReportDocumentSchema.parse(report.document));
-        // Bytes, not JSON: written directly, after the access check and its audit row.
-        void reply.hijack();
-        reply.raw.writeHead(200, {
-          "content-type": format.contentType,
-          "content-length": String(bytes.byteLength),
-          "content-disposition": `attachment; filename="report-${report.id}.${format.extension}"`,
-          "cache-control": "no-store",
+        const document = ReportDocumentSchema.parse(report.document);
+        // Rendered once the transaction has committed: rendering needs no
+        // database, and holding the transaction through it left the
+        // connection idle in transaction until the server ended it.
+        afterCommit(request, async () => {
+          const bytes = await format.render(document);
+          // Bytes, not JSON: written directly, after the access check and its audit row.
+          void reply.hijack();
+          reply.raw.writeHead(200, {
+            "content-type": format.contentType,
+            "content-length": String(bytes.byteLength),
+            "content-disposition": `attachment; filename="report-${report.id}.${format.extension}"`,
+            "cache-control": "no-store",
+          });
+          reply.raw.end(Buffer.from(bytes));
         });
-        reply.raw.end(Buffer.from(bytes));
       },
     );
 

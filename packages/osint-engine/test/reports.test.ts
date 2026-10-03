@@ -26,7 +26,13 @@ import {
 import { loadFixture, startHarness, type Fixture, type Harness } from "@repo/collectors/testing";
 import { allowedModel, type LlmEndpoint } from "@repo/config";
 import { parseTenantId, REPORT_WORDING, type ReportDocument, type TenantId } from "@repo/core";
-import { createDatabase, FileSystemContentStore, type Database } from "@repo/db";
+import {
+  createDatabase,
+  FileSystemContentStore,
+  hashContent,
+  type ContentStore,
+  type Database,
+} from "@repo/db";
 import {
   CredentialVault,
   MasterKey,
@@ -53,7 +59,9 @@ import {
   CollectorJobProcessor,
   InvestigationQueue,
   ReportGenerator,
+  ReportNotRenderableError,
   ReportQueue,
+  ReportRenderer,
   RunCoordinator,
   RunFusion,
   startWorkerPool,
@@ -75,7 +83,7 @@ let vault: CredentialVault;
 beforeAll(async () => {
   db = createDatabase({
     connectionString: TEST_ENGINE.databaseUrl,
-    onIdleClientError: () => undefined,
+    onConnectionError: () => undefined,
   });
   redis = createRedisClient({
     url: TEST_ENGINE.redisUrl,
@@ -248,6 +256,14 @@ async function startEngine(
     investigationConcurrency: 2,
     fusionConcurrency: 2,
     reports: { generator: generator(runtime.registry), concurrency: 1 },
+    renders: {
+      renderer: new ReportRenderer({
+        db,
+        contentStore: new FileSystemContentStore(contentDir),
+        retry: FAST_RETRY,
+      }),
+      concurrency: 1,
+    },
   });
   const investigations = new InvestigationQueue(connection, FAST_RETRY);
   const reports = new ReportQueue(connection, FAST_RETRY);
@@ -616,6 +632,25 @@ describe("a report from a real Phase 4 run with one collector failing (RELEASE-B
     expect(document.handlingMarking).toBe("[TENANT HANDLING MARKING]");
   });
 
+  it("renders its PDF once in the worker and stores it: every download is that file", async () => {
+    const pdf = await waitFor(
+      "the report's PDF to render",
+      () =>
+        db.withTenant(tenant.tenantId, ({ repos }) => repos.reportPdfs.findByReportId(reportId)),
+      (row) => row?.status === "READY" || row?.status === "FAILED",
+    );
+    expect(pdf).toMatchObject({ status: "READY", attempts: 1, errorCode: null });
+    if (pdf === null || pdf.contentHash === null) return expect.unreachable("a stored PDF");
+    const stored = await new FileSystemContentStore(contentDir).get(
+      tenant.tenantId,
+      pdf.contentHash,
+    );
+    // The stored file is the document rendered, byte for byte, with the hash and size recorded.
+    expect(Buffer.from(stored).equals(Buffer.from(await renderReportPdf(document)))).toBe(true);
+    expect(hashContent(stored)).toBe(pdf.contentHash);
+    expect(pdf.byteLength).toBe(stored.byteLength);
+  }, 60_000);
+
   it("renders the PDF with the limitations, the failure and every citation", async () => {
     const bytes = await renderReportPdf(document);
     const text = await pdfText(bytes);
@@ -762,6 +797,140 @@ describe("report generation fails honestly, never with a partial answer", () => 
       kind: "COMPLETED",
       status: "FAILED",
       errorCode: "LLM_UNAVAILABLE",
+    });
+  });
+
+  describe("its PDF, rendered once in the background", () => {
+    /** A generated report (no synthesis asked for). */
+    const generated = async () => {
+      const report = await newReport(false);
+      const disposition = await generatorWith(new ScriptedProvider([])).process(
+        tenant.tenantId,
+        report.id,
+        { finalAttempt: false },
+      );
+      expect(disposition).toMatchObject({ kind: "COMPLETED", status: "SUCCEEDED" });
+      return report.id;
+    };
+    const pdfOf = (reportId: string) =>
+      db.withTenant(tenant.tenantId, ({ repos }) => repos.reportPdfs.findByReportId(reportId));
+    /** A stand-in for the renderer's output. Not a PDF. */
+    const STAND_IN = new TextEncoder().encode("[stand-in rendered bytes]");
+    const storeWith = (overrides: Partial<ContentStore> = {}): ContentStore => {
+      const real = new FileSystemContentStore(contentDir);
+      return {
+        put: (id, bytes) => real.put(id, bytes),
+        get: (id, hash) => real.get(id, hash),
+        has: (id, hash) => real.has(id, hash),
+        ...overrides,
+      };
+    };
+    const rendererWith = (options: {
+      render?: () => Promise<Uint8Array>;
+      contentStore?: ContentStore;
+    }) =>
+      new ReportRenderer({
+        db,
+        contentStore: options.contentStore ?? storeWith(),
+        retry: FAST_RETRY,
+        render: options.render ?? (() => Promise.resolve(STAND_IN)),
+      });
+
+    it("is recorded PENDING when the report is generated, in the same transaction", async () => {
+      const reportId = await generated();
+      expect(await pdfOf(reportId)).toMatchObject({ status: "PENDING", attempts: 0 });
+    });
+
+    it("renders and stores once; a delivery after that does nothing", async () => {
+      const reportId = await generated();
+      let renders = 0;
+      const renderer = rendererWith({
+        render: () => {
+          renders += 1;
+          return Promise.resolve(STAND_IN);
+        },
+      });
+      const first = await renderer.process(tenant.tenantId, reportId, { finalAttempt: false });
+      expect(first).toEqual({ kind: "COMPLETED", status: "READY", errorCode: null });
+      const again = await renderer.process(tenant.tenantId, reportId, { finalAttempt: false });
+      expect(again).toEqual({ kind: "SKIPPED", status: "READY" });
+      expect(renders).toBe(1);
+      const pdf = await pdfOf(reportId);
+      expect(pdf).toMatchObject({ status: "READY", attempts: 1, byteLength: STAND_IN.byteLength });
+      if (pdf?.contentHash == null) return expect.unreachable("a stored file");
+      expect(await storeWith().get(tenant.tenantId, pdf.contentHash)).toEqual(STAND_IN);
+    });
+
+    it("fails a render that throws at once, with attempts left, storing nothing", async () => {
+      const reportId = await generated();
+      let stored = 0;
+      const disposition = await rendererWith({
+        render: () => Promise.reject(new RangeError("[layout failure]")),
+        contentStore: storeWith({
+          put: () => {
+            stored += 1;
+            return Promise.reject(new Error("[must not be called]"));
+          },
+        }),
+      }).process(tenant.tenantId, reportId, { finalAttempt: false });
+      expect(disposition).toEqual({
+        kind: "COMPLETED",
+        status: "FAILED",
+        errorCode: "REPORT_RENDER_FAILED",
+      });
+      expect(stored).toBe(0);
+      expect(await pdfOf(reportId)).toMatchObject({
+        status: "FAILED",
+        errorCode: "REPORT_RENDER_FAILED",
+        // The error's class, never the content being rendered.
+        errorMessage: "The PDF could not be rendered from the stored report: RangeError.",
+        contentHash: null,
+      });
+    });
+
+    it("retries storage that is unavailable, then fails on the last attempt", async () => {
+      const reportId = await generated();
+      const renderer = rendererWith({
+        contentStore: storeWith({ put: () => Promise.reject(new Error("[disk unavailable]")) }),
+      });
+      const first = await renderer.process(tenant.tenantId, reportId, { finalAttempt: false });
+      expect(first).toMatchObject({ kind: "RETRY", errorCode: "REPORT_PDF_STORAGE_UNAVAILABLE" });
+      expect(await pdfOf(reportId)).toMatchObject({ status: "PENDING", attempts: 1 });
+      const last = await renderer.process(tenant.tenantId, reportId, { finalAttempt: true });
+      expect(last).toEqual({
+        kind: "COMPLETED",
+        status: "FAILED",
+        errorCode: "REPORT_PDF_STORAGE_UNAVAILABLE",
+      });
+      expect(await pdfOf(reportId)).toMatchObject({ status: "FAILED", attempts: 2 });
+    });
+
+    it("refuses to render a report that has no document, and records nothing", async () => {
+      const report = await newReport(false);
+      await expect(
+        rendererWith({}).process(tenant.tenantId, report.id, { finalAttempt: false }),
+      ).rejects.toBeInstanceOf(ReportNotRenderableError);
+      expect(await pdfOf(report.id)).toBeNull();
+    });
+
+    it("fails a render whose last delivery crashed, and leaves a finished one alone", async () => {
+      const crashed = await generated();
+      await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.reportPdfs.transition(crashed, {
+          status: "RENDERING",
+          attempts: 3,
+          startedAt: new Date(),
+        }),
+      );
+      const renderer = rendererWith({});
+      const failure = { code: "WORKER_ERROR", message: "[crashed]" };
+      await renderer.failUnrecorded(tenant.tenantId, crashed, failure);
+      expect(await pdfOf(crashed)).toMatchObject({ status: "FAILED", errorCode: "WORKER_ERROR" });
+
+      const finished = await generated();
+      await renderer.process(tenant.tenantId, finished, { finalAttempt: false });
+      await renderer.failUnrecorded(tenant.tenantId, finished, failure);
+      expect(await pdfOf(finished)).toMatchObject({ status: "READY", errorCode: null });
     });
   });
 

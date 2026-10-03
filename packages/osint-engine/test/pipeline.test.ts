@@ -75,7 +75,7 @@ let vault: CredentialVault;
 beforeAll(async () => {
   db = createDatabase({
     connectionString: TEST_ENGINE.databaseUrl,
-    onIdleClientError: () => undefined,
+    onConnectionError: () => undefined,
   });
   owner = new pg.Client({ connectionString: TEST_ENGINE.databaseOwnerUrl });
   await owner.connect();

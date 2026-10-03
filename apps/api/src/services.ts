@@ -1,7 +1,13 @@
 import { NotImplementedError } from "@repo/core";
 import type { CollectorRegistry } from "@repo/collectors";
 import type { CredentialVault } from "@repo/integrations";
-import type { InvestigationQueue, JobReplayer, ReportQueue } from "@repo/osint-engine";
+import type { ContentStore } from "@repo/db";
+import type {
+  InvestigationQueue,
+  JobReplayer,
+  ReportQueue,
+  ReportRenderQueue,
+} from "@repo/osint-engine";
 import type { Auth } from "./auth/better-auth.ts";
 import type { AccessServices } from "./http/access.ts";
 import { resolvePrincipal, type PrincipalServices } from "./http/principal.ts";
@@ -16,6 +22,10 @@ export interface RunServices {
   readonly eventsPollMs: number;
   /** Enqueues report generation; the worker does it. */
   readonly reports: ReportQueue;
+  /** Enqueues a generated report's PDF render, to resume one; the worker does it. */
+  readonly renders: ReportRenderQueue;
+  /** Where the worker stores report PDFs; read here to serve them. */
+  readonly contentStore: ContentStore;
   /** Why a model-written synthesis cannot be offered, or null when it can. */
   readonly synthesisUnavailable: string | null;
 }

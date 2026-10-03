@@ -17,7 +17,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { PLATFORM_COLLECTORS } from "@repo/collectors";
 import { loadFixture, startHarness, type Fixture, type Harness } from "@repo/collectors/testing";
 import type { ReportDocument, TenantId } from "@repo/core";
-import { FileSystemContentStore } from "@repo/db";
+import { FileSystemContentStore, hashContent } from "@repo/db";
 import {
   createRedisClient,
   CredentialVault,
@@ -29,6 +29,7 @@ import {
   CollectionExecutor,
   CollectorJobProcessor,
   ReportGenerator,
+  ReportRenderer,
   RunCoordinator,
   RunFusion,
   startWorkerPool,
@@ -145,6 +146,15 @@ beforeAll(async () => {
       }),
       concurrency: 1,
     },
+    // PDFs are stored where the API serves them from, as in a deployment.
+    renders: {
+      renderer: new ReportRenderer({
+        db: api.db,
+        contentStore: api.services.runs.contentStore,
+        retry: api.retry,
+      }),
+      concurrency: 1,
+    },
   });
   const provisioned = await provisionTestTenant(api, "reports");
   tenantId = provisioned.tenantId;
@@ -189,6 +199,20 @@ async function settledRun(browser: Browser): Promise<string> {
   }
 }
 
+/** The report's PDF once its render has finished (READY or FAILED), as the report view shows it. */
+async function renderedPdf(browser: Browser, reportId: string) {
+  const deadline = Date.now() + 60_000;
+  for (;;) {
+    const read = await browser.request("GET", `/api/v1/reports/${reportId}`);
+    const pdf = read.json<{
+      pdf: { status: string; contentHash: string | null; byteLength: number | null } | null;
+    }>().pdf;
+    if (pdf?.status === "READY" || pdf?.status === "FAILED") return pdf;
+    if (Date.now() > deadline) throw new Error(`PDF not rendered: ${read.body}`);
+    await sleep(100);
+  }
+}
+
 async function generatedReport(browser: Browser, reportId: string) {
   const deadline = Date.now() + 30_000;
   for (;;) {
@@ -222,7 +246,9 @@ describe("a report through the API, from a PARTIAL run (RELEASE-BLOCKING)", () =
     const finished = await generatedReport(owner, reportId);
     expect(finished.status, JSON.stringify(finished.error)).toBe("SUCCEEDED");
     document = finished.document as ReportDocument;
-  }, 60_000);
+    // The PDF renders in the worker after the report succeeds.
+    expect((await renderedPdf(owner, reportId)).status).toBe("READY");
+  }, 120_000);
 
   it("says the run was partial and names the failed collector with its cause", () => {
     expect(document.coverage.partial).toBe(true);
@@ -256,6 +282,70 @@ describe("a report through the API, from a PARTIAL run (RELEASE-BLOCKING)", () =
     if (format === "pdf") expect(exported.body.startsWith("%PDF-")).toBe(true);
     if (format === "json") expect(JSON.parse(exported.body)).toEqual(document);
     if (format !== "pdf") expect(exported.body).toContain("[TENANT MARKING]");
+  });
+
+  it("serves the PDF rendered once in the worker: every download is the stored file", async () => {
+    const pdf = await renderedPdf(owner, reportId);
+    if (pdf.contentHash === null) return expect.unreachable("a stored PDF");
+    const first = await owner.request("GET", `/api/v1/reports/${reportId}/export/pdf`);
+    const second = await owner.request("GET", `/api/v1/reports/${reportId}/export/pdf`);
+    expect(first.status).toBe(200);
+    expect(first.raw.equals(second.raw)).toBe(true);
+    expect(first.raw.byteLength).toBe(pdf.byteLength);
+    expect(hashContent(first.raw)).toBe(pdf.contentHash);
+    const stored = await api.services.runs.contentStore.get(tenantId, pdf.contentHash);
+    expect(Buffer.from(stored).equals(first.raw)).toBe(true);
+  });
+
+  /** A generated report as one made before PDFs were stored: SUCCEEDED, with no PDF row. */
+  const generatedWithoutPdf = () =>
+    api.db.withTenant(tenantId, async ({ repos }) => {
+      const report = await repos.reports.create({
+        runId,
+        includeSynthesis: false,
+        requestedByUserId: null,
+      });
+      await repos.reports.transition(report.id, {
+        status: "SUCCEEDED",
+        attempts: 1,
+        document,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      });
+      return report.id;
+    });
+
+  it("answers 202 for a PDF still to render, resumes its render, then serves it", async () => {
+    const legacy = await generatedWithoutPdf();
+    expect((await owner.request("GET", `/api/v1/reports/${legacy}`)).json()).toMatchObject({
+      pdf: null,
+    });
+    const pending = await owner.request("GET", `/api/v1/reports/${legacy}/export/pdf`);
+    expect(pending.status).toBe(202);
+    expect(pending.headers["retry-after"]).toBe("5");
+    expect(pending.json()).toMatchObject({ status: "PENDING" });
+    const pdf = await renderedPdf(owner, legacy);
+    expect(pdf.status).toBe("READY");
+    const served = await owner.request("GET", `/api/v1/reports/${legacy}/export/pdf`);
+    expect(served.status).toBe(200);
+    expect(hashContent(served.raw)).toBe(pdf.contentHash);
+  });
+
+  it("refuses a PDF that could not be rendered, saying why", async () => {
+    const failed = await generatedWithoutPdf();
+    await api.db.withTenant(tenantId, async ({ repos }) => {
+      await repos.reportPdfs.create(failed);
+      await repos.reportPdfs.transition(failed, {
+        status: "FAILED",
+        error: { code: "REPORT_RENDER_FAILED", message: "[why it failed]" },
+      });
+    });
+    const refused = await owner.request("GET", `/api/v1/reports/${failed}/export/pdf`);
+    expect(refused.status).toBe(409);
+    expect(refused.json()).toMatchObject({
+      code: "REPORT_PDF_FAILED",
+      detail: "The report's PDF could not be rendered: [why it failed]",
+    });
   });
 
   it("lists the run's reports", async () => {
