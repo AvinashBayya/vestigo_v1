@@ -18,13 +18,15 @@ import {
   waitForRedisReady,
   FixedWindowRateLimiter,
   MasterKey,
+  SlidingLogRateLimiter,
 } from "@repo/integrations";
-import { createPlatformRegistry, type CollectorRegistry } from "@repo/collectors";
+import { CollectorRuntime, createPlatformRegistry, type CollectorRegistry } from "@repo/collectors";
 import {
   InvestigationQueue,
   ReportQueue,
   ReportRenderQueue,
   JobReplayer,
+  redisUpstreamRateLimiter,
   type QueueConnection,
   type RetryPolicy,
 } from "@repo/osint-engine";
@@ -49,6 +51,8 @@ export interface TestApi {
   readonly authStore: AuthStore;
   /** This test API's own job queues: a test starts worker pools on the same ones. */
   readonly queue: QueueConnection;
+  /** Where this API instance's content store keeps payloads, so a test can tamper with one. */
+  readonly contentDir: string;
   readonly retry: RetryPolicy;
   close(): Promise<void>;
 }
@@ -118,6 +122,16 @@ export async function createTestApi(
       investigations,
       replayer,
       registry,
+      planner: new CollectorRuntime({
+        registry,
+        // Admission only; most platform sources are UNVERIFIED, and an estimate that excludes them all shows nothing.
+        allowUnverifiedSources: true,
+        network: {
+          rateLimiter: redisUpstreamRateLimiter(
+            new SlidingLogRateLimiter({ redis, keyPrefix: `test:${randomUUID()}:upstream` }),
+          ),
+        },
+      }),
       eventsPollMs: 100,
       reports,
       renders,
@@ -134,6 +148,7 @@ export async function createTestApi(
     db,
     authStore,
     queue,
+    contentDir,
     retry: TEST_RETRY,
     async close() {
       await app.close();
@@ -196,7 +211,7 @@ export class Browser {
   }
 
   async request(
-    method: "GET" | "POST" | "PUT",
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     url: string,
     body?: unknown,
     headers: Record<string, string> = {},

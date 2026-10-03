@@ -1,0 +1,2 @@
+ALTER TABLE "tenants" ADD COLUMN "retention_days" integer;--> statement-breakpoint
+ALTER TABLE "tenants" ADD CONSTRAINT "tenants_retention_days_range" CHECK ("tenants"."retention_days" is null or "tenants"."retention_days" between 1 and 3650);

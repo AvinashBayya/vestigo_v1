@@ -44,8 +44,34 @@ describe("permission catalogue", () => {
 
   it("does not let a viewer manage API keys, credentials or members", () => {
     const viewer = permissionsForRoles("viewer");
-    for (const permission of ["api_key:manage", "credential:read", "member:create"] as const) {
+    for (const permission of [
+      "api_key:manage",
+      "credential:read",
+      "member:create",
+      "member:update",
+      "member:delete",
+      "invitation:create",
+      "invitation:cancel",
+    ] as const) {
       expect(viewer.has(permission)).toBe(false);
+    }
+  });
+
+  it("lets every role see the team, and only administrators change it", () => {
+    for (const role of ROLES) {
+      expect(permissionsForRoles(role).has("member:read"), `${role} reads members`).toBe(true);
+    }
+    for (const role of ["viewer", "analyst"] as const) {
+      const granted = permissionsForRoles(role);
+      for (const permission of ["member:create", "member:update", "member:delete"] as const) {
+        expect(granted.has(permission), `${role} ${permission}`).toBe(false);
+      }
+    }
+    for (const role of ["admin", "owner"] as const) {
+      const granted = permissionsForRoles(role);
+      for (const permission of ["member:create", "member:update", "member:delete"] as const) {
+        expect(granted.has(permission), `${role} ${permission}`).toBe(true);
+      }
     }
   });
 });

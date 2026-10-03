@@ -36,3 +36,10 @@ export const SECURITY = [{ session: [] }, { apiKey: [] }];
 export function page<T>(rows: readonly T[], limit: number): { items: T[]; hasMore: boolean } {
   return { items: rows.slice(0, limit), hasMore: rows.length > limit };
 }
+
+/**
+ * Any JSON value, as a claim's value is stored. Described as unknown rather
+ * than z.json(): that schema is recursive, and its $ref does not resolve in
+ * the generated spec. A stated null is a value, not a missing one.
+ */
+export const JsonValue = z.unknown();

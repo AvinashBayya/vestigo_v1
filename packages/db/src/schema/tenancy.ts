@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { check, foreignKey, pgTable, primaryKey, text, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  check,
+  foreignKey,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { createdAtColumn, idColumn, optionalTimestamp, tenantIdColumn } from "./columns.ts";
 import { tenantPlan, tenantRegion, userStatus, vettingStatus } from "./enums.ts";
 
@@ -26,9 +35,19 @@ export const tenants = pgTable(
      * (Phase 5), or null to use the platform's. Tenant administrators set it.
      */
     reportHandlingMarking: text("report_handling_marking"),
+    /**
+     * How many days the tenant keeps collected evidence before it is due for
+     * deletion, or null when the tenant has not chosen one. Null is "not set",
+     * never a default window. Recorded only: nothing deletes on expiry yet.
+     */
+    retentionDays: integer("retention_days"),
   },
   (t) => [
     check("tenants_name_not_blank", sql`length(btrim(${t.name})) > 0`),
+    check(
+      "tenants_retention_days_range",
+      sql`${t.retentionDays} is null or ${t.retentionDays} between 1 and 3650`,
+    ),
     check(
       "tenants_report_handling_marking_format",
       sql`${t.reportHandlingMarking} is null or (${t.reportHandlingMarking} = btrim(${t.reportHandlingMarking}) and length(${t.reportHandlingMarking}) between 1 and 80 and ${t.reportHandlingMarking} !~ '[[:cntrl:]]')`,

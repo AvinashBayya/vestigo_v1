@@ -127,6 +127,20 @@
       "when": 1791009273517,
       "tag": "0017_phase5_report_pdfs_security",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791015521391,
+      "tag": "0018_phase6a_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791015526857,
+      "tag": "0019_phase6a_retention_security",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import {
+  allowsUnverifiedSources,
   ConfigError,
   loadEnv,
   resolveContentStoreDir,
@@ -13,11 +14,13 @@ import {
   waitForRedisReady,
   FixedWindowRateLimiter,
   MasterKey,
+  SlidingLogRateLimiter,
 } from "@repo/integrations";
-import { createPlatformRegistry } from "@repo/collectors";
+import { CollectorRuntime, createPlatformRegistry } from "@repo/collectors";
 import {
   InvestigationQueue,
   JobReplayer,
+  redisUpstreamRateLimiter,
   ReportQueue,
   ReportRenderQueue,
 } from "@repo/osint-engine";
@@ -68,6 +71,16 @@ const retry = {
   maxDelayMs: env.JOB_RETRY_MAX_MS,
 };
 const registry = createPlatformRegistry();
+// Admission only, to estimate a run before it starts: the API never fetches.
+const planner = new CollectorRuntime({
+  registry,
+  allowUnverifiedSources: allowsUnverifiedSources(env),
+  network: {
+    rateLimiter: redisUpstreamRateLimiter(
+      new SlidingLogRateLimiter({ redis, keyPrefix: `${env.QUEUE_PREFIX}:upstream` }),
+    ),
+  },
+});
 const investigations = new InvestigationQueue(queueConnection, retry);
 const replayer = new JobReplayer({ db, registry, connection: queueConnection, retry });
 const reports = new ReportQueue(queueConnection, retry);
@@ -107,6 +120,7 @@ const app = await buildApp({
       investigations,
       replayer,
       registry,
+      planner,
       eventsPollMs: env.RUN_EVENTS_POLL_MS,
       reports,
       renders,

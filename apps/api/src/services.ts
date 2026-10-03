@@ -1,5 +1,5 @@
 import { NotImplementedError } from "@repo/core";
-import type { CollectorRegistry } from "@repo/collectors";
+import type { CollectorRegistry, CollectorRuntime } from "@repo/collectors";
 import type { CredentialVault } from "@repo/integrations";
 import type { ContentStore } from "@repo/db";
 import type {
@@ -18,6 +18,8 @@ export interface RunServices {
   readonly replayer: JobReplayer;
   /** The platform registry, for each job's source label. */
   readonly registry: CollectorRegistry;
+  /** Admission for planning a run before it starts (estimates); it never fetches. */
+  readonly planner: CollectorRuntime;
   /** How often the progress stream reads a run's state. */
   readonly eventsPollMs: number;
   /** Enqueues report generation; the worker does it. */

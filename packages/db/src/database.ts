@@ -5,7 +5,13 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { reportConnectionErrors } from "./connection-errors.ts";
 import { connectionLostAsTyped, translateDatabaseError } from "./errors.ts";
-import { createRepositories, type Repositories, type Tenant } from "./repositories/index.ts";
+import {
+  createReads,
+  createRepositories,
+  type Reads,
+  type Repositories,
+  type Tenant,
+} from "./repositories/index.ts";
 import { closeScope, openScope, type TenantScope } from "./scope.ts";
 
 export interface DatabaseOptions {
@@ -30,6 +36,8 @@ export interface TenantContext {
   readonly tenantId: TenantId;
   readonly scope: TenantScope;
   readonly repos: Repositories;
+  /** Read models over several tables (not repositories: each owns no table). */
+  readonly reads: Reads;
 }
 
 export interface Database {
@@ -102,7 +110,12 @@ export function createDatabase(options: DatabaseOptions): Database {
         }
         const scope = openScope(id, tx);
         try {
-          return await work({ tenantId: id, scope, repos: createRepositories(scope) });
+          return await work({
+            tenantId: id,
+            scope,
+            repos: createRepositories(scope),
+            reads: createReads(scope),
+          });
         } finally {
           closeScope(scope);
         }

@@ -17,7 +17,8 @@ import { readRunProgress, usageSummary } from "@repo/osint-engine";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { afterCommit, tenantOf, type RequestTenant } from "../http/access.ts";
-import { forbidden, HttpError, notFound, ProblemSchema } from "../http/errors.ts";
+import { HttpError, notFound, ProblemSchema } from "../http/errors.ts";
+import { lockedError } from "../http/person-gate.ts";
 import type { Services } from "../services.ts";
 import {
   iso,
@@ -324,10 +325,7 @@ async function requirePersonAccessFor(
   if (!person) return;
   const decision = decideDisciplineAccess(tenant, "PERSON");
   if (!decision.allowed) {
-    throw forbidden(
-      decision.reason,
-      "This run holds person data; the tenant's plan or vetting does not allow reading it.",
-    );
+    throw lockedError(tenant, decision.reason, "This run's report, its claims and its exports.");
   }
 }
 

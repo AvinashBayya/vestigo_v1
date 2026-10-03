@@ -65,6 +65,19 @@ export class TenantsRepository extends TenantRepository {
     );
   }
 
+  /** Sets the retention window in days, or clears it with null (the tenant has not chosen one). */
+  async setRetentionDays(days: number | null): Promise<Tenant | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .update(tenants)
+          .set({ retentionDays: days })
+          .where(eq(tenants.tenantId, this.tenantId))
+          .returning(),
+      ),
+    );
+  }
+
   async rename(name: string): Promise<Tenant | null> {
     return this.run(async (tx) =>
       firstRow(

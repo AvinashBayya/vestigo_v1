@@ -141,6 +141,31 @@ export class ClaimsRepository extends TenantRepository {
     );
   }
 
+  /** The claims with these ids. Unknown ids are simply absent. */
+  async findByIds(ids: readonly string[]): Promise<Claim[]> {
+    if (ids.length === 0) return [];
+    if (ids.length > 1000) throw new RangeError("at most 1000 claim ids at once");
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(claims)
+        .where(and(this.inTenant(claims), inArray(claims.id, ids.map(requireUuid))))
+        .orderBy(asc(claims.createdAt), asc(claims.id)),
+    );
+  }
+
+  /** Claims about one entity, oldest first; the limit is required so truncation is never silent. */
+  async listForEntity(entityId: string, options: ListOptions): Promise<Claim[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(claims)
+        .where(and(this.inTenant(claims), eq(claims.entityId, requireUuid(entityId))))
+        .orderBy(asc(claims.createdAt), asc(claims.id))
+        .limit(limitOf(options)),
+    );
+  }
+
   async list(options: ListOptions): Promise<Claim[]> {
     return this.run((tx) =>
       tx

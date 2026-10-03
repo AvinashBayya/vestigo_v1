@@ -1,5 +1,5 @@
 import type { QuotaPeriod, UsageUnit } from "@repo/core";
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import {
   alerts,
   casePins,
@@ -116,6 +116,52 @@ export class CasePinsRepository extends TenantRepository {
     return this.run(async (tx) =>
       firstRow(await tx.select().from(casePins).where(this.owned(casePins, id))),
     );
+  }
+
+  /** The pin of exactly this target on this case, or null. */
+  async findByTarget(caseId: string, target: PinTarget): Promise<CasePin | null> {
+    const column =
+      "evidenceId" in target
+        ? casePins.evidenceId
+        : "entityId" in target
+          ? casePins.entityId
+          : casePins.claimId;
+    const id =
+      "evidenceId" in target
+        ? target.evidenceId
+        : "entityId" in target
+          ? target.entityId
+          : target.claimId;
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .select()
+          .from(casePins)
+          .where(
+            and(
+              this.inTenant(casePins),
+              eq(casePins.caseId, requireUuid(caseId)),
+              eq(column, requireUuid(id)),
+            ),
+          ),
+      ),
+    );
+  }
+
+  /** How many pins each of these cases has (measured: a case with none is 0). */
+  async countsForCases(caseIds: readonly string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>(caseIds.map((id) => [id, 0]));
+    if (caseIds.length === 0) return counts;
+    if (caseIds.length > 1000) throw new RangeError("at most 1000 case ids at once");
+    const rows = await this.run((tx) =>
+      tx
+        .select({ caseId: casePins.caseId, total: sql<string>`count(*)` })
+        .from(casePins)
+        .where(and(this.inTenant(casePins), inArray(casePins.caseId, caseIds.map(requireUuid))))
+        .groupBy(casePins.caseId),
+    );
+    for (const row of rows) counts.set(row.caseId, Number(row.total));
+    return counts;
   }
 
   async listForCase(caseId: string): Promise<CasePin[]> {

@@ -349,6 +349,24 @@ export class EntityMergesRepository extends TenantRepository {
     );
   }
 
+  /** Merges, active and undone, in which this entity is either side. Oldest first. */
+  async listInvolving(entityId: string, options: ListOptions): Promise<EntityMerge[]> {
+    const id = requireUuid(entityId);
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(entityMerges)
+        .where(
+          and(
+            this.inTenant(entityMerges),
+            sql`(${entityMerges.survivingEntityId} = ${id} or ${entityMerges.mergedEntityId} = ${id})`,
+          ),
+        )
+        .orderBy(asc(entityMerges.createdAt), asc(entityMerges.id))
+        .limit(limitOf(options)),
+    );
+  }
+
   /** The canonical entity `entityId` currently resolves to (itself if not merged). */
   async resolve(entityId: string): Promise<string> {
     const start = requireUuid(entityId);

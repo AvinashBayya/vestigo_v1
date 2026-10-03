@@ -1,5 +1,14 @@
 export { AppError, NotImplementedError } from "./errors.ts";
 export { detectTargetType, EmptyTargetError, type DetectedTarget } from "./target-detection.ts";
+export {
+  MAX_GRAPH_HOPS,
+  MAX_GRAPH_NODES,
+  type GraphEdge,
+  type GraphNeighbourhoodQuery,
+  type GraphNode,
+  type GraphSlice,
+  type GraphStore,
+} from "./graph.ts";
 export { InvalidTenantIdError, parseTenantId, type TenantId } from "./tenant.ts";
 export {
   AUDIT_ACTOR_KINDS,

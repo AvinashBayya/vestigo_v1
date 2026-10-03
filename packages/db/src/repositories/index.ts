@@ -1,4 +1,6 @@
 import type { TenantScope } from "../scope.ts";
+import { ExplorationRepository } from "./exploration.ts";
+import { PostgresGraphStore } from "./graph.ts";
 import { ClaimsRepository, EvidenceRepository } from "./evidence.ts";
 import {
   EntitiesRepository,
@@ -107,7 +109,30 @@ export function createRepositories(scope: TenantScope): Repositories {
   };
 }
 
+/** Read models that span tables, so none of them is a table's repository. */
+export interface Reads {
+  readonly exploration: ExplorationRepository;
+  readonly graph: PostgresGraphStore;
+}
+
+export function createReads(scope: TenantScope): Reads {
+  return { exploration: new ExplorationRepository(scope), graph: new PostgresGraphStore(scope) };
+}
+
 export * from "./evidence.ts";
+export {
+  ExplorationRepository,
+  sortStrengths,
+  type EntityDetail,
+  type EntityRelationshipView,
+  type MergeCandidate,
+  type PersonProbe,
+  type ReadScope,
+  type ScopedEntity,
+  type TimelineRow,
+  type TimelineTotals,
+} from "./exploration.ts";
+export { PostgresGraphStore } from "./graph.ts";
 export * from "./entities.ts";
 export * from "./operations.ts";
 export * from "./tenancy.ts";

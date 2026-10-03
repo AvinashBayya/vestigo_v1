@@ -104,6 +104,8 @@ Rules:
 ## 9. Privacy and retention
 
 - Person investigation features are plan-gated and vetting-gated. Never bypass the gate, including in development seeds.
+- The gate applies to reading stored data as well as collecting it, however old the data is. A read that rests on person data, when the tenant's plan or vetting does not allow it, is refused whole: 403 with the reason as its code (`MODULE_NOT_IN_PLAN`, `VETTING_NOT_APPROVED`) and a `locked` block saying what was withheld, why, and the next step. Never hide rows, drop nodes or lower a count to make a read pass. A read may return its non-person part only if the response marks, in the response itself, what was withheld and why; if it cannot, refuse the whole read. Use the shared gate (`requirePersonAccess` in `apps/api`), never a local copy.
+- Raw evidence payloads are untrusted third-party content. Serve them only as `application/octet-stream`, as an attachment, with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: default-src 'none'; sandbox`, never inline, never with a sniffed or source-supplied content type, and never rendered in the app's origin. Every read re-hashes the bytes against the recorded content hash and refuses a mismatch without sending any of them.
 - Credentials are encrypted at rest with envelope encryption. Never write a credential to disk in plaintext, log it, or commit it.
 - Deletion must genuinely remove evidence, media and derived data for a tenant.
 - The audit log is append-only. Never add code that edits or deletes audit entries.

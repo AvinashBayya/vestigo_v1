@@ -20,6 +20,11 @@ export interface AuthStore {
   readonly tables: typeof authTables;
   /** Whether an unexpired, pending invitation exists for this email, in any tenant. */
   hasPendingInvitation(email: string): Promise<boolean>;
+  /**
+   * The organisation's pending, unexpired invitations, newest first. The
+   * enrolment token's hash is never selected: nothing here can reveal it.
+   */
+  listPendingInvitations(organizationId: string, limit: number): Promise<PendingInvitation[]>;
   /** Records the enrolment token issued with an invitation (its hash). */
   setInvitationEnrolmentToken(invitationId: string, tokenHash: string): Promise<void>;
   /**
@@ -43,6 +48,15 @@ export interface AuthStore {
   /** Checks the connecting role before first use; throws UnsafeAuthRoleError. */
   verifyRole(): Promise<void>;
   close(): Promise<void>;
+}
+
+export interface PendingInvitation {
+  readonly id: string;
+  readonly email: string;
+  readonly role: string;
+  readonly inviterUserId: string;
+  readonly createdAt: Date;
+  readonly expiresAt: Date;
 }
 
 export interface AuthStoreOptions {
@@ -88,6 +102,31 @@ export function createAuthStore(options: AuthStoreOptions): AuthStore {
         )
         .limit(1);
       return rows.length > 0;
+    },
+    async listPendingInvitations(organizationId, limit) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+        throw new RangeError("invitation list limit must be an integer from 1 to 1000");
+      }
+      const rows = await db
+        .select({
+          id: authTables.invitation.id,
+          email: authTables.invitation.email,
+          role: authTables.invitation.role,
+          inviterUserId: authTables.invitation.inviterId,
+          createdAt: authTables.invitation.createdAt,
+          expiresAt: authTables.invitation.expiresAt,
+        })
+        .from(authTables.invitation)
+        .where(
+          and(
+            eq(authTables.invitation.organizationId, organizationId),
+            eq(authTables.invitation.status, "pending"),
+            gt(authTables.invitation.expiresAt, sql`now()`),
+          ),
+        )
+        .orderBy(desc(authTables.invitation.createdAt), desc(authTables.invitation.id))
+        .limit(limit);
+      return rows;
     },
     async setInvitationEnrolmentToken(invitationId, tokenHash) {
       await db

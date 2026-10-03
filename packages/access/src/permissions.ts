@@ -35,6 +35,8 @@ export const PERMISSIONS = [
 
   "organization:update",
   "organization:delete",
+  // Phase 6a: seeing the team is not managing it, so every role may read it.
+  "member:read",
   "member:create",
   "member:update",
   "member:delete",
@@ -80,6 +82,7 @@ export const PERMISSION_MODULE: Readonly<Record<Permission, Module | null>> = {
   "report:read": "TECHINT",
   "organization:update": null,
   "organization:delete": null,
+  "member:read": null,
   "member:create": null,
   "member:update": null,
   "member:delete": null,
@@ -99,6 +102,7 @@ const READ_ONLY: readonly Permission[] = [
   "evidence:read",
   "run:read",
   "report:read",
+  "member:read",
 ];
 
 const ANALYST: readonly Permission[] = [

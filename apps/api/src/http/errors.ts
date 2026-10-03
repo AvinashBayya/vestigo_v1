@@ -1,4 +1,5 @@
 import { STATUS_CODES } from "node:http";
+import { PLANS, VETTING_STATUSES } from "@repo/access";
 import { AppError, NotImplementedError } from "@repo/core";
 import { ReferenceNotFoundError, TenantContextError, UniqueConflictError } from "@repo/db";
 import type { FastifyError, FastifyInstance } from "fastify";
@@ -32,6 +33,40 @@ export const forbidden = (code: string, message: string) => new HttpError(403, c
 
 export const notFound = (what: string) => new HttpError(404, "NOT_FOUND", `${what} was not found.`);
 
+/**
+ * What the design system's Locked state needs: what the module is, what was
+ * withheld, why it is off (plan or vetting status), and the next step.
+ */
+export const LockedSchema = z.object({
+  module: z.literal("PERSON_INVESTIGATION"),
+  moduleSummary: z.string().describe("What the module is, for the Locked state."),
+  withheld: z.string().describe("What this request would have returned. None of it was."),
+  reason: z.enum(["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"]),
+  plan: z.enum(PLANS),
+  vettingStatus: z.enum(VETTING_STATUSES),
+  nextStep: z.string(),
+});
+export type Locked = z.infer<typeof LockedSchema>;
+
+/**
+ * A read refused whole because it holds data the tenant cannot currently
+ * access. Nothing is returned, thinned or counted down: the response says what
+ * was withheld and why (403, code = the reason).
+ */
+export class LockedError extends HttpError {
+  readonly locked: Locked;
+
+  constructor(locked: Locked) {
+    super(
+      403,
+      locked.reason,
+      "This read holds person-investigation data that this organisation cannot currently access. Nothing was returned.",
+    );
+    this.name = "LockedError";
+    this.locked = locked;
+  }
+}
+
 /** RFC 9457 problem details. */
 export const ProblemSchema = z.object({
   type: z.string(),
@@ -43,6 +78,9 @@ export const ProblemSchema = z.object({
     .array(z.object({ path: z.string(), message: z.string() }))
     .optional()
     .describe("Validation problems, by field. Never includes the submitted value."),
+  locked: LockedSchema.optional().describe(
+    "Present when a read was refused because it holds data the organisation cannot access.",
+  ),
 });
 
 type Problem = z.infer<typeof ProblemSchema>;
@@ -62,6 +100,12 @@ function problem(status: number, code: string, detail: string): Problem {
 
 /** Maps an error to problem details. Unknown errors never leak their message. */
 export function toProblem(error: unknown): { problem: Problem; retryAfterSeconds: number | null } {
+  if (error instanceof LockedError) {
+    return {
+      problem: { ...problem(403, error.code, error.message), locked: error.locked },
+      retryAfterSeconds: null,
+    };
+  }
   if (error instanceof HttpError) {
     return {
       problem: problem(error.status, error.code, error.message),
@@ -136,6 +180,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   // Phase 5: reports.
   REPORT_NOT_FOUND: 404,
   RUN_NOT_SETTLED: 409,
+  // Phase 6a: entity merges (kind mismatch, name-only automerge, already undone).
+  MERGE_RULE_VIOLATION: 409,
 };
 
 export function registerErrorHandling(app: FastifyInstance): void {

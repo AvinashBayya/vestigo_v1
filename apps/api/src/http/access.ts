@@ -71,6 +71,22 @@ export function tenantOf(request: FastifyRequest): RequestTenant {
   return request.tenant;
 }
 
+/** The signed-in person behind a request, for acts that must be attributable to one. */
+export type SessionPrincipal = Extract<Principal, { readonly kind: "session" }>;
+
+/**
+ * Refuses an API key. For judgements and membership changes: the record of who
+ * decided must name a person who did decide it, not the person who issued a
+ * key that a program then used (403 SESSION_REQUIRED).
+ */
+export function sessionPrincipalOf(request: FastifyRequest, what: string): SessionPrincipal {
+  const { principal } = tenantOf(request);
+  if (principal.kind !== "session") {
+    throw forbidden("SESSION_REQUIRED", `${what}: a signed-in person is required, not an API key.`);
+  }
+  return principal;
+}
+
 /**
  * Runs `work` once the request's tenant transaction has committed (its audit
  * row included), and answers the request with `work`'s result instead of the

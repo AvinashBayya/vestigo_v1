@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | Not started                                                                                                                                              |
+| 6     | Frontend                                | **6a done, 2026-10-03** (API surface the UI needs, no frontend). 6b (screens) not started. See the Phase 6a record below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -1301,6 +1301,21 @@ They now render as `example.com / www.example.com`.
   - encoded payloads (base64).
 
   Framing and the citation requirement are the defence there.
+- **Synthesis wording: what the first live review found** (report `1bece818`, 2026-10-03;
+  the output was judged defensible). Two observations to track:
+  - **A collector's stated caveat can be cut before the model ever sees it.** Statement 3 said
+    September 2026 Common Crawl captures were "demonstrating that a web server is actively
+    serving a page", without the collector's own limitation (`COMMONCRAWL_HISTORICAL_NOTE`:
+    the index is a historical snapshot, published weeks after the crawl). The note WAS
+    extracted as a claim and printed in the report — but the synthesis record takes each
+    source's first `MAX_SYNTHESIS_CLAIMS_PER_SOURCE` (25) claims, and the note sat at
+    position 36 of that source's 202, so the model never received it. Consider carrying a
+    collector's caveat claims (derived notes) into the synthesis record ahead of the cap, so
+    the model can honour them.
+  - **"Demonstrating" and "indicating" sit outside the banned certainty list** (`confirmed /
+    proven / verified / certain / definitive / …`). Accepted, not a defect: the strength
+    labels and the synthesis notice carry the uncertainty, and the review judged the wording
+    defensible. Recorded so the validator's line is a known characteristic, not a surprise.
 - **Glyph coverage:** Latin, Greek and Cyrillic only. Devanagari and other scripts show as `?`,
   counted. India-region tenants will need more Noto faces.
 - ~~**PDF rendering happens in the API request.**~~ Resolved 2026-10-03: rendered once in the
@@ -1464,3 +1479,183 @@ default; a worker thread is the next step if render latency ever matters); store
 yet deleted with a tenant's other data (the content store's tenant namespace covers them when
 deletion lands); the `cp5-`/`cp5b-` checkpoint tenants remain in the dev database by design
 (append-only audit).
+
+## Phase 6a record: the API surface the web application needs
+
+No frontend work. Twenty-two operations added (contract 0.3.0), each declaring its permission,
+running in the request's tenant transaction, validated and serialised by Zod and described in the
+generated spec. Four decisions were taken with the owner before building (below).
+
+### What was built
+
+| Area | Routes | Permission |
+| --- | --- | --- |
+| Cases | `POST/GET /cases`, `GET/PATCH /cases/:id` (title, description, archive) | `case:write` / `case:read` |
+| Pins | `POST /cases/:id/pins` (body: target `{type: evidence\|entity\|claim, id}`), `GET /cases/:id/pins`, `DELETE /cases/:id/pins/:pinId` | `case:write` / `case:read` |
+| Entities | `GET /entities?caseId\|runId`, `GET /entities/:id` (claims, relationships, merged ids), `GET /entities/merge-candidates` | `evidence:read` |
+| Merges | `GET/POST /entity-merges`, `POST /entity-merges/:id/undo` | `evidence:read` / `case:write` |
+| Graph | `GET /graph?caseId\|runId&hops&maxNodes` | `evidence:read` |
+| Timeline | `GET /timeline?caseId\|runId&sortBy` | `evidence:read` |
+| Members | `GET /members`, `GET /members/invitations` (pending), `POST /members/invitations`, `PATCH/DELETE /members/:userId` | `member:read`, `member:read`, `invitation:create`, `member:update`, `member:delete` |
+| Evidence | `GET /evidence/:id`, `GET /evidence/:id/payload` | `evidence:read` |
+| Retention | `GET/PUT /settings/retention` | `tenant:read` / `organization:update` |
+| Estimate | `POST /estimates` | `run:start` |
+
+Code: `GraphStore` interface in `packages/core` (`graph.ts`, with `MAX_GRAPH_HOPS` 3 and
+`MAX_GRAPH_NODES` 500); its Postgres adapter and the read models (`ExplorationRepository`) in
+`packages/db`, exposed as `reads` on the tenant context (not in `Repositories`, so the
+one-repository-per-table isolation tests keep their meaning). No Neo4j.
+
+Schema: migration 0018 adds `tenants.retention_days` (nullable, CHECK 1 to 3650); 0019 grants the
+application role UPDATE on that column only. Nothing else changed.
+
+### Decisions taken with the owner
+
+1. **A case is its pins.** There is no case-to-run link. A case's entities are its pinned entities
+   plus those of pinned claims and of claims citing pinned evidence; its timeline is pinned
+   evidence plus the evidence behind pinned claims and entities. Run-scoped reads exist too.
+2. **Retention column added**, recorded only. The response says `enforced: false`; nothing deletes
+   on expiry yet. The 1 to 3650 bound guards against nonsense and is not policy.
+3. **Credit estimate: plan only, cost null.** No collector declares a cost and there is no credit
+   ledger, so every `estimatedCredits` is null with a stated reason, never 0. Adding declared costs
+   to registry entries is a separate decision.
+4. **Merge candidates computed on read**, no table: same kind, same name ignoring case and
+   padding. Always labelled INFERRED and `nameOnly`. Pairs with a merge on record (active or
+   undone) are not suggested again.
+
+### Judgement calls (flag if you disagree)
+
+- **Permissions.** Entities, graph and timeline read under `evidence:read`; merges, pins and cases
+  write under `case:write`. (Listing members first needed `member:update`; the follow-up below adds
+  `member:read`.)
+- **Member changes need a session.** Invite, change role and remove go through the identity
+  provider with the caller's own session, so its checks (who may assign a role, the last owner)
+  apply on top of ours. An API key gets 403 `SESSION_REQUIRED`.
+- **A merge or undo is decided by a signed-in person.** As first built, a key could merge in its
+  issuer's name; the follow-up below removes that: an API key now gets 403 `SESSION_REQUIRED`.
+- **Pinning is idempotent** (200 with the existing pin; 201 when new); pinning to an archived case is
+  409 `CASE_ARCHIVED`. Archiving is one-way (the repository has no unarchive).
+- **Merged entities stay in lists and graphs as stored**, marked with `mergedIntoEntityId`. Folding
+  them onto the survivor is the client's choice. An undone merge simply stops being marked.
+- **Entity counts cover everything recorded about the entity**, not just the scope's share.
+- **Claim values are typed `unknown` in the spec.** `z.json()` is recursive and its `$ref` did not
+  resolve in the generated client (caught by `pnpm generate`). A stated null survives as null.
+- `MERGE_RULE_VIOLATION` now maps to HTTP 409 (it was falling through to 500).
+
+### Rules checked
+
+- Nulls on the wire: the timeline test asserts `"observedAt":null` in the raw body and a null
+  `collectedAt` stays null; a claim whose value is a stated null arrives as `null`; an unregistered
+  collector's `sourceLabel` is null, not its id.
+- The fabrication check caught `counts.get(id) ?? 0` for case pin counts. Fixed: the repository
+  returns a measured entry for every case asked about, and a missing one now throws.
+- Derived values stay distinguishable: every claim carries its strength, and DERIVED is the
+  platform-computed label (Phase 3 `derived` rule). Graph `hop` and timeline totals are
+  platform-computed read-model values, described as such in the spec.
+- Isolation, release-blocking: `packages/db/test/exploration.test.ts` (scope reads, detail,
+  timeline, graph incl. foreign seed ids, candidates, pins, retention) and the last `describe` of
+  `apps/api/test/exploration-api.test.ts` (tenant B against every new endpoint: 404 or empty, and
+  A's data verified unchanged afterwards).
+
+### Gaps the UI will hit (need a decision before 6b; none stubbed)
+
+- ~~No evidence read endpoint~~ and ~~no pending-invitations list~~: built in the follow-up below.
+- ~~The 6a read endpoints do not apply the person-data gate~~: resolved, see "the person-data gate" below.
+- **Case-level timeline of a whole run adoption** is not possible (decision 1); a `case_runs`
+  link table is the follow-up if the UI wants it.
+- Members list reads the tenant `users` table plus one role lookup per row (bounded by the page
+  limit); a bulk role query in the auth store would remove the per-row lookups.
+
+### Checkpoint output
+
+`pnpm turbo lint typecheck test --force`: 46 of 46 tasks successful. Tests: core 20, access 55,
+config 136, db 259 (was 242; +17), integrations 122, collectors 482, llm 130, osint-engine 104,
+api 136 (was 116; +20), web 4, worker 4. Fabrication check clean. Migrations 0018 and 0019 applied
+to the test database by the suite's setup.
+
+### Phase 6a follow-up: permission, evidence, payload, invitations (2026-10-03)
+
+1. **`member:read`** added to `packages/access` (module: none) and granted to every role, so a
+   view-only role can see the team without any write permission. `GET /members` uses it; the
+   catalogue test now pins who holds which member permission (`member:create/update/delete` and
+   `invitation:*` stay admin and owner only). API keys inherit it through the issuer's role cap.
+2. **`GET /evidence/:id`**: the record the provenance drawer shows. Collector id and version,
+   source label and attribution (null when the collector is no longer registered), source URL,
+   job and run id (null when recorded outside a job), content hash, `observedAt` and `collectedAt`
+   separately with null preserved, `recordedAt`, the evidence's strength, and a measured
+   `claimCount`. Claims citing it are split into `stated` and `derived` (strength DERIVED), with
+   `claimsTruncated` when cut. The storage key (`payloadRef`) is not exposed.
+   - Interpretation to confirm: evidence rows carry no `derived` block of their own; the stored
+     payload is the raw upstream response. The platform-computed values are the DERIVED claims
+     that cite the evidence, so `derived` is exactly those, apart from `stated`.
+3. **`GET /evidence/:id/payload`**: the stored bytes, re-hashed on every read like the PDF export
+   (read after commit, via `afterCommit`). A payload that no longer matches is refused with 500
+   `EVIDENCE_PAYLOAD_INTEGRITY_FAILED` and none of its bytes are sent; a payload missing from the
+   store is 404 `EVIDENCE_PAYLOAD_NOT_FOUND`. Served only as `application/octet-stream`, an
+   attachment, `nosniff`, `Content-Security-Policy: default-src 'none'; sandbox`, `no-store`, with
+   the hash in `x-content-hash`: a payload is untrusted third-party content and is never rendered
+   in the app's origin. Audited as `evidence.payload`.
+4. **Person-data gate on both**: evidence from a PERSON-discipline collector (read from the
+   tenant's own registry row, as reports do) is 403 unless the plan includes it and vetting is
+   approved, however old the evidence is. A missing registry row is gated as person data.
+5. **`GET /members/invitations`** (pending, unexpired, newest first; `member:read`): small, so
+   built. New `AuthStore.listPendingInvitations(organizationId, limit)`; the tenant comes from the
+   principal. The enrolment token and its hash are never selected, so the list cannot reveal them.
+   Invitee emails are visible to every role holding `member:read`, as member emails already are.
+6. **API keys are barred from merges, undos and member changes.** One guard
+   (`sessionPrincipalOf`, 403 `SESSION_REQUIRED`) is used by merge, undo, invite, change role and
+   remove, so the record of who decided names the person who did. This corrects 6a as first built:
+   merge and undo accepted a key and attributed the decision to the key's issuer. Tests issue a
+   fully scoped key and assert 403 on each, that nothing was merged, and that a person's merge
+   survives a key's undo attempt. A key can still read members, invitations and evidence.
+
+### Phase 6a follow-up: the person-data gate on every read (2026-10-03)
+
+**Owner's decision:** refuse the read and return a Locked response. Never hide rows or shrink
+counts. A read may return its non-person part only if the response marks what was withheld and
+why; otherwise it is refused whole. The rule is now in CLAUDE.md §9, together with the payload
+serving rule (untyped attachment, `nosniff`, sandbox CSP, re-hash on every read).
+
+- **One probe:** `ExplorationRepository.touchesPersonData`, in `packages/db`. It asks whether
+  anything a read would show rests on evidence from a person-discipline collector, using the
+  tenant's own registry row (no row counts as person). It covers:
+  - the scope's evidence (a case's pins and what they stand on, or a run's evidence);
+  - the evidence behind given claims;
+  - the evidence behind every claim about the given entities, and about relationships touching
+    them. Entity counts span all of an entity's claims, so a count can never be lowered silently.
+- **One gate:** `requirePersonAccess` (`apps/api/src/http/person-gate.ts`). It does nothing for a
+  tenant allowed person data, so the probe is never run for one. Otherwise, if the probe finds
+  person data, it throws `LockedError`: 403, code `MODULE_NOT_IN_PLAN` or `VETTING_NOT_APPROVED`,
+  and a `locked` block on the problem with `module`, `moduleSummary`, `withheld`, `reason`,
+  `plan`, `vettingStatus` and `nextStep`. The detail says nothing was returned. `LockedSchema` is
+  part of `ProblemSchema`, so the generated client types it.
+- **Applied to:**
+  - entity list (scope plus the page's entities);
+  - entity detail (the entity plus the entities its relationships name);
+  - graph (scope plus every returned node);
+  - timeline (the whole scope, since its totals span it);
+  - merge candidates (scope plus both sides of every pair);
+  - case pins: the list probes the whole case; pinning probes the target before anything is
+    written.
+- **Reused:** the evidence routes now use the same gate, and the report gate keeps its codes but
+  throws the same Locked refusal. Partial returns were not used anywhere: every gated read
+  refuses whole.
+- **Tests, release-blocking:**
+  - `apps/api/test/person-gate.test.ts` walks no plan, then vetting pending, approved and
+    suspended, across 14 calls (every gated endpoint, including mixed scopes and an entity with
+    only some person claims). Locked states assert the 403, the code, the `locked` fields, that no
+    result shape is present and that no person value leaks. Approved returns the whole result.
+    Refused pin attempts write nothing.
+  - Clean reads (7 calls) are byte-identical in every state, so the gate never over-refuses.
+  - Neutering the gate makes all 7 tests fail (checked, then restored).
+  - `packages/db/test/exploration.test.ts` covers the probe through each route (evidence, claim,
+    both ends of a relationship, case scope) and confirms another tenant probing these ids gets
+    `false`.
+- **Not gated (no claim or evidence content):** the case list and case read (title and a measured
+  pin count), entity merges (ids and the analyst's reason) and estimates. The Phase 4 run read
+  (job outcomes, evidence ids) predates this rule and was not reviewed here.
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 46 of 46 tasks, fabrication check clean):
+core 20, access 56, config 136, db 260, integrations 122, collectors 482, llm 130, osint-engine 104,
+api 153, web 4, worker 4 (1,471 tests). Migrations 0018 and 0019 are applied to the test database
+by the suite; not yet to the dev database.
