@@ -25,6 +25,7 @@ interface Ids {
   personRun: string;
   mixedRun: string;
   cleanRun: string;
+  notFoundRun: string;
   mixedCase: string;
   cleanCase: string;
   pinCase: string;
@@ -184,6 +185,37 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
         note: null,
       });
     }
+    // A settled run whose only job, a person collector's, found nothing: no
+    // evidence was recorded, and the run is still person data.
+    const notFoundInvestigation = await repos.investigations.create({
+      title: "[not found]",
+      target: "example.com",
+      createdByUserId: userId,
+    });
+    const notFoundRun = await repos.runs.create({
+      investigationId: notFoundInvestigation.id,
+      status: "QUEUED",
+      requestedByUserId: userId,
+    });
+    const notFoundJob = await repos.jobs.create({
+      runId: notFoundRun.id,
+      collectorId: "fixture-person",
+      idempotencyKey: `gate:not-found:${notFoundRun.id}`,
+      status: "QUEUED",
+    });
+    await repos.jobs.transition(notFoundJob.id, {
+      status: "SUCCEEDED",
+      outcome: "NOT_FOUND",
+      outcomeDetail: "[the person source found nothing]",
+      startedAt: new Date("2026-05-01T00:00:00Z"),
+      finishedAt: new Date("2026-05-01T00:00:01Z"),
+    });
+    await repos.runs.transition(notFoundRun.id, {
+      status: "SUCCEEDED",
+      startedAt: new Date("2026-05-01T00:00:00Z"),
+      finishedAt: new Date("2026-05-01T00:00:01Z"),
+    });
+
     // Where pin attempts are aimed, so a pin that succeeds never pollutes the clean case.
     const pinCase = await repos.cases.create({
       title: "[pin attempts]",
@@ -195,6 +227,7 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       personRun: person.runId,
       mixedRun: mixed.runId,
       cleanRun: clean.runId,
+      notFoundRun: notFoundRun.id,
       mixedCase: mixedCase.id,
       cleanCase: cleanCase.id,
       personEntity: personEntity.id,
@@ -268,6 +301,40 @@ const LOCKED_CALLS: Record<string, Call> = {
     () => `/api/v1/cases/${ids.pinCase}/pins`,
     () => ({ target: { type: "entity", id: ids.personEntity } }),
   ],
+  "run read of a person run": ["GET", () => `/api/v1/runs/${ids.personRun}`],
+  "run read of a run whose person job found nothing": [
+    "GET",
+    () => `/api/v1/runs/${ids.notFoundRun}`,
+  ],
+  // Settled, so when allowed the stream ends by itself; refused here at connect.
+  "progress stream of a run whose person job found nothing": [
+    "GET",
+    () => `/api/v1/runs/${ids.notFoundRun}/events`,
+  ],
+  "reports of a person run": ["GET", () => `/api/v1/runs/${ids.personRun}/reports`],
+  "reports of a run whose person job found nothing": [
+    "GET",
+    () => `/api/v1/runs/${ids.notFoundRun}/reports`,
+  ],
+  // No evidence, so nothing person-derived to show; refused anyway, or an empty
+  // answer here and a refusal for a run that found something would tell a
+  // locked tenant what the person collector found.
+  "entities of a run whose person job found nothing": [
+    "GET",
+    () => `/api/v1/entities?runId=${ids.notFoundRun}`,
+  ],
+  "timeline of a run whose person job found nothing": [
+    "GET",
+    () => `/api/v1/timeline?runId=${ids.notFoundRun}`,
+  ],
+  "graph of a run whose person job found nothing": [
+    "GET",
+    () => `/api/v1/graph?runId=${ids.notFoundRun}`,
+  ],
+  "merge candidates of a run whose person job found nothing": [
+    "GET",
+    () => `/api/v1/entities/merge-candidates?runId=${ids.notFoundRun}`,
+  ],
 };
 
 /** Reads that rest on nothing but non-person evidence: never refused, never thinner. */
@@ -282,6 +349,16 @@ const CLEAN_CALLS: Record<string, Call> = {
     () => `/api/v1/entities/merge-candidates?runId=${ids.cleanRun}`,
   ],
   "pins of a clean case": ["GET", () => `/api/v1/cases/${ids.cleanCase}/pins`],
+  "run read of a run with only technical jobs": ["GET", () => `/api/v1/runs/${ids.cleanRun}`],
+  // Its entity has person claims from another run; the run's own jobs are technical.
+  "run read of a run whose entity has person claims elsewhere": [
+    "GET",
+    () => `/api/v1/runs/${ids.mixedRun}`,
+  ],
+  "reports of a run with only technical jobs": [
+    "GET",
+    () => `/api/v1/runs/${ids.cleanRun}/reports`,
+  ],
 };
 
 const run = (call: Call) => browser.request(call[0], call[1](), call[2]?.());
@@ -410,6 +487,14 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     }
     // The refused pin attempts changed nothing.
     expect(await pinAttempts()).toBe(pinsWhenApproved);
+    // An unsettled person run's stream is refused at connect: an ordinary 403, no stream.
+    const stream = await browser.request("GET", `/api/v1/runs/${ids.personRun}/events`);
+    expectLocked("progress stream of an unsettled person run", stream, {
+      code: "VETTING_NOT_APPROVED",
+      vettingStatus: "SUSPENDED",
+      plan: "TECHINT_AND_PERSON",
+    });
+    expect(String(stream.headers["content-type"])).not.toMatch(/event-stream/);
   });
 
   it("suspended: reads that rest on no person data are unchanged, byte for byte", async () => {
@@ -431,5 +516,86 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
       repos.auditLog.recent({ limit: 500 }),
     );
     expect(rows.some((row) => row.action === "graph.read" && row.outcome === "FAILED")).toBe(true);
+  });
+});
+
+/** The events of a closed server-sent event stream, in order. */
+function eventsOf(body: string): { event: string; data: Record<string, unknown> }[] {
+  return body
+    .split("\n\n")
+    .filter((block) => block.startsWith("event: "))
+    .map((block) => {
+      const [eventLine = "", dataLine = ""] = block.split("\n");
+      return {
+        event: eventLine.slice("event: ".length),
+        data: JSON.parse(dataLine.slice("data: ".length)) as Record<string, unknown>,
+      };
+    });
+}
+
+/** `promise`, or a failure after `ms`: a stream that never closes must fail the test, not hang it. */
+async function within<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new TypeError(`${what} did not happen within ${String(ms)} ms`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+describe("the run progress stream re-checks access while open (RELEASE-BLOCKING)", () => {
+  it("closes with a locked event, stating the re-check interval, when vetting is suspended mid-run", async () => {
+    await setEntitlement(tenantId, { plan: "TECHINT_AND_PERSON", vettingStatus: "APPROVED" });
+    const watches = async () =>
+      (
+        await api.db.withTenant(tenantId, ({ repos }) => repos.auditLog.recent({ limit: 500 }))
+      ).filter(
+        (row) =>
+          row.action === "run.watch" && row.targetId === ids.personRun && row.outcome === "ALLOWED",
+      ).length;
+    const before = await watches();
+
+    // The person run is unsettled (QUEUED), so the stream stays open and keeps reading.
+    const stream = browser.request("GET", `/api/v1/runs/${ids.personRun}/events`);
+    // Open once its access check and audit row have committed.
+    await within(
+      (async () => {
+        while ((await watches()) === before) await new Promise((done) => setTimeout(done, 25));
+      })(),
+      10_000,
+      "the stream opening",
+    );
+    await setEntitlement(tenantId, { vettingStatus: "SUSPENDED" });
+    const response = await within(stream, 10_000, "the stream closing after suspension");
+
+    expect(response.status).toBe(200);
+    const events = eventsOf(response.body);
+    // While allowed, it streamed the run and its person job.
+    expect(events[0]?.event).toBe("run");
+    expect(events.some((event) => event.event === "job")).toBe(true);
+    // Then the re-check refused it, and it said so before closing: not an end, not a drop.
+    const last = events.at(-1);
+    expect(last?.event).toBe("locked");
+    expect(events.some((event) => event.event === "end")).toBe(false);
+    expect(last?.data).toMatchObject({
+      code: "VETTING_NOT_APPROVED",
+      // The test API reads progress every 100 ms, and access is re-checked with every read.
+      recheckIntervalMs: 100,
+      locked: {
+        module: "PERSON_INVESTIGATION",
+        reason: "VETTING_NOT_APPROVED",
+        plan: "TECHINT_AND_PERSON",
+        vettingStatus: "SUSPENDED",
+      },
+    });
+    expect(String(last?.data["detail"])).toMatch(/policy decision, not a dropped connection/);
+    expect(Number.isNaN(Date.parse(String(last?.data["checkedAt"])))).toBe(false);
   });
 });

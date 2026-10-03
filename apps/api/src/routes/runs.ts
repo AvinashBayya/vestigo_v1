@@ -10,7 +10,15 @@ import type { FastifyBaseLogger } from "fastify";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { tenantOf } from "../http/access.ts";
-import { HttpError, notFound, ProblemSchema } from "../http/errors.ts";
+import {
+  forbidden,
+  HttpError,
+  LockedSchema,
+  notFound,
+  ProblemSchema,
+  type LockedError,
+} from "../http/errors.ts";
+import { personLockFor, requirePersonAccess } from "../http/person-gate.ts";
 import type { RunServices, Services } from "../services.ts";
 import {
   iso,
@@ -155,6 +163,25 @@ function runView(runs: RunServices, progress: RunProgress): RunViewType {
 }
 
 const QUOTA_UNIT = "UPSTREAM_REQUEST";
+
+/** What a locked run read or progress stream would have shown. */
+const RUN_WITHHELD =
+  "This run's progress: each collector's outcome, its errors and the evidence it recorded.";
+
+/**
+ * Sent when the stream's access re-check finds the run locked, just before the
+ * stream closes. It says the close is a policy decision, not a dropped
+ * connection, and how often access was being re-checked.
+ */
+const LockedEvent = z.object({
+  code: z.string(),
+  detail: z.string(),
+  locked: LockedSchema,
+  /** Access is re-checked with every progress read, so this is the poll interval. */
+  recheckIntervalMs: z.number().int().min(1),
+  /** When the re-check that refused access ran. */
+  checkedAt: z.iso.datetime(),
+});
 /** A progress stream ends after this long even if the run is still going; the client reconnects. */
 const MAX_STREAM_MS = 60 * 60 * 1000;
 const HEARTBEAT_MS = 15_000;
@@ -270,10 +297,13 @@ export const runRoutes =
         },
       },
       async (request) => {
-        const { repos } = tenantOf(request);
+        const context = tenantOf(request);
+        const { repos } = context;
         request.auditTarget = { type: "run", id: request.params.id };
         const progress = await readRunProgress(repos, request.params.id);
         if (progress === null) throw notFound("The run");
+        // A run that used a person collector is person data, whatever its jobs found.
+        await requirePersonAccess(context, { runJobs: progress.id }, RUN_WITHHELD);
         return runView(services().runs, progress);
       },
     );
@@ -286,7 +316,7 @@ export const runRoutes =
           operationId: "watchRun",
           summary: "Stream a run's progress as server-sent events",
           description:
-            "text/event-stream. Events: `run` (the run's state, sent first and on every change), `job` (one job, on every change), `end` (the run is settled; the stream closes). A comment line is sent every 15 s to keep the connection open.",
+            "text/event-stream. Events: `run` (the run's state, sent first and on every change), `job` (one job, on every change), `end` (the run is settled; the stream closes), `timeout` (the stream reached its maximum length; reconnect), `error` (the stream failed), and `locked`. Access to a run that used a person collector is checked when the stream opens (403 with the Locked detail) and re-checked with every progress read, every RUN_EVENTS_POLL_MS milliseconds. If a re-check refuses it, a `locked` event carries the same Locked detail, the re-check interval (`recheckIntervalMs`) and when the check ran, and the stream closes: a policy decision, not a dropped connection. A comment line is sent every 15 s to keep the connection open.",
           tags: ["runs"],
           security: SECURITY,
           params: IdParams,
@@ -298,10 +328,13 @@ export const runRoutes =
         },
       },
       async (request, reply) => {
-        const { repos, principal } = tenantOf(request);
+        const context = tenantOf(request);
+        const { repos, principal } = context;
         request.auditTarget = { type: "run", id: request.params.id };
         const initial = await readRunProgress(repos, request.params.id);
         if (initial === null) throw notFound("The run");
+        // Checked before the stream opens, so a locked run is an ordinary 403.
+        await requirePersonAccess(context, { runJobs: initial.id }, RUN_WITHHELD);
         const all = services();
         const runId = request.params.id;
         const tenantId = principal.tenantId;
@@ -318,7 +351,17 @@ export const runRoutes =
           raw: reply.raw,
           runs: all.runs,
           initial,
-          read: () => all.db.withTenant(tenantId, (ctx) => readRunProgress(ctx.repos, runId)),
+          // Access is re-checked in the same transaction as every progress read.
+          read: () =>
+            all.db.withTenant(tenantId, async (ctx): Promise<StreamRead> => {
+              const tenant = await ctx.repos.tenants.current();
+              if (tenant === null) {
+                throw forbidden("TENANT_NOT_PROVISIONED", "This tenant has not been provisioned.");
+              }
+              const lock = await personLockFor(tenant, ctx.reads, { runJobs: runId }, RUN_WITHHELD);
+              if (lock !== null) return { kind: "locked", lock };
+              return { kind: "progress", progress: await readRunProgress(ctx.repos, runId) };
+            }),
           log: request.log,
         });
       },
@@ -376,15 +419,28 @@ export const runRoutes =
     return Promise.resolve();
   };
 
-/** Writes a run's progress as server-sent events until it is settled or the client leaves. */
+/** One read of the stream: the run's progress (null once it is gone), or the Locked refusal. */
+type StreamRead =
+  | { readonly kind: "progress"; readonly progress: RunProgress | null }
+  | { readonly kind: "locked"; readonly lock: LockedError };
+
+/**
+ * Writes a run's progress as server-sent events until it is settled, the
+ * client leaves, or a re-check of access refuses it.
+ */
 function streamRun(options: {
   readonly raw: ServerResponse;
   readonly runs: RunServices;
   readonly initial: RunProgress;
-  readonly read: () => Promise<RunProgress | null>;
+  readonly read: () => Promise<StreamRead>;
   readonly log: FastifyBaseLogger;
 }): void {
   const { raw, runs } = options;
+  /**
+   * How often access is re-checked: with every progress read, so exactly the
+   * poll interval (RUN_EVENTS_POLL_MS). Stated in the `locked` event.
+   */
+  const accessRecheckMs = runs.eventsPollMs;
   // An object, so the check after each wait sees a disconnect that happened during it.
   const stream = { open: true };
   const isOpen = () => stream.open;
@@ -431,7 +487,22 @@ function streamRun(options: {
     while (isOpen()) {
       await new Promise((resolve) => setTimeout(resolve, runs.eventsPollMs));
       if (!isOpen()) return;
-      const progress = await options.read();
+      const read = await options.read();
+      if (read.kind === "locked") {
+        send(
+          "locked",
+          LockedEvent.parse({
+            code: read.lock.code,
+            detail: `Access to this run was re-checked and is now refused, so the stream is closed: a policy decision, not a dropped connection. Access is re-checked with every progress read, every ${String(accessRecheckMs)} ms.`,
+            locked: read.lock.locked,
+            recheckIntervalMs: accessRecheckMs,
+            checkedAt: new Date().toISOString(),
+          }),
+        );
+        close();
+        return;
+      }
+      const progress = read.progress;
       if (progress === null) {
         send("end", { status: null });
         close();

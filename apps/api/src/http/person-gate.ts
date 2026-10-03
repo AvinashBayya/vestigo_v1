@@ -1,5 +1,5 @@
 import { decideDisciplineAccess } from "@repo/access";
-import type { PersonProbe, Tenant } from "@repo/db";
+import type { PersonProbe, Reads, Tenant } from "@repo/db";
 import type { RequestTenant } from "./access.ts";
 import { LockedError, type Locked } from "./errors.ts";
 
@@ -44,20 +44,40 @@ export function lockedError(
 }
 
 /**
+ * The gate's one decision, for code that holds a tenant transaction but no
+ * request (the run progress stream re-checks with it on every read): the
+ * Locked refusal when the tenant may not access person data and anything the
+ * probe covers rests on it, otherwise null. A tenant that may access person
+ * data passes without the probe being run.
+ */
+export async function personLockFor(
+  tenant: Pick<Tenant, "plan" | "vettingStatus">,
+  reads: Reads,
+  probe: PersonProbe,
+  withheld: string,
+): Promise<LockedError | null> {
+  const decision = decideDisciplineAccess(tenant, "PERSON");
+  if (decision.allowed) return null;
+  if (!(await reads.exploration.touchesPersonData(probe))) return null;
+  return lockedError(tenant, decision.reason, withheld);
+}
+
+/**
  * CLAUDE.md §9. Refuses the whole read, with the Locked detail, when the
  * tenant may not access person data and anything the read would return rests
  * on it. A read is never thinned: no rows dropped, no count lowered, no part
  * returned as if it were the whole. A tenant that may access person data, or
- * a read that touches none, passes untouched (and the probe is not run for
- * the former).
+ * a read that touches none, passes untouched.
+ *
+ * This file is the only place in the apps that decides person access for a
+ * read; packages/config/scripts/person-gate-guard.test.ts fails if a copy
+ * appears anywhere else.
  */
 export async function requirePersonAccess(
   context: RequestTenant,
   probe: PersonProbe,
   withheld: string,
 ): Promise<void> {
-  const decision = decideDisciplineAccess(context.tenant, "PERSON");
-  if (decision.allowed) return;
-  if (!(await context.reads.exploration.touchesPersonData(probe))) return;
-  throw lockedError(context.tenant, decision.reason, withheld);
+  const lock = await personLockFor(context.tenant, context.reads, probe, withheld);
+  if (lock !== null) throw lock;
 }

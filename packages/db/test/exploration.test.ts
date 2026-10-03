@@ -453,3 +453,60 @@ describe("the person-data probe", () => {
     expect(foreign).toEqual([false, false, false]);
   });
 });
+
+describe("the person-data probe on a run's jobs", () => {
+  it("finds a person job whatever its outcome, through runJobs or a run scope, only in its own tenant", async () => {
+    const result = await read(tenant, async ({ repos, reads }) => {
+      await repos.collectorsRegistry.register({
+        collectorId: "probe-person-run",
+        sourceLabel: "[Person run fixture]",
+        discipline: "PERSON",
+        collectionMode: "LOCAL_ANALYSIS",
+        dataLicence: "[not applicable: test fixture]",
+        commercialUse: "UNVERIFIED",
+        enabled: true,
+        disabledReason: null,
+      });
+      const run = await repos.runs.create({
+        investigationId: tenant.investigationId,
+        status: "QUEUED",
+        requestedByUserId: tenant.userId,
+      });
+      const job = await repos.jobs.create({
+        runId: run.id,
+        collectorId: "probe-person-run",
+        idempotencyKey: `probe-person-run:${run.id}`,
+        status: "QUEUED",
+      });
+      // Found nothing: no evidence is recorded, and the run is still person data.
+      await repos.jobs.transition(job.id, {
+        status: "SUCCEEDED",
+        outcome: "NOT_FOUND",
+        outcomeDetail: "[nothing found]",
+      });
+      return {
+        runId: run.id,
+        byRunJobs: await reads.exploration.touchesPersonData({ runJobs: run.id }),
+        byRunScope: await reads.exploration.touchesPersonData({ scope: { runId: run.id } }),
+        // The fixture's run has only a technical collector's job.
+        cleanRunJobs: await reads.exploration.touchesPersonData({ runJobs: tenant.runId }),
+        cleanRunScope: await reads.exploration.touchesPersonData({
+          scope: { runId: tenant.runId },
+        }),
+      };
+    });
+    expect(result).toMatchObject({
+      byRunJobs: true,
+      byRunScope: true,
+      cleanRunJobs: false,
+      cleanRunScope: false,
+    });
+    const foreign = await read(other, ({ reads }) =>
+      Promise.all([
+        reads.exploration.touchesPersonData({ runJobs: result.runId }),
+        reads.exploration.touchesPersonData({ scope: { runId: result.runId } }),
+      ]),
+    );
+    expect(foreign).toEqual([false, false]);
+  });
+});

@@ -1658,4 +1658,85 @@ serving rule (untyped attachment, `nosniff`, sandbox CSP, re-hash on every read)
 **Checkpoint** (`pnpm turbo lint typecheck test --force`, 46 of 46 tasks, fabrication check clean):
 core 20, access 56, config 136, db 260, integrations 122, collectors 482, llm 130, osint-engine 104,
 api 153, web 4, worker 4 (1,471 tests). Migrations 0018 and 0019 are applied to the test database
-by the suite; not yet to the dev database.
+by the suite, and to the dev database on 2026-10-03 (`pnpm migrate` as `app_owner`: 18 applied
+before, 20 after; the dev and test migration lists are identical by timestamp and hash).
+
+### Phase 6a follow-up: the run read, the progress stream, and one gate (2026-10-03)
+
+**The review** (owner asked for it before any change). The run read (`GET /runs/:id`) and its
+progress stream (`GET /runs/:id/events`) showed, for every job of a person collector, its outcome
+(FOUND or NOT_FOUND), the NOT_FOUND detail, the last error, attempts, timestamps and the
+evidence ids. The ids are UUIDv7, so each also carries when the evidence was recorded. One person
+collector is registered today (`contact.phone`, local structural analysis), so the concrete
+exposure was small, but the inconsistency was structural:
+- the same run's report, evidence and timeline were Locked while its run read was not;
+- the stream checked access once, at connect, then read for up to an hour;
+- the report gate was still a local copy, contradicting the CLAUDE.md rule written the turn before.
+
+**Owner's decisions:** gate the run read with the shared helper; refuse it whole rather than hide
+person jobs; a missing registry row counts as person (fail closed); leave ungated the run list
+(status comes from job statuses: FOUND and NOT_FOUND are both SUCCEEDED, so it shows collector
+health, not findings), run start (no jobs exist yet), replay (returns the run id only; the worker
+re-checks admission) and usage (aggregates). The plan's `input` is the analyst's own target, not
+collected data.
+
+**Built:**
+1. **Job-based probe** (`packages/db`): `PersonProbe.runJobs`, true when any job of the run is a
+   person collector's, whatever its outcome; a job with no registry row counts as person.
+   - Judgement call, flagged: a run scope (`scope: { runId }`) now covers the run's jobs too.
+     Covering evidence alone, entities, graph, timeline and merge candidates for a run would be
+     refused when a person collector found something and answered (empty) when it found nothing,
+     so the refusal would tell a locked tenant what the collector found. Case scopes are
+     unchanged.
+2. **Run read and stream.** `GET /runs/:id` refuses whole (Locked). The stream is checked at
+   connect, as an ordinary 403 with no stream. It is then re-checked in the same transaction as
+   every progress read, so the re-check interval is exactly `RUN_EVENTS_POLL_MS` (default
+   1,000 ms). On a refusal it sends a `locked` event and closes. The event carries `code`, the
+   Locked block, `recheckIntervalMs`, `checkedAt` and a detail saying the close is a policy
+   decision, not a dropped connection; it is validated by Zod on the way out.
+   - Judgement call, flagged: the interval is the poll interval, not a separate setting. A check
+     on every read is the tightest possible and costs one primary-key read; the probe runs only
+     for a tenant without person access. A separate, longer setting would only widen the window.
+3. **One gate.** The report gate's local copy is gone; report create, list, read and export call
+   `requirePersonAccess` with `runJobs`, with the same codes as before. `personLockFor` is the
+   gate's non-throwing form, for code holding a transaction but no request (the stream).
+4. **Guard** (`packages/config/scripts/person-gate-guard.ts` and `.test.ts`, release-blocking).
+   It scans every workspace, as the fabrication check does, for the gate's pieces outside their
+   homes:
+   - a module or discipline access decision;
+   - the discipline-to-module lookup;
+   - a discipline compared with the person discipline, in code, SQL or a query builder;
+   - the person module compared by name.
+
+   Homes: the shared gate, `packages/access/src/`, the collection runtime's dispatch admission,
+   and the probe. Run against the committed `reports.ts`, it flags both pieces of the old copy
+   (lines 323 and 326). It also asserts each home exists and that the gate and probe are where it
+   says. A grep cannot catch every disguise (a switch on a discipline reads like a switch on an
+   entity kind); the lifecycle tests pin the behaviour.
+
+**Tests:**
+- `person-gate.test.ts`: the four-state lifecycle now covers the run read (a person run, and a
+  run whose only person job was NOT_FOUND and recorded no evidence), the stream refused at
+  connect (settled and unsettled runs), reports of both, and run-scoped entities, timeline, graph
+  and candidates of the NOT_FOUND run.
+- Clean run reads and a clean run's reports stay byte-identical in every state, including the
+  mixed run whose entity has person claims from another run: its own jobs are technical.
+- New, release-blocking: a stream opened while approved closes with `locked` (code,
+  `recheckIntervalMs: 100`, Locked block, policy detail) when vetting is suspended mid-run, and
+  never sends `end`.
+- `packages/db/test/exploration.test.ts`: the job route (NOT_FOUND only; `runJobs` and run scope;
+  a clean run; another tenant gets `false`).
+- Each protection was checked by breaking it:
+  - without the run-read gate, 6 tests fail;
+  - without the stream re-check, the mid-run test fails (no close within 10 s);
+  - with a run scope covering evidence only, 6 tests fail.
+
+**Noted, not changed:** the stream re-checks person access on every read, but not membership or
+permissions. A member removed, or a role lowered, while a stream is open keeps receiving that
+run's progress until it settles or the stream reaches its one-hour limit. The same re-check point
+could check both; that needs a decision.
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 46 of 46 tasks, fabrication check clean):
+core 20, access 56, config 161, db 261, integrations 122, collectors 482, llm 130, osint-engine 104,
+api 154, web 4, worker 4 (1,498 tests).
+

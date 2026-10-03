@@ -1,4 +1,3 @@
-import { decideDisciplineAccess } from "@repo/access";
 import {
   CLAIM_STRENGTHS,
   COVERAGE_STATES,
@@ -11,14 +10,14 @@ import {
   TARGET_TYPES,
   type ReportDocument,
 } from "@repo/core";
-import type { Report, ReportPdf, Repositories } from "@repo/db";
+import type { Report, ReportPdf } from "@repo/db";
 import { REPORT_EXPORT_FORMAT_NAMES, REPORT_EXPORT_FORMATS } from "@repo/integrations";
 import { readRunProgress, usageSummary } from "@repo/osint-engine";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { afterCommit, tenantOf, type RequestTenant } from "../http/access.ts";
+import { afterCommit, tenantOf } from "../http/access.ts";
 import { HttpError, notFound, ProblemSchema } from "../http/errors.ts";
-import { lockedError } from "../http/person-gate.ts";
+import { requirePersonAccess } from "../http/person-gate.ts";
 import type { Services } from "../services.ts";
 import {
   iso,
@@ -303,32 +302,6 @@ function reportView(report: Report, pdf: ReportPdf | null): z.infer<typeof Repor
   };
 }
 
-/**
- * A run that used a PERSON collector holds person data: generating or reading
- * a report from it needs the same plan and vetting as running one did, decided
- * by @repo/access exactly as the planner and the worker decide it. The
- * discipline is read from the tenant's own registry row, which every job
- * references, so a collector no longer in the platform registry is still gated.
- */
-async function requirePersonAccessFor(
-  repos: Repositories,
-  tenant: RequestTenant["tenant"],
-  runId: string,
-): Promise<void> {
-  const jobs = await repos.jobs.listForRun(runId, { limit: 1000 });
-  let person = false;
-  for (const collectorId of new Set(jobs.map((job) => job.collectorId))) {
-    const registration = await repos.collectorsRegistry.find(collectorId);
-    // A job's collector always has a row (a foreign key); a missing one is gated as person data.
-    if (registration === null || registration.discipline === "PERSON") person = true;
-  }
-  if (!person) return;
-  const decision = decideDisciplineAccess(tenant, "PERSON");
-  if (!decision.allowed) {
-    throw lockedError(tenant, decision.reason, "This run's report, its claims and its exports.");
-  }
-}
-
 const CONFLICT = { 409: ProblemSchema } as const;
 
 /** How long a client waits before asking again for a PDF that is still rendering. */
@@ -357,11 +330,17 @@ export const reportRoutes =
         },
       },
       async (request, reply) => {
-        const { repos, principal, tenant } = tenantOf(request);
+        const context = tenantOf(request);
+        const { repos, principal } = context;
         const runs = services().runs;
         const progress = await readRunProgress(repos, request.params.id);
         if (progress === null) throw notFound("The run");
-        await requirePersonAccessFor(repos, tenant, progress.id);
+        // A run that used a person collector is person data, whatever its jobs found.
+        await requirePersonAccess(
+          context,
+          { runJobs: progress.id },
+          "A report on this run, generated from what its collectors found.",
+        );
         if (!progress.settled) {
           throw new HttpError(
             409,
@@ -417,9 +396,14 @@ export const reportRoutes =
         },
       },
       async (request) => {
-        const { repos, tenant } = tenantOf(request);
+        const context = tenantOf(request);
+        const { repos } = context;
         if ((await repos.runs.findById(request.params.id)) === null) throw notFound("The run");
-        await requirePersonAccessFor(repos, tenant, request.params.id);
+        await requirePersonAccess(
+          context,
+          { runJobs: request.params.id },
+          "This run's reports and their status.",
+        );
         const rows = await repos.reports.listForRun(request.params.id, {
           limit: request.query.limit + 1,
         });
@@ -446,11 +430,16 @@ export const reportRoutes =
         },
       },
       async (request) => {
-        const { repos, tenant } = tenantOf(request);
+        const context = tenantOf(request);
+        const { repos } = context;
         request.auditTarget = { type: "report", id: request.params.id };
         const report = await repos.reports.findById(request.params.id);
         if (report === null) throw notFound("The report");
-        await requirePersonAccessFor(repos, tenant, report.runId);
+        await requirePersonAccess(
+          context,
+          { runJobs: report.runId },
+          "This report: its findings, claims, coverage and limitations.",
+        );
         return reportView(report, await repos.reportPdfs.findByReportId(report.id));
       },
     );
@@ -482,11 +471,16 @@ export const reportRoutes =
         },
       },
       async (request, reply) => {
-        const { repos, tenant, tenantId } = tenantOf(request);
+        const context = tenantOf(request);
+        const { repos, tenantId } = context;
         request.auditTarget = { type: "report", id: request.params.id };
         const report = await repos.reports.findById(request.params.id);
         if (report === null) throw notFound("The report");
-        await requirePersonAccessFor(repos, tenant, report.runId);
+        await requirePersonAccess(
+          context,
+          { runJobs: report.runId },
+          "This report's exports: PDF, JSON, CSV and Maltego.",
+        );
         if (report.status !== "SUCCEEDED" || report.document === null) {
           throw new HttpError(
             409,

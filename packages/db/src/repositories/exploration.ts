@@ -78,16 +78,23 @@ function scopeEntities(tenantId: string, scope: ReadScope): SQL {
 
 /**
  * What a read is about to return, for asking whether any of it rests on
- * person-discipline evidence. Everything a read shows is covered: the scope's
- * own evidence, the evidence behind given claims, and the evidence behind
- * every claim about the given entities or about relationships touching them
- * (counts span all of an entity's claims, not just the scope's share).
+ * person data. Everything a read shows is covered: the scope's own evidence,
+ * the evidence behind given claims, and the evidence behind every claim about
+ * the given entities or about relationships touching them (counts span all of
+ * an entity's claims, not just the scope's share).
  */
 export interface PersonProbe {
+  /** A run scope also covers the run's jobs, as `runJobs` does. */
   readonly scope?: ReadScope;
   readonly evidenceIds?: readonly string[];
   readonly claimIds?: readonly string[];
   readonly entityIds?: readonly string[];
+  /**
+   * A run whose jobs a read shows or rests on. The run is person data when any
+   * of its jobs is a person-discipline collector's, whatever the job's outcome:
+   * a NOT_FOUND records no evidence, and is still a finding about the target.
+   */
+  readonly runJobs?: string;
 }
 
 const uuidList = (ids: readonly string[]): SQL => {
@@ -212,10 +219,16 @@ export interface MergeCandidate {
  */
 export class ExplorationRepository extends TenantRepository {
   /**
-   * Whether anything the probe covers rests on evidence from a
-   * person-discipline collector. The discipline is read from the tenant's own
-   * registry row, which every piece of evidence references; evidence with no
-   * row is treated as person data. Reads only: the caller decides what to do.
+   * Whether anything the probe covers rests on person data: evidence from a
+   * person-discipline collector, or, for a run, any job of one. The discipline
+   * is read from the tenant's own registry row, which every job and every piece
+   * of evidence references; one with no row is treated as person data (fail
+   * closed). Reads only: the caller decides what to do.
+   *
+   * A run scope covers the run's jobs as well as its evidence. Were it to cover
+   * evidence alone, a read of the run would be refused when a person collector
+   * found something and answered when it found nothing, so the refusal itself
+   * would tell a locked tenant what the collector found.
    */
   async touchesPersonData(probe: PersonProbe): Promise<boolean> {
     const tenantId = this.tenantId;
@@ -243,18 +256,33 @@ export class ExplorationRepository extends TenantRepository {
             and (r.source_entity_id in (${list}) or r.target_entity_id in (${list}))`,
       );
     }
-    if (parts.length === 0) return false;
-    const covered = sql.join(parts, sql` union `);
-    return this.run(async (tx) => {
-      const result = await tx.execute<{ held: boolean }>(sql`
-        select exists (
+    const checks: SQL[] = [];
+    if (parts.length > 0) {
+      checks.push(sql`exists (
           select 1 from ${evidence} ev
           left join ${collectorsRegistry} cr
             on cr.tenant_id = ev.tenant_id and cr.collector_id = ev.collector_id
           where ev.tenant_id = ${tenantId}
-            and ev.id in (${covered})
-            and (cr.collector_id is null or cr.discipline = 'PERSON')
-        ) as held`);
+            and ev.id in (${sql.join(parts, sql` union `)})
+            and (cr.collector_id is null or cr.discipline = 'PERSON'))`);
+    }
+    const runId =
+      probe.runJobs ??
+      (probe.scope !== undefined && "runId" in probe.scope ? probe.scope.runId : undefined);
+    if (runId !== undefined) {
+      checks.push(sql`exists (
+          select 1 from ${jobs} j
+          left join ${collectorsRegistry} cr
+            on cr.tenant_id = j.tenant_id and cr.collector_id = j.collector_id
+          where j.tenant_id = ${tenantId}
+            and j.run_id = ${requireUuid(runId)}
+            and (cr.collector_id is null or cr.discipline = 'PERSON'))`);
+    }
+    if (checks.length === 0) return false;
+    return this.run(async (tx) => {
+      const result = await tx.execute<{ held: boolean }>(
+        sql`select (${sql.join(checks, sql` or `)}) as held`,
+      );
       const row = firstRow(result.rows);
       return row !== null && row.held;
     });
