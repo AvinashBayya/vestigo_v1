@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from "@repo/config";
+import { PRODUCT_NAME } from "@repo/config/product";
 import { Panel } from "@repo/ui";
 import type { ReactNode } from "react";
 

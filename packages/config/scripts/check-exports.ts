@@ -22,6 +22,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "resolveLlmConfiguration",
     "LlmConfiguration",
   ],
+  // The browser's entry point: nothing that needs Node (apps/web imports it).
+  "packages/config/src/product.ts": ["PRODUCT_NAME"],
   "packages/core/src/index.ts": [
     "AppError",
     "NotImplementedError",

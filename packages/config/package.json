@@ -9,6 +9,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./product": {
+      "types": "./dist/product.d.ts",
+      "default": "./dist/product.js"
+    },
     "./eslint": "./eslint/index.js",
     "./prettier": "./prettier/index.js",
     "./tsconfig/base.json": "./tsconfig/base.json",

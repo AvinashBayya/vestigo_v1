@@ -1,4 +1,4 @@
-import { PRODUCT_NAME } from "@repo/config";
+import { PRODUCT_NAME } from "@repo/config/product";
 import { Button, Panel } from "@repo/ui";
 import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";

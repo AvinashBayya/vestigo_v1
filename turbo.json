@@ -29,7 +29,8 @@
     "dev": {
       "dependsOn": ["^build", "generate"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["AUTH_SECRET", "VAULT_MASTER_KEY"]
     },
     "@repo/config#fabrication-check": {
       "dependsOn": ["@repo/web#generate"],
