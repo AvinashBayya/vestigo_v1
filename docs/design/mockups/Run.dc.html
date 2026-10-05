@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Investigation run in progress</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: #F5F5F1; }
+a { color: #22355B; } a:hover { color: #16233C; }
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F5F1; color: #15171C; overflow: hidden;">
+
+  <header style="height: 56px; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E3E2DB; background: #FFFFFF; display: flex; align-items: center; justify-content: space-between; padding: 0 22px;">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <a href="Main.dc.html" style="display: inline-flex; align-items: center; gap: 7px; font-size: 13px; text-decoration: none; font-weight: 600;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 6l-6 6 6 6"></path></svg>
+        Search
+      </a>
+      <span style="width: 1px; height: 20px; background: #E3E2DB;"></span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500;">[TARGET]</span>
+      <span style="font-size: 11px; font-weight: 600; color: #22355B; background: #E8ECF4; border-radius: 999px; padding: 3px 10px;">Detected: domain</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #D6D5CC; background: #FFFFFF; font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; font-weight: 600; color: #3C3E45; cursor: pointer;">Pause run</button>
+      <a href="Workspace.dc.html" style="height: 34px; padding: 0 16px; border-radius: 8px; background: #22355B; color: #FFFFFF; font-size: 13px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center;">Open workspace</a>
+    </div>
+  </header>
+
+  <div style="flex-grow: 1; box-sizing: border-box; padding: 26px 40px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 24px; overflow: hidden;">
+
+    <section style="grid-column: span 7; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+
+      <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 18px 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <span style="font-size: 15px; font-weight: 600;">Full investigation</span>
+            <span style="font-size: 12px; color: #5E6066;">18 of 21 collectors finished · elapsed 4m 12s · estimate 8m</span>
+          </div>
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 500;">42</span>
+            <span style="font-size: 11px; color: #5E6066;">credits committed</span>
+          </div>
+        </div>
+        <div style="height: 6px; border-radius: 3px; background: #ECEBE4; margin-top: 14px; display: flex; overflow: hidden;">
+          <div style="width: 71%; background: #22355B;"></div>
+          <div style="width: 10%; background: #8A5A12;"></div>
+        </div>
+      </div>
+
+      <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; flex-grow: 1; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="padding: 15px 20px; border-bottom: 1px solid #EFEEE8; display: flex; align-items: center; justify-content: space-between;">
+          <h2 style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: #5E6066;">Collectors</h2>
+          <div style="display: flex; gap: 7px; font-size: 11px;">
+            <span style="font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 999px; padding: 3px 9px;">14 ran</span>
+            <span style="font-weight: 600; color: #22355B; background: #E8ECF4; border-radius: 999px; padding: 3px 9px;">3 running</span>
+            <span style="font-weight: 600; color: #7A2E1E; background: #F6E6E1; border-radius: 999px; padding: 3px 9px;">1 failed</span>
+            <span style="font-weight: 600; color: #4A4C52; background: #ECEBE4; border-radius: 999px; padding: 3px 9px;">3 skipped</span>
+          </div>
+        </div>
+
+        <div style="padding: 6px 8px; overflow: hidden;">
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #1F6F4A; flex-shrink: 0;"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 13px; font-weight: 600;">crt.sh certificates</span>
+              <span style="font-size: 11.5px; color: #5E6066;">TECHINT · 148 evidence items · 2.1s</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 999px; padding: 3px 9px;">Ran</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px; background: #F8F8F5;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #22355B; flex-shrink: 0;"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-size: 13px; font-weight: 600;">SpiderFoot scan</span>
+              <div style="height: 4px; width: 210px; border-radius: 2px; background: #E3E2DB;">
+                <div style="width: 62%; height: 4px; border-radius: 2px; background: #22355B;"></div>
+              </div>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #22355B; background: #E8ECF4; border-radius: 999px; padding: 3px 9px;">Running</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #1F6F4A; flex-shrink: 0;"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 13px; font-weight: 600;">theHarvester</span>
+              <span style="font-size: 11.5px; color: #5E6066;">TECHINT · 37 evidence items · 41s</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 999px; padding: 3px 9px;">Ran</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px; border: 1px solid #F0DCD5; background: #FDF7F5;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #A33F27; flex-shrink: 0;"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 13px; font-weight: 600;">Shodan host lookup</span>
+              <span style="font-size: 11.5px; color: #7A2E1E;">Rate limited by provider · retrying in 40s · no partial results used</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #7A2E1E; background: #F6E6E1; border-radius: 999px; padding: 3px 9px;">Failed</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #8A5A12; flex-shrink: 0;"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 13px; font-weight: 600;">Breach exposure (HIBP)</span>
+              <span style="font-size: 11.5px; color: #5E6066;">No tenant credential configured</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #8A5A12; background: #F6EEDD; border-radius: 999px; padding: 3px 9px;">Needs key</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #8E9096; flex-shrink: 0;"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 13px; font-weight: 600;">Port and service scan</span>
+              <span style="font-size: 11.5px; color: #5E6066;">Active collection — needs recorded scope authorisation</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #4A4C52; background: #ECEBE4; border-radius: 999px; padding: 3px 9px;">Skipped</span>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: 8px;">
+            <span style="width: 9px; height: 9px; border-radius: 50%; background: #1F6F4A; flex-shrink: 0;"></span>
+            <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 13px; font-weight: 600;">Dork search (Brave)</span>
+              <span style="font-size: 11.5px; color: #5E6066;">MEDIAINT · 19 of 24 operators supported · 5 offered as browser links</span>
+            </div>
+            <span style="font-size: 11px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 999px; padding: 3px 9px;">Partial</span>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <section style="grid-column: span 5; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+      <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+        <h2 style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: #5E6066;">Arriving now</h2>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; font-weight: 600;">Subdomains</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">64</span>
+            </div>
+            <span style="font-size: 11.5px; color: #5E6066;">from crt.sh, theHarvester, SpiderFoot</span>
+          </div>
+          <div style="height: 1px; background: #EFEEE8;"></div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; font-weight: 600;">Email addresses</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">12</span>
+            </div>
+            <span style="font-size: 11.5px; color: #5E6066;">from theHarvester</span>
+          </div>
+          <div style="height: 1px; background: #EFEEE8;"></div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; font-weight: 600;">Open services</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #5E6066;">—</span>
+            </div>
+            <span style="font-size: 11.5px; color: #7A2E1E;">Not measured — Shodan lookup failed</span>
+          </div>
+          <div style="height: 1px; background: #EFEEE8;"></div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 13px; font-weight: 600;">News mentions</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">8</span>
+            </div>
+            <span style="font-size: 11.5px; color: #5E6066;">from indexed RSS and GDELT</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
+        <h2 style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: #5E6066;">Run settings</h2>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 13px;">Collection mode</span>
+          <span style="font-size: 12px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 999px; padding: 3px 10px;">Passive only</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 13px;">Person data modules</span>
+          <span style="font-size: 12px; font-weight: 600; color: #4A4C52; background: #ECEBE4; border-radius: 999px; padding: 3px 10px;">Off for this plan</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 13px;">Model residency</span>
+          <span style="font-size: 12px; font-weight: 600; color: #22355B; background: #E8ECF4; border-radius: 999px; padding: 3px 10px;">In-region, open weights</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 13px;">Audit log</span>
+          <span style="font-size: 12px; color: #5E6066;">Recording to case [CASE ID]</span>
+        </div>
+      </div>
+
+      <div style="background: #FFFFFF; border: 1px dashed #D6D5CC; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 13px;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#5E6066" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8h.01"></path><path d="M11 12h1v4h1"></path></svg>
+        <p style="margin: 0; font-size: 12.5px; color: #3C3E45; line-height: 1.5;">Results stream into the case as each collector finishes. Nothing is inferred to fill a gap: a collector that fails is shown as failed, never as an empty result.</p>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

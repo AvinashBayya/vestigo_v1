@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Case workspace — media forensics</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: #F5F5F1; }
+a { color: #22355B; } a:hover { color: #16233C; }
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F5F1; color: #15171C; overflow: hidden;">
+
+  <header style="height: 54px; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E3E2DB; background: #FFFFFF; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a href="Main.dc.html" style="font-size: 13px; text-decoration: none; font-weight: 600;">Cases</a>
+      <span style="width: 1px; height: 18px; background: #E3E2DB;"></span>
+      <span style="font-size: 14px; font-weight: 600;">[CASE NAME]</span>
+    </div>
+    <button type="button" style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #D6D5CC; background: #FFFFFF; font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; font-weight: 600; color: #3C3E45; cursor: pointer;">Upload media</button>
+  </header>
+
+  <div style="height: 44px; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E3E2DB; background: #FFFFFF; display: flex; align-items: stretch; padding: 0 16px; gap: 2px;">
+    <a href="Overview.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Overview</a>
+    <a href="Entities.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Entities</a>
+    <a href="Workspace.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Graph</a>
+    <a href="Timeline.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Timeline</a>
+    <a href="Evidence.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Evidence</a>
+    <a href="Media.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; font-weight: 600; color: #22355B; text-decoration: none; box-shadow: inset 0 -2px 0 #22355B;">Media</a>
+    <a href="Map.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Map</a>
+    <a href="Report.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Report</a>
+  </div>
+
+  <div style="flex-grow: 1; box-sizing: border-box; padding: 22px 32px; display: flex; gap: 20px; overflow: hidden;">
+
+    <section style="width: 300px; flex-shrink: 0; background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Media in case</h2>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+        <div style="border: 2px solid #22355B; border-radius: 9px; overflow: hidden;">
+          <div style="height: 82px; background: #ECEBE4; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #5E6066;">[IMAGE 1]</div>
+          <div style="padding: 6px 8px; font-size: 11px; color: #3C3E45;">image · JPEG</div>
+        </div>
+        <div style="border: 1px solid #E3E2DB; border-radius: 9px; overflow: hidden;">
+          <div style="height: 82px; background: #ECEBE4; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #5E6066;">[IMAGE 2]</div>
+          <div style="padding: 6px 8px; font-size: 11px; color: #3C3E45;">image · PNG</div>
+        </div>
+        <div style="border: 1px solid #E3E2DB; border-radius: 9px; overflow: hidden;">
+          <div style="height: 82px; background: #ECEBE4; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #5E6066;">[VIDEO]</div>
+          <div style="padding: 6px 8px; font-size: 11px; color: #3C3E45;">video · MP4</div>
+        </div>
+        <div style="border: 1px solid #E3E2DB; border-radius: 9px; overflow: hidden;">
+          <div style="height: 82px; background: #ECEBE4; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #5E6066;">[DOCUMENT]</div>
+          <div style="padding: 6px 8px; font-size: 11px; color: #3C3E45;">document · PDF</div>
+        </div>
+      </div>
+      <div style="margin-top: auto; border: 1px dashed #D6D5CC; border-radius: 9px; padding: 12px; font-size: 11.5px; color: #5E6066; line-height: 1.5;">Drop files here. They are hashed on arrival and stored by content hash, so the same file is never duplicated.</div>
+    </section>
+
+    <section style="flex-grow: 1; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+
+      <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 18px 20px; display: flex; gap: 20px;">
+        <div style="width: 260px; height: 190px; flex-shrink: 0; background: #ECEBE4; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #5E6066;">[SELECTED IMAGE]</div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500;">[FILENAME]</span>
+              <span style="font-size: 11.5px; color: #5E6066;">SHA-256 5c2b…f01 · 2.4 MB · 3024 × 4032</span>
+            </div>
+            <button type="button" style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #D6D5CC; background: #FFFFFF; font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; font-weight: 600; color: #3C3E45; cursor: pointer;">Pin to case</button>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px;">
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 11px; color: #5E6066;">Capture time (EXIF)</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;">[DATE TIME]</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 11px; color: #5E6066;">Device</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;">[MAKE MODEL]</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 11px; color: #5E6066;">GPS</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: #5E6066;" title="Not measured — no GPS tags present in this file">—</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 11px; color: #5E6066;">Software</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px;">[EDITOR NAME]</span>
+            </div>
+          </div>
+          <span style="font-size: 11.5px; color: #5E6066; line-height: 1.5;">A missing GPS tag means the file carries none. It does not mean the photo was taken at 0°, 0°.</span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; flex-grow: 1;">
+
+        <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+          <h3 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Provenance (C2PA)</h3>
+          <span style="font-size: 11px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 6px; padding: 3px 8px; align-self: flex-start;">Manifest valid</span>
+          <div style="display: flex; flex-direction: column; gap: 7px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; gap: 8px;"><span style="color: #5E6066;">Issuer</span><span>[SIGNER]</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 8px;"><span style="color: #5E6066;">Signed</span><span style="font-family: 'IBM Plex Mono', monospace;">[DATE]</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 8px;"><span style="color: #5E6066;">Edits recorded</span><span>2</span></div>
+          </div>
+          <span style="font-size: 11.5px; color: #5E6066; line-height: 1.5;">A valid manifest proves the chain was signed, not that the content is true.</span>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+          <h3 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Near-duplicates</h3>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 46px; height: 46px; border-radius: 7px; background: #ECEBE4;"></div>
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 12.5px; font-weight: 600;">[MATCH 1]</span>
+              <span style="font-size: 11.5px; color: #5E6066;">pHash distance 4 · seen [DATE]</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="width: 46px; height: 46px; border-radius: 7px; background: #ECEBE4;"></div>
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span style="font-size: 12.5px; font-weight: 600;">[MATCH 2]</span>
+              <span style="font-size: 11.5px; color: #5E6066;">pHash distance 9 · seen [DATE]</span>
+            </div>
+          </div>
+          <span style="font-size: 11.5px; color: #5E6066; line-height: 1.5;">Visual similarity only. It is not a claim that the images share an origin.</span>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px;">
+          <h3 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Model analysis</h3>
+          <span style="font-size: 11px; font-weight: 600; color: #4A4C52; background: #ECEBE4; border-radius: 6px; padding: 3px 8px; align-self: flex-start;">Unavailable</span>
+          <p style="margin: 0; font-size: 12px; line-height: 1.55; color: #3C3E45;">Object detection, scene description and face analysis need the GPU worker, which is not attached to this workspace.</p>
+          <div style="display: flex; flex-direction: column; gap: 7px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; gap: 8px;"><span style="color: #5E6066;">Objects</span><span style="color: #5E6066;">—</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 8px;"><span style="color: #5E6066;">Text (OCR)</span><span style="color: #17543A; font-weight: 600;">Ran on CPU</span></div>
+            <div style="display: flex; justify-content: space-between; gap: 8px;"><span style="color: #5E6066;">Faces</span><span style="color: #5E6066;">—</span></div>
+          </div>
+          <a href="#enable-gpu" style="font-size: 12.5px; font-weight: 600;">Enable media analysis</a>
+        </div>
+
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

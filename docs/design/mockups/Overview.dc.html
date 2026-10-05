@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Case workspace — overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: #F5F5F1; }
+a { color: #22355B; } a:hover { color: #16233C; }
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F5F1; color: #15171C; overflow: hidden;">
+
+  <header style="height: 54px; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E3E2DB; background: #FFFFFF; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a href="Main.dc.html" style="font-size: 13px; text-decoration: none; font-weight: 600;">Cases</a>
+      <span style="width: 1px; height: 18px; background: #E3E2DB;"></span>
+      <span style="font-size: 14px; font-weight: 600;">[CASE NAME]</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <button type="button" style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #D6D5CC; background: #FFFFFF; font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; font-weight: 600; color: #3C3E45; cursor: pointer;">Export</button>
+      <a href="Report.dc.html" style="height: 32px; padding: 0 15px; border-radius: 8px; background: #22355B; color: #FFFFFF; font-size: 12.5px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center;">Generate report</a>
+    </div>
+  </header>
+
+  <div style="height: 44px; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E3E2DB; background: #FFFFFF; display: flex; align-items: stretch; padding: 0 16px; gap: 2px;">
+    <a href="Overview.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; font-weight: 600; color: #22355B; text-decoration: none; box-shadow: inset 0 -2px 0 #22355B;">Overview</a>
+    <a href="Entities.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Entities</a>
+    <a href="Workspace.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Graph</a>
+    <a href="Timeline.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Timeline</a>
+    <a href="Evidence.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Evidence</a>
+    <a href="Media.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Media</a>
+    <a href="Map.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Map</a>
+    <a href="Report.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Report</a>
+  </div>
+
+  <div style="flex-grow: 1; box-sizing: border-box; padding: 24px 40px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: min-content; gap: 20px; overflow: hidden;">
+
+    <section style="grid-column: span 8; background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 20px;">
+      <h2 style="margin: 0 0 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Case summary</h2>
+      <p style="margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #24262C;">[SUMMARY PARAGRAPH — written by the model from pinned evidence only. Each sentence carries a citation marker linking to the evidence item it rests on, and the paragraph is regenerated when new evidence is pinned.]</p>
+      <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
+        <span style="font-size: 11px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 6px; padding: 3px 8px;">14 OBSERVED</span>
+        <span style="font-size: 11px; font-weight: 600; color: #1E4577; background: #E8ECF4; border-radius: 6px; padding: 3px 8px;">9 REPORTED</span>
+        <span style="font-size: 11px; font-weight: 600; color: #0F4F4F; background: #E7EFEF; border-radius: 6px; padding: 3px 8px;">4 CORRELATED</span>
+        <span style="font-size: 11px; font-weight: 600; color: #6B4510; background: #F6EEDD; border-radius: 6px; padding: 3px 8px;">3 INFERRED</span>
+        <span style="font-size: 11px; font-weight: 600; color: #4A4C52; background: #ECEBE4; border-radius: 6px; padding: 3px 8px;">1 HYPOTHESIS</span>
+      </div>
+    </section>
+
+    <section style="grid-column: span 4; background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Coverage</h2>
+      <div style="display: flex; flex-direction: column; gap: 11px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 13px;">TECHINT</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">148</span></div>
+        <div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 13px;">SOCMINT</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">36</span></div>
+        <div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 13px;">MEDIAINT</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">27</span></div>
+        <div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 13px;">GEOINT</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">9</span></div>
+        <div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 13px; color: #7A2E1E;">Host exposure</span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #5E6066;" title="Not measured — Shodan lookup failed">—</span></div>
+      </div>
+    </section>
+
+    <section style="grid-column: span 4; background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 13px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Key entities</h2>
+      <a href="Workspace.dc.html" style="display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: inherit;">
+        <span style="font-size: 13.5px; font-weight: 600;">[ORG NAME]</span>
+        <span style="font-size: 11px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 6px; padding: 2px 7px;">OBSERVED</span>
+      </a>
+      <div style="height: 1px; background: #EFEEE8;"></div>
+      <a href="Workspace.dc.html" style="display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: inherit;">
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">[DOMAIN]</span>
+        <span style="font-size: 11px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 6px; padding: 2px 7px;">OBSERVED</span>
+      </a>
+      <div style="height: 1px; background: #EFEEE8;"></div>
+      <a href="Workspace.dc.html" style="display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: inherit;">
+        <span style="font-size: 13.5px;">[PERSON]</span>
+        <span style="font-size: 11px; font-weight: 600; color: #523579; background: #EFE9F6; border-radius: 6px; padding: 2px 7px;">DERIVED</span>
+      </a>
+      <div style="height: 1px; background: #EFEEE8;"></div>
+      <a href="Workspace.dc.html" style="display: flex; align-items: center; justify-content: space-between; text-decoration: none; color: inherit;">
+        <span style="font-size: 13.5px;">[ACCOUNT]</span>
+        <span style="font-size: 11px; font-weight: 600; color: #6B4510; background: #F6EEDD; border-radius: 6px; padding: 2px 7px;">INFERRED</span>
+      </a>
+    </section>
+
+    <section style="grid-column: span 4; background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 13px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Contradictions</h2>
+      <div style="border: 1px solid #F0E4CB; background: #FDFAF3; border-radius: 9px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 12.5px; font-weight: 600; color: #6B4510;">Registration country disagrees</span>
+        <span style="font-size: 12px; color: #3C3E45; line-height: 1.5;">RDAP reports [COUNTRY A]; a company filing reports [COUNTRY B].</span>
+        <a href="Evidence.dc.html" style="font-size: 12px; font-weight: 600;">Compare sources</a>
+      </div>
+      <div style="border: 1px solid #F0E4CB; background: #FDFAF3; border-radius: 9px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <span style="font-size: 12.5px; font-weight: 600; color: #6B4510;">Two candidate people share a name</span>
+        <span style="font-size: 12px; color: #3C3E45; line-height: 1.5;">Not merged. Merging requires a second independent identifier.</span>
+        <a href="Entities.dc.html" style="font-size: 12px; font-weight: 600;">Review candidates</a>
+      </div>
+    </section>
+
+    <section style="grid-column: span 4; background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 13px;">
+      <h2 style="margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Gaps to close</h2>
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #A33F27; margin-top: 6px; flex-shrink: 0;"></span>
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-size: 12.5px; font-weight: 600;">Host exposure never collected</span>
+          <span style="font-size: 12px; color: #5E6066;">Shodan lookup failed in the last run.</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #8A5A12; margin-top: 6px; flex-shrink: 0;"></span>
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-size: 12.5px; font-weight: 600;">Breach data unavailable</span>
+          <span style="font-size: 12px; color: #5E6066;">No credential configured for this tenant.</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: flex-start; gap: 10px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: #8E9096; margin-top: 6px; flex-shrink: 0;"></span>
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-size: 12.5px; font-weight: 600;">Person modules off</span>
+          <span style="font-size: 12px; color: #5E6066;">Not included in this plan.</span>
+        </div>
+      </div>
+      <button type="button" style="margin-top: 2px; height: 36px; border-radius: 8px; border: 1px solid #D6D5CC; background: #FFFFFF; font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; font-weight: 600; color: #3C3E45; cursor: pointer;">Re-run failed collectors</button>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

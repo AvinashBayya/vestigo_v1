@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Case workspace — timeline</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: #F5F5F1; }
+a { color: #22355B; } a:hover { color: #16233C; }
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F5F1; color: #15171C; overflow: hidden;">
+
+  <header style="height: 54px; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E3E2DB; background: #FFFFFF; display: flex; align-items: center; justify-content: space-between; padding: 0 20px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <a href="Main.dc.html" style="font-size: 13px; text-decoration: none; font-weight: 600;">Cases</a>
+      <span style="width: 1px; height: 18px; background: #E3E2DB;"></span>
+      <span style="font-size: 14px; font-weight: 600;">[CASE NAME]</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 9px;">
+      <button type="button" style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #D6D5CC; background: #FFFFFF; font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; color: #3C3E45; cursor: pointer;">Observed time</button>
+      <button type="button" style="height: 32px; padding: 0 13px; border-radius: 8px; border: 1px solid #D6D5CC; background: #FFFFFF; font-family: 'IBM Plex Sans', sans-serif; font-size: 12.5px; color: #3C3E45; cursor: pointer;">Export</button>
+    </div>
+  </header>
+
+  <div style="height: 44px; flex-shrink: 0; box-sizing: border-box; border-bottom: 1px solid #E3E2DB; background: #FFFFFF; display: flex; align-items: stretch; padding: 0 16px; gap: 2px;">
+    <a href="Overview.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Overview</a>
+    <a href="Entities.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Entities</a>
+    <a href="Workspace.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Graph</a>
+    <a href="Timeline.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; font-weight: 600; color: #22355B; text-decoration: none; box-shadow: inset 0 -2px 0 #22355B;">Timeline</a>
+    <a href="Evidence.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Evidence</a>
+    <a href="Media.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Media</a>
+    <a href="Map.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Map</a>
+    <a href="Report.dc.html" style="display: flex; align-items: center; padding: 0 13px; font-size: 13px; color: #5E6066; text-decoration: none;">Report</a>
+  </div>
+
+  <div style="flex-grow: 1; box-sizing: border-box; padding: 22px 40px; display: flex; flex-direction: column; gap: 18px; overflow: hidden;">
+
+    <div style="background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 22px;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">Range</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">[START DATE] — [END DATE]</span>
+      </div>
+      <div style="flex-grow: 1; height: 44px; position: relative; border-radius: 8px; background: #FCFCFA; border: 1px solid #EFEEE8; overflow: hidden;">
+        <div style="position: absolute; left: 6%; bottom: 8px; width: 3px; height: 14px; background: #1F6F4A;"></div>
+        <div style="position: absolute; left: 13%; bottom: 8px; width: 3px; height: 22px; background: #1F6F4A;"></div>
+        <div style="position: absolute; left: 21%; bottom: 8px; width: 3px; height: 10px; background: #2B5C9E;"></div>
+        <div style="position: absolute; left: 30%; bottom: 8px; width: 3px; height: 26px; background: #1F6F4A;"></div>
+        <div style="position: absolute; left: 38%; bottom: 8px; width: 3px; height: 16px; background: #2B5C9E;"></div>
+        <div style="position: absolute; left: 47%; bottom: 8px; width: 3px; height: 12px; background: #8A5A12;"></div>
+        <div style="position: absolute; left: 55%; bottom: 8px; width: 3px; height: 28px; background: #1F6F4A;"></div>
+        <div style="position: absolute; left: 64%; bottom: 8px; width: 3px; height: 18px; background: #6A4A9E;"></div>
+        <div style="position: absolute; left: 73%; bottom: 8px; width: 3px; height: 20px; background: #2B5C9E;"></div>
+        <div style="position: absolute; left: 82%; bottom: 8px; width: 3px; height: 24px; background: #1F6F4A;"></div>
+        <div style="position: absolute; left: 90%; bottom: 8px; width: 3px; height: 14px; background: #2B5C9E;"></div>
+        <div style="position: absolute; left: 44%; top: 0; width: 28%; height: 100%; background: rgba(34,53,91,0.08); border-left: 2px solid #22355B; border-right: 2px solid #22355B;"></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+        <span style="font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: #5E6066;">In selection</span>
+        <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px;">18 events</span>
+      </div>
+    </div>
+
+    <div style="flex-grow: 1; background: #FFFFFF; border: 1px solid #E3E2DB; border-radius: 12px; padding: 20px 24px; display: flex; flex-direction: column; gap: 0; overflow: hidden;">
+
+      <div style="display: flex; gap: 18px;">
+        <div style="width: 132px; flex-shrink: 0; text-align: right; padding-top: 1px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 500;">[DATE]</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #5E6066;">[TIME] UTC</div>
+        </div>
+        <div style="width: 2px; background: #EFEEE8; position: relative; flex-shrink: 0;">
+          <span style="position: absolute; left: -5px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 3px solid #1F6F4A;"></span>
+        </div>
+        <div style="flex-grow: 1; padding-bottom: 22px; display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <span style="font-size: 13.5px; font-weight: 600;">Certificate issued for [DOMAIN]</span>
+            <span style="font-size: 10.5px; font-weight: 600; color: #17543A; background: #E7F1EA; border-radius: 5px; padding: 2px 6px;">OBSERVED</span>
+          </div>
+          <span style="font-size: 12.5px; color: #3C3E45;">Subject alternative names include three previously unseen hostnames.</span>
+          <span style="font-size: 11.5px; color: #5E6066;">crt.sh · collected [DATE]</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 18px;">
+        <div style="width: 132px; flex-shrink: 0; text-align: right; padding-top: 1px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 500;">[DATE]</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #5E6066;">[TIME] UTC</div>
+        </div>
+        <div style="width: 2px; background: #EFEEE8; position: relative; flex-shrink: 0;">
+          <span style="position: absolute; left: -5px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 3px solid #2B5C9E;"></span>
+        </div>
+        <div style="flex-grow: 1; padding-bottom: 22px; display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <span style="font-size: 13.5px; font-weight: 600;">Press article names [ORG NAME]</span>
+            <span style="font-size: 10.5px; font-weight: 600; color: #1E4577; background: #E8ECF4; border-radius: 5px; padding: 2px 6px;">REPORTED</span>
+          </div>
+          <span style="font-size: 12.5px; color: #3C3E45;">Publication date precedes our collection by [N] days.</span>
+          <span style="font-size: 11.5px; color: #5E6066;">[PUBLICATION] · collected [DATE]</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 18px;">
+        <div style="width: 132px; flex-shrink: 0; text-align: right; padding-top: 1px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 500;">[DATE]</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #5E6066;">approximate</div>
+        </div>
+        <div style="width: 2px; background: #EFEEE8; position: relative; flex-shrink: 0;">
+          <span style="position: absolute; left: -5px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 3px dashed #8A5A12;"></span>
+        </div>
+        <div style="flex-grow: 1; padding-bottom: 22px; display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <span style="font-size: 13.5px; font-weight: 600;">Account likely created</span>
+            <span style="font-size: 10.5px; font-weight: 600; color: #6B4510; background: #F6EEDD; border-radius: 5px; padding: 2px 6px;">INFERRED</span>
+          </div>
+          <span style="font-size: 12.5px; color: #3C3E45;">Estimated from the earliest post, not from a stated creation date. Shown with a dashed marker because the time is bounded, not known.</span>
+          <span style="font-size: 11.5px; color: #6B4510;">Derived · 2 supporting items</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 18px;">
+        <div style="width: 132px; flex-shrink: 0; text-align: right; padding-top: 1px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; font-weight: 500;">[DATE]</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; color: #5E6066;">[TIME] UTC</div>
+        </div>
+        <div style="width: 2px; background: #EFEEE8; position: relative; flex-shrink: 0;">
+          <span style="position: absolute; left: -5px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: #FFFFFF; border: 3px solid #6A4A9E;"></span>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 5px;">
+          <div style="display: flex; align-items: center; gap: 9px;">
+            <span style="font-size: 13.5px; font-weight: 600;">Person linked to organisation in a filing</span>
+            <span style="font-size: 10.5px; font-weight: 600; color: #523579; background: #EFE9F6; border-radius: 5px; padding: 2px 6px;">DERIVED</span>
+          </div>
+          <span style="font-size: 12.5px; color: #3C3E45;">Extracted from a registry document; the document itself is pinned as evidence.</span>
+          <span style="font-size: 11.5px; color: #5E6066;">[REGISTRY] · collected [DATE]</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Dashboard-dark.dc.html": {
+      "h": 900,
+      "title": "Dashboard — dark theme",
+      "w": 1440,
+      "x": 52,
+      "y": 1021
+    },
+    "Entities.dc.html": {
+      "h": 900,
+      "title": "Entities tab",
+      "w": 1440,
+      "x": 1520,
+      "y": 2041
+    },
+    "Evidence.dc.html": {
+      "h": 900,
+      "title": "Evidence grid",
+      "w": 1440,
+      "x": 0,
+      "y": 3061
+    },
+    "Main.dc.html": {
+      "h": 900,
+      "title": "Dashboard — unified search",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "Map.dc.html": {
+      "h": 900,
+      "title": "Map tab",
+      "w": 1440,
+      "x": 3040,
+      "y": 3061
+    },
+    "Media.dc.html": {
+      "h": 900,
+      "title": "Media forensics tab",
+      "w": 1440,
+      "x": 1520,
+      "y": 3061
+    },
+    "Overview.dc.html": {
+      "h": 900,
+      "title": "Overview tab",
+      "w": 1440,
+      "x": 0,
+      "y": 2041
+    },
+    "Report.dc.html": {
+      "h": 900,
+      "title": "Report editor",
+      "w": 1440,
+      "x": -55,
+      "y": 4098
+    },
+    "ReportPDF.dc.html": {
+      "h": 1123,
+      "title": "Printed report page (A4)",
+      "w": 794,
+      "x": 1520,
+      "y": 4081
+    },
+    "Run.dc.html": {
+      "h": 900,
+      "title": "Run in progress",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "Timeline.dc.html": {
+      "h": 900,
+      "title": "Timeline tab",
+      "w": 1440,
+      "x": 3040,
+      "y": 2041
+    },
+    "Workspace.dc.html": {
+      "h": 900,
+      "title": "Case workspace — graph",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "SignIn.dc.html": {
+      "h": 900,
+      "title": "Sign in and MFA challenge",
+      "w": 1440,
+      "x": 0,
+      "y": 5504
+    },
+    "MfaEnrol.dc.html": {
+      "h": 900,
+      "title": "MFA enrolment from an invitation",
+      "w": 1440,
+      "x": 1520,
+      "y": 5504
+    },
+    "RunLive.dc.html": {
+      "h": 900,
+      "title": "Run view — the real collector set",
+      "w": 1440,
+      "x": 3040,
+      "y": 5504
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-23T00:00:00Z",
+    "v": 1
+  },
+  "designSystems": [
+    {
+      "artifact": "https://claude.ai/artifact/5aoHSLvKvkJrL5rt9eEYCZ",
+      "copiedAt": "2026-09-23T00:00:00Z",
+      "namespace": "osint-platform",
+      "title": "OSINT Platform Design System",
+      "version": null
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "note-honest": {
+      "fill": "orange",
+      "text": "Honest-failure UI: every collector shows ran / running / partial / failed / needs-key / skipped, and a value that was never measured renders as an em dash, never as 0.",
+      "w": 560,
+      "x": 1520,
+      "y": 960
+    },
+    "note-pin": {
+      "fill": "blue",
+      "text": "Pin-to-case sits on every result, including direct tool panels. That is the fix for the disconnect between tool panels and cases in the current build.",
+      "w": 560,
+      "x": 3040,
+      "y": 960
+    },
+    "row1": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Light theme — the three-step flow: search, run, workspace",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "row2": {
+      "kind": "title1",
+      "maxW": 1440,
+      "text": "Dark theme",
+      "w": 240,
+      "x": 0,
+      "y": 720
+    },
+    "row3": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Workspace tabs — overview, entities, timeline",
+      "w": 240,
+      "x": 0,
+      "y": 1741
+    },
+    "row4": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Evidence, media forensics, map",
+      "w": 240,
+      "x": 0,
+      "y": 2761
+    },
+    "row5": {
+      "kind": "title1",
+      "maxW": 2314,
+      "text": "Report — on screen and on paper",
+      "w": 240,
+      "x": 0,
+      "y": 3781
+    },
+    "row6": {
+      "kind": "title1",
+      "maxW": 4480,
+      "text": "Phase 6 screens — auth, and the run view against the collectors actually built",
+      "w": 240,
+      "x": 0,
+      "y": 5204
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Run.dc.html",
+    "Workspace.dc.html",
+    "Dashboard-dark.dc.html",
+    "Overview.dc.html",
+    "Entities.dc.html",
+    "Timeline.dc.html",
+    "Evidence.dc.html",
+    "Media.dc.html",
+    "Map.dc.html",
+    "Report.dc.html",
+    "ReportPDF.dc.html",
+    "SignIn.dc.html",
+    "MfaEnrol.dc.html",
+    "RunLive.dc.html"
+  ],
+  "pages": [],
+  "title": "OSINT Platform — Dashboard & Workspace Mockups"
+}

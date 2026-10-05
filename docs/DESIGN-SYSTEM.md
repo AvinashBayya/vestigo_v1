@@ -2,6 +2,8 @@
 
 The design language for Vestigo. Build every screen from these tokens and rules. If a screen needs something not defined here, add it here first rather than inventing it in a component.
 
+The screens themselves are drawn in the reference designs: [design/README.md](design/README.md). They take their layout and wording from there, and every value from this document.
+
 One goal governs everything: **a reader must be able to tell, at a glance, how strongly a claim is supported and whether a value was actually measured.** A design that makes weak evidence look strong is a defect, not a style choice.
 
 ---

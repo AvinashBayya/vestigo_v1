@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05, awaiting the owner's look; step 4 not started. See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigning with the screen designs** (docs/design/) before step 4. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -2105,15 +2105,48 @@ early close as finished, and showing "0 credits" in place of the em dash, each f
 20, access 56, config 180, db 261, integrations 122, collectors 482, llm 130, osint-engine 104,
 api 180, ui 7, web 40, worker 4 (1,586 tests).
 
-### Handover for step 4 (a fresh session)
+### Realignment with the screen designs (2026-10-05)
 
-- **Read first:** the step 3 record, `apps/web/src/screens/Run.tsx`, `src/run/progress.ts`, and
-  the evidence, claims and pins routes from Phase 6a (`GET /api/v1/evidence/{id}`, the payload
-  download, case pins).
-- **Step 4:** results for a run: evidence and claims with strength labels as words, the
-  provenance drawer from any value (collector and version, run id, `observedAt` and
-  `collectedAt` apart, content hash, source URL, payload link), and pin-to-case on every result.
-  The run view's "Found n evidence records" is the natural way in.
-- **Open question for the owner:** per-run cost metering (see the step 3 judgement calls).
-- **Keep:** the fetch stub runs before the generated client is imported (`vi.hoisted`); every
-  call goes through `unwrap(...)`; the em dash is `Unmeasured`; statuses are `StatusChip`.
+**What happened.** The owner had designed 15 screens in claude.ai (canvas of 2026-10-03), but
+only the design system's tokens reached the repo. Steps 1 to 3 were therefore laid out from the
+written rules alone, and look nothing like the designs: no side navigation, no hero search, no
+two-column run view. The owner asked why. Claude Code never had the designs and never asked
+whether screen designs existed.
+
+**R0 (done).** The designs are now in the repo: `docs/design/README.md` and
+`docs/design/mockups/`.
+- **Contents:** 15 sources, screenshots, the canvas index and the tokens.
+- **Token check:** the tokens equal DESIGN-SYSTEM.md exactly.
+- **The README sets the rules:**
+  - Layout and wording come from the mockup; values come from the tokens.
+  - Data comes only from the API.
+  - Unbuilt features are hidden.
+  - False copy is corrected, with a list of every correction.
+  - A screen-by-screen audit against the API.
+- **Linked from:** BUILD-PHASES.md Phase 6 and DESIGN-SYSTEM.md.
+
+**Owner's decisions:**
+- Screens plus a small API exposure first, then a side-by-side review.
+- Unbuilt features hidden until built.
+- False copy corrected in the app only.
+
+**Next, in order:**
+- **R1. App shell** to Main.dc.html: side navigation (only what exists), the tenant's
+  vetting chip from `/me`, an account menu, and a light/dark toggle.
+- **R2. Sign-in, MFA challenge and enrolment** to SignIn and MfaEnrol, with corrected copy.
+- **R3. Dashboard** to Main.dc.html: hero search, the estimate inline, recent cases and
+  collector health.
+- **R4. Run view** to RunLive.dc.html: the two columns, summary chips, rich rows, and arriving
+  now, cost and settings.
+- **R5.** `GET /api/v1/collectors` and registry fields on run jobs and exclusions, in
+  `apps/api` only.
+- **Then step 4:** results to Evidence.dc.html, run-scoped.
+
+**Gaps found by the audit, each needing its own decision:**
+- **Cases and runs are not linked.** This blocks the workspace, overview and case reports.
+- **No claims or evidence list endpoint.**
+- **No correlation, inference or contradictions.**
+- **No per-run cost or claim counts.**
+- **Media, map, monitors and credits** are not built.
+- **In production a domain target would run nothing.** 8 of 10 collectors are licence-UNVERIFIED
+  and refused unless `COLLECTORS_ALLOW_UNVERIFIED=true`.

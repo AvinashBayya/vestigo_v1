@@ -161,6 +161,7 @@ CHECKPOINT: a report generates from a real case with every claim cited, the limi
 
 ```
 Read CLAUDE.md and docs/DESIGN-SYSTEM.md (tokens and rules from the design system artifact).
+Read docs/design/README.md: the screen designs (mockups and screenshots), what each can show today, and the copy corrections.
 
 Build the web application. The API client is generated from the OpenAPI spec — never hand-written, and never call an endpoint the spec does not describe.
 
