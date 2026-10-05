@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, awaiting the owner's look; steps 2 to 4 not started. See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05, awaiting the owner's look; step 4 not started. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -1839,7 +1839,7 @@ Four steps, each stopped for the owner to look at: (1) auth, (2) search dashboar
   referenced. `apps/web/src/stream-types.test.ts` asserts the generated types at type level, so
   the web build fails if an event stops being documented (checked by breaking it).
 
-### Step 1: auth (done; awaiting the owner's look)
+### Step 1: auth (done; looked at by the owner 2026-10-05)
 
 **Decisions taken with the owner (2026-10-03):**
 1. **Product session routes** instead of exposing the identity provider. Its own sign-in and
@@ -1965,16 +1965,155 @@ leaving a tenant, renaming a tenant, change-password, and the session list and r
 clean): core 20, access 56, config 180, db 261, integrations 122, collectors 482, llm 130,
 osint-engine 104, api 180, ui 5, web 17, worker 4 (1,561 tests).
 
-### Handover for step 2 (a fresh session)
+### Fix after step 1: the page was blank in a browser (2026-10-05, commit 6c99779)
 
-- **Read first:** this record, the design-system additions above, `packages/ui/src` and
-  `apps/web/src/{api,session,router}.ts`.
-- **Step 2:** the search dashboard. One input; `POST /api/v1/estimates` gives the detected type,
-  alternates, collectors with credentials needs, exclusions with reasons, and
-  `estimatedCredits: null` with its reason, to show as an em dash with that reason, never a
-  number. Then `POST /api/v1/investigations` and `POST /api/v1/investigations/{id}/runs` to start.
-- **Still needed:** an em-dash-with-tooltip component (Radix Tooltip from radix-ui; already
-  installed) and a status chip. Both go in `packages/ui`.
+The screens imported `PRODUCT_NAME` from `@repo/config`'s main entry, which also carries Node-only
+helpers (`node:path`, `node:fs`). Every test passed under Node; in a browser the page was blank.
+`@repo/config/product` is now the browser's entry point (pinned by check-exports), and
+`apps/web/scripts/browser-bundle.test.ts` builds the app as the browser gets it and fails on any
+import of a Node built-in (checked by restoring the old import: it fails naming both).
+
+Also found while running it locally: `.env` copied from `.env.example` leaves `AUTH_SECRET` and
+`VAULT_MASTER_KEY` empty, so the API refuses to start (`CONFIG_INVALID`), and Docker Desktop must
+be running for Postgres and Redis. Both are setup, not defects.
+
+### Step 2: search dashboard (done; looked at by the owner 2026-10-05)
+
+**What it does.** One input on the signed-in home screen. "Check target" calls
+`POST /api/v1/estimates` and shows, in panels:
+- **Target:** the normalised input in mono; the detected type, or a choice between detection's
+  answer and its alternates ("Treat it as", the detected one marked). Choosing another type
+  plans again with `targetType`. A candidate type the input is not valid for shows its reason.
+- **Sources that would run:** label, the type each runs as, its key needs as stated by the
+  registry ("Needs no key", "Uses a key if your organisation has set one; runs without it",
+  "Needs a key. Without one it will not run"), and its cost.
+- **Sources that would not run:** a §3 status chip with its word, the API's message and the
+  reason code. Sources that do not take this kind of target at all are counted apart in a
+  collapsed list, not mixed in with refusals.
+- **Estimated cost of this run:** while no collector declares a cost (every estimate today), an
+  em dash with the API's reason in its tooltip and accessible name, and the reason in plain text
+  beside it. A cost the API does give shows as a number ("0 credits" is a measured zero).
+- **Start run:** `POST /api/v1/investigations`, then `POST /api/v1/investigations/{id}/runs`
+  with the chosen type. The queued run's status and id are shown; live progress is step 3.
+
+**States.** Empty (before a check: what checking does, that nothing runs until started);
+loading (skeletons in the panels' shape); stale (the text changed after the check: a notice, and
+Start is disabled until checked again); failed (the reason and code; for a failed start after
+the investigation was opened, a retry starts the run in it rather than opening another); no
+source can run (Start disabled, with why); Locked (a 403 carrying a `locked` block, rendered from
+the API's own wording, any screen).
+
+**Components.** `packages/ui`: `Unmeasured` (the em dash, Radix Tooltip; a real button so the
+reason is reachable by keyboard) and `StatusChip` (the seven §3 statuses, always as words).
+`apps/web`: `LockedNotice` (ProblemNotice renders it for any refusal carrying `locked`), and
+`src/search/plan.ts` for the mapping of exclusion reasons to §3 statuses.
+
+**Judgement calls (flagged to the owner):**
+- The investigation is titled with its target. There is one input, and the API requires a
+  title. Renaming is a later screen.
+- Exclusion reason to status: `LICENCE_BLOCKED`, `UNVERIFIED_SOURCE_NOT_ALLOWED` and
+  `NOT_IMPLEMENTED` are Held; `MODULE_NOT_IN_PLAN`, `VETTING_NOT_APPROVED` and
+  `SCOPE_AUTHORISATION_REQUIRED` are Skipped; `TARGET_TYPE_NOT_ACCEPTED` has no status (listed
+  apart); anything else is an admission failure, shown as Failed with the API's message.
+- No Locked panel for person collectors the plan leaves out: the estimate carries no `locked`
+  block, and the page does not write its own next-step copy. They show as Skipped with the API's
+  reason. Adding a `locked` block to the estimate response would be an API change; not made.
+- The would-run rows have no status chip: nothing has run, and "Needs key" (§3) means no
+  credential is configured, which the estimate does not know.
+
+**Tests.** `src/search.test.tsx` (8): the empty state, the full plan (types, key needs, chips as
+words, no number for an unestimated cost, the total's reason in sight), a measured zero, choosing
+an alternate type through to the run's request, a failed start retried without a second
+investigation, the stale plan, no runnable source, a plain refusal and the Locked state.
+`packages/ui` (2 more): the em dash's name and tooltip, every status as words.
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean): core
+20, access 56, config 180, db 261, integrations 122, collectors 482, llm 130, osint-engine 104,
+api 180, ui 7, web 26, worker 4 (1,572 tests).
+
+### Before step 3: runs could not progress locally, and a cost message promised too much (2026-10-05)
+
+The owner asked why the site felt half-baked after step 2. Two real causes, both fixed:
+- **No worker under `pnpm dev`.** `apps/worker` had no `dev` script, so nothing consumed the
+  queues and every run stayed QUEUED. It now has one (`node --watch`, like the API), and the
+  README no longer claims the worker exits NOT_IMPLEMENTED (`startWorker` has been complete since
+  Phase 4). Checked live: the owner's queued run moved to RUNNING, and dns, rdap and commoncrawl
+  succeeded. crt.sh answered UNAVAILABLE and is retrying with backoff.
+- **The estimate's cost reasons.** The run total reused the per-collector reason ("for this
+  collector"), and both said "the cost will be shown after the run", which nothing does: no run
+  records a cost. The total now has its own reason, and neither promises a later cost.
+  `test/exploration-api.test.ts` pins both texts.
+
+### Step 3: run view (done; awaiting the owner's look)
+
+**What it does.** "Start run" on the dashboard goes straight to `/runs/$runId`, which follows
+`GET /api/v1/runs/{id}/events` through the generated client (`parseAs: "stream"`) and shows:
+- **Run:** the target, the run status in words, queued, started and finished times (in mono,
+  with the exact instant in `dateTime`), and "every source has finished; results still being
+  merged" while finished but not settled.
+- **Sources: n of m finished:** each job with its §3 chip and, in words, what it found ("Found 2
+  evidence records", "Found nothing: …") or why not (the error and its code, the retry state:
+  next attempt at, or gave up after n attempts and kept in the dead-letter queue). Found nothing
+  and failed are different words, chips and reasons.
+- **Not run:** the plan's exclusions with chips. The plan records collector ids only, so ids
+  are shown in mono.
+- **Cost:** estimated and actual, each an em dash with its reason. A run records neither (see
+  the judgement calls below).
+
+**The connection.** Connecting is bounded by the API timeout. Reading is bounded by a stall
+timeout of 45 s, three missed keep-alives. Every event is checked at the boundary: its name,
+JSON data, and the fields the page reads. Anything else is `STREAM_PROTOCOL`, never shown as
+progress. Outcomes:
+- `end`: the final state; the stream is closed, and no reconnect is offered.
+- `timeout`: reconnects at once.
+- `error`, an early close, a stall or malformed data: "Live updates stopped" with the reason
+  and code, what is shown is marked "as of" the last update, and Reconnect is offered.
+- `locked`: `LockedNotice` when person data is the reason; otherwise the API's detail and code.
+  The stream closes and no reconnect is offered.
+- A refused connection (403 Locked, 404) shows as any refusal does. An `end` with no status
+  says the run no longer exists.
+
+**Design system (added to §3 first):** **Queued** (planned, waiting for a worker or its next
+attempt) and **Cancelled**, both on `claim-hypothesis-*`; `StatusChip` has both. No new tokens.
+
+**Status mapping** (`src/run/progress.ts`, `jobStatus`, read the way the run report's
+`coverageFromJob` reads a job): SUCCEEDED → Ran; FAILED → Needs key, Skipped (REFUSED) or Failed
+by outcome; DEAD_LETTERED → Failed; CANCELLED, RUNNING, QUEUED as named.
+
+**Other changes.** `AppShell` holds the signed-in header and footer, now shared by home and run;
+the product name links home. The dashboard's "Run started" notice is gone: starting navigates.
+
+**Judgement calls (flagged to the owner):**
+- **Cost shown twice (§9) is two em dashes.** No run records its estimate or what it cost.
+  Metering counts upstream requests per tenant per day and month (`/api/v1/usage`), not per
+  run. A real actual cost needs per-run metering in `packages/db` and the engine, a backend
+  change not made here.
+- **Stream data checks are partial.** The web app has no runtime schema for the API's types,
+  so it checks the fields it reads (Zod) and relies on the API validating every event on send.
+- **Not-run rows show collector ids,** because the run's plan records no labels.
+
+**Tests.** `src/run-view.test.tsx` (8): progress event by event (every chip, found versus found
+nothing versus failed, retry and dead-letter, the plan's exclusions, the settled run with no
+reconnect), the costs, reconnecting after `timeout`, a failed stream kept as of its last update
+and reconnected, an early close and malformed data, both kinds of `locked`, a refused connection,
+a run that no longer exists. `src/run/progress.test.ts` (6): the parser across split chunks,
+CRLF, comments and multi-line data; boundary checks; the status mapping; job order.
+`search.test.tsx` now expects navigation to the run. Checked by breaking the code: treating an
+early close as finished, and showing "0 credits" in place of the em dash, each fail their test.
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean): core
+20, access 56, config 180, db 261, integrations 122, collectors 482, llm 130, osint-engine 104,
+api 180, ui 7, web 40, worker 4 (1,586 tests).
+
+### Handover for step 4 (a fresh session)
+
+- **Read first:** the step 3 record, `apps/web/src/screens/Run.tsx`, `src/run/progress.ts`, and
+  the evidence, claims and pins routes from Phase 6a (`GET /api/v1/evidence/{id}`, the payload
+  download, case pins).
+- **Step 4:** results for a run: evidence and claims with strength labels as words, the
+  provenance drawer from any value (collector and version, run id, `observedAt` and
+  `collectedAt` apart, content hash, source URL, payload link), and pin-to-case on every result.
+  The run view's "Found n evidence records" is the natural way in.
+- **Open question for the owner:** per-run cost metering (see the step 3 judgement calls).
 - **Keep:** the fetch stub runs before the generated client is imported (`vi.hoisted`); every
-  call goes through `unwrap(...)` with `timed()`.
-
+  call goes through `unwrap(...)`; the em dash is `Unmeasured`; statuses are `StatusChip`.

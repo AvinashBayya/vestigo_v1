@@ -1,9 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { Button } from "./button.tsx";
 import { cn } from "./cn.ts";
 import { Field } from "./field.tsx";
 import { Notice } from "./notice.tsx";
+import { COLLECTOR_STATUSES, StatusChip } from "./status-chip.tsx";
+import { Unmeasured } from "./unmeasured.tsx";
 
 afterEach(() => {
   cleanup();
@@ -50,5 +52,30 @@ describe("cn", () => {
     expect(cn("text-body text-ink-primary", "text-ink-muted")).toBe("text-body text-ink-muted");
     expect(cn("p-3", "p-5")).toBe("p-5");
     expect(cn("bg-surface-raised", "bg-accent")).toBe("bg-accent");
+  });
+});
+
+describe("Unmeasured", () => {
+  it("shows an em dash, never a number, and says why in its name and its tooltip (§1)", async () => {
+    render(<Unmeasured reason="[why there is no value]" />);
+    const dash = screen.getByRole("button", { name: "Not measured. [why there is no value]" });
+    expect(dash.textContent).toBe("—");
+    fireEvent.focus(dash);
+    expect((await screen.findByRole("tooltip")).textContent).toBe("[why there is no value]");
+  });
+});
+
+describe("StatusChip", () => {
+  it("always renders the status as words, never colour alone (§2, §3)", () => {
+    render(
+      <>
+        {COLLECTOR_STATUSES.map((status) => (
+          <StatusChip key={status} status={status} />
+        ))}
+      </>,
+    );
+    expect(document.body.textContent).toBe(
+      "RanRunningPartialFailedNeeds keySkippedHeldQueuedCancelled",
+    );
   });
 });

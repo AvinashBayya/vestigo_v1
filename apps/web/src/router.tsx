@@ -13,6 +13,7 @@ import { AuthFrame } from "./components/AuthFrame.tsx";
 import { ProblemNotice } from "./components/ProblemNotice.tsx";
 import { EnrolScreen } from "./screens/Enrol.tsx";
 import { HomeScreen } from "./screens/Home.tsx";
+import { RunScreen } from "./screens/Run.tsx";
 import { SignInScreen } from "./screens/SignIn.tsx";
 import { TenantScreen } from "./screens/Tenant.tsx";
 import { VerifyScreen } from "./screens/Verify.tsx";
@@ -113,7 +114,18 @@ const home = createRoute({
   component: HomeScreen,
 });
 
-const routeTree = root.addChildren([signIn, verify, enrol, tenant, home]);
+/** A run's live progress. The id is checked by the API, which answers a malformed one plainly. */
+const run = createRoute({
+  getParentRoute: () => root,
+  path: "/runs/$runId",
+  beforeLoad: guard("/"),
+  component: function RunRoute() {
+    const { runId } = run.useParams();
+    return <RunScreen key={runId} runId={runId} />;
+  },
+});
+
+const routeTree = root.addChildren([signIn, verify, enrol, tenant, home, run]);
 
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {
   return createRouter({

@@ -95,6 +95,8 @@ The same vocabulary everywhere a collector appears. Reuse the claim tokens:
 | **Needs key** | No tenant credential configured | `claim-inferred-*` |
 | **Skipped** | Policy or plan prevented the run (e.g. active scan without scope authorisation) | `claim-hypothesis-*` |
 | **Held** | Registered but not enabled (licence unverified, or held pending verification) | `claim-hypothesis-*` |
+| **Queued** | Planned, waiting for a worker to start it, or waiting for its next attempt (say when) (added in Phase 6b) | `claim-hypothesis-*` |
+| **Cancelled** | Stopped before it finished; nothing more will be collected (added in Phase 6b) | `claim-hypothesis-*` |
 
 A failed collector and a collector that found nothing must look obviously different.
 

@@ -412,9 +412,16 @@ describe("the credit estimate", () => {
     expect(estimate.collectors.length).toBeGreaterThan(0);
     for (const collector of estimate.collectors) {
       expect(collector.estimatedCredits).toBeNull();
-      expect(collector.estimatedCreditsReason).toMatch(/no credit cost/i);
+      expect(collector.estimatedCreditsReason).toBe(
+        "No credit cost is declared for this collector, so none is estimated.",
+      );
     }
     expect(estimate.total.estimatedCredits).toBeNull();
+    // The run's total speaks of the run, not of one collector, and promises no later cost:
+    // no run records one yet.
+    expect(estimate.total.estimatedCreditsReason).toBe(
+      "No collector in this run declares a credit cost, so the run's cost is not estimated.",
+    );
     expect(estimate.excluded.length).toBeGreaterThan(0);
     expect(response.body).toContain('"estimatedCredits":null');
   });

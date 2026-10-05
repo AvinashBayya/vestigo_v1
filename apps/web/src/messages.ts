@@ -25,6 +25,11 @@ const BY_CODE: Readonly<Record<string, string>> = {
   ORIGIN_NOT_ALLOWED:
     "Sign-in is only allowed from the app's own address. Open the app from its usual address.",
   VALIDATION_FAILED: "Some of what was entered is not in the expected form.",
+  TARGET_EMPTY: "Enter something to search for.",
+  PERMISSION_DENIED: "Your role in this organisation does not allow this.",
+  QUOTA_EXCEEDED: "This organisation's usage quota is spent, so no run can start until it resets.",
+  INVESTIGATION_ARCHIVED: "That investigation is archived, so no run can start in it.",
+  QUEUE_UNAVAILABLE: "The run could not be queued just now. Nothing was started. Try again.",
 };
 
 export function messageFor(error: unknown): Message {

@@ -41,8 +41,8 @@ Phase 2B lacks the `app_auth` role: recreate it with `docker compose down -v`.
 
 The web dev server proxies `/health` and `/api` to the API, so the browser talks to one origin.
 
-The worker (`apps/worker`) is not started by `pnpm dev`: it validates its configuration and then
-exits with `NOT_IMPLEMENTED`, because queue consumption is not built yet.
+`pnpm dev` also starts the worker (`apps/worker`), which consumes every queue (`WORKER_QUEUES`
+defaults to `*`), so a run started in the web app progresses. Without it, runs stay `QUEUED`.
 
 To stop the databases: `docker compose down` (add `-v` to delete their data volumes).
 

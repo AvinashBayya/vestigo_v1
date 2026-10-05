@@ -9,9 +9,13 @@ import { PROTECTED_ERRORS, SECURITY } from "./schemas.ts";
 
 const TargetType = z.enum(TARGET_TYPES);
 
-/** Why no cost can be given. Costs are not declared anywhere yet, so none is estimated. */
-const NO_COST_REASON =
-  "No credit cost is declared for this collector, so none is estimated. The cost will be shown after the run.";
+/**
+ * Why no cost can be given. Costs are not declared anywhere yet, so none is
+ * estimated. Neither says a cost will follow: no run records one yet.
+ */
+const NO_COST_REASON = "No credit cost is declared for this collector, so none is estimated.";
+const NO_TOTAL_COST_REASON =
+  "No collector in this run declares a credit cost, so the run's cost is not estimated.";
 
 const Cost = z.object({
   /** Null: not measured and not declared. Never 0, which would mean the run is free. */
@@ -144,7 +148,7 @@ export const estimateRoutes =
             reason: row.reason,
             message: row.message,
           })),
-          total: { estimatedCredits: null, estimatedCreditsReason: NO_COST_REASON },
+          total: { estimatedCredits: null, estimatedCreditsReason: NO_TOTAL_COST_REASON },
         };
       },
     );
