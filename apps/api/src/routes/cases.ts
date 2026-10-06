@@ -1,5 +1,5 @@
 import { CLAIM_STRENGTHS, ENTITY_KINDS } from "@repo/core";
-import type { Case, CasePin, PinTarget } from "@repo/db";
+import type { Case, CasePin, PersonProbe, PinTarget } from "@repo/db";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { tenantOf } from "../http/access.ts";
@@ -53,7 +53,7 @@ const caseView = (row: Case, pinCount: number): z.infer<typeof CaseView> => ({
 });
 
 /** What can be pinned. The pin endpoint takes a type and an id, never a screen. */
-const PIN_TARGET_TYPES = ["evidence", "entity", "claim"] as const;
+const PIN_TARGET_TYPES = ["evidence", "entity", "claim", "relationship"] as const;
 const PinTargetInput = z.object({ type: z.enum(PIN_TARGET_TYPES), id: z.uuid() });
 
 const Strength = z.enum(CLAIM_STRENGTHS);
@@ -85,6 +85,12 @@ const PinSubject = z.discriminatedUnion("type", [
     value: JsonValue,
     strength: Strength,
   }),
+  z.object({
+    type: z.literal("relationship"),
+    kind: z.string(),
+    source: z.object({ id: z.uuid(), kind: z.enum(ENTITY_KINDS), displayName: z.string() }),
+    target: z.object({ id: z.uuid(), kind: z.enum(ENTITY_KINDS), displayName: z.string() }),
+  }),
 ]);
 
 const PinView = z.object({
@@ -102,16 +108,23 @@ function targetOf(pin: CasePin): z.infer<typeof PinTargetInput> {
   if (pin.evidenceId !== null) return { type: "evidence", id: pin.evidenceId };
   if (pin.entityId !== null) return { type: "entity", id: pin.entityId };
   if (pin.claimId !== null) return { type: "claim", id: pin.claimId };
+  if (pin.relationshipId !== null) return { type: "relationship", id: pin.relationshipId };
   // The table's CHECK allows exactly one target; this is a corrupted row.
   throw new HttpError(500, "PIN_WITHOUT_TARGET", "A pin has no target.");
 }
 
-const pinTarget = (input: z.infer<typeof PinTargetInput>): PinTarget =>
-  input.type === "evidence"
-    ? { evidenceId: input.id }
-    : input.type === "entity"
-      ? { entityId: input.id }
-      : { claimId: input.id };
+function pinTarget(input: z.infer<typeof PinTargetInput>): PinTarget {
+  switch (input.type) {
+    case "evidence":
+      return { evidenceId: input.id };
+    case "entity":
+      return { entityId: input.id };
+    case "claim":
+      return { claimId: input.id };
+    case "relationship":
+      return { relationshipId: input.id };
+  }
+}
 
 export const caseRoutes =
   (services: () => Services): FastifyPluginAsyncZod =>
@@ -252,7 +265,7 @@ export const caseRoutes =
         config: { access: { permission: "case:write", action: "case.pin" } },
         schema: {
           operationId: "pinToCase",
-          summary: "Pin evidence, an entity or a claim to a case",
+          summary: "Pin evidence, an entity, a claim or a relationship to a case",
           description:
             "Takes the kind and id of what is pinned, from any screen that shows it. Pinning what is already pinned returns the existing pin (200) and changes nothing.",
           tags: ["cases"],
@@ -280,15 +293,22 @@ export const caseRoutes =
         }
         const target = pinTarget(request.body.target);
         // The pin comes back with a summary of what it points at: person data is not summarised.
-        await requirePersonAccess(
-          context,
-          "evidenceId" in target
-            ? { evidenceIds: [target.evidenceId] }
-            : "claimId" in target
-              ? { claimIds: [target.claimId] }
-              : { entityIds: [target.entityId] },
-          "The pinned item and its summary.",
-        );
+        // A relationship is summarised by both of its ends, so both are probed.
+        let probe: PersonProbe;
+        if ("relationshipId" in target) {
+          const relationship = await context.reads.exploration.relationshipDetail(
+            target.relationshipId,
+          );
+          if (relationship === null) throw notFound("The relationship");
+          probe = { entityIds: [relationship.source.id, relationship.target.id] };
+        } else if ("evidenceId" in target) {
+          probe = { evidenceIds: [target.evidenceId] };
+        } else if ("claimId" in target) {
+          probe = { claimIds: [target.claimId] };
+        } else {
+          probe = { entityIds: [target.entityId] };
+        }
+        await requirePersonAccess(context, probe, "The pinned item and its summary.");
         const existing = await repos.casePins.findByTarget(caseRow.id, target);
         const pin =
           existing ??
@@ -378,11 +398,14 @@ export const caseRoutes =
           const id = pick(pin);
           return id === null ? [] : [id];
         });
-      const [evidenceRows, entityRows, claimRows] = await Promise.all([
+      const { reads } = tenantOf(request);
+      const [evidenceRows, entityRows, claimRows, relationshipRows] = await Promise.all([
         repos.evidence.findByIds(ids((pin) => pin.evidenceId)),
         repos.entities.findByIds(ids((pin) => pin.entityId)),
         repos.claims.findByIds(ids((pin) => pin.claimId)),
+        reads.exploration.relationshipDetails(ids((pin) => pin.relationshipId)),
       ]);
+      const relationshipById = new Map(relationshipRows.map((row) => [row.id, row]));
       const evidenceById = new Map(evidenceRows.map((row) => [row.id, row]));
       const entityById = new Map(entityRows.map((row) => [row.id, row]));
       const claimById = new Map(claimRows.map((row) => [row.id, row]));
@@ -393,6 +416,8 @@ export const caseRoutes =
         const evidence = pin.evidenceId === null ? undefined : evidenceById.get(pin.evidenceId);
         const entity = pin.entityId === null ? undefined : entityById.get(pin.entityId);
         const claim = pin.claimId === null ? undefined : claimById.get(pin.claimId);
+        const relationship =
+          pin.relationshipId === null ? undefined : relationshipById.get(pin.relationshipId);
         if (evidence !== undefined) {
           subject = {
             type: "evidence",
@@ -413,6 +438,18 @@ export const caseRoutes =
             attribute: claim.attribute,
             value: claim.value,
             strength: claim.strength,
+          };
+        } else if (relationship !== undefined) {
+          const end = (side: typeof relationship.source) => ({
+            id: side.id,
+            kind: side.kind,
+            displayName: side.displayName,
+          });
+          subject = {
+            type: "relationship",
+            kind: relationship.kind,
+            source: end(relationship.source),
+            target: end(relationship.target),
           };
         }
         return {

@@ -380,8 +380,9 @@ describe("the signed-in frame", () => {
     // Not "Verified tenant": that is said only when vetting is approved.
     expect(await screen.findByText("Vetting not submitted")).toBeTruthy();
     expect(screen.queryByText("Verified tenant")).toBeNull();
+    // Only what is built: search, and the cases that results are pinned to.
     expect(screen.getByRole("navigation", { name: "Main" }).textContent).toBe(
-      `${PRODUCT_NAME}Search`,
+      `${PRODUCT_NAME}SearchCases`,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Account" }));

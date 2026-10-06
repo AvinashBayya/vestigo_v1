@@ -69,6 +69,37 @@ Inferred content also carries a lighter treatment in context: a dashed edge in t
 | `status-failed-ink` | `#7A2E1E` | `#E9A48F` | Failure text, including the reason |
 | `status-failed-mark` | `#A33F27` | `#C4644A` | Failure dot, error icon |
 
+### Entity class (added in Phase 6b)
+
+The ring and fill of a node in the graph, by the class of entity it stands for. Used **only** for entity class, and always with the class written inside or beside the node (§6): colour is the second channel, never the only one.
+
+Four families, as the screen designs group them: infrastructure (greens), contact (blues), person (purple), account (ambers), plus organisation (rose) and location (cyan). Within a family the classes step in lightness, so they differ in lightness and not hue alone (§7). Every ring meets 3:1 against `surface-sunken` in its theme. These deliberately do not reuse the claim tokens: in the graph, colour says what a node is, and claim strength is said by the edge (§2, Claim strength) and in words.
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `entity-domain-ring` | `#1D6B47` | `#55B183` | Domain node ring (infrastructure) |
+| `entity-domain-fill` | `#E5F0E9` | `#1D3227` | Domain node fill |
+| `entity-ip-ring` | `#2E8A5E` | `#7FCFA3` | IP address node ring (infrastructure, lighter) |
+| `entity-ip-fill` | `#E9F4EE` | `#1F3A2C` | IP address node fill |
+| `entity-url-ring` | `#134A33` | `#3E9468` | URL node ring (infrastructure, darker) |
+| `entity-url-fill` | `#E1ECE5` | `#18291F` | URL node fill |
+| `entity-email-ring` | `#2A5CA0` | `#7B9DD6` | Email address node ring (contact) |
+| `entity-email-fill` | `#E7EDF6` | `#232C3A` | Email address node fill |
+| `entity-phone-ring` | `#1B3F70` | `#5A7FBF` | Phone number node ring (contact, darker) |
+| `entity-phone-fill` | `#E3E9F3` | `#1E2633` | Phone number node fill |
+| `entity-person-ring` | `#6A4A9E` | `#9A7BD0` | Person node ring |
+| `entity-person-fill` | `#EFE9F6` | `#2A2338` | Person node fill |
+| `entity-username-ring` | `#8A5A12` | `#C79A4E` | Username node ring (account) |
+| `entity-username-fill` | `#F6EEDD` | `#33291A` | Username node fill |
+| `entity-account-ring` | `#6B4510` | `#A87A32` | Social account node ring (account, darker) |
+| `entity-account-fill` | `#F3EAD8` | `#2E2416` | Social account node fill |
+| `entity-organisation-ring` | `#9A2F63` | `#D07AA6` | Organisation node ring |
+| `entity-organisation-fill` | `#F5E6EE` | `#35212C` | Organisation node fill |
+| `entity-location-ring` | `#0F5E66` | `#5BB5BD` | Location node ring |
+| `entity-location-fill` | `#E3F0F1` | `#1A2E30` | Location node fill |
+
+Node labels are `ink-primary` on the fill. The run's or case's seed entities are drawn with a wider ring of their own class colour. The selected node, the "key graph node" of `accent` (§2), gets an `accent` outline outside its ring, so it never loses its class colour.
+
 ### QR code (added in Phase 6b)
 
 | Token | Light | Dark | Use |
@@ -80,7 +111,7 @@ The same in both themes, deliberately: authenticator apps scan dark-on-light rel
 
 ### Colour discipline
 
-Chrome is neutral. Colour means **claim strength, collector status, or entity class in the graph** — nothing else. Anything decorative that borrows a semantic colour is a bug.
+Chrome is neutral. Colour means **claim strength, collector status, or entity class in the graph** (the `entity-*` tokens) — nothing else. Anything decorative that borrows a semantic colour is a bug.
 
 ---
 
@@ -166,6 +197,7 @@ Monospace is a signal that a value is literal data. Use it deliberately.
 | `layout-page-width` | 880px | Maximum width of a single-column page wider than a form: MFA enrolment (added from the screen designs) |
 | `layout-nav-width` | 216px | The side navigation of the signed-in app (added from the screen designs) |
 | `layout-search-width` | 780px | The dashboard's search bar (added from the screen designs) |
+| `layout-drawer-width` | 400px | The provenance drawer (§9), from the right edge (added in Phase 6b) |
 | `qr-size` | 176px | The MFA enrolment QR code, large enough to scan from a screen |
 
 **Density.** Two modes. *Comfortable*: `space-5` card padding, 11px row padding, `body` in tables. *Compact*: `space-3`, 7px, `small` in tables. All spacing comes from tokens, so the swap is mechanical. Compact is the default in the Evidence grid.

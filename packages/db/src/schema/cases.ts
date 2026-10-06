@@ -9,7 +9,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { createdAtColumn, idColumn, optionalTimestamp, tenantIdColumn } from "./columns.ts";
-import { entities } from "./entities.ts";
+import { entities, entityRelationships } from "./entities.ts";
 import { claims, evidence } from "./evidence.ts";
 import { tenants, users } from "./tenancy.ts";
 
@@ -40,7 +40,7 @@ export const cases = pgTable(
   ],
 );
 
-/** A piece of evidence, an entity or a claim pinned to a case: exactly one. */
+/** A piece of evidence, an entity, a claim or a relationship pinned to a case: exactly one. */
 export const casePins = pgTable(
   "case_pins",
   {
@@ -50,6 +50,7 @@ export const casePins = pgTable(
     evidenceId: uuid("evidence_id"),
     entityId: uuid("entity_id"),
     claimId: uuid("claim_id"),
+    relationshipId: uuid("relationship_id"),
     pinnedByUserId: uuid("pinned_by_user_id"),
     note: text("note"),
     createdAt: createdAtColumn(),
@@ -82,13 +83,18 @@ export const casePins = pgTable(
       foreignColumns: [claims.tenantId, claims.id],
     }),
     foreignKey({
+      name: "case_pins_relationship_fk",
+      columns: [t.tenantId, t.relationshipId],
+      foreignColumns: [entityRelationships.tenantId, entityRelationships.id],
+    }),
+    foreignKey({
       name: "case_pins_pinned_by_fk",
       columns: [t.tenantId, t.pinnedByUserId],
       foreignColumns: [users.tenantId, users.id],
     }),
     check(
       "case_pins_one_target",
-      sql`num_nonnulls(${t.evidenceId}, ${t.entityId}, ${t.claimId}) = 1`,
+      sql`num_nonnulls(${t.evidenceId}, ${t.entityId}, ${t.claimId}, ${t.relationshipId}) = 1`,
     ),
     uniqueIndex("case_pins_evidence_key")
       .on(t.tenantId, t.caseId, t.evidenceId)
@@ -99,5 +105,8 @@ export const casePins = pgTable(
     uniqueIndex("case_pins_claim_key")
       .on(t.tenantId, t.caseId, t.claimId)
       .where(sql`${t.claimId} is not null`),
+    uniqueIndex("case_pins_relationship_key")
+      .on(t.tenantId, t.caseId, t.relationshipId)
+      .where(sql`${t.relationshipId} is not null`),
   ],
 );

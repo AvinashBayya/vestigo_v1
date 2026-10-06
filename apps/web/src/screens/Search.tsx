@@ -1,6 +1,6 @@
 import { Button, Notice, Panel, Skeleton, StatusChip, Unmeasured } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Search as SearchIcon } from "lucide-react";
 import { useId, useState, type ReactNode, type SyntheticEvent } from "react";
 import { timed, unwrap } from "../api.ts";
@@ -486,7 +486,13 @@ function RecentCases() {
         <ul className="flex flex-col divide-y divide-border-subtle">
           {recent.map((item) => (
             <li key={item.id} className="flex flex-col gap-1 py-3">
-              <p className="text-body-strong text-ink-primary">{item.title}</p>
+              <Link
+                to="/cases/$caseId/$tab"
+                params={{ caseId: item.id, tab: "overview" }}
+                className="self-start text-body-strong text-accent underline"
+              >
+                {item.title}
+              </Link>
               <p className="text-small text-ink-secondary">
                 {item.pinCount} pinned · created{" "}
                 <time dateTime={item.createdAt} className="font-mono text-mono-caption">

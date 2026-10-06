@@ -23,6 +23,7 @@ import {
 import { useRunStream, type Connection } from "../run/useRunStream.ts";
 import { exclusionStatus, NOT_APPLICABLE_REASON, TYPE_LABEL } from "../search/plan.ts";
 import { sessionQuery } from "../session.ts";
+import { WorkspaceTabs } from "../workspace/Workspace.tsx";
 
 /** Neither cost is recorded on a run yet; each says so rather than showing a number. */
 const NO_ESTIMATE_RECORDED =
@@ -96,6 +97,7 @@ export function RunScreen({ runId }: { readonly runId: string }) {
     <AppShell>
       <div className="flex flex-col gap-6">
         <RunHeader run={run} />
+        <WorkspaceTabs scope={{ kind: "run", id: runId }} tab="progress" />
         <ConnectionNotice
           connection={connection}
           locked={locked}

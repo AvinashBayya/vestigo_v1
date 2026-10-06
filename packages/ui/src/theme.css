@@ -46,6 +46,26 @@
   --color-status-failed-fill: var(--ds-status-failed-fill);
   --color-status-failed-ink: var(--ds-status-failed-ink);
   --color-status-failed-mark: var(--ds-status-failed-mark);
+  --color-entity-domain-ring: var(--ds-entity-domain-ring);
+  --color-entity-domain-fill: var(--ds-entity-domain-fill);
+  --color-entity-ip-ring: var(--ds-entity-ip-ring);
+  --color-entity-ip-fill: var(--ds-entity-ip-fill);
+  --color-entity-url-ring: var(--ds-entity-url-ring);
+  --color-entity-url-fill: var(--ds-entity-url-fill);
+  --color-entity-email-ring: var(--ds-entity-email-ring);
+  --color-entity-email-fill: var(--ds-entity-email-fill);
+  --color-entity-phone-ring: var(--ds-entity-phone-ring);
+  --color-entity-phone-fill: var(--ds-entity-phone-fill);
+  --color-entity-person-ring: var(--ds-entity-person-ring);
+  --color-entity-person-fill: var(--ds-entity-person-fill);
+  --color-entity-username-ring: var(--ds-entity-username-ring);
+  --color-entity-username-fill: var(--ds-entity-username-fill);
+  --color-entity-account-ring: var(--ds-entity-account-ring);
+  --color-entity-account-fill: var(--ds-entity-account-fill);
+  --color-entity-organisation-ring: var(--ds-entity-organisation-ring);
+  --color-entity-organisation-fill: var(--ds-entity-organisation-fill);
+  --color-entity-location-ring: var(--ds-entity-location-ring);
+  --color-entity-location-fill: var(--ds-entity-location-fill);
   --color-qr-module: var(--ds-qr-module);
   --color-qr-ground: var(--ds-qr-ground);
 
@@ -105,6 +125,7 @@
   --container-page: var(--ds-layout-page-width);
   --container-nav: var(--ds-layout-nav-width);
   --container-search: var(--ds-layout-search-width);
+  --container-drawer: var(--ds-layout-drawer-width);
 
   --radius-*: initial;
   --radius-sm: var(--ds-radius-sm);

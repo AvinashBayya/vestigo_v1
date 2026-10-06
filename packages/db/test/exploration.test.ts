@@ -325,6 +325,109 @@ describe("pins", () => {
   });
 });
 
+describe("a relationship", () => {
+  it("is read with both of its ends and measured claim counts, only in its own tenant", async () => {
+    const detail = await read(tenant, ({ reads }) =>
+      reads.exploration.relationshipDetail(tenant.relationshipId),
+    );
+    expect(detail).toMatchObject({
+      id: tenant.relationshipId,
+      kind: "subdomain_of",
+      source: { id: tenant.otherEntityId, kind: "DOMAIN", displayName: "www.example.com" },
+      target: { id: tenant.entityId, kind: "DOMAIN" },
+      // Measured: the fixture records no claim about it.
+      claimCount: 0,
+      strengths: [],
+    });
+    const both = await read(tenant, ({ reads }) =>
+      reads.exploration.relationshipDetails([tenant.relationshipId, other.relationshipId]),
+    );
+    expect(both.map((row) => row.id)).toEqual([tenant.relationshipId]);
+    expect(
+      await read(other, ({ reads }) => reads.exploration.relationshipDetail(tenant.relationshipId)),
+    ).toBeNull();
+
+    // A relationship with a claim behind it: its own tenant reads the claim, the other nothing.
+    const asserted = await read(tenant, async ({ repos }) => {
+      const from = await repos.entities.create({ kind: "DOMAIN", displayName: "[rel from]" });
+      const to = await repos.entities.create({ kind: "IP_ADDRESS", displayName: "[rel to]" });
+      const relationship = await repos.entityRelationships.create({
+        sourceEntityId: from.id,
+        targetEntityId: to.id,
+        kind: "resolves_to",
+      });
+      const claim = await repos.claims.create({
+        evidenceId: tenant.evidenceId,
+        subject: { relationshipId: relationship.id },
+        attribute: "record_type",
+        value: "A",
+        strength: "OBSERVED",
+      });
+      return { relationshipId: relationship.id, claimId: claim.id };
+    });
+    const own = await read(tenant, async ({ repos, reads }) => ({
+      claims: await repos.claims.listForRelationship(asserted.relationshipId, { limit: 5 }),
+      detail: await reads.exploration.relationshipDetail(asserted.relationshipId),
+    }));
+    expect(own.claims.map((claim) => claim.id)).toEqual([asserted.claimId]);
+    expect(own.detail).toMatchObject({ claimCount: 1, strengths: ["OBSERVED"] });
+    await read(other, async ({ repos, reads }) => {
+      expect(await repos.claims.listForRelationship(asserted.relationshipId, { limit: 5 })).toEqual(
+        [],
+      );
+      expect(await reads.exploration.relationshipDetail(asserted.relationshipId)).toBeNull();
+    });
+  });
+
+  it("pinned to a case, puts both of its ends in the case, and is found by its target", async () => {
+    const result = await read(tenant, async ({ repos, reads }) => {
+      const caseRow = await repos.cases.create({
+        title: "[case with a pinned relationship]",
+        description: null,
+        createdByUserId: tenant.userId,
+      });
+      const pin = await repos.casePins.pin({
+        caseId: caseRow.id,
+        target: { relationshipId: tenant.relationshipId },
+        pinnedByUserId: tenant.userId,
+        note: null,
+      });
+      return {
+        pin,
+        found: await repos.casePins.findByTarget(caseRow.id, {
+          relationshipId: tenant.relationshipId,
+        }),
+        entities: await reads.exploration.entitiesInScope({ caseId: caseRow.id }, { limit: 5 }),
+        seeds: await reads.exploration.entityIdsInScope({ caseId: caseRow.id }, 5),
+      };
+    });
+    expect(result.pin.relationshipId).toBe(tenant.relationshipId);
+    expect(result.found?.id).toBe(result.pin.id);
+    expect(result.entities.map((row) => row.id).sort()).toEqual(
+      [tenant.entityId, tenant.otherEntityId].sort(),
+    );
+    expect(result.seeds.ids.sort()).toEqual([tenant.entityId, tenant.otherEntityId].sort());
+  });
+
+  it("a pin holds exactly one target, a relationship included, enforced by the database", async () => {
+    const client = await rawClient();
+    try {
+      const state = await sqlStateOf(() =>
+        asTenant(client, tenant.tenantId, () =>
+          client.query(
+            `insert into public.case_pins (tenant_id, case_id, entity_id, relationship_id)
+             values ($1, $2, $3, $4)`,
+            [tenant.tenantId, tenant.caseId, tenant.entityId, tenant.relationshipId],
+          ),
+        ),
+      );
+      expect(state).toBe("23514");
+    } finally {
+      await client.end();
+    }
+  });
+});
+
 describe("the retention window", () => {
   it("is null until the tenant sets one, and can be set and cleared", async () => {
     const fresh = await read(other, ({ repos }) => repos.tenants.current());

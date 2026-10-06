@@ -222,8 +222,12 @@ describe("the search dashboard", () => {
     // Newest first by creation (cases record no update time), archived left out, three shown.
     const cases = (await screen.findByText("[Newest case]")).closest("ul");
     expect(
-      [...(cases?.querySelectorAll("li > p:first-child") ?? [])].map((p) => p.textContent),
+      [...(cases?.querySelectorAll("li > a:first-child") ?? [])].map((a) => a.textContent),
     ).toEqual(["[Newest case]", "[Third case]", "[Second case]"]);
+    // Each opens its case's workspace.
+    expect(screen.getByRole("link", { name: "[Newest case]" }).getAttribute("href")).toBe(
+      "/cases/77777777-7777-4777-8777-000000000004/overview",
+    );
     expect(cases?.textContent).toContain("0 pinned · created");
 
     const rowOf = (label: string) => screen.getByText(label).closest("li")?.textContent;

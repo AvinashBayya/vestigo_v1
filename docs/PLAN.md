@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06; step 4 waits on six questions (Q1–Q6 in the 6b record). See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 on the owner's answers to Q1–Q6, awaiting the owner's look; step 5 (report view) next. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -2259,3 +2259,172 @@ so the API has nothing to show it from. Partial shows only at run level (`PARTIA
 - **Media, map, monitors and credits** are not built.
 - **In production a domain target would run nothing.** 8 of 10 collectors are licence-UNVERIFIED
   and refused unless `COLLECTORS_ALLOW_UNVERIFIED=true`.
+
+### Step 4: results and the case workspace (done 2026-10-06; awaiting the owner's look)
+
+**Owner's answers to Q1–Q6 (2026-10-06):**
+- **Q1:** pinned-only cases. A run's results get the tabs; a case gets the same tabs, labelled
+  "pinned items only". Cases are not linked to runs: that is a schema change for the later cases
+  reclamation.
+- **Q2:** the evidence grid is built on the timeline. Past 500 records it says "500 of N";
+  paging is a later API task.
+- **Q3:** the API change, made now as the one exception: a relationship read and a relationship
+  pin, with a migration and cross-tenant tests.
+- **Q4:** entity-class tokens added to DESIGN-SYSTEM.md first, then used. Colour and the class in
+  words, no raw hex.
+- **Q5:** Overview is composed from existing reads. A count past the list limit is an em dash
+  with its reason.
+- **Q6:** TanStack Table and Cytoscape.js are installed.
+
+**API and database (Q3):**
+- **Migration `0020_phase6b_relationship_pins`:**
+  - adds `case_pins.relationship_id`, with a tenant-scoped foreign key to
+    `entity_relationships` and a unique index per case;
+  - widens the one-target check to four targets.
+  - **Expand-only, no downtime:** a nullable column and a looser check. The key and the check
+    are `NOT VALID`, after 0015's precedent: every existing row holds a null there and passed
+    the stricter check.
+  - Table-level grants and RLS already cover the column.
+- **`GET /api/v1/relationships/{id}`** (`routes/entities.ts`, `evidence:read`): the
+  relationship, both ends with class and name, its measured claim count and strengths, and every
+  claim behind it with its `evidenceId` (`claimLimit`, `claimsTruncated`).
+  - **Person gate:** the shared `requirePersonAccess`, probing both ends. That covers the
+    evidence behind the relationship's own claims.
+- **Pins:** `relationship` is a fourth pin type. The pin summary names the relationship and both
+  ends, read in one batched query (`relationshipDetails`). Pinning a relationship is gated on
+  both ends.
+- **Case scope:** a pinned relationship brings in both of its ends (entities, graph seeds) and
+  the evidence behind its claims (timeline).
+- **Tests:**
+  - db `exploration.test.ts`: the relationship read, its claims only in its own tenant, a pinned
+    relationship's ends in the case, and the database refusing a pin with two targets.
+  - db `isolation.repositories.test.ts`: pinning another tenant's relationship.
+  - api `exploration-api.test.ts`: the read (both ends, stated and derived claims citing
+    evidence, truncation, 404, 400); pinning idempotently with its summary; the case scope after
+    a pin. The release-blocking cross-tenant block also covers the read (404) and the pin type
+    (404 from B's own case).
+  - api `person-gate.test.ts`: a relationship asserted only by person evidence is refused
+    across the lifecycle, and so are its pin and a case holding it (entities, timeline, graph).
+    A clean relationship and a clean case graph are unchanged byte for byte.
+
+**Design system:**
+- **§2 Entity class:** 20 tokens. A ring and a fill for each of the ten classes, light and dark,
+  in families as the designs group them: infrastructure greens, contact blues, person,
+  account ambers, organisation, location.
+  - **Measured:** every ring is at least 3:1 on `surface-sunken`; every label (`ink-primary`)
+    is at least 4.5:1 on its fill. Classes within a family step in lightness.
+  - **Not the claim colours,** deliberately: in the graph, colour says what a node is, and
+    strength is said by the edge (dashed when only inferred or hypothetical claims stand
+    behind it) and in words.
+  - **Selection:** a seed has a wider ring of its own colour; the selected node has an `accent`
+    outline.
+- **§5:** `layout-drawer-width` (400px), the provenance drawer.
+- **Guard:** 112 tokens, both themes, nothing extra.
+
+**UI package:**
+- `ClaimStrength`: the word, always, on a small-radius badge, since pills are for status only.
+- `EntityClassName`: a colour dot and the class name.
+- `Drawer`: Radix Dialog from the right edge.
+
+**Web** (`apps/web/src/workspace/`), every call through the generated client:
+- **Routes:**
+  - `/runs/$runId/$tab` and `/cases/$caseId/$tab`, for overview, entities, evidence, graph and
+    timeline;
+  - `/cases`, the case list, which can also create a case;
+  - **Cases** in the side navigation;
+  - recent cases on the dashboard open their workspace.
+  - The run view's tab bar starts with **Progress**. A case has no Progress tab.
+  - An unknown tab is said plainly.
+- **Evidence:** a TanStack Table grid over the timeline.
+  - **Columns:** source label (the collector id with an em dash and its reason when the registry
+    has no label), strength in words, observed and collected apart, claims, source URL, pin.
+  - **Sorting:** unknown times sort last both ways.
+  - **Filters:** text, strength and source, over the loaded rows.
+  - **States:** "Partial: n of N" past 500, and how many records lack each timestamp.
+- **Entities:** a grid with the class in words, strengths and measured counts. "Recorded", not
+  "first seen": it is when the platform recorded the entity.
+  - **The entity panel:** claims stated by a source apart from claims computed by the platform
+    (DERIVED: dashed edge and the word). Each value opens its provenance with the claim marked.
+    Each relationship opens its provenance.
+  - **Pins:** the entity, each claim and each relationship.
+- **Graph:** Cytoscape.js behind `GraphRendererProps`.
+  - **Drawing:** colours, font and line widths are read from the tokens at runtime and redrawn
+    when the theme changes. Each node carries its class name as well as its colour.
+  - **Controls:** hops 0 to 3, a partial notice when the slice is cut, and a legend of the
+    classes present.
+  - **The list:** every node and relationship in words, with pins and provenance. It is the
+    keyboard path, and the whole graph where no canvas exists.
+- **Timeline:** order by observed or collected time (the API's `sortBy`). Events without that
+  time are grouped as undated, never placed at the other time.
+- **Overview,** composed:
+  - **Totals:** evidence records (measured), entities (an em dash with why past 500), and how
+    many lack an observed time.
+  - **Strengths:** evidence counted by strength, an em dash when the list is cut.
+  - **Key entities:** among those listed.
+  - **For a run:** its coverage (status chips with counts; "These results are partial" for a
+    PARTIAL run) and its gaps, each failed, keyless, refused or excluded source with its reason.
+  - **For a case:** its pins counted by kind.
+- **Provenance drawer:** one component, opened from any value. It has a Back trail from a
+  relationship to the evidence behind a claim.
+  - **Evidence:** collector and version, source label, run, observed, collected and recorded,
+    the content hash, and the source URL (linked only if http or https).
+  - **Attribution:** shown when present.
+  - **Raw payload:** "Download raw payload", fetched as a blob through the client and saved as
+    a file, never opened.
+  - **Claims:** stated apart from derived, each pinnable.
+  - **A relationship:** both ends and what asserts it.
+- **Pin-to-case** on every result surface: grid rows, the timeline, entities, claims,
+  relationships, graph nodes and edges, and inside the drawer.
+  - **Choosing a case:** open cases only (archived ones take no pins), or "Create and pin".
+    "Already pinned" is said on a 200.
+  - **Permission:** a role without `case:write` is told why before anything is sent.
+- **States everywhere:**
+  - skeletons in the layout's shape;
+  - an empty state that says where results would come from;
+  - Failed, with the code and Try again;
+  - Locked for any 403 carrying `locked`;
+  - Partial, for cut lists and partial runs;
+  - Stale: the read-at time with Refresh, and "still collecting" while a run is not settled.
+
+**Judgement calls (flag if you disagree):**
+- **No virtualisation.** TanStack Virtual positions rows with computed inline styles, which the
+  design-system guard forbids, and the timeline caps the grid at 500 rows, which a plain table
+  renders well. It was installed and then removed. When API paging lifts the cap, virtualisation
+  needs a guard decision.
+- **No hash or claim-text column** in the evidence grid. The timeline carries neither, and
+  reading every record for them would be 500 reads. Both are in the drawer.
+- **Hidden until built:**
+  - the runs rail, discipline filters, the case summary paragraph and contradictions;
+  - merge actions, bulk actions and saved views;
+  - the timeline's range brush;
+  - Re-verify and Cite in report.
+- **Not driven in a real browser in this session.** jsdom has no canvas, so the Cytoscape
+  drawing is exercised only by its fallback in tests. The owner's look is its first real
+  rendering.
+
+**Tests:**
+- web `workspace.test.tsx` (18) covers the brief's non-negotiables:
+  - source labels and both timestamps;
+  - the em dash for an unknown observed time;
+  - strengths in words;
+  - derived apart from stated;
+  - partial past 500;
+  - Locked and not an error, and Failed with a retry;
+  - the drawer's every field and the payload download;
+  - the relationship-to-evidence trail;
+  - pinning (by type and id; no archived cases; create and pin; refused for a role without
+    `case:write`);
+  - the graph's list, legend and cut notice;
+  - undated timeline events and the reorder;
+  - Overview for a partial run, a collecting run and a case;
+  - the tab bar and an unknown tab.
+- **Checked by breaking the code:** filling an unknown observed time from the collection time
+  fails the evidence test.
+- ui (3 more): strengths and classes in words, and entity colours merging.
+- Two existing tests now expect Cases in the navigation and linked recent cases.
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean, with
+Postgres and Redis up): core 20, access 56, config 180, db 264, integrations 122, collectors 482,
+llm 130, osint-engine 104, api 184, ui 10, web 62, worker 4 (1,618 tests).
+
+**Next: step 5, the report view,** after the owner's look.

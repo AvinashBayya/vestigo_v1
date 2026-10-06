@@ -1,4 +1,4 @@
-import { Button, Skeleton } from "@repo/ui";
+import { Button, Notice, Skeleton } from "@repo/ui";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
@@ -9,8 +9,10 @@ import {
   type RouterHistory,
 } from "@tanstack/react-router";
 import { z } from "zod";
+import { AppShell } from "./components/AppShell.tsx";
 import { AuthFrame } from "./components/AuthFrame.tsx";
 import { ProblemNotice } from "./components/ProblemNotice.tsx";
+import { CasesScreen } from "./screens/Cases.tsx";
 import { EnrolScreen } from "./screens/Enrol.tsx";
 import { HomeScreen } from "./screens/Home.tsx";
 import { RunScreen } from "./screens/Run.tsx";
@@ -18,6 +20,22 @@ import { SignInScreen } from "./screens/SignIn.tsx";
 import { TenantScreen } from "./screens/Tenant.tsx";
 import { VerifyScreen } from "./screens/Verify.tsx";
 import { enrolmentToken, homeOf, sessionQuery } from "./session.ts";
+import { Workspace, WORKSPACE_TABS, type WorkspaceTab } from "./workspace/Workspace.tsx";
+
+const isTab = (value: string): value is WorkspaceTab =>
+  (WORKSPACE_TABS as readonly string[]).includes(value);
+
+/** A tab the workspace does not have: said plainly, with the way back. */
+function NoSuchTab({ tab }: { readonly tab: string }) {
+  return (
+    <AppShell>
+      <Notice>
+        There is no <span className="font-mono">{tab}</span> tab. The workspace has{" "}
+        {WORKSPACE_TABS.join(", ")}.
+      </Notice>
+    </AppShell>
+  );
+}
 
 interface RouterContext {
   readonly queryClient: QueryClient;
@@ -125,7 +143,48 @@ const run = createRoute({
   },
 });
 
-const routeTree = root.addChildren([signIn, verify, enrol, tenant, home, run]);
+/** A run's results: the workspace tabs over what the run collected. */
+const runResults = createRoute({
+  getParentRoute: () => root,
+  path: "/runs/$runId/$tab",
+  beforeLoad: guard("/"),
+  component: function RunResultsRoute() {
+    const { runId, tab } = runResults.useParams();
+    if (!isTab(tab)) return <NoSuchTab tab={tab} />;
+    return <Workspace key={runId} scope={{ kind: "run", id: runId }} tab={tab} />;
+  },
+});
+
+const cases = createRoute({
+  getParentRoute: () => root,
+  path: "/cases",
+  beforeLoad: guard("/"),
+  component: CasesScreen,
+});
+
+/** A case: the same tabs over what is pinned to it, and only that. */
+const caseWorkspace = createRoute({
+  getParentRoute: () => root,
+  path: "/cases/$caseId/$tab",
+  beforeLoad: guard("/"),
+  component: function CaseRoute() {
+    const { caseId, tab } = caseWorkspace.useParams();
+    if (!isTab(tab)) return <NoSuchTab tab={tab} />;
+    return <Workspace key={caseId} scope={{ kind: "case", id: caseId }} tab={tab} />;
+  },
+});
+
+const routeTree = root.addChildren([
+  signIn,
+  verify,
+  enrol,
+  tenant,
+  home,
+  run,
+  runResults,
+  cases,
+  caseWorkspace,
+]);
 
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {
   return createRouter({

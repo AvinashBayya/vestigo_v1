@@ -39,6 +39,9 @@ interface Ids {
   cleanOther: string;
   personEvidence: string;
   personClaim: string;
+  personRelationship: string;
+  relationshipCase: string;
+  cleanRelationship: string;
 }
 let ids: Ids;
 
@@ -219,6 +222,49 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       finishedAt: new Date("2026-05-01T00:00:01Z"),
     });
 
+    // A relationship between two technical entities, asserted only by person
+    // evidence (from a run of its own, so the person run's scope is unchanged).
+    const personRel = await makeRun("fixture-person", "person-relationship");
+    const relSource = await repos.entities.create({
+      kind: "DOMAIN",
+      displayName: "rel.example.com",
+    });
+    const relTarget = await repos.entities.create({
+      kind: "DOMAIN",
+      displayName: "rel.example.net",
+    });
+    const personRelationship = await repos.entityRelationships.create({
+      sourceEntityId: relSource.id,
+      targetEntityId: relTarget.id,
+      kind: "linked_to",
+    });
+    await repos.claims.create({
+      evidenceId: personRel.evidenceId,
+      subject: { relationshipId: personRelationship.id },
+      attribute: "note",
+      value: "[person claim]",
+      strength: "REPORTED",
+    });
+    // A case whose only pin is that relationship: its ends and evidence are its content.
+    const relationshipCase = await repos.cases.create({
+      title: "[relationship case]",
+      description: null,
+      createdByUserId: userId,
+    });
+    await repos.casePins.pin({
+      caseId: relationshipCase.id,
+      target: { relationshipId: personRelationship.id },
+      pinnedByUserId: userId,
+      note: null,
+    });
+    // The clean case also pins the clean relationship.
+    await repos.casePins.pin({
+      caseId: cleanCase.id,
+      target: { relationshipId: relationship.id },
+      pinnedByUserId: userId,
+      note: null,
+    });
+
     // Where pin attempts are aimed, so a pin that succeeds never pollutes the clean case.
     const pinCase = await repos.cases.create({
       title: "[pin attempts]",
@@ -240,6 +286,9 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       cleanOther: cleanOther.id,
       personEvidence: person.evidenceId,
       personClaim: personClaim.id,
+      personRelationship: personRelationship.id,
+      relationshipCase: relationshipCase.id,
+      cleanRelationship: relationship.id,
     };
   });
 }
@@ -304,6 +353,27 @@ const LOCKED_CALLS: Record<string, Call> = {
     () => `/api/v1/cases/${ids.pinCase}/pins`,
     () => ({ target: { type: "entity", id: ids.personEntity } }),
   ],
+  "relationship asserted only by person evidence": [
+    "GET",
+    () => `/api/v1/relationships/${ids.personRelationship}`,
+  ],
+  "pinning a relationship asserted by person evidence": [
+    "POST",
+    () => `/api/v1/cases/${ids.pinCase}/pins`,
+    () => ({ target: { type: "relationship", id: ids.personRelationship } }),
+  ],
+  "entities of a case whose pinned relationship rests on person evidence": [
+    "GET",
+    () => `/api/v1/entities?caseId=${ids.relationshipCase}`,
+  ],
+  "timeline of a case whose pinned relationship rests on person evidence": [
+    "GET",
+    () => `/api/v1/timeline?caseId=${ids.relationshipCase}`,
+  ],
+  "graph of a case whose pinned relationship rests on person evidence": [
+    "GET",
+    () => `/api/v1/graph?caseId=${ids.relationshipCase}`,
+  ],
   "run read of a person run": ["GET", () => `/api/v1/runs/${ids.personRun}`],
   "run read of a run whose person job found nothing": [
     "GET",
@@ -352,6 +422,8 @@ const CLEAN_CALLS: Record<string, Call> = {
     () => `/api/v1/entities/merge-candidates?runId=${ids.cleanRun}`,
   ],
   "pins of a clean case": ["GET", () => `/api/v1/cases/${ids.cleanCase}/pins`],
+  "clean relationship detail": ["GET", () => `/api/v1/relationships/${ids.cleanRelationship}`],
+  "graph of a clean case": ["GET", () => `/api/v1/graph?caseId=${ids.cleanCase}&hops=0`],
   "run read of a run with only technical jobs": ["GET", () => `/api/v1/runs/${ids.cleanRun}`],
   // Its entity has person claims from another run; the run's own jobs are technical.
   "run read of a run whose entity has person claims elsewhere": [
@@ -476,7 +548,8 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     };
     expect(approvedFull["pins"]).toContain('"type":"evidence"');
     pinsWhenApproved = await pinAttempts();
-    expect(pinsWhenApproved).toBe(3);
+    // Evidence, a claim, an entity and a relationship.
+    expect(pinsWhenApproved).toBe(4);
   });
 
   it("suspended: the same reads are refused, never a thinner result", async () => {

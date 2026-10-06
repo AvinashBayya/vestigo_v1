@@ -397,6 +397,13 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
         }),
       (r, v, a) =>
         r.casePins.pin({
+          caseId: a.caseId,
+          target: { relationshipId: v.relationshipId },
+          pinnedByUserId: null,
+          note: null,
+        }),
+      (r, v, a) =>
+        r.casePins.pin({
           caseId: v.caseId,
           target: { evidenceId: a.evidenceId },
           pinnedByUserId: null,

@@ -7,7 +7,8 @@ The reference designs for the web app: 15 screens drawn by the owner in claude.a
 - **Its design system:** https://claude.ai/artifact/5aoHSLvKvkJrL5rt9eEYCZ. Its tokens are
   `docs/DESIGN-SYSTEM.md` and `packages/ui/src/tokens.css`. `mockups/tokens.json` matches that
   document exactly (33 colour tokens, every spacing, radius and shadow token; checked
-  2026-10-05).
+  2026-10-05). Since then the repo's design system has added tokens the canvas does not have:
+  the entity-class colours and `layout-drawer-width` (2026-10-06).
 
 These files were brought into the repo on 2026-10-05, after Phase 6b steps 1 to 3 had been built
 without them. Until then they existed only in claude.ai. Read this page before building or
@@ -51,11 +52,11 @@ Audited against `apps/api/openapi.json` on 2026-10-05.
 |---|---|---|
 | SignIn (sign-in and MFA challenge) | Built to the design (2026-10-05) | Lost-device line corrected (below) |
 | MfaEnrol | Built to the design (2026-10-05) | Backup codes come before the final step, because confirming leaves the page. "Invited to [ORG] as [ROLE]" needs the invitation in the enrolment state (API), so it is not shown |
-| Main, Dashboard-dark | Built to the design (2026-10-05); dark theme from the account menu | Side navigation shows Search only. Recent cases show pins and the created date (cases record no updated time). Collector health comes from `GET /api/v1/collectors`. Monitors, credits, attach and command palette are Backend, so hidden |
+| Main, Dashboard-dark | Built to the design (2026-10-05); dark theme from the account menu | Side navigation shows Search and Cases (2026-10-06). Recent cases open their workspace. Recent cases show pins and the created date (cases record no updated time). Collector health comes from `GET /api/v1/collectors`. Monitors, credits, attach and command palette are Backend, so hidden |
 | RunLive (the run view against the collectors that exist) | Built to the design (2026-10-05) | Duration estimate, claims per source, per-run cost, pause and "Open case" are Backend: not shown, or an em dash with its reason |
 | Run (an earlier run view) | Superseded by RunLive | Shows collectors that do not exist (SpiderFoot, theHarvester, Shodan, HIBP, Brave) |
-| Evidence | Next (step 4), run-scoped | Provenance from `GET /evidence/{id}`. A claims list with search, hash and paging is API; Re-verify and Cite in report are Backend |
-| Workspace, Overview, Entities, Timeline | Later | Cases and runs are not linked (Backend: a db migration). Correlation, inference, contradictions and saved views do not exist |
+| Evidence | Built (step 4, 2026-10-06), for a run and for a case | From the timeline read, the only evidence list: at most 500 records, said to be partial beyond that. No claim text or hash column (the list carries neither; both are in the provenance drawer). Selection, saved views, Re-verify and Cite in report are Backend, so hidden |
+| Workspace, Overview, Entities, Timeline | Built (step 4, 2026-10-06) | A run's results and a case's pins share the tabs; a case is labelled "Pinned items only" (cases and runs are not linked). Overview is composed from existing reads. The runs rail, discipline filters, case summary paragraph, contradictions, merge actions, bulk actions and saved views are Backend or not built, so hidden. The timeline's range brush is not built |
 | Report, ReportPDF | Later | Reports are per run and read-only. Editing, regenerating a section, review state and case reports are Backend |
 | Media, Map | Later | Not built: no upload, media forensics, geo layers or external feeds |
 
@@ -72,7 +73,10 @@ Audited against `apps/api/openapi.json` on 2026-10-05.
 | Workspace, Evidence, Timeline | crt.sh, DNS and Wayback evidence as OBSERVED | The strength the API gives (REPORTED) | Strength comes from the registry entry |
 | Overview, Entities | "Merging requires a second independent identifier" | "A merge is recorded with its reason and can be undone" | A person may merge on name alone; only automatic name-only merges are refused |
 | Entities | "Shared: display name, city" | The match signals the API gives | Candidates are matched on name only |
-| Evidence | "Open stored copy" | "Download stored copy" | Payloads are only ever served as a download (CLAUDE.md §9) |
+| Evidence | "Open stored copy" | "Download raw payload" | Payloads are only ever served as a download (CLAUDE.md §9) |
+| Workspace | Graph nodes in the claim-strength colours | The entity-class tokens (DESIGN-SYSTEM §2, added 2026-10-06) | In the graph a colour says what a node is; strength is said by the edge and in words |
+| Entities | "First seen" | "Recorded" | The date is when the platform recorded the entity, not when it was first seen anywhere |
+| Overview | "Coverage" by discipline with counts | Each source's status, and the gaps with their reasons | Evidence is not counted by discipline anywhere in the API |
 | Report | "cannot cite pinned evidence" | "cannot cite this run's evidence" | Citations are checked against the run's evidence |
 | ReportPDF | "Case [CASE ID]", "Independent sources" | The run and investigation; "Sources" | Reports are per run; independence of sources is not established |
 | Map | "Conflict events: Needs key" | Licence-blocked | The source is blocked by its licence |

@@ -84,7 +84,18 @@ export class CasesRepository extends TenantRepository {
 }
 
 export type PinTarget =
-  { readonly evidenceId: string } | { readonly entityId: string } | { readonly claimId: string };
+  | { readonly evidenceId: string }
+  | { readonly entityId: string }
+  | { readonly claimId: string }
+  | { readonly relationshipId: string };
+
+/** The column a pin target is stored in, and the id it holds. */
+function pinColumn(target: PinTarget) {
+  if ("evidenceId" in target) return { column: casePins.evidenceId, id: target.evidenceId };
+  if ("entityId" in target) return { column: casePins.entityId, id: target.entityId };
+  if ("claimId" in target) return { column: casePins.claimId, id: target.claimId };
+  return { column: casePins.relationshipId, id: target.relationshipId };
+}
 
 export class CasePinsRepository extends TenantRepository {
   async pin(input: {
@@ -104,6 +115,7 @@ export class CasePinsRepository extends TenantRepository {
             evidenceId: "evidenceId" in target ? requireUuid(target.evidenceId) : null,
             entityId: "entityId" in target ? requireUuid(target.entityId) : null,
             claimId: "claimId" in target ? requireUuid(target.claimId) : null,
+            relationshipId: "relationshipId" in target ? requireUuid(target.relationshipId) : null,
             pinnedByUserId: input.pinnedByUserId,
             note: input.note,
           })
@@ -120,18 +132,7 @@ export class CasePinsRepository extends TenantRepository {
 
   /** The pin of exactly this target on this case, or null. */
   async findByTarget(caseId: string, target: PinTarget): Promise<CasePin | null> {
-    const column =
-      "evidenceId" in target
-        ? casePins.evidenceId
-        : "entityId" in target
-          ? casePins.entityId
-          : casePins.claimId;
-    const id =
-      "evidenceId" in target
-        ? target.evidenceId
-        : "entityId" in target
-          ? target.entityId
-          : target.claimId;
+    const { column, id } = pinColumn(target);
     return this.run(async (tx) =>
       firstRow(
         await tx

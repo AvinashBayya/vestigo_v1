@@ -1,5 +1,5 @@
 import { CLAIM_STRENGTHS, DECISION_ACTOR_KINDS, ENTITY_KINDS, MERGE_SIGNALS } from "@repo/core";
-import type { EntityMerge, ScopedEntity } from "@repo/db";
+import type { Claim, EntityMerge, ScopedEntity } from "@repo/db";
 import { ConstraintViolationError } from "@repo/db";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -76,7 +76,39 @@ const RelationshipView = z.object({
   strengths: z.array(Strength),
 });
 
+const RelationshipEndView = z.object({
+  id: z.uuid(),
+  kind: z.enum(ENTITY_KINDS),
+  displayName: z.string(),
+  identifier: z.string().nullable(),
+});
+
+const RelationshipDetailView = z.object({
+  id: z.uuid(),
+  kind: z.string(),
+  source: RelationshipEndView,
+  target: RelationshipEndView,
+  createdAt: z.iso.datetime(),
+  /** Every claim recorded about the relationship (measured). */
+  claimCount: z.number().int().min(0),
+  /** The distinct strengths of its claims, strongest first. */
+  strengths: z.array(Strength),
+});
+
 const CLAIM_LIMIT_MAX = 500;
+
+const ClaimLimitQuery = z.object({
+  claimLimit: z.coerce.number().int().min(1).max(CLAIM_LIMIT_MAX).default(200),
+});
+
+const claimView = (claim: Claim): z.infer<typeof ClaimView> => ({
+  id: claim.id,
+  evidenceId: claim.evidenceId,
+  attribute: claim.attribute,
+  value: claim.value,
+  strength: claim.strength,
+  createdAt: iso(claim.createdAt),
+});
 
 const Actor = z.object({
   kind: z.enum(DECISION_ACTOR_KINDS),
@@ -240,9 +272,7 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
         tags: ["entities"],
         security: SECURITY,
         params: IdParams,
-        querystring: z.object({
-          claimLimit: z.coerce.number().int().min(1).max(CLAIM_LIMIT_MAX).default(200),
-        }),
+        querystring: ClaimLimitQuery,
         response: {
           200: z.object({
             entity: EntityView,
@@ -278,20 +308,68 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
       });
       return {
         entity: entityView(detail.entity),
-        claims: rows.slice(0, request.query.claimLimit).map((claim) => ({
-          id: claim.id,
-          evidenceId: claim.evidenceId,
-          attribute: claim.attribute,
-          value: claim.value,
-          strength: claim.strength,
-          createdAt: iso(claim.createdAt),
-        })),
+        claims: rows.slice(0, request.query.claimLimit).map(claimView),
         claimsTruncated: rows.length > request.query.claimLimit,
         relationships: detail.relationships.map((r) => ({
           ...r,
           strengths: [...r.strengths],
         })),
         mergedEntityIds: [...detail.mergedEntityIds],
+      };
+    },
+  );
+
+  app.get(
+    "/api/v1/relationships/:id",
+    {
+      config: { access: { permission: "evidence:read", action: "relationship.read" } },
+      schema: {
+        operationId: "getRelationship",
+        summary: "Read a relationship with both of its entities and the claims behind it",
+        description:
+          "The provenance of an edge: every claim asserting the relationship, each with the evidence it cites. DERIVED marks a claim the platform computed; every other label is the source's.",
+        tags: ["entities"],
+        security: SECURITY,
+        params: IdParams,
+        querystring: ClaimLimitQuery,
+        response: {
+          200: z.object({
+            relationship: RelationshipDetailView,
+            claims: z.array(ClaimView),
+            /** True when the relationship has more claims than were returned: the list is partial. */
+            claimsTruncated: z.boolean(),
+          }),
+          ...PROTECTED_ERRORS,
+        },
+      },
+    },
+    async (request) => {
+      const context = tenantOf(request);
+      const { repos, reads } = context;
+      request.auditTarget = { type: "relationship", id: request.params.id };
+      const detail = await reads.exploration.relationshipDetail(request.params.id);
+      if (detail === null) throw notFound("The relationship");
+      // Both ends are shown by name; probing them covers the relationship's own claims too.
+      await requirePersonAccess(
+        context,
+        { entityIds: [detail.source.id, detail.target.id] },
+        "This relationship, with both of its entities and the claims behind it.",
+      );
+      const rows = await repos.claims.listForRelationship(request.params.id, {
+        limit: request.query.claimLimit + 1,
+      });
+      return {
+        relationship: {
+          id: detail.id,
+          kind: detail.kind,
+          source: detail.source,
+          target: detail.target,
+          createdAt: iso(detail.createdAt),
+          claimCount: detail.claimCount,
+          strengths: [...detail.strengths],
+        },
+        claims: rows.slice(0, request.query.claimLimit).map(claimView),
+        claimsTruncated: rows.length > request.query.claimLimit,
       };
     },
   );

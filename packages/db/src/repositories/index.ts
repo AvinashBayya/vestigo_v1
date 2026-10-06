@@ -128,6 +128,8 @@ export {
   type MergeCandidate,
   type PersonProbe,
   type ReadScope,
+  type RelationshipDetail,
+  type RelationshipEnd,
   type ScopedEntity,
   type TimelineRow,
   type TimelineTotals,

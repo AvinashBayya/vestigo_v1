@@ -50,6 +50,28 @@
   --ds-status-failed-ink: #7a2e1e;
   --ds-status-failed-mark: #a33f27;
 
+  /* §2 Entity class (graph nodes) */
+  --ds-entity-domain-ring: #1d6b47;
+  --ds-entity-domain-fill: #e5f0e9;
+  --ds-entity-ip-ring: #2e8a5e;
+  --ds-entity-ip-fill: #e9f4ee;
+  --ds-entity-url-ring: #134a33;
+  --ds-entity-url-fill: #e1ece5;
+  --ds-entity-email-ring: #2a5ca0;
+  --ds-entity-email-fill: #e7edf6;
+  --ds-entity-phone-ring: #1b3f70;
+  --ds-entity-phone-fill: #e3e9f3;
+  --ds-entity-person-ring: #6a4a9e;
+  --ds-entity-person-fill: #efe9f6;
+  --ds-entity-username-ring: #8a5a12;
+  --ds-entity-username-fill: #f6eedd;
+  --ds-entity-account-ring: #6b4510;
+  --ds-entity-account-fill: #f3ead8;
+  --ds-entity-organisation-ring: #9a2f63;
+  --ds-entity-organisation-fill: #f5e6ee;
+  --ds-entity-location-ring: #0f5e66;
+  --ds-entity-location-fill: #e3f0f1;
+
   /* §2 QR code: the same in both themes, so it always scans */
   --ds-qr-module: #15171c;
   --ds-qr-ground: #ffffff;
@@ -114,6 +136,7 @@
   --ds-layout-page-width: 880px;
   --ds-layout-nav-width: 216px;
   --ds-layout-search-width: 780px;
+  --ds-layout-drawer-width: 400px;
   --ds-qr-size: 176px;
 }
 
@@ -156,4 +179,26 @@
   --ds-status-failed-fill: #33211c;
   --ds-status-failed-ink: #e9a48f;
   --ds-status-failed-mark: #c4644a;
+
+  /* §2 Entity class (graph nodes) */
+  --ds-entity-domain-ring: #55b183;
+  --ds-entity-domain-fill: #1d3227;
+  --ds-entity-ip-ring: #7fcfa3;
+  --ds-entity-ip-fill: #1f3a2c;
+  --ds-entity-url-ring: #3e9468;
+  --ds-entity-url-fill: #18291f;
+  --ds-entity-email-ring: #7b9dd6;
+  --ds-entity-email-fill: #232c3a;
+  --ds-entity-phone-ring: #5a7fbf;
+  --ds-entity-phone-fill: #1e2633;
+  --ds-entity-person-ring: #9a7bd0;
+  --ds-entity-person-fill: #2a2338;
+  --ds-entity-username-ring: #c79a4e;
+  --ds-entity-username-fill: #33291a;
+  --ds-entity-account-ring: #a87a32;
+  --ds-entity-account-fill: #2e2416;
+  --ds-entity-organisation-ring: #d07aa6;
+  --ds-entity-organisation-fill: #35212c;
+  --ds-entity-location-ring: #5bb5bd;
+  --ds-entity-location-fill: #1a2e30;
 }

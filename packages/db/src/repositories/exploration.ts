@@ -33,7 +33,7 @@ function scopeEvidence(tenantId: string, scope: ReadScope): SQL {
   }
   const caseId = requireUuid(scope.caseId);
   // Pinned evidence, the evidence behind pinned claims, and the evidence
-  // behind the claims about pinned entities.
+  // behind the claims about pinned entities and pinned relationships.
   return sql`select p.evidence_id as id from ${casePins} p
       where p.tenant_id = ${tenantId} and p.case_id = ${caseId} and p.evidence_id is not null
     union
@@ -43,6 +43,10 @@ function scopeEvidence(tenantId: string, scope: ReadScope): SQL {
     union
     select c.evidence_id from ${claims} c
       join ${casePins} p on p.tenant_id = c.tenant_id and p.entity_id = c.entity_id
+      where p.tenant_id = ${tenantId} and p.case_id = ${caseId}
+    union
+    select c.evidence_id from ${claims} c
+      join ${casePins} p on p.tenant_id = c.tenant_id and p.relationship_id = c.relationship_id
       where p.tenant_id = ${tenantId} and p.case_id = ${caseId}`;
 }
 
@@ -60,10 +64,19 @@ function scopeEntities(tenantId: string, scope: ReadScope): SQL {
               where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)} and p.claim_id is not null)
             or c.evidence_id in (select p.evidence_id from ${casePins} p
               where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)} and p.evidence_id is not null))`;
+  // A case's pinned entities, and both ends of its pinned relationships.
   const pinnedEntities =
     "caseId" in scope
       ? sql`select p.entity_id as id from ${casePins} p
           where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)} and p.entity_id is not null
+        union
+        select r.source_entity_id from ${casePins} p
+          join ${entityRelationships} r on r.tenant_id = p.tenant_id and r.id = p.relationship_id
+          where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)}
+        union
+        select r.target_entity_id from ${casePins} p
+          join ${entityRelationships} r on r.tenant_id = p.tenant_id and r.id = p.relationship_id
+          where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)}
         union`
       : sql``;
   return sql`${pinnedEntities}
@@ -185,6 +198,24 @@ export interface EntityDetail {
   readonly relationships: readonly EntityRelationshipView[];
   /** Ids of the entities currently merged into this one. */
   readonly mergedEntityIds: readonly string[];
+}
+
+export interface RelationshipEnd {
+  readonly id: string;
+  readonly kind: EntityKind;
+  readonly displayName: string;
+  readonly identifier: string | null;
+}
+
+export interface RelationshipDetail {
+  readonly id: string;
+  readonly kind: string;
+  readonly source: RelationshipEnd;
+  readonly target: RelationshipEnd;
+  readonly createdAt: Date;
+  /** Every claim recorded about the relationship (measured). */
+  readonly claimCount: number;
+  readonly strengths: readonly ClaimStrength[];
 }
 
 export interface TimelineRow {
@@ -370,6 +401,65 @@ export class ExplorationRepository extends TenantRepository {
         })),
         mergedEntityIds: merged.rows.map((m) => m.merged_entity_id),
       };
+    });
+  }
+
+  /** One relationship with both of its ends, or null when it is not in this tenant. */
+  async relationshipDetail(id: string): Promise<RelationshipDetail | null> {
+    const [row] = await this.relationshipDetails([id]);
+    return row ?? null;
+  }
+
+  /** Relationships with both of their ends; ids not in this tenant are left out. */
+  async relationshipDetails(ids: readonly string[]): Promise<RelationshipDetail[]> {
+    if (ids.length === 0) return [];
+    const list = uuidList(ids);
+    return this.run(async (tx) => {
+      const result = await tx.execute<{
+        id: string;
+        kind: string;
+        created_at: Date | string;
+        source_id: string;
+        source_kind: EntityKind;
+        source_name: string;
+        source_identifier: string | null;
+        target_id: string;
+        target_kind: EntityKind;
+        target_name: string;
+        target_identifier: string | null;
+        claim_count: string;
+        strengths: string[];
+      }>(sql`
+        select r.id, r.kind, r.created_at,
+          s.id as source_id, s.kind as source_kind, s.display_name as source_name, s.identifier as source_identifier,
+          t.id as target_id, t.kind as target_kind, t.display_name as target_name, t.identifier as target_identifier,
+          (select count(*) from ${claims} c where c.tenant_id = r.tenant_id and c.relationship_id = r.id) as claim_count,
+          (select coalesce(array_agg(distinct c.strength::text), '{}') from ${claims} c
+             where c.tenant_id = r.tenant_id and c.relationship_id = r.id) as strengths
+        from ${entityRelationships} r
+        join ${entities} s on s.tenant_id = r.tenant_id and s.id = r.source_entity_id
+        join ${entities} t on t.tenant_id = r.tenant_id and t.id = r.target_entity_id
+        where r.tenant_id = ${this.tenantId} and r.id in (${list})
+        order by r.created_at, r.id`);
+      return result.rows.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        source: {
+          id: row.source_id,
+          kind: row.source_kind,
+          displayName: row.source_name,
+          identifier: row.source_identifier,
+        },
+        target: {
+          id: row.target_id,
+          kind: row.target_kind,
+          displayName: row.target_name,
+          identifier: row.target_identifier,
+        },
+        createdAt: toDate(row.created_at) ?? new Date(Number.NaN),
+        claimCount: Number(row.claim_count),
+        strengths: sortStrengths(row.strengths),
+      }));
     });
   }
 

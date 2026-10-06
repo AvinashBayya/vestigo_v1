@@ -1,7 +1,7 @@
 import { Button, cn, Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { FolderOpen, Search } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { timed, unwrap, type SessionState } from "../api.ts";
 import { api } from "../client/index.ts";
@@ -56,8 +56,16 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
 
 function SideNav() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  // A run is part of the search flow that started it.
+  // A run, and its results, are part of the search flow that started it.
   const searchActive = pathname === "/" || pathname.startsWith("/runs/");
+  const casesActive = pathname === "/cases" || pathname.startsWith("/cases/");
+  const item = (active: boolean) =>
+    cn(
+      "flex min-h-target items-center gap-3 rounded-md px-3 text-body",
+      active
+        ? "bg-accent-soft text-body-strong text-accent-ink"
+        : "text-ink-secondary hover:bg-surface-hover",
+    );
   return (
     <nav
       aria-label="Main"
@@ -71,15 +79,20 @@ function SideNav() {
           <Link
             to="/"
             aria-current={searchActive ? "page" : undefined}
-            className={cn(
-              "flex min-h-target items-center gap-3 rounded-md px-3 text-body",
-              searchActive
-                ? "bg-accent-soft text-body-strong text-accent-ink"
-                : "text-ink-secondary hover:bg-surface-hover",
-            )}
+            className={item(searchActive)}
           >
             <Search className="size-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
             Search
+          </Link>
+        </li>
+        <li>
+          <Link
+            to="/cases"
+            aria-current={casesActive ? "page" : undefined}
+            className={item(casesActive)}
+          >
+            <FolderOpen className="size-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
+            Cases
           </Link>
         </li>
       </ul>

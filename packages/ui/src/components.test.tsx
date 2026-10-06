@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { Button } from "./button.tsx";
+import { CLAIM_STRENGTH_LABELS, ClaimStrength } from "./claim-strength.tsx";
 import { cn } from "./cn.ts";
+import { ENTITY_CLASSES, EntityClassName } from "./entity-class.tsx";
 import { Field } from "./field.tsx";
 import { Notice } from "./notice.tsx";
 import { COLLECTOR_STATUSES, StatusChip } from "./status-chip.tsx";
@@ -77,5 +79,37 @@ describe("StatusChip", () => {
     expect(document.body.textContent).toBe(
       "RanRunningPartialFailedNeeds keySkippedHeldQueuedCancelledReady",
     );
+  });
+});
+
+describe("ClaimStrength", () => {
+  it("always renders the strength as its word, never colour alone (§2)", () => {
+    render(
+      <>
+        {CLAIM_STRENGTH_LABELS.map((strength) => (
+          <ClaimStrength key={strength} strength={strength} />
+        ))}
+      </>,
+    );
+    expect(document.body.textContent).toBe("OBSERVEDREPORTEDDERIVEDCORRELATEDINFERREDHYPOTHESIS");
+  });
+});
+
+describe("EntityClassName", () => {
+  it("names every class in words beside its colour (§6)", () => {
+    render(
+      <>
+        {ENTITY_CLASSES.map((entityClass) => (
+          <EntityClassName key={entityClass} entityClass={entityClass} />
+        ))}
+      </>,
+    );
+    expect(document.body.textContent).toBe(
+      "PersonOrganisationDomainIP addressEmailUsernamePhoneURLAccountLocation",
+    );
+  });
+
+  it("lets a later entity colour replace an earlier one", () => {
+    expect(cn("bg-entity-domain-ring", "bg-entity-person-ring")).toBe("bg-entity-person-ring");
   });
 });

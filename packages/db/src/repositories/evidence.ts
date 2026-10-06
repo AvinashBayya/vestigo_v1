@@ -166,6 +166,18 @@ export class ClaimsRepository extends TenantRepository {
     );
   }
 
+  /** Claims about one relationship, oldest first; the limit is required so truncation is never silent. */
+  async listForRelationship(relationshipId: string, options: ListOptions): Promise<Claim[]> {
+    return this.run((tx) =>
+      tx
+        .select()
+        .from(claims)
+        .where(and(this.inTenant(claims), eq(claims.relationshipId, requireUuid(relationshipId))))
+        .orderBy(asc(claims.createdAt), asc(claims.id))
+        .limit(limitOf(options)),
+    );
+  }
+
   async list(options: ListOptions): Promise<Claim[]> {
     return this.run((tx) =>
       tx

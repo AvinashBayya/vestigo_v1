@@ -24,6 +24,7 @@ import {
 
 let api: TestApi;
 let tenantA: TenantId;
+let ownerA: string;
 let a: Browser;
 let b: Browser;
 
@@ -134,6 +135,7 @@ beforeAll(async () => {
     provisionTestTenant(api, "x-b"),
   ]);
   tenantA = ta.tenantId;
+  ownerA = ta.ownerUserId;
   a = await readyBrowser(api, ta.owner, tenantA);
   b = await readyBrowser(api, tb.owner, tb.tenantId);
   seedA = await seed(tenantA, ta.ownerUserId);
@@ -360,6 +362,180 @@ describe("entities, merges, graph and timeline", () => {
       strength: "OBSERVED",
     });
     expect(timeline).toMatchObject({ total: 1, withoutObservedAt: 1, withoutCollectedAt: 0 });
+  });
+});
+
+/**
+ * A relationship asserted by two claims, one stated and one derived, from a
+ * run of its own (so the main fixture's counts are unchanged).
+ */
+async function seedRelationship(): Promise<{
+  runId: string;
+  evidenceId: string;
+  relationshipId: string;
+  sourceId: string;
+  targetId: string;
+}> {
+  return api.db.withTenant(tenantA, async ({ repos }) => {
+    const investigation = await repos.investigations.create({
+      title: "[relationship investigation]",
+      target: "example.org",
+      createdByUserId: ownerA,
+    });
+    const run = await repos.runs.create({
+      investigationId: investigation.id,
+      status: "QUEUED",
+      requestedByUserId: ownerA,
+    });
+    const job = await repos.jobs.create({
+      runId: run.id,
+      collectorId: "fixture",
+      idempotencyKey: `explore-relationship:${run.id}`,
+      status: "QUEUED",
+    });
+    const stored = await api.services.runs.contentStore.put(
+      tenantA,
+      new TextEncoder().encode(`[relationship payload ${run.id}]`),
+    );
+    const evidence = await repos.evidence.record({
+      collectorId: "fixture",
+      collectorVersion: "0.0.0-test",
+      jobId: job.id,
+      sourceUrl: null,
+      contentHash: stored.contentHash,
+      payloadRef: stored.ref,
+      observedAt: null,
+      collectedAt: new Date("2026-05-02T00:00:00Z"),
+      claimStrength: "OBSERVED",
+    });
+    const source = await repos.entities.create({ kind: "DOMAIN", displayName: "example.org" });
+    const target = await repos.entities.create({ kind: "IP_ADDRESS", displayName: "192.0.2.1" });
+    const relationship = await repos.entityRelationships.create({
+      sourceEntityId: source.id,
+      targetEntityId: target.id,
+      kind: "resolves_to",
+    });
+    await repos.claims.create({
+      evidenceId: evidence.id,
+      subject: { relationshipId: relationship.id },
+      attribute: "record_type",
+      value: "A",
+      strength: "OBSERVED",
+    });
+    await repos.claims.create({
+      evidenceId: evidence.id,
+      subject: { relationshipId: relationship.id },
+      attribute: "first_seen",
+      value: null,
+      strength: "DERIVED",
+    });
+    return {
+      runId: run.id,
+      evidenceId: evidence.id,
+      relationshipId: relationship.id,
+      sourceId: source.id,
+      targetId: target.id,
+    };
+  });
+}
+
+describe("relationships: provenance and pins", () => {
+  let rel: Awaited<ReturnType<typeof seedRelationship>>;
+
+  beforeAll(async () => {
+    rel = await seedRelationship();
+  });
+
+  it("reads a relationship with both ends and every claim behind it, each citing its evidence", async () => {
+    const response = await a.request("GET", `/api/v1/relationships/${rel.relationshipId}`);
+    expect(response.status).toBe(200);
+    expect(response.body).toContain('"value":null');
+    const body = json<{
+      relationship: {
+        kind: string;
+        source: { id: string; kind: string };
+        target: { id: string; kind: string };
+        claimCount: number;
+        strengths: string[];
+      };
+      claims: { attribute: string; evidenceId: string; strength: string; value: unknown }[];
+      claimsTruncated: boolean;
+    }>(response);
+    expect(body.relationship).toMatchObject({
+      kind: "resolves_to",
+      source: { id: rel.sourceId, kind: "DOMAIN" },
+      target: { id: rel.targetId, kind: "IP_ADDRESS" },
+      claimCount: 2,
+      strengths: ["OBSERVED", "DERIVED"],
+    });
+    // Created in one transaction, so they share a timestamp: compare without order.
+    expect(
+      body.claims.map((claim) => [claim.attribute, claim.strength, claim.evidenceId]).sort(),
+    ).toEqual([
+      ["first_seen", "DERIVED", rel.evidenceId],
+      ["record_type", "OBSERVED", rel.evidenceId],
+    ]);
+    expect(body.claimsTruncated).toBe(false);
+
+    const cut = json<{ claims: unknown[]; claimsTruncated: boolean }>(
+      await a.request("GET", `/api/v1/relationships/${rel.relationshipId}?claimLimit=1`),
+    );
+    expect(cut.claims).toHaveLength(1);
+    expect(cut.claimsTruncated).toBe(true);
+    const unknown = "00000000-0000-4000-8000-000000000000";
+    expect((await a.request("GET", `/api/v1/relationships/${unknown}`)).status).toBe(404);
+    expect(
+      (await a.request("GET", `/api/v1/relationships/${rel.relationshipId}?claimLimit=0`)).status,
+    ).toBe(400);
+  });
+
+  it("pins a relationship idempotently, summarised by its ends; the case then holds both ends and its evidence", async () => {
+    const { id: caseId } = json<{ id: string }>(
+      await a.request("POST", "/api/v1/cases", { title: "[Relationship pins]" }),
+    );
+    const pin = () =>
+      a.request("POST", `/api/v1/cases/${caseId}/pins`, {
+        target: { type: "relationship", id: rel.relationshipId },
+      });
+    const first = await pin();
+    expect(first.status).toBe(201);
+    expect(json<{ target: unknown; subject: unknown }>(first)).toMatchObject({
+      target: { type: "relationship", id: rel.relationshipId },
+      subject: {
+        type: "relationship",
+        kind: "resolves_to",
+        source: { id: rel.sourceId, kind: "DOMAIN", displayName: "example.org" },
+        target: { id: rel.targetId, kind: "IP_ADDRESS", displayName: "192.0.2.1" },
+      },
+    });
+    const again = await pin();
+    expect(again.status).toBe(200);
+    expect(json<{ id: string }>(again).id).toBe(json<{ id: string }>(first).id);
+    const missing = await a.request("POST", `/api/v1/cases/${caseId}/pins`, {
+      target: { type: "relationship", id: "00000000-0000-4000-8000-000000000000" },
+    });
+    expect(missing.status).toBe(404);
+
+    const listed = json<{ items: { subject: { type: string } | null }[] }>(
+      await a.request("GET", `/api/v1/cases/${caseId}/pins`),
+    );
+    expect(listed.items.map((item) => item.subject?.type)).toEqual(["relationship"]);
+
+    const entities = json<{ items: { id: string }[] }>(
+      await a.request("GET", `/api/v1/entities?caseId=${caseId}`),
+    );
+    expect(entities.items.map((item) => item.id).sort()).toEqual(
+      [rel.sourceId, rel.targetId].sort(),
+    );
+    const timeline = json<{ items: { evidenceId: string }[]; total: number }>(
+      await a.request("GET", `/api/v1/timeline?caseId=${caseId}`),
+    );
+    expect(timeline.items.map((item) => item.evidenceId)).toEqual([rel.evidenceId]);
+    expect(timeline.total).toBe(1);
+    const graph = json<{ edges: { id: string }[] }>(
+      await a.request("GET", `/api/v1/graph?caseId=${caseId}&hops=0`),
+    );
+    expect(graph.edges.map((edge) => edge.id)).toEqual([rel.relationshipId]);
   });
 });
 
@@ -865,6 +1041,7 @@ describe("tenant B cannot reach tenant A through any new endpoint (RELEASE-BLOCK
       ["entity", seedA.entityId],
       ["evidence", seedA.evidenceId],
       ["claim", seedA.claimId],
+      ["relationship", seedA.relationshipId],
     ] as const) {
       const response = await b.request("POST", `/api/v1/cases/${own.id}/pins`, {
         target: { type, id },
@@ -893,6 +1070,13 @@ describe("tenant B cannot reach tenant A through any new endpoint (RELEASE-BLOCK
       }
     }
     expect((await b.request("GET", `/api/v1/entities/${seedA.entityId}`)).status).toBe(404);
+    expect((await b.request("GET", `/api/v1/relationships/${seedA.relationshipId}`)).status).toBe(
+      404,
+    );
+    // The fixture is real: A reads it.
+    expect((await a.request("GET", `/api/v1/relationships/${seedA.relationshipId}`)).status).toBe(
+      200,
+    );
   });
 
   it("merges: A's cannot be listed, made or undone by B", async () => {
