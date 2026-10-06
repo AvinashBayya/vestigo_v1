@@ -60,7 +60,7 @@ const merge = extendTailwindMerge({
         "metric",
       ],
       spacing: ["1", "2", "3", "4", "5", "6", "8", "10", "target", "qr"],
-      container: ["form"],
+      container: ["form", "page", "nav", "search"],
       radius: ["sm", "md", "lg", "pill"],
       shadow: ["card", "overlay"],
     },

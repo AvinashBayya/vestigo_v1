@@ -196,3 +196,19 @@ export const RUN_STATUS_TEXT: Readonly<Record<RunStatus, string>> = {
   FAILED: "Failed: no source succeeded. Each failure is listed with its reason.",
   CANCELLED: "Cancelled: nothing more will be collected.",
 };
+
+/** A measured duration in words: "0.9s", "14s", "1m 58s", "1h 2m". */
+export function formatDuration(milliseconds: number): string {
+  if (milliseconds < 10_000) return `${(milliseconds / 1000).toFixed(1)}s`;
+  const total = Math.round(milliseconds / 1000);
+  if (total < 60) return `${String(total)}s`;
+  const minutes = Math.floor(total / 60);
+  if (minutes < 60) return `${String(minutes)}m ${String(total % 60)}s`;
+  return `${String(Math.floor(minutes / 60))}h ${String(minutes % 60)}m`;
+}
+
+/** How long between two recorded instants; null unless both were recorded. */
+export function durationBetween(from: string | null, to: string | null): number | null {
+  if (from === null || to === null) return null;
+  return Date.parse(to) - Date.parse(from);
+}

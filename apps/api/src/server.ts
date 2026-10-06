@@ -72,9 +72,10 @@ const retry = {
 };
 const registry = createPlatformRegistry();
 // Admission only, to estimate a run before it starts: the API never fetches.
+const unverifiedSourcesAllowed = allowsUnverifiedSources(env);
 const planner = new CollectorRuntime({
   registry,
-  allowUnverifiedSources: allowsUnverifiedSources(env),
+  allowUnverifiedSources: unverifiedSourcesAllowed,
   network: {
     rateLimiter: redisUpstreamRateLimiter(
       new SlidingLogRateLimiter({ redis, keyPrefix: `${env.QUEUE_PREFIX}:upstream` }),
@@ -121,6 +122,7 @@ const app = await buildApp({
       replayer,
       registry,
       planner,
+      unverifiedSourcesAllowed,
       eventsPollMs: env.RUN_EVENTS_POLL_MS,
       reports,
       renders,

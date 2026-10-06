@@ -20,6 +20,8 @@ export interface RunServices {
   readonly registry: CollectorRegistry;
   /** Admission for planning a run before it starts (estimates); it never fetches. */
   readonly planner: CollectorRuntime;
+  /** Whether collectors with an UNVERIFIED licence run here; the planner is built with the same value. */
+  readonly unverifiedSourcesAllowed: boolean;
   /** How often the progress stream reads a run's state. */
   readonly eventsPollMs: number;
   /** Enqueues report generation; the worker does it. */

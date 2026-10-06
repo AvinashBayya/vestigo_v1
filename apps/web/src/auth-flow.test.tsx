@@ -4,6 +4,7 @@
  * over a fetch stub that answers as the API's session routes do; every
  * request goes through the generated client.
  */
+import { PRODUCT_NAME } from "@repo/config/product";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
@@ -91,9 +92,9 @@ describe("sign in", () => {
     expect(await screen.findByRole("heading", { name: "Sign in" })).toBeTruthy();
     expect(router.state.location.pathname).toBe("/sign-in");
 
-    typeInto("Email address", "analyst@example.com");
+    typeInto("Work email", "analyst@example.com");
     typeInto("Password", "[wrong]");
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("That email address and password do not match an account.");
@@ -108,9 +109,9 @@ describe("sign in", () => {
     });
     renderAt("/sign-in");
     await screen.findByRole("heading", { name: "Sign in" });
-    typeInto("Email address", "analyst@example.com");
+    typeInto("Work email", "analyst@example.com");
     typeInto("Password", "[password]");
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Too many attempts. Try again in 40 seconds.",
     );
@@ -146,19 +147,23 @@ describe("the MFA challenge", () => {
     });
     const router = renderAt("/sign-in");
     await screen.findByRole("heading", { name: "Sign in" });
-    typeInto("Email address", user.email);
+    typeInto("Work email", user.email);
     typeInto("Password", "[password]");
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
-
-    expect(await screen.findByRole("heading", { name: "Two-factor authentication" })).toBeTruthy();
-    typeInto("Authenticator code", "000000");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect((await screen.findByRole("alert")).textContent).toContain("That code is not right.");
 
-    typeInto("Authenticator code", "123456");
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(
+      await screen.findByRole("heading", { name: "Enter your authentication code" }),
+    ).toBeTruthy();
+    typeInto("Six-digit code", "000000");
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("That code was not accepted.");
+
+    typeInto("Six-digit code", "123456");
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
     expect(await screen.findByText(acme.name)).toBeTruthy();
-    expect(screen.getByText(user.email)).toBeTruthy();
+    // Who is signed in is in the account menu.
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    expect(await screen.findByText(user.email)).toBeTruthy();
     expect(router.state.location.pathname).toBe("/");
     expect(requests("POST", "/api/v1/session/tenant")).toHaveLength(1);
   });
@@ -173,10 +178,10 @@ describe("the MFA challenge", () => {
       },
     });
     renderAt("/sign-in/verify");
-    await screen.findByRole("heading", { name: "Two-factor authentication" });
+    await screen.findByRole("heading", { name: "Enter your authentication code" });
     fireEvent.click(screen.getByRole("button", { name: "Use a backup code instead" }));
     typeInto("Backup code", "abcde-12345");
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
       "That backup code is not right, or it has already been used.",
     );
@@ -190,9 +195,9 @@ describe("the MFA challenge", () => {
         problem(401, "INVALID_TWO_FACTOR_COOKIE", "Invalid two factor cookie"),
     });
     renderAt("/sign-in/verify");
-    await screen.findByRole("heading", { name: "Two-factor authentication" });
-    typeInto("Authenticator code", "123456");
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Enter your authentication code" });
+    typeInto("Six-digit code", "123456");
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
     expect((await screen.findByRole("alert")).textContent).toContain("This sign-in has expired.");
     expect(screen.getByRole("link", { name: "Sign in again" })).toBeTruthy();
   });
@@ -226,7 +231,7 @@ describe("MFA enrolment with the link's token", () => {
       await screen.findByRole("heading", { name: "Set up two-factor authentication" }),
     ).toBeTruthy();
     // The link's token is used, not asked for.
-    expect(screen.getByText("Enrolment link received.")).toBeTruthy();
+    expect(screen.getByText("Enrolment link received")).toBeTruthy();
     expect(screen.queryByLabelText("Enrolment token")).toBeNull();
 
     typeInto("Password", "[password]");
@@ -238,8 +243,8 @@ describe("MFA enrolment with the link's token", () => {
     expect(screen.getByText("aaaaa-11111")).toBeTruthy();
     expect(screen.getByText("bbbbb-22222")).toBeTruthy();
 
-    typeInto("Code from the app", "654321");
-    fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
+    typeInto("Six-digit code from your app", "654321");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and finish" }));
     // Two tenants: the person chooses.
     expect(await screen.findByRole("heading", { name: "Choose an organisation" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: other.name }));
@@ -292,8 +297,98 @@ describe("signed in", () => {
     });
     renderAt("/");
     expect(await screen.findByText(acme.name)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sign out" }));
     expect(await screen.findByText("You are signed out.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Sign in" })).toBeTruthy();
+  });
+});
+
+describe("the screen designs, with their copy corrected for what is true", () => {
+  it("never tells the person an administrator can reset their second factor: none can", async () => {
+    fakeApi({ "GET /api/v1/session": () => Response.json({ state: "SIGNED_OUT" }) });
+    renderAt("/sign-in/verify");
+    await screen.findByRole("heading", { name: "Enter your authentication code" });
+    expect(document.body.textContent).toContain(
+      "Lost your device? Sign in with one of the backup codes",
+    );
+    expect(document.body.textContent).not.toMatch(/reset your second factor/i);
+    expect(screen.getByText("Step 2 of 2")).toBeTruthy();
+  });
+
+  it("puts saving the backup codes before the confirmation that leaves the page, and downloads them as a file", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "MFA_ENROLMENT_REQUIRED", user }),
+      "POST /api/v1/session/mfa/enrolment": () =>
+        Response.json({
+          totpUri: "otpauth://totp/Test:analyst?secret=JBSWY3DPEHPK3PXP&issuer=Test",
+          secret: "JBSWY3DPEHPK3PXP",
+          backupCodes: ["aaaaa-11111", "bbbbb-22222"],
+        }),
+    });
+    const saved: Blob[] = [];
+    const createObjectURL = vi.fn((blob: Blob) => {
+      saved.push(blob);
+      return "blob:backup-codes";
+    });
+    // jsdom has no object URLs; the file's contents are what matter.
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = vi.fn();
+    renderAt("/enrol#token=mfa_fromlink");
+    await screen.findByRole("heading", { name: "Set up two-factor authentication" });
+    expect(document.body.textContent).not.toMatch(/link verified|Invitation accepted/i);
+    typeInto("Password", "[password]");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("img", { name: "QR code for your authenticator app" });
+
+    const steps = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(steps).toEqual([
+      "Scan with your authenticator app",
+      "Save your backup codes",
+      "Confirm the code",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Download codes" }));
+    expect(saved).toHaveLength(1);
+    const text = await saved[0]?.text();
+    expect(text).toContain("aaaaa-11111\nbbbbb-22222");
+  });
+});
+
+describe("the signed-in frame", () => {
+  it("shows the organisation's vetting status as the API states it, and switches theme from the account menu", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(signedIn(acme.id)),
+      "GET /api/v1/me": () =>
+        Response.json({
+          authMethod: "SESSION",
+          user: { id: user.id, email: user.email, displayName: null },
+          apiKeyId: null,
+          tenant: {
+            id: acme.id,
+            name: acme.name,
+            plan: "TECHINT",
+            vettingStatus: "NOT_SUBMITTED",
+            planModules: ["TECHINT"],
+          },
+          permissions: ["run:read"],
+        }),
+      "GET /health": () => Response.json({ status: "ok" }),
+    });
+    renderAt("/");
+    // Not "Verified tenant": that is said only when vetting is approved.
+    expect(await screen.findByText("Vetting not submitted")).toBeTruthy();
+    expect(screen.queryByText("Verified tenant")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Main" }).textContent).toBe(
+      `${PRODUCT_NAME}Search`,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use dark theme" }));
+    expect(document.documentElement.dataset["theme"]).toBe("dark");
+    expect(screen.getByRole("button", { name: "Use light theme" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Use light theme" }));
+    expect(document.documentElement.dataset["theme"]).toBe("light");
   });
 });

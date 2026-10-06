@@ -52,12 +52,50 @@ function progressStream() {
   };
 }
 
-/** Answers the session, and each request for the stream with the next response given. */
+/** The collector list: the plan's left-out sources are in it; the test jobs' collectors are not. */
+const COLLECTORS = {
+  unverifiedSourcesAllowed: true,
+  items: [
+    { id: "unlicensed-source", label: "[Unlicensed source]", discipline: "TECHINT" },
+    { id: "phone-source", label: "[Phone source]", discipline: "PERSON" },
+  ].map((entry) => ({
+    ...entry,
+    version: "1.0.0",
+    targetTypes: ["DOMAIN"],
+    collectionMode: "PASSIVE_API",
+    claimStrength: "REPORTED",
+    credentials: { vaultIds: [], runsWithout: true },
+    availability: "AVAILABLE",
+    availabilityReason: null,
+  })),
+};
+
+const ME = {
+  authMethod: "SESSION",
+  user: { id: "u1", email: "analyst@example.com", displayName: null },
+  apiKeyId: null,
+  tenant: {
+    id: tenant.id,
+    name: tenant.name,
+    plan: "TECHINT",
+    vettingStatus: "NOT_SUBMITTED",
+    planModules: ["TECHINT"],
+  },
+  permissions: ["run:read"],
+};
+
+/** Answers the session, the collector list and /me, and each stream request with the next response given. */
 function fakeApi(streams: (() => Response)[]): void {
   fetchMock.mockImplementation((request) => {
     const path = new URL(request.url).pathname;
     if (request.method === "GET" && path === "/api/v1/session") {
       return Promise.resolve(Response.json(session));
+    }
+    if (request.method === "GET" && path === "/api/v1/collectors") {
+      return Promise.resolve(Response.json(COLLECTORS));
+    }
+    if (request.method === "GET" && path === "/api/v1/me") {
+      return Promise.resolve(Response.json(ME));
     }
     if (request.method === "GET" && path === EVENTS) {
       const next = streams.shift();
@@ -174,9 +212,12 @@ describe("the run view", () => {
 
     expect(await screen.findByText("Running.")).toBeTruthy();
     expect(screen.getByText("Live: this page updates as each source finishes.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Sources: 0 of 5 finished" })).toBeTruthy();
-    expect(rowOf("[Found source]").textContent).toBe("Queued[Found source]Waiting for a worker.");
-    expect(rowOf("[Empty source]").textContent).toBe("Running[Empty source]Collecting.");
+    expect(screen.getByText(/0 of 5 sources settled · elapsed /)).toBeTruthy();
+    expect(screen.getByText("3 queued")).toBeTruthy();
+    expect(screen.getByText("2 running")).toBeTruthy();
+    expect(screen.getByText("2 not run")).toBeTruthy();
+    expect(rowOf("[Found source]").textContent).toBe("[Found source]waiting for a workerQueued");
+    expect(rowOf("[Empty source]").textContent).toBe("[Empty source]collectingRunning");
 
     const evidence = [
       "66666666-6666-4666-8666-000000000001",
@@ -187,6 +228,8 @@ describe("the run view", () => {
       status: "SUCCEEDED",
       outcome: "FOUND",
       evidenceIds: evidence,
+      startedAt: "2026-01-01T00:00:01.000Z",
+      finishedAt: "2026-01-01T00:00:01.900Z",
       fusedAt: "2026-01-01T00:00:05.000Z",
     });
     stream.send("job", {
@@ -217,28 +260,58 @@ describe("the run view", () => {
       nextAttemptAt: "2026-01-01T00:01:00.000Z",
     });
 
-    await screen.findByRole("heading", { name: "Sources: 4 of 5 finished" });
-    expect(rowOf("[Found source]").textContent).toBe("Ran[Found source]Found 2 evidence records.");
-    // Found nothing and failed look obviously different: the word, and the reason.
+    await screen.findByText(/4 of 5 sources settled/);
+    // What it found, with how long it took (measured from its own start and finish).
+    expect(rowOf("[Found source]").textContent).toBe("[Found source]2 evidence records · 0.9sRan");
+    // Found nothing and failed look obviously different: the word, the reason, the tint.
     expect(rowOf("[Empty source]").textContent).toBe(
-      "Ran[Empty source]Found nothing: [what was not found]",
+      "[Empty source]found nothing: [what was not found]Ran",
     );
-    const failed = rowOf("[Failing source]").textContent;
-    expect(failed).toContain("Failed[Failing source][why it timed out] Code: UPSTREAM_TIMEOUT.");
-    expect(failed).toContain("Gave up after 3 attempts at");
-    expect(failed).toContain("kept in the dead-letter queue for review.");
+    const failed = rowOf("[Failing source]");
+    expect(failed.className).toContain("bg-status-failed-fill");
+    expect(failed.textContent).toContain(
+      "[Failing source]UPSTREAM_TIMEOUT: [why it timed out] · gave up after 3 attempts · dead-lettered ",
+    );
+    expect(failed.textContent).toMatch(/, kept for reviewFailed$/);
     expect(rowOf("[Keyed source]").textContent).toBe(
-      "Needs key[Keyed source][which key is missing] Code: NEEDS_CREDENTIALS.",
+      "[Keyed source]NEEDS_CREDENTIALS: [which key is missing]Needs key",
     );
     const queued = rowOf("[Retrying source]").textContent;
-    expect(queued).toContain("Queued[Retrying source][rate limited] Code: UPSTREAM_RATE_LIMITED.");
-    expect(queued).toContain("Next attempt at");
-    expect(queued).toContain("(after 1 attempt).");
+    expect(queued).toContain(
+      "[Retrying source]UPSTREAM_RATE_LIMITED: [rate limited] · next attempt ",
+    );
+    expect(queued).toMatch(/\(after 1 attempt\)Queued$/);
 
-    // Left out by the plan: by id and status; a source that does not take the type is not listed.
-    const notRun = screen.getByRole("heading", { name: "Not run (1)" }).closest("section");
-    expect(notRun?.textContent).toBe(
-      "Not run (1)Heldunlicensed-source[why its licence blocks it]LICENCE_BLOCKED",
+    // Left out by the plan: labelled from the collector list, with its status and the API's reason.
+    expect(rowOf("[Unlicensed source]").textContent).toBe(
+      "[Unlicensed source]TECHINT · [why its licence blocks it]Held",
+    );
+    expect(rowOf("[Phone source]").textContent).toBe(
+      "[Phone source]Person · [the types it accepts]Skipped",
+    );
+
+    // Arriving now: counted from the run; what a source that did not complete would have found is unmeasured.
+    const arriving = screen.getByRole("heading", { name: "Arriving now" }).closest("section");
+    if (arriving === null) throw new TypeError("no panel");
+    expect(within(arriving).getByText("Evidence records").parentElement?.textContent).toBe(
+      "Evidence records2",
+    );
+    expect(
+      within(arriving).getByRole("button", {
+        name: "Not measured. [Failing source] did not complete, so what it would have found is not measured.",
+      }),
+    ).toBeTruthy();
+
+    // Settings, each from what the API states.
+    const settings = screen.getByRole("heading", { name: "Run settings" }).closest("section");
+    if (settings === null) throw new TypeError("no panel");
+    expect(within(settings).getByText("Not in this plan")).toBeTruthy();
+    // The test jobs' collectors are not in the list, so the mode is not asserted.
+    expect(
+      within(settings).getByRole("button", { name: /^Not measured\. The collector list/ }),
+    ).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(
+      /Recording to case|In-region|Open case|Pause run/,
     );
 
     stream.send(
@@ -340,7 +413,7 @@ describe("the run view", () => {
     expect(screen.getByText("Running.")).toBeTruthy();
   });
 
-  it("closes on a locked event: the Locked state when person data is the reason, the plain reason otherwise, and no reconnect", async () => {
+  it("closes on a locked event: the Locked state for every reason, never a failure, and no reconnect", async () => {
     const person = progressStream();
     fakeApi([person.response]);
     renderRun();
@@ -370,21 +443,47 @@ describe("the run view", () => {
     expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
     cleanup();
 
-    const revoked = progressStream();
-    fakeApi([revoked.response]);
-    renderRun();
-    revoked.send("run", run());
-    revoked.send(
-      "locked",
-      lockedEvent({ reason: "MEMBERSHIP_REVOKED", code: "NOT_A_MEMBER", locked: null }),
-    );
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toContain(
-      "Updates stopped: access to this run is no longer allowed.",
-    );
-    expect(alert.textContent).toContain("[why access is refused]");
-    expect(alert.textContent).toContain("Code: NOT_A_MEMBER");
-    expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
+    // The reader's own access ended: the Locked state with the API's reason and
+    // an action this app can take, never a failure or a connection error.
+    const accessCases = [
+      {
+        reason: "CREDENTIAL_REVOKED",
+        code: "UNAUTHENTICATED",
+        next: "Sign in again to keep following this run.",
+        href: "/sign-in",
+      },
+      {
+        reason: "MEMBERSHIP_REVOKED",
+        code: "NOT_A_MEMBER",
+        next: "Choose an organisation you still belong to.",
+        href: "/tenant",
+      },
+      {
+        reason: "PERMISSION_LOST",
+        code: "PERMISSION_DENIED",
+        next: "Ask an owner or administrator of this organisation to give your role permission to read runs.",
+        href: null,
+      },
+    ] as const;
+    for (const { reason, code, next, href } of accessCases) {
+      cleanup();
+      const revoked = progressStream();
+      fakeApi([revoked.response]);
+      renderRun();
+      revoked.send("run", run());
+      revoked.send("locked", lockedEvent({ reason, code, locked: null }));
+      const step = await screen.findByText(next);
+      const notice = step.closest("[role]");
+      expect(notice?.getAttribute("role"), reason).toBe("status");
+      expect(notice?.textContent).toContain("Locked");
+      expect(notice?.textContent).toContain("Live updates for this run are withheld.");
+      expect(notice?.textContent).toContain("2026-01-01T00:00:10.000Z");
+      expect(notice?.textContent).toContain("[why access is refused]");
+      expect(notice?.textContent).toContain(`Reason: ${reason} · Code: ${code}`);
+      expect(step.closest("a")?.getAttribute("href") ?? null, reason).toBe(href);
+      expect(screen.queryByRole("alert"), reason).toBeNull();
+      expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
+    }
   });
 
   it("shows a refused connection plainly: the Locked state for person data, the reason otherwise", async () => {
@@ -430,5 +529,35 @@ describe("the run view", () => {
     expect(
       await screen.findByText("This run no longer exists, so there is nothing more to show."),
     ).toBeTruthy();
+  });
+
+  it("says the run is passive only when every source in it is, from the collector list, and shows the run's status in the header", async () => {
+    const stream = progressStream();
+    fakeApi([stream.response]);
+    renderRun();
+    stream.send(
+      "run",
+      run({ status: "SUCCEEDED", settled: true, finishedAt: "2026-01-01T00:02:00.000Z" }),
+    );
+    stream.send(
+      "job",
+      job({
+        collectorId: "unlicensed-source",
+        sourceLabel: "[Listed source]",
+        status: "SUCCEEDED",
+        outcome: "FOUND",
+        attempts: 2,
+      }),
+    );
+    stream.send("end", { status: "SUCCEEDED" });
+    expect(await screen.findByText("Finished: every source ran.")).toBeTruthy();
+    const settings = screen.getByRole("heading", { name: "Run settings" }).closest("section");
+    if (settings === null) throw new TypeError("no panel");
+    expect(await within(settings).findByText("Passive only")).toBeTruthy();
+    // A source that succeeded on a later attempt says so; its discipline comes from the list.
+    expect(rowOf("[Listed source]").textContent).toBe(
+      "[Listed source]TECHINT · 0 evidence records · merging into the results · recovered on attempt 2Ran",
+    );
+    expect(screen.getByText("Detected: domain")).toBeTruthy();
   });
 });

@@ -22,8 +22,15 @@ const fetchMock = vi.hoisted(() => {
 
 type Handler = (body: Record<string, unknown>, request: Request) => Response | Promise<Response>;
 
+/** What the dashboard's panels read when a test does not say otherwise: nothing yet. */
+const PANEL_DEFAULTS: Record<string, Handler> = {
+  "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
+  "GET /api/v1/collectors": () => Response.json({ unverifiedSourcesAllowed: true, items: [] }),
+};
+
 /** Answers by method and path; anything unexpected fails loudly as a 404 problem. */
-function fakeApi(handlers: Record<string, Handler>): void {
+function fakeApi(given: Record<string, Handler>): void {
+  const handlers = { ...PANEL_DEFAULTS, ...given };
   fetchMock.mockImplementation(async (request) => {
     const path = new URL(request.url).pathname;
     const handler = handlers[`${request.method} ${path}`];
@@ -124,13 +131,13 @@ function renderHome() {
 }
 
 const typeTarget = (value: string) => {
-  fireEvent.change(screen.getByLabelText("Target"), { target: { value } });
+  fireEvent.change(screen.getByLabelText("Target to investigate"), { target: { value } });
 };
 
 const checkTarget = async (value: string) => {
-  await screen.findByLabelText("Target");
+  await screen.findByLabelText("Target to investigate");
   typeTarget(value);
-  fireEvent.click(screen.getByRole("button", { name: "Check target" }));
+  fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
   await screen.findByRole("heading", { name: /Sources that would run/ });
 };
 
@@ -153,14 +160,82 @@ afterEach(() => {
 });
 
 describe("the search dashboard", () => {
-  it("before any check, says what checking does and that nothing runs yet", async () => {
-    fakeApi({ "GET /api/v1/session": () => Response.json(session) });
+  it("before any search: the newest open cases, and each collector with whether it can run here", async () => {
+    const caseOf = (title: string, createdAt: string, archivedAt: string | null = null) => ({
+      id: `77777777-7777-4777-8777-${createdAt.slice(8, 10).padStart(12, "0")}`,
+      title,
+      description: null,
+      createdByUserId: null,
+      createdAt,
+      archivedAt,
+      pinCount: 0,
+    });
+    const collector = (
+      id: string,
+      label: string,
+      availability: string,
+      availabilityReason: string | null,
+      targetTypes: string[],
+    ) => ({
+      id,
+      version: "1.0.0",
+      label,
+      discipline: "TECHINT",
+      targetTypes,
+      collectionMode: "PASSIVE_API",
+      claimStrength: "REPORTED",
+      credentials: { vaultIds: [], runsWithout: true },
+      availability,
+      availabilityReason,
+    });
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(session),
+      "GET /api/v1/cases": () =>
+        Response.json({
+          items: [
+            caseOf("[Oldest case]", "2026-01-01T00:00:00.000Z"),
+            caseOf("[Archived case]", "2026-01-05T00:00:00.000Z", "2026-01-06T00:00:00.000Z"),
+            caseOf("[Second case]", "2026-01-02T00:00:00.000Z"),
+            caseOf("[Newest case]", "2026-01-04T00:00:00.000Z"),
+            caseOf("[Third case]", "2026-01-03T00:00:00.000Z"),
+          ],
+          hasMore: false,
+        }),
+      "GET /api/v1/collectors": () =>
+        Response.json({
+          unverifiedSourcesAllowed: false,
+          items: [
+            collector("ok", "[Permitted source]", "AVAILABLE", null, ["DOMAIN"]),
+            collector("unverified", "[Unverified source]", "UNVERIFIED", "[licence reason]", [
+              "USERNAME",
+            ]),
+            collector("blocked", "[Blocked source]", "BLOCKED", "[why it is blocked]", ["URL"]),
+          ],
+        }),
+    });
     renderHome();
     expect(
-      (await screen.findByText(/Check a target to see what kind of target it is/)).textContent,
-    ).toContain("Nothing is collected until you start a run.");
-    expect(screen.getByRole("button", { name: "Check target" }).hasAttribute("disabled")).toBe(
-      true,
+      await screen.findByRole("heading", { name: "What are you investigating?" }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Investigate" }).hasAttribute("disabled")).toBe(true);
+
+    // Newest first by creation (cases record no update time), archived left out, three shown.
+    const cases = (await screen.findByText("[Newest case]")).closest("ul");
+    expect(
+      [...(cases?.querySelectorAll("li > p:first-child") ?? [])].map((p) => p.textContent),
+    ).toEqual(["[Newest case]", "[Third case]", "[Second case]"]);
+    expect(cases?.textContent).toContain("0 pinned · created");
+
+    const rowOf = (label: string) => screen.getByText(label).closest("li")?.textContent;
+    expect(rowOf("[Permitted source]")).toBe("[Permitted source]TECHINTReady");
+    // This deployment does not allow unverified sources, so that one is held, and says so.
+    expect(rowOf("[Unverified source]")).toBe(
+      "[Unverified source]TECHINT · Its licence is unverified, and this deployment does not allow unverified sources.Held",
+    );
+    expect(rowOf("[Blocked source]")).toBe("[Blocked source]TECHINT · [why it is blocked]Held");
+    // Only types some source here can take are offered as examples.
+    expect(screen.getByText("Sources here run for:").parentElement?.textContent).toBe(
+      "Sources here run for:domain",
     );
     expect(requests("POST", "/api/v1/estimates")).toHaveLength(0);
   });
@@ -391,15 +466,15 @@ describe("the search dashboard", () => {
       "POST /api/v1/estimates": () => refusal,
     });
     renderHome();
-    await screen.findByLabelText("Target");
+    await screen.findByLabelText("Target to investigate");
     typeTarget("example.org");
-    fireEvent.click(screen.getByRole("button", { name: "Check target" }));
+    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
     expect((await screen.findByRole("alert")).textContent).toContain(
       "Your role in this organisation does not allow this.",
     );
 
     refusal = problem(403, "VETTING_NOT_APPROVED", "[detail]", { locked });
-    fireEvent.click(screen.getByRole("button", { name: "Check target" }));
+    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
     const notice = await screen.findByText("[the next step]");
     const block = notice.parentElement;
     expect(block?.textContent).toContain("Locked");

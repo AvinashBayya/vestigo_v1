@@ -11,6 +11,7 @@ export const COLLECTOR_STATUSES = [
   "HELD",
   "QUEUED",
   "CANCELLED",
+  "READY",
 ] as const;
 export type CollectorStatus = (typeof COLLECTOR_STATUSES)[number];
 
@@ -24,6 +25,7 @@ const LABEL: Readonly<Record<CollectorStatus, string>> = {
   HELD: "Held",
   QUEUED: "Queued",
   CANCELLED: "Cancelled",
+  READY: "Ready",
 };
 
 /** §3's tokens for each status. Colour is the second channel; the word is the first. */
@@ -37,15 +39,19 @@ const TONE: Readonly<Record<CollectorStatus, string>> = {
   HELD: "bg-claim-hypothesis-fill text-claim-hypothesis-ink",
   QUEUED: "bg-claim-hypothesis-fill text-claim-hypothesis-ink",
   CANCELLED: "bg-claim-hypothesis-fill text-claim-hypothesis-ink",
+  READY: "bg-claim-observed-fill text-claim-observed-ink",
 };
 
 /** A collector's status as a pill (the only use of a pill, §5), always with its text label. */
 export function StatusChip({
   status,
   className,
+  children,
 }: {
   readonly status: CollectorStatus;
   readonly className?: string;
+  /** Words to show instead of the bare status, e.g. "6 ran"; they must still name the status. */
+  readonly children?: string;
 }) {
   return (
     <span
@@ -55,7 +61,7 @@ export function StatusChip({
         className,
       )}
     >
-      {LABEL[status]}
+      {children ?? LABEL[status]}
     </span>
   );
 }

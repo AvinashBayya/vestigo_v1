@@ -17,6 +17,7 @@ import { auditLogRoutes } from "./routes/audit-log.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { caseRoutes } from "./routes/cases.ts";
 import { entityRoutes } from "./routes/entities.ts";
+import { collectorRoutes } from "./routes/collectors.ts";
 import { estimateRoutes } from "./routes/estimates.ts";
 import { evidenceRoutes } from "./routes/evidence.ts";
 import { exploreRoutes } from "./routes/explore.ts";
@@ -125,6 +126,7 @@ export async function buildApp(options: AppOptions) {
   await app.register(memberRoutes(services));
   await app.register(settingsRoutes);
   await app.register(estimateRoutes(services));
+  await app.register(collectorRoutes(services));
 
   return app;
 }

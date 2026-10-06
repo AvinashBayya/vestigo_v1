@@ -102,6 +102,9 @@
 
   --container-*: initial;
   --container-form: var(--ds-layout-form-width);
+  --container-page: var(--ds-layout-page-width);
+  --container-nav: var(--ds-layout-nav-width);
+  --container-search: var(--ds-layout-search-width);
 
   --radius-*: initial;
   --radius-sm: var(--ds-radius-sm);

@@ -99,6 +99,7 @@ The same vocabulary everywhere a collector appears. Reuse the claim tokens:
 | **Held** | Registered but not enabled (licence unverified, or held pending verification) | `claim-hypothesis-*` |
 | **Queued** | Planned, waiting for a worker to start it, or waiting for its next attempt (say when) (added in Phase 6b) | `claim-hypothesis-*` |
 | **Cancelled** | Stopped before it finished; nothing more will be collected (added in Phase 6b) | `claim-hypothesis-*` |
+| **Ready** | Before any run: it can run in this deployment (implemented, and its licence permits it or the deployment allows unverified sources). Added from the screen designs | `claim-observed-*` |
 
 A failed collector and a collector that found nothing must look obviously different.
 
@@ -161,7 +162,10 @@ Monospace is a signal that a value is literal data. Use it deliberately.
 | `target-min` | 44px | Smallest dimension of any interactive control (§7). Buttons and inputs are at least this tall |
 | `focus-ring-width` | 2px | The focus outline (§7) |
 | `focus-ring-offset` | 2px | Gap between a control and its focus outline (§7) |
-| `layout-form-width` | 400px | Maximum width of a single-column form: sign-in, MFA |
+| `layout-form-width` | 500px | Maximum width of a single-column form: sign-in, MFA challenge (the sign-in design's column; was 400px) |
+| `layout-page-width` | 880px | Maximum width of a single-column page wider than a form: MFA enrolment (added from the screen designs) |
+| `layout-nav-width` | 216px | The side navigation of the signed-in app (added from the screen designs) |
+| `layout-search-width` | 780px | The dashboard's search bar (added from the screen designs) |
 | `qr-size` | 176px | The MFA enrolment QR code, large enough to scan from a screen |
 
 **Density.** Two modes. *Comfortable*: `space-5` card padding, 11px row padding, `body` in tables. *Compact*: `space-3`, 7px, `small` in tables. All spacing comes from tokens, so the swap is mechanical. Compact is the default in the Evidence grid.

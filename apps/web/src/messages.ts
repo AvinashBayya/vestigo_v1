@@ -11,7 +11,7 @@ const BY_CODE: Readonly<Record<string, string>> = {
   INVALID_EMAIL_OR_PASSWORD: "That email address and password do not match an account.",
   INVALID_PASSWORD: "That password is not right.",
   INVALID_CODE:
-    "That code is not right. Use the code your authenticator app shows now; it changes every 30 seconds.",
+    "That code was not accepted. Codes change every 30 seconds; check your device's clock if this keeps happening.",
   INVALID_BACKUP_CODE: "That backup code is not right, or it has already been used.",
   INVALID_TWO_FACTOR_COOKIE: "This sign-in has expired. Sign in again.",
   TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: "Too many wrong codes. Sign in again.",

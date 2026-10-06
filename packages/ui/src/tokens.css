@@ -110,7 +110,10 @@
   --ds-target-min: 44px;
   --ds-focus-ring-width: 2px;
   --ds-focus-ring-offset: 2px;
-  --ds-layout-form-width: 400px;
+  --ds-layout-form-width: 500px;
+  --ds-layout-page-width: 880px;
+  --ds-layout-nav-width: 216px;
+  --ds-layout-search-width: 780px;
   --ds-qr-size: 176px;
 }
 

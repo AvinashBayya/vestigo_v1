@@ -10,6 +10,10 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createAppRouter } from "./router.tsx";
+import { applyTheme, initialTheme } from "./theme.ts";
+
+// Before the first paint, so a dark-theme viewer never sees a light flash.
+applyTheme(initialTheme());
 
 class RootElementMissingError extends AppError {
   readonly code = "WEB_ROOT_ELEMENT_MISSING";

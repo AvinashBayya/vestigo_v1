@@ -1,12 +1,14 @@
 import { Button, Field, Notice } from "@repo/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { ShieldCheck } from "lucide-react";
 import { useState, type SubmitEvent } from "react";
 import { timed, unwrap } from "../api.ts";
 import { api } from "../client/index.ts";
 import { AuthFrame } from "../components/AuthFrame.tsx";
 import { ProblemNotice } from "../components/ProblemNotice.tsx";
 
+/** Sign-in, step 1 of 2 (docs/design/mockups/SignIn.dc.html). */
 export function SignInScreen() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/sign-in" });
@@ -27,14 +29,26 @@ export function SignInScreen() {
   };
 
   return (
-    <AuthFrame title="Sign in">
+    <AuthFrame
+      title="Sign in"
+      intro="Accounts are created by invitation. If you need access, ask an administrator in your organisation."
+      footnote={
+        <>
+          <ShieldCheck className="size-4 shrink-0" strokeWidth={1.9} aria-hidden="true" />
+          <p>
+            Two-factor authentication is required on every account. You will be asked for a code
+            after your password.
+          </p>
+        </>
+      }
+    >
       {search.reason === "enrol" ? (
         <Notice tone="info">Sign in to finish setting up two-factor authentication.</Notice>
       ) : null}
       {search.reason === "signed-out" ? <Notice tone="info">You are signed out.</Notice> : null}
       <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <Field
-          label="Email address"
+          label="Work email"
           type="email"
           name="email"
           autoComplete="username"
@@ -57,12 +71,9 @@ export function SignInScreen() {
         />
         {signIn.isError ? <ProblemNotice error={signIn.error} /> : null}
         <Button type="submit" disabled={signIn.isPending || email === "" || password === ""}>
-          {signIn.isPending ? "Signing in…" : "Sign in"}
+          {signIn.isPending ? "Checking…" : "Continue"}
         </Button>
       </form>
-      <p className="text-caption text-ink-muted">
-        Accounts are created by invitation. If you were invited, use the link you were given.
-      </p>
     </AuthFrame>
   );
 }

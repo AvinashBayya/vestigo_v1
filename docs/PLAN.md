@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigning with the screen designs** (docs/design/) before step 4. See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06; step 4 waits on six questions (Q1–Q6 in the 6b record). See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -2130,17 +2130,126 @@ whether screen designs existed.
 - Unbuilt features hidden until built.
 - False copy corrected in the app only.
 
-**Next, in order:**
-- **R1. App shell** to Main.dc.html: side navigation (only what exists), the tenant's
-  vetting chip from `/me`, an account menu, and a light/dark toggle.
-- **R2. Sign-in, MFA challenge and enrolment** to SignIn and MfaEnrol, with corrected copy.
-- **R3. Dashboard** to Main.dc.html: hero search, the estimate inline, recent cases and
-  collector health.
-- **R4. Run view** to RunLive.dc.html: the two columns, summary chips, rich rows, and arriving
-  now, cost and settings.
-- **R5.** `GET /api/v1/collectors` and registry fields on run jobs and exclusions, in
-  `apps/api` only.
-- **Then step 4:** results to Evidence.dc.html, run-scoped.
+**R1 to R5 (done, awaiting the owner's side-by-side review):**
+- **R5, API:** `GET /api/v1/collectors` (`apps/api/src/routes/collectors.ts`, permission
+  `run:read`).
+  - **What it returns:** each registry entry's label, discipline, mode, target types, claim
+    strength, credential needs, and availability with its reason. It also says whether this
+    deployment runs UNVERIFIED sources (`unverifiedSourcesAllowed`, the value the planner is
+    built with).
+  - **What it leaves out:** no live health, and no tenant credentials.
+  - **Run views unchanged:** the web app labels jobs and exclusions from this list. That
+    replaces the planned additions to the run view's fields, so the run and stream schemas
+    did not change.
+  - **Tests:** `test/collectors.test.ts`.
+- **R1, app shell:** side navigation (Search only: nothing else exists yet), the
+  organisation's name, and its vetting status in words from `/me` ("Verified tenant" only when
+  APPROVED). An account menu holds the person, Switch organisation, the light/dark toggle
+  (stored per device, light by default), Sign out and API health. The footer is gone.
+- **R2, sign-in, challenge and enrolment:** the designs' layout and wording, with corrections.
+  - **Lost device:** the line points to the backup codes; no one can reset a second factor.
+  - **Link status:** "Enrolment link received", never "verified".
+  - **Step order:** the enrolment steps are reordered so the backup codes are saved before
+    "Confirm and finish", which leaves the page.
+  - **Download codes:** saves the codes as a text file on the device.
+- **R3, dashboard:** "What are you investigating?", the search bar, and the target types some
+  source here can take. Investigate shows the estimate as before.
+  - **Recent cases:** the newest open cases by creation, with their pins.
+  - **Collector health:** each collector as Ready or Held, with why.
+- **R4, run view:** two columns.
+  - **Header:** target, detected type and real alternates, the run's status chip.
+  - **Summary:** settled of total, elapsed, and status counts as chips.
+  - **Every source in one list:** jobs, then the plan's exclusions labelled from the collector
+    list, each with its discipline, evidence count or "found nothing", duration, attempts, retry
+    or dead-letter state. Failed rows are tinted.
+  - **Arriving now:** evidence records, found and found-nothing counts, and an em dash for what
+    each source that did not complete would have found.
+  - **Cost:** two em dashes with reasons.
+  - **Settings:** passive only, from the registry's modes; person modules from `/me`; the model
+    named on the report.
+  - **The design's honesty note.**
+- **Design system:**
+  - **New sizes:** `layout-page-width` 880px, `layout-nav-width` 216px, `layout-search-width`
+    780px; `layout-form-width` is now 500px.
+  - **New status:** Ready (`claim-observed-*`).
+  - **Colour discipline:** the vetting chip uses the accent, not green, because colour means
+    only claim strength, collector status or entity class.
+  - **UI package:** `Popover` added; `StatusChip` takes a count ("6 ran").
+- **Tests:** web 44 (shell, corrected copy asserted absent, codes download, theme, dashboard
+  panels, run view rows and settings); API 182.
+- **Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean):
+  core 20, access 56, config 180, db 261, integrations 122, collectors 482, llm 130,
+  osint-engine 104, api 182, ui 7, web 44, worker 4 (1,592 tests).
+
+**Then step 4:** results to Evidence.dc.html, run-scoped, after the owner's review.
+
+### Locked state for every stream refusal, and what step 4 needs first (2026-10-06)
+
+**State confirmed against the owner's 6b brief.** Step 1 (auth), step 2 (search dashboard) and
+step 3 (run view) are built. R1 to R5 realign them with the screen designs, uncommitted and still
+awaiting the owner's side-by-side review. Nothing was rebuilt.
+
+**One step 3 requirement was not met, now fixed.** The brief asks that a `locked` event render as
+the Locked state for all five reasons. A refusal of the reader's own access (CREDENTIAL_REVOKED,
+MEMBERSHIP_REVOKED, PERMISSION_LOST) carries no `locked` block. It showed as a failure-toned
+alert, "Updates stopped". It now shows as the Locked state (`AccessLockedNotice` in
+`components/LockedNotice.tsx`):
+- **Tone:** information, not failure (role `status`, never `alert`).
+- **What is withheld:** live updates, with what is shown "as of" the event's `checkedAt`.
+- **Why:** the API's own detail, with the reason and the code.
+- **Next step:** an action this app can take: sign in again (`/sign-in`), choose an
+  organisation (`/tenant`), or ask an owner or administrator (the roles holding
+  `member:update`).
+- **Test:** `run-view.test.tsx` covers all three access reasons and asserts there is no alert
+  and no Reconnect.
+
+**Collector "Partial" (§3) never shows on a job.** No job outcome records dropped sub-queries,
+so the API has nothing to show it from. Partial shows only at run level (`PARTIAL`).
+
+**Before step 4: what the endpoints cover, and what they do not.** Checked against
+`apps/api/openapi.json`. Nothing is stubbed.
+- **Covered:**
+  - entities, graph and timeline, each scoped by run or case;
+  - entity detail (claims carry `evidenceId`);
+  - evidence detail (collector and version, run, both timestamps, hash, source URL,
+    attribution, stated and derived claims) and the raw payload;
+  - cases and pins.
+  - Stated versus derived is `strength === "DERIVED"` (`routes/evidence.ts`), so every claim
+    surface can show it the same way.
+- **Q1. A case is only its pins.** Cases and runs are not linked, so a case-scoped read covers
+  only what is pinned. Proposal: run-scoped tabs as the run's results, and the same tabs on a
+  case labelled "pinned items only". Alternative: wait for a case–run link (a db migration and
+  the API).
+- **Q2. The evidence grid has one source, the timeline.** It returns at most 500 records, with
+  `total` and `hasMore` but no cursor or offset. Proposal: build on it. A run with more than 500
+  records shows as partial ("500 of N"), and sort and filter apply to the loaded rows only.
+  Alternative: add paging to the API first.
+- **Q3. Relationships have no provenance and cannot be pinned.** No endpoint returns a
+  relationship's claims or evidence, and pins take evidence, entities and claims only. That
+  breaks "pin on every result" and "provenance from any value" for graph edges and the entity
+  relationship list. Proposal: an API addition, a relationship read with its claims and a
+  `relationship` pin kind (with a migration). Alternative: show edges marked "no provenance or
+  pin yet".
+- **Q4. No entity-class colours exist.** §6 says graph nodes are distinguished by ring colour
+  and a text label, but §2 defines no entity-class tokens. Workspace.dc.html uses claim colours
+  and raw hex. Proposal: the owner adds entity-class tokens to §2; until then, nodes are neutral
+  with their class as text.
+- **Q5. Overview has no endpoint of its own.** Proposal: compose it from existing reads
+  (timeline totals, undated counts, entities, pins). `/entities` has no total, so an entity count
+  past the limit is an em dash with its reason.
+- **Q6. New dependencies** approved in ARCHITECTURE-DECISIONS §8 but not yet installed:
+  TanStack Table (with virtualisation) for the evidence grid, and Cytoscape.js behind a
+  swappable component for the graph.
+- **Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean,
+  with Postgres and Redis up): core 20, access 56, config 180, db 261, integrations 122,
+  collectors 482, llm 130, osint-engine 104, api 182, ui 7, web 44, worker 4 (1,592 tests). Run
+  first without Docker, integrations and llm fail with ECONNREFUSED on 5432 and 6379: setup, not
+  a defect.
+- **Step 5 is covered by the spec as it stands:**
+  - reports: create (409 SYNTHESIS_UNAVAILABLE), list and read;
+  - PDF export: 202 with `Retry-After` while rendering;
+  - the document: coverage with `partial`, citations, and the model's endpoint host and raw
+    region headers.
 
 **Gaps found by the audit, each needing its own decision:**
 - **Cases and runs are not linked.** This blocks the workspace, overview and case reports.

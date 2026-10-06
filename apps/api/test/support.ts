@@ -133,6 +133,7 @@ export async function createTestApi(
           ),
         },
       }),
+      unverifiedSourcesAllowed: true,
       eventsPollMs: 100,
       reports,
       renders,

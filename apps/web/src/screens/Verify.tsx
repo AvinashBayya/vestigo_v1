@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from "@repo/config/product";
 import { Button, Field } from "@repo/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -10,7 +11,7 @@ import { homeOf, settleTenant } from "../session.ts";
 
 type Method = "TOTP" | "BACKUP_CODE";
 
-/** The MFA challenge, after a password was accepted. */
+/** The MFA challenge, step 2 of 2 (docs/design/mockups/SignIn.dc.html). */
 export function VerifyScreen() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -39,17 +40,27 @@ export function VerifyScreen() {
 
   return (
     <AuthFrame
-      title="Two-factor authentication"
+      eyebrow="Step 2 of 2"
+      title={method === "TOTP" ? "Enter your authentication code" : "Enter a backup code"}
       intro={
         method === "TOTP"
-          ? "Enter the six-digit code your authenticator app shows for this account."
+          ? `Open your authenticator app and enter the six-digit code for ${PRODUCT_NAME}.`
           : "Enter one of the backup codes you saved when you set up two-factor authentication. Each works once."
+      }
+      // No one can reset a second factor; the backup codes are the way back in.
+      footnote={
+        method === "TOTP" ? (
+          <p>
+            Lost your device? Sign in with one of the backup codes you saved when you set up
+            two-factor authentication.
+          </p>
+        ) : undefined
       }
     >
       <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
         <Field
           key={method}
-          label={method === "TOTP" ? "Authenticator code" : "Backup code"}
+          label={method === "TOTP" ? "Six-digit code" : "Backup code"}
           name="code"
           autoComplete="one-time-code"
           inputMode={method === "TOTP" ? "numeric" : "text"}
@@ -70,10 +81,10 @@ export function VerifyScreen() {
           </ProblemNotice>
         ) : null}
         <Button type="submit" disabled={verify.isPending || code === ""}>
-          {verify.isPending ? "Checking…" : "Continue"}
+          {verify.isPending ? "Checking…" : "Verify and sign in"}
         </Button>
         <Button
-          variant="quiet"
+          variant="secondary"
           onClick={() => {
             setMethod(method === "TOTP" ? "BACKUP_CODE" : "TOTP");
             setCode("");

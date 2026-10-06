@@ -49,10 +49,10 @@ Audited against `apps/api/openapi.json` on 2026-10-05.
 
 | Screen | Status | Notes |
 |---|---|---|
-| SignIn (sign-in and MFA challenge) | Built (step 1); layout to match | Lost-device line corrected (below) |
-| MfaEnrol | Built (step 1); layout to match | "Invited to [ORG] as [ROLE]" needs the invitation in the enrolment state (API) |
-| Main, Dashboard-dark | Built in part (step 2); layout to match | Collector health needs `GET /collectors` (API). Monitors, credits, attach and command palette are Backend, so hidden |
-| RunLive (the run view against the collectors that exist) | Built in part (step 3); layout to match | Discipline and labels for not-run sources need API. Duration estimate, per-run cost, claims per source, pause and "Open case" are Backend |
+| SignIn (sign-in and MFA challenge) | Built to the design (2026-10-05) | Lost-device line corrected (below) |
+| MfaEnrol | Built to the design (2026-10-05) | Backup codes come before the final step, because confirming leaves the page. "Invited to [ORG] as [ROLE]" needs the invitation in the enrolment state (API), so it is not shown |
+| Main, Dashboard-dark | Built to the design (2026-10-05); dark theme from the account menu | Side navigation shows Search only. Recent cases show pins and the created date (cases record no updated time). Collector health comes from `GET /api/v1/collectors`. Monitors, credits, attach and command palette are Backend, so hidden |
+| RunLive (the run view against the collectors that exist) | Built to the design (2026-10-05) | Duration estimate, claims per source, per-run cost, pause and "Open case" are Backend: not shown, or an em dash with its reason |
 | Run (an earlier run view) | Superseded by RunLive | Shows collectors that do not exist (SpiderFoot, theHarvester, Shodan, HIBP, Brave) |
 | Evidence | Next (step 4), run-scoped | Provenance from `GET /evidence/{id}`. A claims list with search, hash and paging is API; Re-verify and Cite in report are Backend |
 | Workspace, Overview, Entities, Timeline | Later | Cases and runs are not linked (Backend: a db migration). Correlation, inference, contradictions and saved views do not exist |
