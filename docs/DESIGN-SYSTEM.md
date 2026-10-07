@@ -2,7 +2,7 @@
 
 The design language for Vestigo. Build every screen from these tokens and rules. If a screen needs something not defined here, add it here first rather than inventing it in a component.
 
-The screens themselves are drawn in the reference designs: [design/README.md](design/README.md). They take their layout and wording from there, and every value from this document.
+**The 15 mockups in [design/mockups/](design/README.md) are the binding visual specification** (owner, 2026-10-06), as `legacy/` is for porting. Layout, hierarchy, spacing and wording come from the mockup; every value comes from this document. On 2026-10-06 (U1-a) every value here was reconciled against the mockups' HTML, read to exact values and checked against the PNG renders. Where a mockup breaks a rule that does not bend (accessibility, honesty, colour meaning), the rule wins and §12 records the deviation.
 
 One goal governs everything: **a reader must be able to tell, at a glance, how strongly a claim is supported and whether a value was actually measured.** A design that makes weak evidence look strong is a defect, not a style choice.
 
@@ -12,68 +12,86 @@ One goal governs everything: **a reader must be able to tell, at a glance, how s
 
 These are product rules, not writing suggestions. They are enforced in code elsewhere; the UI must not undo them.
 
-- **Never fabricate.** A missing value renders as an em dash (`—`) with a tooltip saying why. Never `0`, never `"N/A"`, never an empty string, never a plausible guess. `0` means measured and the count was zero.
-- **Name the source.** Any claim, number or attribute can be clicked to open the provenance drawer listing the evidence behind it.
+- **Never fabricate.** A missing value renders as an em dash (`—`) with its reason, said where the reader can get it (an accessible name, not a hover-only tooltip). Never `0`, never `"N/A"`, never an empty string, never a plausible guess. `0` means measured and the count was zero.
+- **Name the source.** Any claim, number or attribute opens the provenance drawer listing the evidence behind it.
 - **Failures stay visible.** A collector that failed shows as failed, with its reason, beside the ones that succeeded. Partial results are labelled partial.
 - **Two timestamps, always distinguished.** `observedAt` (when the thing happened) and `collectedAt` (when we saw it). A null `observedAt` renders as an em dash, never as the collection time.
 - **Derived values are visibly distinct** from values a source stated. Anything inside an evidence record's `derived` block was computed by the platform.
+- **Mockup numbers are placeholders.** A count, duration, credit figure or collector name drawn in a mockup is never shipped; every value comes from the API (design/README.md).
 - **Voice:** plain, specific, unexcited. "Rate limited by provider, retrying in 40s" rather than "Something went wrong". No exclamation marks. Never congratulate the analyst on finding something.
 
 ---
 
 ## 2. Colour tokens
 
-Define as CSS variables on `:root`, with a `[data-theme="dark"]` override. Light is primary; dark is fully supported.
+Define as CSS variables on `:root`, with a `[data-theme="dark"]` override. Light is primary; the dark dashboard mockup defines the dark values, and the rest are derived to the same contrast.
 
 ### Surfaces and chrome
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
 | `surface-page` | `#F5F5F1` | `#14161B` | App background behind all panels |
-| `surface-raised` | `#FFFFFF` | `#1A1D23` | Cards, rails, headers, inspector panels |
-| `surface-sunken` | `#FCFCFA` | `#1F232B` | Graph and map canvases, inputs, code blocks |
-| `surface-hover` | `#F8F8F5` | `#22262E` | Row hover, selected list rows |
-| `border-subtle` | `#EFEEE8` | `#24282F` | Dividers inside a card; never a card edge |
-| `border-default` | `#E3E2DB` | `#2A2E36` | Card and panel edges, table rules |
-| `border-strong` | `#D6D5CC` | `#333944` | Inputs, secondary buttons, interactive at rest |
-| `ink-primary` | `#15171C` | `#ECECE7` | Headings, values, body text |
-| `ink-secondary` | `#3C3E45` | `#C4C6CC` | Secondary labels, inactive navigation |
-| `ink-muted` | `#5E6066` | `#9A9DA5` | Captions, metadata, source lines. The lightest permitted text colour; never below 12px |
-| `accent` | `#22355B` | `#7B94C8` | Primary buttons, active tab underline, focus ring, key graph node |
-| `accent-soft` | `#E8ECF4` | `#26303F` | Selected navigation, accent chips, active run row |
-| `accent-ink` | `#22355B` | `#C8D8F2` | Text and icons on `accent-soft` |
+| `surface-raised` | `#FFFFFF` | `#1A1D23` | Cards, rails, headers, tab bars, docked drawers |
+| `surface-sunken` | `#FCFCFA` | `#1F232B` | Graph canvas, workspace inputs, table header row, code and key blocks |
+| `surface-hover` | `#F8F8F5` | `#22262E` | Selected table row, running collector row |
+| `surface-field` | `#FFFFFF` | `#1F232B` | Auth inputs, the hero search shell, detect tags |
+| `surface-control` | `#F5F5F1` | `#262B34` | Square icon controls at rest: the search bar's attach button, the account avatar |
+| `surface-muted` | `#ECEBE4` | `#2A2E36` | Meter and progress tracks, media placeholders |
+| `surface-map` | `#F1F0EA` | `#1F232B` | The map container's ground, under the basemap |
+| `border-subtle` | `#EFEEE8` | `#24282F` | Dividers inside a card, table rules; never a card edge |
+| `border-default` | `#E3E2DB` | `#2A2E36` | Card and panel edges, header and tab-bar rules, mini-progress track |
+| `border-strong` | `#D6D5CC` | `#333944` | Inputs, secondary buttons, interactive at rest, dashed notes |
+| `border-control` | `#E3E2DB` | `#333944` | Tags and the attach button: lighter than a button in light, as strong as one in dark |
+| `ink-primary` | `#15171C` | `#ECECE7` | Headings, values, interface text |
+| `ink-body` | `#24262C` | `#ECECE7` | Reading text: summaries, claim sentences, the report document, evidence cards |
+| `ink-secondary` | `#3C3E45` | `#B6B8BF` | Secondary labels, inactive navigation and tabs' neighbours, collector names in tables |
+| `ink-muted` | `#5E6066` | `#9A9DA5` | Captions, metadata, source lines, placeholders. The lightest permitted text colour; never below 11px |
+| `accent` | `#22355B` | `#7B94C8` | Primary buttons, active tab underline, focus ring, meter fill, the selected graph node's outline |
+| `accent-hover` | `#16233C` | `#A8BEE4` | A primary button under the pointer |
+| `accent-soft` | `#E8ECF4` | `#26303F` | Selected navigation and runs, filter chips, the active density segment, neutral pills |
+| `accent-ink` | `#22355B` | `#C8D8F2` | Text and icons on `accent-soft`; the active tab's label |
 | `on-accent` | `#FFFFFF` | `#14161B` | Text on a filled accent button |
+| `link` | `#22355B` | `#A8BEE4` | Standalone links: "All cases", "Cases", "Manage" |
+| `link-hover` | `#16233C` | `#C8D8F2` | A link under the pointer |
 
 ### Claim strength
 
-Six labels, in descending order of support. Each has a fill (background), an ink (text) and, where it appears as a dot or ring, a mark.
+Six labels, in descending order of support. Each has a fill (background), an ink (text) and a mark (dot, ring, edge, timeline bar).
 
 | Label | Meaning | fill (L/D) | ink (L/D) | mark (L/D) |
 |---|---|---|---|---|
 | `OBSERVED` | Seen directly by the platform | `#E7F1EA` / `#1D3227` | `#17543A` / `#8FD5AE` | `#1F6F4A` / `#55B183` |
 | `REPORTED` | Stated by the cited source, unverified | `#E8ECF4` / `#232C3A` | `#1E4577` / `#A8BEE4` | `#2B5C9E` / `#7B94C8` |
 | `DERIVED` | Computed by the platform from recorded values | `#EFE9F6` / `#2A2338` | `#523579` / `#C3AEE4` | `#6A4A9E` / `#9A7BD0` |
-| `CORRELATED` | A link across independent cited sources | `#E7EFEF` / `#1B2C2C` | `#0F4F4F` / `#84CACA` | — |
+| `CORRELATED` | A link across independent cited sources | `#E7EFEF` / `#1B2C2C` | `#0F4F4F` / `#84CACA` | `#196B6B` / `#84CACA` |
 | `INFERRED` | Analytic inference, no source stated it | `#F6EEDD` / `#33291A` | `#6B4510` / `#E0B872` | `#8A5A12` / `#C79A4E` |
-| `HYPOTHESIS` | A possibility the evidence permits | `#ECEBE4` / `#272B33` | `#4A4C52` / `#B6B8BF` | — |
+| `HYPOTHESIS` | A possibility the evidence permits | `#ECEBE4` / `#272B33` | `#4A4C52` / `#B6B8BF` | `#8E9096` / `#7C8089` |
 
 **Always render the word, never the colour alone.** Roughly one in twelve men has some colour vision deficiency, and that is this product's buyer demographic. Colour is a second channel.
 
-Inferred content also carries a lighter treatment in context: a dashed edge in the graph, a tinted card in the inspector. Where an inference is shown, say what it was inferred from.
-
-### Failure
+Inferred content also carries a lighter treatment in context: a dashed edge in the graph, a tinted card (below), a 3px `claim-inferred-mark` rule beside report prose. Where an inference is shown, say what it was inferred from, in the words INFERRED and "from …", never borrowing another strength's word.
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `status-failed-fill` | `#F6E6E1` | `#33211C` | Failed collector rows, error banners |
-| `status-failed-ink` | `#7A2E1E` | `#E9A48F` | Failure text, including the reason |
+| `claim-inferred-tint` | `#FDFAF3` | `#221E16` | The ground of an INFERRED evidence card, report paragraph or citation card |
+| `claim-inferred-border` | `#F0E4CB` | `#4A3C22` | Its edge |
+
+### Failure and collector status inks
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `status-failed-fill` | `#F6E6E1` | `#33211C` | The Failed chip; error banner chip |
+| `status-failed-ink` | `#7A2E1E` | `#E9A48F` | Failure text, including the reason and the code |
 | `status-failed-mark` | `#A33F27` | `#C4644A` | Failure dot, error icon |
+| `status-failed-tint` | `#FDF7F5` | `#241A18` | The ground of a failed row, an error alert, a coverage-limitation callout |
+| `status-failed-border` | `#F0DCD5` | `#4A2A22` | Its edge |
+| `status-needs-key-ink` | `#8A5A12` | `#E0B872` | The Needs key chip's word, on `claim-inferred-fill`: distinct from the INFERRED badge's darker ink |
 
 ### Entity class (added in Phase 6b)
 
 The ring and fill of a node in the graph, by the class of entity it stands for. Used **only** for entity class, and always with the class written inside or beside the node (§6): colour is the second channel, never the only one.
 
-Four families, as the screen designs group them: infrastructure (greens), contact (blues), person (purple), account (ambers), plus organisation (rose) and location (cyan). Within a family the classes step in lightness, so they differ in lightness and not hue alone (§7). Every ring meets 3:1 against `surface-sunken` in its theme. These deliberately do not reuse the claim tokens: in the graph, colour says what a node is, and claim strength is said by the edge (§2, Claim strength) and in words.
+Four families, as the screen designs group them: infrastructure (greens), contact (blues), person (purple), account (ambers), plus organisation (rose) and location (cyan). Within a family the classes step in lightness, so they differ in lightness and not hue alone (§7). Every ring meets 3:1 against `surface-sunken` in its theme. The Workspace mockup draws classes in the claim palettes; that is not followed (§12): in the graph, colour says what a node is, and claim strength is said by the edge and in words.
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
@@ -98,7 +116,7 @@ Four families, as the screen designs group them: infrastructure (greens), contac
 | `entity-location-ring` | `#0F5E66` | `#5BB5BD` | Location node ring |
 | `entity-location-fill` | `#E3F0F1` | `#1A2E30` | Location node fill |
 
-Node labels are `ink-primary` on the fill. The run's or case's seed entities are drawn with a wider ring of their own class colour. The selected node, the "key graph node" of `accent` (§2), gets an `accent` outline outside its ring, so it never loses its class colour.
+Node labels are `ink-primary` on the fill. The run's or case's seed entities are drawn with a wider ring of their own class colour. The selected node gets an `accent` outline outside its ring, so it never loses its class colour (the mockup's accent-filled focal node is not followed, §12).
 
 ### QR code (added in Phase 6b)
 
@@ -107,32 +125,37 @@ Node labels are `ink-primary` on the fill. The run's or case's seed entities are
 | `qr-module` | `#15171C` | `#15171C` | The dark modules of the MFA enrolment QR code |
 | `qr-ground` | `#FFFFFF` | `#FFFFFF` | Its background and quiet zone |
 
-The same in both themes, deliberately: authenticator apps scan dark-on-light reliably and an inverted code unreliably.
+The same in both themes, deliberately: authenticator apps scan dark-on-light reliably and an inverted code unreliably. The mockup's `#FCFCFA` frame is not followed; pure white scans best.
 
 ### Colour discipline
 
-Chrome is neutral. Colour means **claim strength, collector status, or entity class in the graph** (the `entity-*` tokens) — nothing else. Anything decorative that borrows a semantic colour is a bug.
+Chrome is neutral. Colour means **claim strength, collector or run status, or entity class in the graph** (the `entity-*` tokens) — nothing else (ARCHITECTURE-DECISIONS §9). Anything decorative that borrows a semantic colour is a bug. Error alerts use the failure palette (a failure is a status). Everything else that a mockup tints — vetting, settings, review state, contradictions, map layers — is neutral or classed by entity (§12).
 
 ---
 
-## 3. Collector status
+## 3. Collector and run status
 
-The same vocabulary everywhere a collector appears. Reuse the claim tokens:
+The same vocabulary everywhere a collector appears. Statuses are pills (§9, status chip), always with their word.
 
-| Status | Meaning | Tokens |
+| Status | Meaning | Chip (ink on fill · dot) |
 |---|---|---|
-| **Ran** | Finished, results attached | `claim-observed-*` |
-| **Running** | In progress; determinate bar where the source reports progress | `accent` |
-| **Partial** | Finished, but some sub-queries were unsupported or dropped — say which | `claim-observed-*` |
-| **Failed** | With the reason and the retry state | `status-failed-*` |
-| **Needs key** | No tenant credential configured | `claim-inferred-*` |
-| **Skipped** | Policy or plan prevented the run (e.g. active scan without scope authorisation) | `claim-hypothesis-*` |
-| **Held** | Registered but not enabled (licence unverified, or held pending verification) | `claim-hypothesis-*` |
-| **Queued** | Planned, waiting for a worker to start it, or waiting for its next attempt (say when) (added in Phase 6b) | `claim-hypothesis-*` |
-| **Cancelled** | Stopped before it finished; nothing more will be collected (added in Phase 6b) | `claim-hypothesis-*` |
-| **Ready** | Before any run: it can run in this deployment (implemented, and its licence permits it or the deployment allows unverified sources). Added from the screen designs | `claim-observed-*` |
+| **Ready** | Before any run: it can run in this deployment (implemented, and its licence permits it or the deployment allows unverified sources) | `claim-observed-ink` on `claim-observed-fill` · `claim-observed-mark` |
+| **Needs key** | No tenant credential configured | `status-needs-key-ink` on `claim-inferred-fill` · `claim-inferred-mark` |
+| **Unavailable** | Registered and permitted, but it cannot run here now: a service it needs is not attached (the GPU media worker), or its source is cut off by an open circuit breaker. Say which | `claim-hypothesis-ink` on `claim-hypothesis-fill` · `claim-hypothesis-mark` |
+| **Ran** | Finished, results attached | observed, as Ready |
+| **Partial** | Finished, but some sub-queries were unsupported or dropped — say which | observed, as Ran; only the word differs |
+| **Running** | In progress; a determinate bar where the source reports progress | `accent-ink` on `accent-soft` · `accent`; row ground `surface-hover` |
+| **Queued** | Planned, waiting for a worker or for its next attempt (say when) | hypothesis, as Unavailable |
+| **Failed** | With the reason, the code, the attempts and the retry or dead-letter state | `status-failed-ink` on `status-failed-fill` · `status-failed-mark`; row `status-failed-tint` with `status-failed-border` |
+| **Skipped** | Policy or plan prevented the run (e.g. active scan without scope authorisation) | hypothesis |
+| **Held** | Registered but not enabled (licence unverified, or held pending verification) | hypothesis |
+| **Cancelled** | Stopped before it finished; nothing more will be collected | hypothesis |
 
-A failed collector and a collector that found nothing must look obviously different.
+Five statuses share the hypothesis grey (Unavailable, Queued, Skipped, Held, Cancelled) and differ by word alone. That is deliberate: none of them produced a result, and the word, never the colour, carries which.
+
+**Run status** is a separate vocabulary on the run's own chip: QUEUED, RUNNING, SUCCEEDED (shown "Ran"), CANCELLED and FAILED as above, and **PARTIAL** in `claim-inferred-ink` on `claim-inferred-fill`, as the run mockup draws it. A collector's Partial (green) and a run's PARTIAL (amber) are different words in different places and must not be confused.
+
+A failed collector and a collector that found nothing must look obviously different: a failed row is tinted, its dot is the failure mark, its line is in failure ink and states the code.
 
 ---
 
@@ -142,81 +165,173 @@ A failed collector and a collector that found nothing must look obviously differ
 |---|---|---|
 | `sans` | `"IBM Plex Sans", "Segoe UI", system-ui, sans-serif` | All interface text |
 | `mono` | `"IBM Plex Mono", ui-monospace, monospace` | Anything an analyst might copy, compare or verify: domains, hashes, IPs, identifiers, counts, timestamps |
-| `serif` | `"IBM Plex Serif", Georgia, serif` | Printed reports only — never in the UI |
+| `serif` | `"IBM Plex Serif", Georgia, serif` | Reports: the printed page and the report document card in the app (Report.dc.html) — nowhere else in the UI |
 
-Monospace is a signal that a value is literal data. Use it deliberately.
+Monospace is a signal that a value is literal data. Use it deliberately. An em dash inside a mono cell is set in `sans`, so it reads as a dash and not a hyphen.
+
+Interface styles run at about 1.3× line height, as the mockups render; `prose` styles at 1.5–1.6× for reading.
 
 | Style | Size / line height | Weight | Notes |
 |---|---|---|---|
-| `display` | 30 / 36 | 600 | `letter-spacing: -0.5px` |
-| `title` | 20 / 26 | 600 | |
-| `body` | 14 / 21 | 400 | |
-| `body-strong` | 14 / 21 | 600 | |
-| `small` | 12.5 / 19 | 400 | Replaces `body` in compact tables |
-| `caption` | 11.5 / 17 | 400 | |
+| `display` | 30 / 39 | 600 | `letter-spacing: -0.5px`. The dashboard question |
+| `heading-auth` | 26 / 34 | 600 | `letter-spacing: -0.4px`. Sign-in title |
+| `heading-page` | 24 / 31 | 600 | `letter-spacing: -0.4px`. Enrolment title |
+| `heading-step` | 22 / 29 | 600 | `letter-spacing: -0.3px`. MFA challenge title |
+| `title` | 20 / 26 | 600 | Page titles inside the app (Cases) |
+| `heading` | 16 / 21 | 600 | Inspector entity name |
+| `subtitle` | 15 / 20 | 600 | Run summary title, enrolment step titles |
+| `wordmark` | 15 / 20 | 700 | `letter-spacing: -0.2px`. Product name beside the logo |
+| `body` | 14 / 18 | 400 | Navigation, inputs, interface text |
+| `body-strong` | 14 / 18 | 600 | Active navigation, case titles, primary buttons on auth and dashboard |
+| `prose` | 14 / 22 | 400 | Reading text: summaries |
+| `prose-lead` | 13.5 / 21 | 400 | Auth and enrolment leads |
+| `ui` | 13 / 17 | 400 | Tabs, back links, collector names, stat labels |
+| `ui-strong` | 13 / 17 | 600 | Active tab, alert titles, buttons at 34px |
+| `section-label` | 13 / 17 | 600 | `letter-spacing: 0.4px`, uppercase card headings (Recent cases, Collectors) |
+| `small` | 12.5 / 16 | 400 | Table cells in comfortable density, rail text, key-value rows |
+| `small-strong` | 12.5 / 16 | 600 | Field labels, buttons at 32 and 36px, gap titles |
+| `prose-small` | 12.5 / 19 | 400 | Notes, callouts, dashed honesty cards |
+| `meta` | 12 / 16 | 400 | Meta lines, compact table cells, drawer values, card links |
+| `meta-strong` | 12 / 16 | 600 | The vetting pill, filter chips |
+| `caption` | 11.5 / 15 | 400 | Row meta, footers, legends |
+| `caption-prose` | 11.5 / 17 | 400 | Footnotes, drop-zone text |
 | `eyebrow` | 11 / 14 | 600 | `letter-spacing: 0.5px`, uppercase section labels |
-| `mono-body` | 13 / 20 | 400 | |
-| `mono-caption` | 11.5 / 17 | 400 | |
-| `metric` | 21 / 26 | 500 | Mono. Large single numbers |
+| `overline` | 11 / 14 | 600 | `letter-spacing: 0.6px`, uppercase meter labels |
+| `chip` | 11 / 14 | 600 | Status chips and count chips |
+| `th` | 11 / 14 | 600 | `letter-spacing: 0.5px`, uppercase table headers (drawn 10.5px; raised so `ink-muted` stays at 11px or more) |
+| `badge` | 10.5 / 14 | 600 | Claim badges in tables, cards, timeline, map and report (claim inks only, never `ink-muted`) |
+| `mono-target` | 14 / 18 | 500 | Mono. The run's target in its header |
+| `mono-value` | 14 / 18 | 400 | Mono. Stat and cost values |
+| `mono-body` | 13 / 17 | 400 | Mono. Counts, ranges, keys |
+| `mono-small` | 12.5 / 16 | 400 | Mono. Attribute values, entity identifiers, dates |
+| `mono-meta` | 12 / 16 | 400 | Mono. Detect tags, table hashes and times, drawer values, keycaps |
+| `mono-caption` | 11.5 / 15 | 400 | Mono. Counts in rails and legends, citation numbers |
+| `mono-otp` | 22 / 29 | 400 | Mono. `letter-spacing: 7px`. One-time code input |
+| `metric` | 21 / 27 | 500 | Mono. Large single numbers |
+| `serif-title` | 23 / 30 | 600 | Serif. Report document section title |
+| `serif-body` | 14.5 / 25 | 400 | Serif. Report document body |
+
+Print (the PDF) has its own type in points (`packages/integrations`), not tokens: body 12pt/1.65 justified, headings 19pt and 13pt, labels as bracketed capitals for greyscale.
 
 ---
 
-## 5. Spacing, radius, shadow
+## 5. Spacing, radius, shadow, sizes
+
+**Spacing.** The mockups step in single pixels, so the scale has quarter steps of 4px (`space-2.25` is 9px; the class is `p-2.25`). Rhythm: a title to its meta line 2–5px; inside a card 12–14px; between cards 16–20px; section to section 26–34px; page gutters `space-10` on workspace and run screens, `space-16` on the dashboard.
 
 | Token | Value | Use |
 |---|---|---|
-| `space-0` | 0px | Flush: an edge set against its container or the viewport (`top-0`, `right-0`), and `min-w-0` letting a flex child shrink. Added in Phase 6b, after the provenance drawer rendered off-screen without it |
-| `space-1` | 4px | Badge padding, icon-to-label gaps |
-| `space-2` | 8px | Chip rows, tight button groups |
-| `space-3` | 12px | Compact density row padding |
-| `space-4` | 16px | Default card padding, list gaps |
-| `space-5` | 20px | Comfortable card padding |
-| `space-6` | 24px | Grid gutters between panels |
+| `space-0` | 0px | Flush edges (`top-0`, `right-0`) and `min-w-0` letting a flex child shrink |
+| `space-0.25` | 1px | Badge vertical padding, optical offsets |
+| `space-0.5` | 2px | Tab gap, navigation list gap, keycap and small badge vertical padding |
+| `space-0.75` | 3px | Chip vertical padding, text-stack gaps |
+| `space-1` | 4px | Icon-to-label gaps, unmeasured caption gap |
+| `space-1.25` | 5px | Title to meta, vetting pill vertical padding, eyebrow to heading |
+| `space-1.5` | 6px | Small badge horizontal padding, compact cell gaps |
+| `space-1.75` | 7px | Label to input, pill dot gap, key-value gap, toolbar gaps |
+| `space-2` | 8px | Chip rows, button pairs, small badge row gap |
+| `space-2.25` | 9px | Status chip horizontal padding, case-header right cluster gap |
+| `space-2.5` | 10px | Navigation item padding, table cell horizontal, toolbar vertical |
+| `space-2.75` | 11px | Navigation icon gap, vetting pill horizontal, nested card padding |
+| `space-3` | 12px | Table cell horizontal (comfortable), meter box padding, card inner gaps |
+| `space-3.25` | 13px | Tab horizontal padding, secondary button and input horizontal padding |
+| `space-3.5` | 14px | Navigation horizontal padding, card-header margin, overlay offsets |
+| `space-3.75` | 15px | Primary button horizontal padding, alert horizontal padding |
+| `space-4` | 16px | Docked drawer section padding, rail padding, list gaps |
+| `space-4.5` | 18px | Card padding, Evidence content padding and gap |
+| `space-5` | 20px | Card horizontal padding on run cards, grid gutters (dashboard, overview) |
+| `space-5.5` | 22px | App header horizontal padding, run view column gap |
+| `space-6` | 24px | Enrolment step padding, run view grid gap |
+| `space-6.5` | 26px | Navigation column gap, auth block gap |
+| `space-7` | 28px | Entities body horizontal padding |
 | `space-8` | 32px | Section separation |
-| `space-10` | 40px | Page margins |
+| `space-8.5` | 34px | Dashboard hero to grid, report document padding |
+| `space-9` | 36px | Run view horizontal page padding |
+| `space-10` | 40px | Workspace page gutters |
+| `space-13.5` | 54px | Dashboard content top |
+| `space-14` | 56px | Enrolment frame vertical padding |
+| `space-16` | 64px | Dashboard content horizontal padding |
 
 | Token | Value | Use |
 |---|---|---|
-| `radius-sm` | 6px | Badges, small icon buttons |
-| `radius-md` | 8px | Buttons, navigation rows, inputs |
+| `radius-bar` | 3px | Progress and meter bars (half their height); not a pill |
+| `radius-xs` | 5px | Claim badges, the ⌘K keycap |
+| `radius-sm` | 6px | Tags, icon buttons in rows, backup-code cells |
+| `radius-md` | 8px | Buttons, inputs, navigation rows, run and collector rows, logo tile |
+| `radius-inner` | 9px | Cards nested in a card, legends, alerts, the hero search's buttons |
+| `radius-box` | 10px | The credits box, the QR frame, the map's floating card |
 | `radius-lg` | 12px | Cards and panels |
-| `radius-pill` | 999px | Status chips **only** — a pill that is not a status is wrong |
+| `radius-xl` | 14px | The hero search bar |
+| `radius-pill` | 999px | Status chips, count chips, the vetting pill, dots and avatars **only** — a pill that is not a status is wrong |
 
 | Token | Value | Use |
 |---|---|---|
-| `shadow-card` | `0 1px 2px rgba(21,23,28,0.05)` | The search bar and floating graph controls. Nothing else is raised |
-| `shadow-overlay` | `0 8px 24px rgba(21,23,28,0.12)` | Command palette, popovers, provenance drawer |
+| `shadow-card` | `0 1px 2px rgba(21,23,28,0.05)` | The dashboard's hero search bar. Nothing else is raised |
+| `shadow-overlay` | `0 8px 24px rgba(21,23,28,0.12)` | The command palette, popovers and the account menu (floating layers only). In dark, overlays also carry a `border-default` edge, because the shadow does not show |
 
-**Sizes** (added in Phase 6b, for the first screens):
+**Sizes.**
 
 | Token | Value | Use |
 |---|---|---|
-| `target-min` | 44px | Smallest dimension of any interactive control (§7). Buttons and inputs are at least this tall |
+| `target-min` | 44px | Smallest hit area of any interactive control (§7) |
+| `control-sm` | 32px | Visual height of workspace header buttons, filter chips and workspace inputs; the hit area extends to `target-min` |
+| `control-md` | 36px | Visual height of drawer, rail and callout buttons; the hit area extends to `target-min` |
+| `row-compact` | 44px | Table row height in compact density (the mockups' 31–39px rows cannot hold 44px targets, §12) |
+| `row-comfortable` | 52px | Table and collector row pitch in comfortable density |
 | `focus-ring-width` | 2px | The focus outline (§7) |
 | `focus-ring-offset` | 2px | Gap between a control and its focus outline (§7) |
-| `layout-form-width` | 500px | Maximum width of a single-column form: sign-in, MFA challenge (the sign-in design's column; was 400px) |
-| `layout-page-width` | 880px | Maximum width of a single-column page wider than a form: MFA enrolment (added from the screen designs) |
-| `layout-nav-width` | 216px | The side navigation of the signed-in app (added from the screen designs) |
-| `layout-search-width` | 780px | The dashboard's search bar (added from the screen designs) |
-| `layout-drawer-width` | 400px | The provenance drawer (§9), from the right edge (added in Phase 6b) |
-| `qr-size` | 176px | The MFA enrolment QR code, large enough to scan from a screen |
+| `tab-indicator-width` | 2px | The active tab's underline |
+| `dot` | 9px | Status and legend dots |
+| `dot-sm` | 8px | Alert and gap dots |
+| `dot-xs` | 7px | The vetting pill's dot |
+| `bar-lg` | 6px | Run progress bar |
+| `bar-md` | 5px | Credits meter bar |
+| `bar-sm` | 4px | A row's mini progress |
+| `icon-sm` | 15px | Icons in buttons and inline |
+| `icon` | 17px | Navigation icons |
+| `icon-lg` | 19px | Search and hero icons |
+| `avatar` | 34px | The account avatar (inside a 44px button) |
+| `logo-tile` | 30px | The product mark's tile |
+| `otp-height` | 52px | One-time code input |
+| `mini-progress-width` | 190px | A running row's progress bar |
+| `timeline-date-col` | 132px | The timeline's date column |
+| `layout-header-height` | 56px | The app header (dashboard, run view) |
+| `layout-case-header-height` | 54px | The case header (workspace screens) |
+| `layout-tabbar-height` | 44px | The workspace tab bar |
+| `layout-form-width` | 500px | Single-column forms: sign-in, MFA challenge |
+| `layout-page-width` | 880px | A single-column page wider than a form: MFA enrolment |
+| `layout-nav-width` | 216px | The side navigation |
+| `layout-search-width` | 780px | The dashboard's search bar |
+| `layout-drawer-width` | 350px | The docked inspector and provenance drawer (one component, §9) |
+| `layout-runs-rail-width` | 232px | The workspace runs rail |
+| `layout-side-rail-width` | 330px | The Entities rail and the report's citation rail |
+| `layout-report-nav-width` | 226px | The report's section navigation |
+| `layout-map-rail-width` | 280px | The map's layers rail |
+| `layout-media-rail-width` | 300px | The media rail |
+| `layout-document-width` | 680px | The report document card's text column |
+| `layout-palette-width` | 560px | The command palette (not drawn; sized to the search bar's proportions) |
+| `qr-size` | 150px | The MFA enrolment QR code |
+| `qr-frame` | 188px | Its frame |
 
-**Density.** Two modes. *Comfortable*: `space-5` card padding, 11px row padding, `body` in tables. *Compact*: `space-3`, 7px, `small` in tables. All spacing comes from tokens, so the swap is mechanical. Compact is the default in the Evidence grid.
+**Density.** Two modes. *Comfortable*: `row-comfortable` rows, `small` cells, `space-3` cell padding. *Compact*: `row-compact` rows, `meta` cells, `space-2.5` cell padding. Compact is the default in the Evidence grid. Rows never go below `row-compact`, because they hold 44px targets.
 
 ---
 
 ## 6. Iconography
 
-Line icons, 1.9px stroke, 24px grid, rendered at 15–19px, inheriting `currentColor`. No filled icons, no two-tone, **no emoji anywhere in the product**. Icon-only buttons always carry an `aria-label`. Entity classes in the graph are distinguished by ring colour **and** a text label inside the node.
+Line icons (lucide), 1.9px stroke, 24px grid, rendered at `icon-sm`, `icon` or `icon-lg`, inheriting `currentColor`. No filled icons, no two-tone, **no emoji anywhere in the product**. Icon-only buttons always carry an `aria-label`. Entity classes in the graph are distinguished by ring colour **and** a text label inside the node.
 
 ---
 
 ## 7. Accessibility
 
-- Body and caption text meet 4.5:1 against their surface in both themes. `ink-muted` is the lightest permitted text colour.
-- Interactive targets are at least 44px in their smallest dimension.
+- Text meets 4.5:1 against its surface in both themes (every pair in this document is computed). `ink-muted` is the lightest permitted text colour and is never set below 11px. Placeholders are `ink-muted`.
+- **Targets.** Every interactive control has a hit area of at least `target-min` (44px) in both dimensions. A control drawn smaller (`control-sm`, `control-md`, a 26–28px icon button) keeps its drawn look and extends its hit area invisibly to 44px, provided the extension overlaps no neighbouring target; where it would, the control grows instead. Rows that hold targets are at least `row-compact`.
+- **No interactive links inside running prose.** A link that would sit inside a sentence is set after it as a standalone link with its own 44px hit area (WCAG's inline-link exemption is not taken, §12).
 - Focus is visible on every control: `accent`, `focus-ring-width`, with `focus-ring-offset`.
-- Every control is a real `<button>`, `<a href>` or labelled `<input>`. Nothing interactive is a `div`.
+- Every control is a real `<button>`, `<a href>` or labelled `<input>`. Nothing interactive is a `div`. Toggles carry `aria-pressed`; the workspace tabs are links with `aria-current="page"`; a removable chip's name says "Remove filter …".
+- Selection and state are never carried by a row tint alone (the tints are 1.06–1.18:1): the selected row also changes weight or carries `aria-selected`, and the running row its word.
+- The graph and map canvases have an equivalent list that can be reached and used by keyboard.
 - Entity and status distinctions differ in lightness, not hue alone.
 - Every form input has a label, visible or screen-reader-only.
 
@@ -226,26 +341,75 @@ Line icons, 1.9px stroke, 24px grid, rendered at 15–19px, inheriting `currentC
 
 Every data surface designs these explicitly. None may be left to a default spinner.
 
-| State | Requirement |
-|---|---|
-| **Empty** | Says what would appear here and how to get it. First-run empty states are onboarding. |
-| **Loading** | Skeletons matching the real layout, not a centred spinner. |
-| **Partial** | Says what is missing and why. Never presents partial data as complete. |
-| **Failed** | The reason, the retry state, and what the user can do. |
-| **Stale** | When data was collected, where that matters. |
-| **Locked** | What the module does, why it is off (plan or vetting), and the next step. Sells, never scolds. |
+| State | Requirement | Design |
+|---|---|---|
+| **Empty** | Says what would appear here and how to get it. First-run empty states are onboarding. | A card (`surface-raised`, `border-default`, `radius-lg`, `space-4.5`): `ui-strong` title, `prose-small` sentence in `ink-secondary`, and the one action that fills it |
+| **Not built** | A tab or panel whose analysis does not exist yet. | The empty card, titled with what the tab will show, saying plainly that it is not built yet and what it needs. No sample data, no greyed fake content |
+| **Loading** | Skeletons matching the real layout, not a centred spinner. | `surface-sunken` blocks in the layout's shape, with a `role="status"` line saying what is being read |
+| **Partial** | Says what is missing and why. Never presents partial data as complete. | A notice (`accent-soft`, `accent-ink`): bold "Partial: n of N …" and the reason |
+| **Failed** | The reason, the code, the retry state, and what the user can do. | An alert (`status-failed-tint`, `status-failed-border`, `radius-inner`): a `status-failed-mark` dot, `ui-strong` title in `status-failed-ink`, the reason in `prose-small` `ink-secondary`, the code in `mono-caption`, and the action |
+| **Stale** | When data was read, where that matters. | "Read at" with the time in `mono-meta`, and Refresh |
+| **Locked** | What the module does, why it is off (plan or vetting), and the next step. Sells, never scolds. | A neutral notice: eyebrow "Locked", what the module does, what was withheld and why, the next step in `body-strong`, the reason code in `mono-caption` |
 
 ---
 
-## 9. Patterns
+## 9. Patterns and components
 
-**Provenance drawer.** Opens from any number, claim or attribute. Shows collector and version, run id, `observedAt` and `collectedAt` separately, content hash, source URL, and a link to the stored raw payload. One component, reused everywhere.
+Exact values from the mockups; tokens from §2–§5. Each names the mockup it matches.
+
+**App header row** (Main, Dashboard-dark). `layout-header-height`, `surface-raised`, `border-default` bottom, padding 0 `space-5.5`. Left: the command-palette button. Right, gap `space-3.5`: the vetting pill, then the account button.
+
+**Command-palette button and palette** (Main). The button: a `⌘K` keycap (`mono-meta`, `ink-muted`, 1px `border-default`, `radius-xs`, padding `space-0.5` `space-1.5`; "Ctrl K" off Apple platforms) and "Command palette" in `meta` `ink-muted`, gap `space-2.25`, hit area 44px. The palette (not drawn): a floating layer `layout-palette-width` wide, `shadow-overlay`, `radius-lg`; a 44px input; result rows 44px; arrow keys move, Enter opens, Escape closes and returns focus; empty, loading and no-results states as §8.
+
+**Account menu.** The account button: an `avatar` circle (`surface-control`, 1px `border-default`, initials `ui-strong` `ink-secondary`) inside a 44px button named "Account". The menu: a popover (`shadow-overlay`, `radius-lg`, `space-4`), rows 44px: the person, Switch organisation, the theme as a radio pair (Light, Dark), Sign out.
+
+**Vetting pill** (Main). A pill (`meta-strong`, padding `space-1.25` `space-2.75`, gap `space-1.75`, a `dot-xs` dot), its word from the tenant's vetting status: Verified tenant, Vetting pending, Vetting not submitted, Vetting rejected, Vetting suspended. Colour: `accent-ink` on `accent-soft` with an `accent` dot (§12, owner decision D1).
+
+**Credits meter** (Main). A box (`border-default`, `radius-box`, `space-3`) at the foot of the navigation: `overline` "Credits this month", the figure in `metric` with "of [limit]" in `meta` `ink-muted`, a `bar-md` bar (`surface-muted` track, `accent` fill, `radius-bar`), `role="meter"`. **No credit metering exists**: until it does the figure is an em dash with its reason and there is no bar (a bar at any width would be a fabricated value).
+
+**Navigation** (Main). `layout-nav-width`, padding `space-5` `space-3.5`, gap `space-6.5`. Product mark: `logo-tile` `accent` tile (`radius-md`) and `wordmark`. Items: 44px, padding `space-2.5`, gap `space-2.75`, `radius-md`, `body`; inactive `ink-secondary`, active `accent-soft` with `body-strong` `accent-ink`; `icon` icons. Only built destinations are listed.
+
+**Case header and tabs** (Workspace and the six tab mockups). Header `layout-case-header-height`: "Cases" link (`ui-strong`, `link`), a divider (1px `border-default`), the case name in `body-strong`, right cluster gap `space-2.25`. Tab bar `layout-tabbar-height`, `surface-raised`, `border-default` bottom, padding 0 `space-4`, gap `space-0.5`. Tabs in the drawn order — Overview, Entities, Graph, Timeline, Evidence, Media, Map, Report — padding 0 `space-3.25`, `ui` `ink-muted`; the active tab `ui-strong` `accent-ink` with a `tab-indicator-width` `accent` underline.
+
+**Card** (all). `surface-raised`, 1px `border-default`, `radius-lg`, no shadow, padding `space-4.5` (run cards `space-4.5` `space-5`). Header row: `section-label` in `ink-muted`, a standalone link or count chip right. Inner dividers `border-subtle`. A nested card: 1px `border-subtle`, `radius-inner`, padding `space-2.75`–`space-3`. A dashed note: 1px dashed `border-strong`, `radius-lg`, `prose-small` `ink-secondary`.
+
+**Status chip** (Main, Run, RunLive). A pill: `chip`, padding `space-0.75` `space-2.25`, no border, no icon, about 20px tall, ink and fill from §3. In a row it pairs with a `dot` of the matching mark. A count chip ("6 ran") is the same shape.
+
+**Claim badge** (Workspace, Entities, Evidence, Timeline, Map, Report). Literal capitals. *md*: `chip`, padding `space-0.75` `space-2`, `radius-xs`. *sm*: `badge`, padding `space-0.5` `space-1.5`, `radius-xs`. Ink on fill from §2. Never a pill.
+
+**Tag** (Main: "domain", "ip"…). `mono-meta`, padding `space-0.75` `space-2`, `radius-sm`, 1px `border-control`, `surface-field`. Not a status, so not a pill.
+
+**Removable filter chip** (Evidence). A `<button>`, `control-sm` visual, padding 0 `space-2.75`, `radius-md`, 1px `accent` border, `accent-soft`, `meta-strong` `accent-ink`, label "Facet: value ×", accessible name "Remove filter Facet: value"; the whole chip removes. The add chip: 1px dashed `border-strong`, `surface-raised`, `meta` `ink-secondary`, "+ Filter". When chips wrap, the row gap is at least `space-3` so hit areas do not overlap.
+
+**Data table — the Evidence grid** (Evidence; Entities). A card with no padding. Toolbar: padding `space-2.5` `space-3.5`, `border-subtle` bottom, gap `space-2`, wraps; search input `control-sm`, `surface-sunken`, a visually hidden label. Header row: `surface-sunken`; `th` in `ink-muted`, padding `space-2` `space-2.5`, `border-subtle` bottom; sortable headers are buttons with `aria-sort` and an `icon-sm` chevron (`ink-muted`, `ink-secondary` when active). Rows `row-compact` or `row-comfortable`, `border-subtle` rules; claim text `ink-primary`, collector `ink-secondary`, times and hash in `mono-meta` (observed `ink-secondary`, collected and hash `ink-muted`), hash shortened 4…3 with the whole hash in the drawer. Selection column: native checkboxes, `accent` accent colour, "Select row n" / "Select all rows". Per-row action column: a 26px pin button (`radius-sm`) with a 44px hit area — unpinned `border-strong` "+", pinned `accent` border on `accent-soft` "✓", `aria-pressed`, "Pin row n to case". Footer: padding `space-2.5` `space-3.5`, `caption` `ink-muted`: "n selected · n of N rows" left, "Rows are never deleted; evidence is append-only." right. Density toggle (Entities): a segmented pair, `control-sm`, 1px `border-strong`, `radius-md`; off `ink-muted` on `surface-raised`, on `small-strong` `accent-ink` on `accent-soft`, `aria-pressed`.
+
+**Inspector and provenance drawer** (Workspace, Evidence). **One component**: docked right, `layout-drawer-width`, full height, `surface-raised`, `border-default` left, no shadow. A title row (eyebrow, a close button with a 44px hit area). Sections padded `space-4` `space-4.5`, divided by `border-subtle`: the subject (`heading`, badges, Pin), a key-value list (gap `space-2.25`; keys `meta` `ink-muted`, values `mono-meta` right-aligned; a missing value is an em dash with its reason), lists. Provenance shows collector and version, run, observed and collected apart, content hash, source URL, and the raw payload as a download ("Download raw payload": an attachment, never opened in the app, CLAUDE.md §9). A footer action pair pinned to the bottom: gap `space-2`, both equal width, `control-md` visual, secondary then primary — only actions that exist.
+
+**Metric and cost card** (RunLive). A card, padding `space-4.5` `space-5`, gap `space-3`: rows label (`ui` `ink-muted`) and value (`mono-value` `ink-primary`), baseline-aligned; a footnote in `caption-prose` `ink-muted`. **Cost shown twice**: "Estimated before the run" and "Spent so far"; each is an em dash with its reason while the API records neither per run.
+
+**"Arriving now" list** (RunLive). A card, gap `space-3.25`: rows label (`ui` `ink-primary`) and value (`mono-value`), `border-subtle` between rows. An unmeasured value is an em dash with, under it, a `caption` line in `status-failed-ink`: "Not measured — <cause>".
+
+**Run view** (RunLive). Header `layout-header-height`: back link, divider, `mono-target`, the detected-type tag, alternates in `caption` `ink-muted`; right, the run's status chip. Body padding `space-6` `space-9`, a 12-column grid, gap `space-5.5`, split 8/4; cards stack gap `space-4`. Collector rows: `row-comfortable` pitch, padding `space-2.25` `space-3`, `radius-md`, a `dot`, name in `ui-strong`, meta in `caption`, the chip right; a running row adds a `bar-sm` mini progress `mini-progress-width` wide (track `border-default`, fill `accent`).
+
+**Graph shell** (Workspace). The canvas fills its area on `surface-sunken`. A toolbar overlay top-left (`space-4`, `space-3.5`), gap `space-1.75`: Layout, hops, Hide inferred (`aria-pressed`) — `control-sm` buttons with 44px hit areas. A legend overlay bottom-left: `surface-raised`, 1px `border-default`, `radius-inner`, padding `space-2.5` `space-3`, gap `space-3.5`: every entity class present (dot and word) and the edge key in words (solid: stated or derived; dashed: inferred or hypothesis). Edges `border`-weight lines in `claim-hypothesis-mark`; inferred edges dashed in `claim-inferred-mark` with their word.
+
+**Runs rail** (Workspace). `layout-runs-rail-width`, padding `space-4` `space-3`, gap `space-4.5`. Run rows: real buttons, 44px, padding `space-2.25` `space-2.5`, `radius-md`; target `mono-meta` (selected `accent-ink` on `accent-soft`), meta `caption` `ink-muted`. Discipline filters: 44px label rows, a checkbox, the discipline word in `small` `ink-secondary`, its count in `mono-caption` right — counts only where measured. "Pinned to case" at the foot, `border-subtle` above.
+
+**Evidence card** (Workspace). 1px `border-subtle`, `radius-inner`, padding `space-3`, gap `space-1.75`: a top row with the sm claim badge and a pin button (44px hit area); the text in `prose-small` `ink-body`; a source line in `caption` `ink-muted`: "source · observed … · collected …". INFERRED cards on `claim-inferred-tint` with `claim-inferred-border`, saying what they were inferred from.
+
+**Map shell** (Map). Layers rail `layout-map-rail-width`, padding `space-4` `space-3.5`: 44px rows with a checkbox, a `dot` in the layer's entity class, the name in `small`, a mono count right. The container `surface-map`, MapLibre filling it. A legend bottom-left as the graph's. A floating selected-point card top-right: `radius-box`, padding `space-3.5` `space-4`, key-value rows, a full-width secondary button. Point colours are entity classes, never claim colours (§12).
+
+**Buttons.** *Primary*: `accent`, `on-accent`, hover `accent-hover`, `radius-md`, weight 600. *Secondary*: `surface-raised`, 1px `border-strong`, `ink-secondary`, weight 600. Visual heights: 44 (auth and dashboard, `body-strong`, padding 0 `space-5`), `control-md` 36 and `control-sm` 32 (`small-strong`, padding 0 `space-3.25` secondary, `space-3.75` primary) — every one with a 44px hit area.
+
+**Inputs.** Auth: 44px, padding 0 `space-3.25`, 1px `border-strong`, `radius-md`, `surface-field`, `body`. One-time code: `otp-height`, `surface-sunken`, `mono-otp`. Workspace search and filters: `control-sm`, `surface-sunken`, `meta`. Hero search shell: `layout-search-width`, `surface-field`, 1px `border-strong`, `radius-xl`, padding `space-3.5` `space-4`, `shadow-card`, a borderless input and 44px buttons (`radius-inner`; the attach button `surface-control` with `border-control`). Labels `small-strong` `ink-secondary`, gap `space-1.75`.
+
+**Report document card** (Report). The run's report as stored, on a card with the text column `layout-document-width`: `serif-title`, `serif-body` in `ink-body`, citation markers as buttons with a 44px hit area opening the cited evidence; INFERRED sentences with a 3px `claim-inferred-mark` rule on `claim-inferred-tint`; coverage limitations in a failed-tint callout. A section rail `layout-report-nav-width` and a citation rail `layout-side-rail-width`.
 
 **Pin-to-case.** Present on **every** result surface, including direct tool panels. The predecessor's worst structural flaw was that tool panels could not feed a case.
 
 **Cost shown twice.** Estimated before a run starts, actual after it finishes. Surprise bills lose customers.
 
-**Evidence as a grid, not cards.** Cards suit the inspector; the Evidence tab is a sortable, filterable grid with saved views and compact density by default.
+**Evidence as a grid, not cards.** Cards suit the inspector; the Evidence tab is a sortable, filterable grid, compact by default.
 
 **Attribution.** Sources that require attribution (GDELT: citation on redistribution; HIBP: visible link) must have it rendered wherever their data appears. A source requiring attribution with nowhere to render it is a bug.
 
@@ -253,10 +417,53 @@ Every data surface designs these explicitly. None may be left to a default spinn
 
 ## 10. White-labelling
 
-Per-tenant themes may override `accent`, `on-accent` and the `surface-*` family **only**. The claim and status families are fixed, because their meaning must not vary between tenants.
+Per-tenant themes may override `accent`, `accent-hover`, `on-accent`, `link`, `link-hover` and the `surface-*` family **only**. The claim, status and entity families are fixed, because their meaning must not vary between tenants.
 
 ---
 
 ## 11. Implementation
 
-Tailwind with shadcn/ui, mapping these tokens to CSS variables at the theme layer. Components never hard-code a hex value, a pixel spacing or a font stack — everything comes from a token. A pull request introducing a raw colour is a review failure.
+Tailwind with shadcn/ui, mapping these tokens to CSS variables at the theme layer. Components never hard-code a hex value, a pixel spacing or a font stack — everything comes from a token. A pull request introducing a raw colour is a review failure. The guard (`packages/config/scripts/design-system-guard.test.ts`) holds `tokens.css` to this document value for value, and `apps/web/scripts/tailwind-classes.test.ts` fails on any class that generates no CSS.
+
+---
+
+## 12. Where the mockups yield, and decisions for the owner
+
+The mockups are binding; these are the only places they are not followed, each because a rule that does not bend wins, or because the mockup draws data the API does not have (design/README.md lists those).
+
+**Accessibility and honesty (rule wins):**
+
+| Mockup draws | Rule | Built as |
+|---|---|---|
+| Controls 26–40px (header and toolbar buttons, chips, inputs, pin and close buttons, pagination, density segments) | 44px targets | Drawn look kept; hit area extended to 44px, or the control grows where an extension would overlap |
+| Table rows 31px (Entities) and 39px (Evidence) holding pin buttons and checkboxes | 44px targets | `row-compact` 44px |
+| Checkbox and run rows 16–37px with 9–11px gaps (rails, layers, recent cases, key entities, report sections) | 44px targets | 44px rows |
+| Links inside sentences ("review", "Compare sources") | 44px targets | Standalone links after the sentence (owner decision D2) |
+| Table headers at 10.5px in `ink-muted` | `ink-muted` never below 11px | `th` 11px |
+| Placeholder colour not set (browser default 4.49:1) | 4.5:1 | `ink-muted` |
+| Graph edges `#CFCEC6` and `#B79C6A` (1.54 and 2.56:1) | Non-text 3:1 | `claim-hypothesis-mark` and `claim-inferred-mark` |
+| Credits "[N] of [PLAN LIMIT]" with a filled bar | Never fabricate (no credit metering exists) | An em dash with its reason, no bar |
+| Mono em dashes reading as hyphens | Never fabricate (an unmeasured value must read as unmeasured) | The dash set in `sans` |
+
+**Colour discipline (ARCHITECTURE-DECISIONS §9, rule wins):**
+
+| Mockup draws | Built as |
+|---|---|
+| Graph nodes in the claim palettes; the focal node filled `accent` | `entity-*` classes; the selected node outlined in `accent` (D3) |
+| Map layers in claim colours ("Reported event" amber) | Points by entity class (D5) |
+| Run settings pills green and navy ("Passive only", "In-region") | Neutral tags |
+| Contradiction callouts in inferred amber | Neutral callouts titled "Contradiction"; amber only on an INFERRED item |
+| Report "Unreviewed" amber pill; citation check in green | Neutral (and not built: no review state exists) |
+| Non-status pills ("Detected: domain", "3 runs") | `radius-sm` tags |
+| Run progress with an unlabelled amber segment | One `accent` fill with the count in words |
+| Timeline bars coloured by strength without words | A legend with the strength words |
+| Media status chips at `radius-sm` | Pills |
+
+**Decisions for the owner** (the default, rule-compliant choice is built; say if you want the mockup instead):
+
+- **D1. Vetting pill colour.** The mockup draws "Verified tenant" green. Vetting is not one of the three meanings colour may carry, so it is built neutral (`accent-soft`). The alternative is to extend the colour rule to "and tenant vetting".
+- **D2. Inline links.** Built as standalone links. The alternative is to adopt WCAG 2.5.8's exemption for links inside sentences.
+- **D3. Focal graph node.** Built with its class colour and an `accent` outline. The alternative is the mockup's filled accent node, which hides its class.
+- **D4. Serif in the app.** Adopted from the mockup for the report document card (§4). This changes the previous "printed reports only" rule; say if you want the card in sans.
+- **D5. Map point colours.** Built by entity class. The alternative is a fourth colour meaning, "map layer".
+- **D6. Tab order.** The drawn order (Overview, Entities, Graph, Timeline, Evidence, Media, Map, Report) is adopted; the app currently orders Evidence before Graph.

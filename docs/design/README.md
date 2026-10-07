@@ -7,8 +7,10 @@ The reference designs for the web app: 15 screens drawn by the owner in claude.a
 - **Its design system:** https://claude.ai/artifact/5aoHSLvKvkJrL5rt9eEYCZ. Its tokens are
   `docs/DESIGN-SYSTEM.md` and `packages/ui/src/tokens.css`. `mockups/tokens.json` matches that
   document exactly (33 colour tokens, every spacing, radius and shadow token; checked
-  2026-10-05). Since then the repo's design system has added tokens the canvas does not have:
-  the entity-class colours and `layout-drawer-width` (2026-10-06).
+  2026-10-05). On 2026-10-07 (U1-a) the document was reconciled with the mockups' HTML itself,
+  value by value, and now holds many tokens `tokens.json` does not: the drawn surfaces, tints,
+  links, type styles, quarter-step spacing, radii and sizes, and the entity-class colours.
+  `DESIGN-SYSTEM.md` §12 lists every place a mockup is not followed and why.
 
 These files were brought into the repo on 2026-10-05, after Phase 6b steps 1 to 3 had been built
 without them. Until then they existed only in claude.ai. Read this page before building or

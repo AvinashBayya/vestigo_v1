@@ -16,18 +16,27 @@
   --ds-surface-raised: #ffffff;
   --ds-surface-sunken: #fcfcfa;
   --ds-surface-hover: #f8f8f5;
+  --ds-surface-field: #ffffff;
+  --ds-surface-control: #f5f5f1;
+  --ds-surface-muted: #ecebe4;
+  --ds-surface-map: #f1f0ea;
   --ds-border-subtle: #efeee8;
   --ds-border-default: #e3e2db;
   --ds-border-strong: #d6d5cc;
+  --ds-border-control: #e3e2db;
   --ds-ink-primary: #15171c;
+  --ds-ink-body: #24262c;
   --ds-ink-secondary: #3c3e45;
   --ds-ink-muted: #5e6066;
   --ds-accent: #22355b;
+  --ds-accent-hover: #16233c;
   --ds-accent-soft: #e8ecf4;
   --ds-accent-ink: #22355b;
   --ds-on-accent: #ffffff;
+  --ds-link: #22355b;
+  --ds-link-hover: #16233c;
 
-  /* §2 Claim strength: fill, ink, mark */
+  /* §2 Claim strength: fill, ink, mark; inferred context */
   --ds-claim-observed-fill: #e7f1ea;
   --ds-claim-observed-ink: #17543a;
   --ds-claim-observed-mark: #1f6f4a;
@@ -39,16 +48,23 @@
   --ds-claim-derived-mark: #6a4a9e;
   --ds-claim-correlated-fill: #e7efef;
   --ds-claim-correlated-ink: #0f4f4f;
+  --ds-claim-correlated-mark: #196b6b;
   --ds-claim-inferred-fill: #f6eedd;
   --ds-claim-inferred-ink: #6b4510;
   --ds-claim-inferred-mark: #8a5a12;
   --ds-claim-hypothesis-fill: #ecebe4;
   --ds-claim-hypothesis-ink: #4a4c52;
+  --ds-claim-hypothesis-mark: #8e9096;
+  --ds-claim-inferred-tint: #fdfaf3;
+  --ds-claim-inferred-border: #f0e4cb;
 
-  /* §2 Failure */
+  /* §2 Failure and collector status inks */
   --ds-status-failed-fill: #f6e6e1;
   --ds-status-failed-ink: #7a2e1e;
   --ds-status-failed-mark: #a33f27;
+  --ds-status-failed-tint: #fdf7f5;
+  --ds-status-failed-border: #f0dcd5;
+  --ds-status-needs-key-ink: #8a5a12;
 
   /* §2 Entity class (graph nodes) */
   --ds-entity-domain-ring: #1d6b47;
@@ -79,66 +95,216 @@
   /* §4 Typography */
   --ds-font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --ds-font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --ds-font-serif: "IBM Plex Serif", Georgia, serif;
   --ds-type-display-size: 30px;
-  --ds-type-display-line: 36px;
+  --ds-type-display-line: 39px;
   --ds-type-display-weight: 600;
   --ds-type-display-tracking: -0.5px;
+  --ds-type-heading-auth-size: 26px;
+  --ds-type-heading-auth-line: 34px;
+  --ds-type-heading-auth-weight: 600;
+  --ds-type-heading-auth-tracking: -0.4px;
+  --ds-type-heading-page-size: 24px;
+  --ds-type-heading-page-line: 31px;
+  --ds-type-heading-page-weight: 600;
+  --ds-type-heading-page-tracking: -0.4px;
+  --ds-type-heading-step-size: 22px;
+  --ds-type-heading-step-line: 29px;
+  --ds-type-heading-step-weight: 600;
+  --ds-type-heading-step-tracking: -0.3px;
   --ds-type-title-size: 20px;
   --ds-type-title-line: 26px;
   --ds-type-title-weight: 600;
+  --ds-type-heading-size: 16px;
+  --ds-type-heading-line: 21px;
+  --ds-type-heading-weight: 600;
+  --ds-type-subtitle-size: 15px;
+  --ds-type-subtitle-line: 20px;
+  --ds-type-subtitle-weight: 600;
+  --ds-type-wordmark-size: 15px;
+  --ds-type-wordmark-line: 20px;
+  --ds-type-wordmark-weight: 700;
+  --ds-type-wordmark-tracking: -0.2px;
   --ds-type-body-size: 14px;
-  --ds-type-body-line: 21px;
+  --ds-type-body-line: 18px;
   --ds-type-body-weight: 400;
   --ds-type-body-strong-size: 14px;
-  --ds-type-body-strong-line: 21px;
+  --ds-type-body-strong-line: 18px;
   --ds-type-body-strong-weight: 600;
+  --ds-type-prose-size: 14px;
+  --ds-type-prose-line: 22px;
+  --ds-type-prose-weight: 400;
+  --ds-type-prose-lead-size: 13.5px;
+  --ds-type-prose-lead-line: 21px;
+  --ds-type-prose-lead-weight: 400;
+  --ds-type-ui-size: 13px;
+  --ds-type-ui-line: 17px;
+  --ds-type-ui-weight: 400;
+  --ds-type-ui-strong-size: 13px;
+  --ds-type-ui-strong-line: 17px;
+  --ds-type-ui-strong-weight: 600;
+  --ds-type-section-label-size: 13px;
+  --ds-type-section-label-line: 17px;
+  --ds-type-section-label-weight: 600;
+  --ds-type-section-label-tracking: 0.4px;
   --ds-type-small-size: 12.5px;
-  --ds-type-small-line: 19px;
+  --ds-type-small-line: 16px;
   --ds-type-small-weight: 400;
+  --ds-type-small-strong-size: 12.5px;
+  --ds-type-small-strong-line: 16px;
+  --ds-type-small-strong-weight: 600;
+  --ds-type-prose-small-size: 12.5px;
+  --ds-type-prose-small-line: 19px;
+  --ds-type-prose-small-weight: 400;
+  --ds-type-meta-size: 12px;
+  --ds-type-meta-line: 16px;
+  --ds-type-meta-weight: 400;
+  --ds-type-meta-strong-size: 12px;
+  --ds-type-meta-strong-line: 16px;
+  --ds-type-meta-strong-weight: 600;
   --ds-type-caption-size: 11.5px;
-  --ds-type-caption-line: 17px;
+  --ds-type-caption-line: 15px;
   --ds-type-caption-weight: 400;
+  --ds-type-caption-prose-size: 11.5px;
+  --ds-type-caption-prose-line: 17px;
+  --ds-type-caption-prose-weight: 400;
   --ds-type-eyebrow-size: 11px;
   --ds-type-eyebrow-line: 14px;
   --ds-type-eyebrow-weight: 600;
   --ds-type-eyebrow-tracking: 0.5px;
+  --ds-type-overline-size: 11px;
+  --ds-type-overline-line: 14px;
+  --ds-type-overline-weight: 600;
+  --ds-type-overline-tracking: 0.6px;
+  --ds-type-chip-size: 11px;
+  --ds-type-chip-line: 14px;
+  --ds-type-chip-weight: 600;
+  --ds-type-th-size: 11px;
+  --ds-type-th-line: 14px;
+  --ds-type-th-weight: 600;
+  --ds-type-th-tracking: 0.5px;
+  --ds-type-badge-size: 10.5px;
+  --ds-type-badge-line: 14px;
+  --ds-type-badge-weight: 600;
+  --ds-type-mono-target-size: 14px;
+  --ds-type-mono-target-line: 18px;
+  --ds-type-mono-target-weight: 500;
+  --ds-type-mono-value-size: 14px;
+  --ds-type-mono-value-line: 18px;
+  --ds-type-mono-value-weight: 400;
   --ds-type-mono-body-size: 13px;
-  --ds-type-mono-body-line: 20px;
+  --ds-type-mono-body-line: 17px;
   --ds-type-mono-body-weight: 400;
+  --ds-type-mono-small-size: 12.5px;
+  --ds-type-mono-small-line: 16px;
+  --ds-type-mono-small-weight: 400;
+  --ds-type-mono-meta-size: 12px;
+  --ds-type-mono-meta-line: 16px;
+  --ds-type-mono-meta-weight: 400;
   --ds-type-mono-caption-size: 11.5px;
-  --ds-type-mono-caption-line: 17px;
+  --ds-type-mono-caption-line: 15px;
   --ds-type-mono-caption-weight: 400;
+  --ds-type-mono-otp-size: 22px;
+  --ds-type-mono-otp-line: 29px;
+  --ds-type-mono-otp-weight: 400;
+  --ds-type-mono-otp-tracking: 7px;
   --ds-type-metric-size: 21px;
-  --ds-type-metric-line: 26px;
+  --ds-type-metric-line: 27px;
   --ds-type-metric-weight: 500;
+  --ds-type-serif-title-size: 23px;
+  --ds-type-serif-title-line: 30px;
+  --ds-type-serif-title-weight: 600;
+  --ds-type-serif-body-size: 14.5px;
+  --ds-type-serif-body-line: 25px;
+  --ds-type-serif-body-weight: 400;
 
-  /* §5 Spacing, radius, shadow */
+  /* §5 Spacing */
   --ds-space-0: 0px;
+  --ds-space-0_25: 1px;
+  --ds-space-0_5: 2px;
+  --ds-space-0_75: 3px;
   --ds-space-1: 4px;
+  --ds-space-1_25: 5px;
+  --ds-space-1_5: 6px;
+  --ds-space-1_75: 7px;
   --ds-space-2: 8px;
+  --ds-space-2_25: 9px;
+  --ds-space-2_5: 10px;
+  --ds-space-2_75: 11px;
   --ds-space-3: 12px;
+  --ds-space-3_25: 13px;
+  --ds-space-3_5: 14px;
+  --ds-space-3_75: 15px;
   --ds-space-4: 16px;
+  --ds-space-4_5: 18px;
   --ds-space-5: 20px;
+  --ds-space-5_5: 22px;
   --ds-space-6: 24px;
+  --ds-space-6_5: 26px;
+  --ds-space-7: 28px;
   --ds-space-8: 32px;
+  --ds-space-8_5: 34px;
+  --ds-space-9: 36px;
   --ds-space-10: 40px;
+  --ds-space-13_5: 54px;
+  --ds-space-14: 56px;
+  --ds-space-16: 64px;
+
+  /* §5 Radius */
+  --ds-radius-bar: 3px;
+  --ds-radius-xs: 5px;
   --ds-radius-sm: 6px;
   --ds-radius-md: 8px;
+  --ds-radius-inner: 9px;
+  --ds-radius-box: 10px;
   --ds-radius-lg: 12px;
+  --ds-radius-xl: 14px;
   --ds-radius-pill: 999px;
+
+  /* §5 Shadow */
   --ds-shadow-card: 0 1px 2px rgba(21, 23, 28, 0.05);
   --ds-shadow-overlay: 0 8px 24px rgba(21, 23, 28, 0.12);
 
   /* §5 Sizes */
   --ds-target-min: 44px;
+  --ds-control-sm: 32px;
+  --ds-control-md: 36px;
+  --ds-row-compact: 44px;
+  --ds-row-comfortable: 52px;
   --ds-focus-ring-width: 2px;
   --ds-focus-ring-offset: 2px;
+  --ds-tab-indicator-width: 2px;
+  --ds-dot: 9px;
+  --ds-dot-sm: 8px;
+  --ds-dot-xs: 7px;
+  --ds-bar-lg: 6px;
+  --ds-bar-md: 5px;
+  --ds-bar-sm: 4px;
+  --ds-icon-sm: 15px;
+  --ds-icon: 17px;
+  --ds-icon-lg: 19px;
+  --ds-avatar: 34px;
+  --ds-logo-tile: 30px;
+  --ds-otp-height: 52px;
+  --ds-mini-progress-width: 190px;
+  --ds-timeline-date-col: 132px;
+  --ds-layout-header-height: 56px;
+  --ds-layout-case-header-height: 54px;
+  --ds-layout-tabbar-height: 44px;
   --ds-layout-form-width: 500px;
   --ds-layout-page-width: 880px;
   --ds-layout-nav-width: 216px;
   --ds-layout-search-width: 780px;
-  --ds-layout-drawer-width: 400px;
-  --ds-qr-size: 176px;
+  --ds-layout-drawer-width: 350px;
+  --ds-layout-runs-rail-width: 232px;
+  --ds-layout-side-rail-width: 330px;
+  --ds-layout-report-nav-width: 226px;
+  --ds-layout-map-rail-width: 280px;
+  --ds-layout-media-rail-width: 300px;
+  --ds-layout-document-width: 680px;
+  --ds-layout-palette-width: 560px;
+  --ds-qr-size: 150px;
+  --ds-qr-frame: 188px;
 }
 
 [data-theme="dark"] {
@@ -147,18 +313,27 @@
   --ds-surface-raised: #1a1d23;
   --ds-surface-sunken: #1f232b;
   --ds-surface-hover: #22262e;
+  --ds-surface-field: #1f232b;
+  --ds-surface-control: #262b34;
+  --ds-surface-muted: #2a2e36;
+  --ds-surface-map: #1f232b;
   --ds-border-subtle: #24282f;
   --ds-border-default: #2a2e36;
   --ds-border-strong: #333944;
+  --ds-border-control: #333944;
   --ds-ink-primary: #ecece7;
-  --ds-ink-secondary: #c4c6cc;
+  --ds-ink-body: #ecece7;
+  --ds-ink-secondary: #b6b8bf;
   --ds-ink-muted: #9a9da5;
   --ds-accent: #7b94c8;
+  --ds-accent-hover: #a8bee4;
   --ds-accent-soft: #26303f;
   --ds-accent-ink: #c8d8f2;
   --ds-on-accent: #14161b;
+  --ds-link: #a8bee4;
+  --ds-link-hover: #c8d8f2;
 
-  /* §2 Claim strength: fill, ink, mark */
+  /* §2 Claim strength: fill, ink, mark; inferred context */
   --ds-claim-observed-fill: #1d3227;
   --ds-claim-observed-ink: #8fd5ae;
   --ds-claim-observed-mark: #55b183;
@@ -170,16 +345,23 @@
   --ds-claim-derived-mark: #9a7bd0;
   --ds-claim-correlated-fill: #1b2c2c;
   --ds-claim-correlated-ink: #84caca;
+  --ds-claim-correlated-mark: #84caca;
   --ds-claim-inferred-fill: #33291a;
   --ds-claim-inferred-ink: #e0b872;
   --ds-claim-inferred-mark: #c79a4e;
   --ds-claim-hypothesis-fill: #272b33;
   --ds-claim-hypothesis-ink: #b6b8bf;
+  --ds-claim-hypothesis-mark: #7c8089;
+  --ds-claim-inferred-tint: #221e16;
+  --ds-claim-inferred-border: #4a3c22;
 
-  /* §2 Failure */
+  /* §2 Failure and collector status inks */
   --ds-status-failed-fill: #33211c;
   --ds-status-failed-ink: #e9a48f;
   --ds-status-failed-mark: #c4644a;
+  --ds-status-failed-tint: #241a18;
+  --ds-status-failed-border: #4a2a22;
+  --ds-status-needs-key-ink: #e0b872;
 
   /* §2 Entity class (graph nodes) */
   --ds-entity-domain-ring: #55b183;

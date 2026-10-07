@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. **UI foundation:** U1-a (design system from the mockups) done 2026-10-07, awaiting the owner's review; U1-b (component library) next. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -2687,3 +2687,111 @@ collectors 482, llm 130, osint-engine 104, api 184, ui 10, web 74, worker 4 (1,6
 **Next: R1,** the case analysis engine, from the PURE rows of `src/utils/cases/` and the
 analytical parts of `src/utils/osint/`.
 
+## UI foundation U1-a: the design system extracted from the mockups (2026-10-07)
+
+**The brief.** The 15 mockups are now the binding visual specification. U1-a corrects
+`docs/DESIGN-SYSTEM.md` and the tokens to match what is drawn. It is frontend and design system
+only: no backend change, no new endpoint.
+
+**How it was read.** Fifteen agents each read one mockup's `.dc.html` in full and checked it
+against its PNG. Each returned a measured inventory: every colour with its role and count, type,
+spacing, radii, borders, shadows, component specs and layout. One agent reconciled the
+inventories with the document and computed contrast for every pair. A critic re-read the
+mockups to find gaps and wrong values; it found ten, all taken in. I also looked at all 15
+renders myself.
+
+**What changed against the previous tokens** (113 before, 275 now; nothing removed):
+- **Values corrected to the drawings:**
+  - `ink-secondary` dark `#C4C6CC` → `#B6B8BF`.
+  - Line heights to about 1.3×, as the mockups render: `display` 36→39, `body` and
+    `body-strong` 21→18, `small` 19→16, `caption` 17→15, `mono-body` 20→17, `mono-caption`
+    17→15, `metric` 26→27.
+  - `layout-drawer-width` 400→350.
+  - `qr-size` 176→150.
+- **Colours added (from the drawings):** `surface-field`, `surface-control`, `surface-muted`,
+  `surface-map`, `border-control`, `ink-body`, `accent-hover`, `link`, `link-hover`,
+  `claim-inferred-tint` and `-border`, `status-failed-tint` and `-border`,
+  `status-needs-key-ink`, and the missing marks `claim-correlated-mark` and
+  `claim-hypothesis-mark`. Dark values come from the dark dashboard where drawn, and are
+  derived to the same contrast where not.
+- **Type:** the `serif` family (the report document card, D4) and 27 styles: the auth and page
+  headings, `heading`, `subtitle`, `wordmark`, `prose` and `prose-lead`, `ui`, `section-label`,
+  `meta`, `chip`, `th`, `badge`, the `mono-*` data styles, `mono-otp`, and `serif-title` and
+  `serif-body`.
+- **Spacing:** quarter steps of 4px, because the mockups step in single pixels (`space-2.25` is
+  9px; the class is `p-2.25`; the CSS variable is `--ds-space-2_25`). 21 steps were added, 30 in
+  all.
+- **Radius:** `xs` 5, `inner` 9, `box` 10, `xl` 14, `bar` 3.
+- **Sizes:**
+  - `control-sm` 32 and `control-md` 36 (visual; hit area 44);
+  - `row-compact` 44 and `row-comfortable` 52;
+  - `tab-indicator-width`;
+  - dots, bars, icons, avatar, logo tile, the OTP field;
+  - the header, case-header and tab-bar heights;
+  - the rails, document, palette and drawer widths;
+  - the QR frame.
+- **Components (§9), each naming its mockup:**
+  - the app and case headers, tabs in the drawn order;
+  - the command-palette button and palette, the account menu with its theme toggle;
+  - the vetting pill (every vetting status), the credits meter (with its unmeasured state);
+  - navigation, cards;
+  - the status chip, claim badge md and sm, tag, removable filter chip;
+  - the data table (the Evidence grid), the inspector and provenance drawer (one docked
+    component with a footer pair);
+  - the metric and cost card, "arriving now", the run view;
+  - the graph shell, runs rail, evidence card, map shell;
+  - buttons, inputs, the report document card.
+- **States (§8):** each designed, plus **Not built** for tabs whose analysis does not exist.
+- **Status (§3):** **Unavailable** defined. Run status separated from collector status (a run's
+  PARTIAL is amber; a collector's Partial is green).
+
+**Where the mockups yield** (§12). Each row is a rule that does not bend:
+- **44px targets:** controls keep their drawn look with a hit area extended to 44px. Table rows
+  are at least 44px (the mockups' 31–39px rows hold pin buttons).
+- **Never fabricate:** the credits meter is an em dash with its reason and no bar, because no
+  credit metering exists.
+- **Contrast:** `th` at 11px so `ink-muted` never falls below 11px. Placeholders are `ink-muted`
+  (the browser default fails at 4.49:1). Graph edges use colours that meet 3:1.
+- **Colour discipline (ARCHITECTURE-DECISIONS §9):** graph nodes and map points by entity
+  class, never in claim colours. Settings, review state, contradictions and non-status pills
+  are neutral.
+
+**Decisions for the owner (D1–D6, §12).** Each default is the rule-compliant choice:
+- **D1:** the vetting pill is neutral, where the mockup draws it green.
+- **D2:** links are standalone, with no inline-link exemption.
+- **D3:** the focal graph node keeps its class colour.
+- **D4:** serif in the report document card (adopted from the mockup).
+- **D5:** map points by entity class.
+- **D6:** the drawn tab order.
+
+**Contrast, computed.** 162 pairs, both themes: every text pair the document relies on at
+4.5:1 or more, and every mark at 3:1 or more against `surface-sunken` and `surface-raised`.
+None below its minimum.
+
+**Tooling:**
+- **Generated, not hand-kept:** `tokens.css` is generated from the document (the guard holds it
+  value for value). The Tailwind theme (`theme.css`) and `cn.ts`'s scale lists are generated
+  from the same token list.
+- **The guard** reads dotted spacing names and the serif family, and accepts underscores in
+  variable names. It expects 275 tokens.
+- **The class guard's** sanity case moved from `p-7` (now a real token, `space-7`) to `p-11`.
+
+**Not changed in U1-a:** the screens. Their spacing and line heights shift with the corrected
+tokens; they are rebuilt from the component library in U1-b and U1-c.
+
+**Endpoint gaps the specs meet** (to raise, not stub):
+- **Cost:** no per-run cost ("Spent so far").
+- **Credits:** no credit balance.
+- **Monitors:** no monitor or alert endpoint.
+- **Workspace data:**
+  - no evidence list with claim text or hash;
+  - no case-level summary or contradictions;
+  - no media endpoints;
+  - no coordinates for the map;
+  - no report sections or review state.
+
+The UI shows these as an em dash with its reason, or as **Not built**.
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean, with
+Postgres and Redis up): core 20, access 56, config 188, db 264, integrations 122, collectors 482,
+llm 130, osint-engine 104, api 184, ui 10, web 87, worker 4 (1,651 tests).

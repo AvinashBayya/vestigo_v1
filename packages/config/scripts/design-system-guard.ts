@@ -49,7 +49,11 @@ const code = (cell: string | undefined): string | null => {
 export function tokensFromDocument(markdown: string): Map<string, TokenValue> {
   const tokens = new Map<string, TokenValue>();
   const set = (name: string, light: string, dark = light) => {
-    tokens.set(`ds-${name}`, { light: normalise(light), dark: normalise(dark) });
+    // A dotted spacing step (`space-2.25`) is `--ds-space-2_25` in CSS, where a dot is not a name character.
+    tokens.set(`ds-${name.replaceAll(".", "_")}`, {
+      light: normalise(light),
+      dark: normalise(dark),
+    });
   };
   for (const line of markdown.split(/\r?\n/)) {
     if (!line.startsWith("|")) continue;
@@ -81,9 +85,9 @@ export function tokensFromDocument(markdown: string): Map<string, TokenValue> {
       continue;
     }
 
-    // Families: | `sans` | `"IBM Plex Sans", …` | use |  (serif is for printed reports, never the UI)
+    // Families: | `sans` | `"IBM Plex Sans", …` | use |  (serif: the report document only, §4)
     const family = code(row[1]);
-    if ((first === "sans" || first === "mono") && family !== null) {
+    if ((first === "sans" || first === "mono" || first === "serif") && family !== null) {
       set(`font-${first}`, family);
       continue;
     }
@@ -115,7 +119,7 @@ export function tokensFromDocument(markdown: string): Map<string, TokenValue> {
 function declarations(block: string): Map<string, string> {
   const found = new Map<string, string>();
   const withoutComments = block.replace(/\/\*[\s\S]*?\*\//g, "");
-  for (const match of withoutComments.matchAll(/--([a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+  for (const match of withoutComments.matchAll(/--([a-z0-9_-]+)\s*:\s*([^;]+);/g)) {
     if (match[1] !== undefined && match[2] !== undefined) found.set(match[1], normalise(match[2]));
   }
   return found;

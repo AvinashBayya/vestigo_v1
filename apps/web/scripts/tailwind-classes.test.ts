@@ -112,7 +112,7 @@ describe("every class the UI uses generates CSS (RELEASE-BLOCKING)", () => {
   it("can tell: a token utility adds CSS, one outside the tokens adds none", async () => {
     const compiler = await appCompiler();
     const base = compiler.build([]);
-    expect(compiler.build(["p-7"])).toBe(base);
+    expect(compiler.build(["p-11"])).toBe(base);
     expect(compiler.build(["p-4"])).not.toBe(base);
     expect(classesIn('className="fixed top-0 right-0 min-w-0"')).toEqual([
       "fixed",

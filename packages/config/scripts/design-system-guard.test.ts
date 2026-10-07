@@ -60,9 +60,11 @@ describe("the token stylesheet is the design system document (RELEASE-BLOCKING)"
   const defined = tokensFromStylesheet(read("packages/ui/src/tokens.css"));
 
   it("reads every table of the document", () => {
-    // 14 chrome + 16 claim + 3 failure + 20 entity class + 2 QR colours, 2 families,
-    // 10 type styles x 3 values + 2 trackings, 9 spacing + 4 radius + 2 shadow + 9 sizes.
-    expect(documented.size).toBe(113);
+    // U1-a (2026-10-06), reconciled with the mockups: 71 colours (chrome 23, claim 20 with
+    // the inferred tints, failure and status 6, entity class 20, QR 2), 3 families,
+    // 37 type styles (each size, line and weight, 10 with a tracking), 30 spacing steps,
+    // 9 radii, 2 shadows and 39 sizes.
+    expect(documented.size).toBe(275);
   });
 
   it("defines every documented token, with the documented value in each theme", () => {
