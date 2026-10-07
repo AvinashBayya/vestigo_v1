@@ -2621,3 +2621,69 @@ export, Refresh skipping reports, the StrictMode revocation).
 core 20, access 56, config 188, db 264, integrations 122, collectors 482, llm 130,
 osint-engine 104, api 184, ui 10, web 87, worker 4 (1,651 tests).
 
+## Reclamation R0: the legacy classification pass (2026-10-06)
+
+What `docs/MASTER-BUILD-SEQUENCE.md` calls R0, by the method in `docs/vapt/VAPT-REFERENCES.md`
+part 1d. It produces the harvest list R1 starts from. **Nothing was ported.**
+
+**Output:** `docs/reclamation/legacy-classification.md`. It is reference data that does not ship. It has every
+exported function, class and object holding functions in `legacy/src` and `legacy/scripts`, with
+path, export, bin and a one-line reason; a summary; and counts by area.
+
+**Counts:** 1,162 exports in 299 files.
+
+| Bin | Exports |
+|---|---|
+| PURE | 489 |
+| FABRICATION-FLAGGED | 52 |
+| IO-BOUND | 160 |
+| UI/DEAD | 461 |
+
+- **Not binned:** exported constants holding only data. They are counted in the document.
+- **Not in scope:** `legacy/ai-service` is Python.
+
+**Tooling** (`packages/config/scripts/`). It reads source only and never imports or runs legacy
+code.
+- **`legacy-classification.ts`:** the classifier.
+- **`legacy-classify.ts`:** the CLI. `legacy/` is absent in CI, so it is run by hand:
+  `node packages/config/scripts/legacy-classify.ts`.
+- **`legacy-classification.test.ts`** (8): in-memory fixtures, never `legacy/`.
+- **`eslint/fabrication-plugin.d.ts`:** types for the plugin, for TypeScript importers.
+
+**How it bins** (first that applies):
+- **UI/DEAD:**
+  - React: JSX, hooks or the React module;
+  - browser state: `localStorage`, `sessionStorage`, `window`, `document`, `navigator`;
+  - or no importer anywhere in `legacy/`. Tests count as importers, and route files and app
+    entry points count as used.
+- **FABRICATION-FLAGGED:** this repository's gate fires inside it. That is both halves: the line
+  patterns and the AST rule `no-fabricated-fallback`. Legacy's own disable comments are ignored.
+- **IO-BOUND:**
+  - **Direct or followed:** network, disk, database or queue, directly or through any function
+    that is, followed across imports to a fixed point. The reason names the root cause and the
+    path to it ("via resolveA (src/utils/attack-surface.ts): calls fetch").
+  - **Also here:** the clock, randomness and the process environment, ranked below real I/O.
+- **PURE:** the rest.
+
+**Checked by hand before trusting it:**
+- **Known modules agree with the audit.** `analysis.ts` `buildTimeline` is flagged at line 614,
+  the zero-fallback INVENTORY.md names. `cib.ts`, `client-ip.ts`, `file-provenance.ts` and the
+  `cases/` logic are mostly PURE.
+- **Dead verdicts:** 8 random "nothing imports it" verdicts were confirmed by text search. The
+  one name that appears elsewhere appears only in comments.
+- **Three flaws found and fixed in the classifier, each with a test:**
+  - a local `const window` read as the browser's;
+  - collector definitions held in objects were skipped entirely;
+  - the first-found cause hid the network behind the clock.
+
+**Limits.** These are stated in the document. Calls through parameters, methods or dynamic
+imports are not followed, so PURE means "no I/O found". An export used only inside its own file
+reads as dead. Every port still passes the gate and brings its tests (CLAUDE.md).
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, nothing cached, fabrication
+check clean over 396 files): core 20, access 56, config 188, db 264, integrations 122,
+collectors 482, llm 130, osint-engine 104, api 184, ui 10, web 74, worker 4 (1,638 tests).
+
+**Next: R1,** the case analysis engine, from the PURE rows of `src/utils/cases/` and the
+analytical parts of `src/utils/osint/`.
+

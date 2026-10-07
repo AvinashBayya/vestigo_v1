@@ -230,7 +230,7 @@ This is large — comparable to another two or three phases. It runs AFTER Phase
 before VA/PT, because VA/PT's value multiplies on a fully-reclaimed OSINT platform. Suggested order:
 
 1. **Run the automated classification pass first** (`VAPT-REFERENCES.md` Part 1d) across all ~130
-   modules, producing `docs/legacy-classification.md`. This confirms PURE vs FABRICATION-FLAGGED vs
+   modules, producing `docs/reclamation/legacy-classification.md`. This confirms PURE vs FABRICATION-FLAGGED vs
    IO-BOUND vs DEAD per function, under the gate — ground truth beneath this module-level audit.
 2. **Reclaim in value order:**
    - **R1 — The analysis layer** (§1 cases + §2 osint analytical pieces): `packages/case-engine`.

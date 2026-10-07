@@ -69,7 +69,7 @@ function and bins it:
 - **IO-BOUND** — hits network/disk/DB. Port the logic, replace the I/O.
 - **UI/DEAD** — React, localStorage, or nothing imports it. Drop.
 
-Output a table (path, export, bin, one-line reason) into `docs/legacy-classification.md`. This gives a
+Output a table (path, export, bin, one-line reason) into `docs/reclamation/legacy-classification.md`. This gives a
 harvest list before any human judgement, and is the correct reading of "reuse the useful functions
 automatically" — extract 100% of the *reusable* ones, leave the *fabricating* ones behind.
 
