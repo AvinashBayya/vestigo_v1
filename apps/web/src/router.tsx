@@ -20,10 +20,10 @@ import { SignInScreen } from "./screens/SignIn.tsx";
 import { TenantScreen } from "./screens/Tenant.tsx";
 import { VerifyScreen } from "./screens/Verify.tsx";
 import { enrolmentToken, homeOf, sessionQuery } from "./session.ts";
-import { Workspace, WORKSPACE_TABS, type WorkspaceTab } from "./workspace/Workspace.tsx";
+import { RUN_TABS, Workspace, type WorkspaceTab } from "./workspace/Workspace.tsx";
 
 const isTab = (value: string): value is WorkspaceTab =>
-  (WORKSPACE_TABS as readonly string[]).includes(value);
+  (RUN_TABS as readonly string[]).includes(value);
 
 /** A tab the workspace does not have: said plainly, with the way back. */
 function NoSuchTab({ tab }: { readonly tab: string }) {
@@ -31,7 +31,7 @@ function NoSuchTab({ tab }: { readonly tab: string }) {
     <AppShell>
       <Notice>
         There is no <span className="font-mono">{tab}</span> tab. The workspace has{" "}
-        {WORKSPACE_TABS.join(", ")}.
+        {RUN_TABS.join(", ")}.
       </Notice>
     </AppShell>
   );

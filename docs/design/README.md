@@ -57,7 +57,7 @@ Audited against `apps/api/openapi.json` on 2026-10-05.
 | Run (an earlier run view) | Superseded by RunLive | Shows collectors that do not exist (SpiderFoot, theHarvester, Shodan, HIBP, Brave) |
 | Evidence | Built (step 4, 2026-10-06), for a run and for a case | From the timeline read, the only evidence list: at most 500 records, said to be partial beyond that. No claim text or hash column (the list carries neither; both are in the provenance drawer). Selection, saved views, Re-verify and Cite in report are Backend, so hidden |
 | Workspace, Overview, Entities, Timeline | Built (step 4, 2026-10-06) | A run's results and a case's pins share the tabs; a case is labelled "Pinned items only" (cases and runs are not linked). Overview is composed from existing reads. The runs rail, discipline filters, case summary paragraph, contradictions, merge actions, bulk actions and saved views are Backend or not built, so hidden. The timeline's range brush is not built |
-| Report, ReportPDF | Later | Reports are per run and read-only. Editing, regenerating a section, review state and case reports are Backend |
+| Report, ReportPDF | Built (step 5, 2026-10-06) as a run's Report tab | The report as stored, in its own wording, beside the stored PDF. Editing, regenerating a section, review state and case reports are Backend, so hidden |
 | Media, Map | Later | Not built: no upload, media forensics, geo layers or external feeds |
 
 ## Copy corrections: mockup, then what ships

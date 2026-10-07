@@ -1,4 +1,4 @@
-import { cn, Unmeasured } from "@repo/ui";
+import { ClaimStrength, cn, Unmeasured, type ClaimStrengthLabel } from "@repo/ui";
 import type { ReactNode } from "react";
 
 /** A section's label: the design's uppercase eyebrow. */
@@ -58,3 +58,20 @@ export function ClaimValue({ value }: { readonly value: unknown }) {
 
 export const plural = (count: number, word: string, many = `${word}s`) =>
   `${String(count)} ${count === 1 ? word : many}`;
+
+/**
+ * The distinct strengths of an entity's claims, as words. An entity with no
+ * claims has no strength: said so (a measured empty set), never a blank cell.
+ */
+export function StrengthList({ strengths }: { readonly strengths: readonly ClaimStrengthLabel[] }) {
+  if (strengths.length === 0) {
+    return <span className="text-caption text-ink-muted">no claims, so no strength</span>;
+  }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {strengths.map((strength) => (
+        <ClaimStrength key={strength} strength={strength} />
+      ))}
+    </span>
+  );
+}

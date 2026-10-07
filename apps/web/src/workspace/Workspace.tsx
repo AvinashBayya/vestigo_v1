@@ -11,11 +11,18 @@ import { GraphTab } from "./GraphTab.tsx";
 import { OverviewTab } from "./OverviewTab.tsx";
 import { ProvenanceProvider } from "./Provenance.tsx";
 import { caseQuery, runQuery, scopeKeys, type Scope } from "./queries.ts";
+import { ReportTab } from "./report/ReportTab.tsx";
 import { TimelineTab } from "./TimelineTab.tsx";
 
 /** The workspace tabs that have endpoints (owner's brief, 6b-4). Media, map and monitors come later. */
 export const WORKSPACE_TABS = ["overview", "entities", "evidence", "graph", "timeline"] as const;
-export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
+/** A run also has its report (6b-5). Reports are per run: a case has none. */
+export const RUN_TABS = [...WORKSPACE_TABS, "report"] as const;
+export type WorkspaceTab = (typeof RUN_TABS)[number];
+
+/** The tabs a scope has. */
+export const tabsOf = (scope: Scope): readonly WorkspaceTab[] =>
+  scope.kind === "run" ? RUN_TABS : WORKSPACE_TABS;
 
 const TAB_TEXT: Readonly<Record<WorkspaceTab, string>> = {
   overview: "Overview",
@@ -23,6 +30,7 @@ const TAB_TEXT: Readonly<Record<WorkspaceTab, string>> = {
   evidence: "Evidence",
   graph: "Graph",
   timeline: "Timeline",
+  report: "Report",
 };
 
 const TAB_CLASS = (active: boolean) =>
@@ -76,7 +84,7 @@ export function WorkspaceTabs({
           Progress
         </Link>
       ) : null}
-      {WORKSPACE_TABS.map((value) =>
+      {tabsOf(scope).map((value) =>
         scope.kind === "run" ? (
           <Link
             key={value}
@@ -115,6 +123,15 @@ function TabBody({ scope, tab }: { readonly scope: Scope; readonly tab: Workspac
       return <GraphTab scope={scope} />;
     case "timeline":
       return <TimelineTab scope={scope} />;
+    case "report":
+      return scope.kind === "run" ? (
+        <ReportTab runId={scope.id} />
+      ) : (
+        <Notice>
+          A case has no report: reports are generated from a run. Open the run a result came from to
+          read or generate its report.
+        </Notice>
+      );
   }
 }
 

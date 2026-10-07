@@ -109,6 +109,7 @@
 
   --spacing: initial;
   --spacing-*: initial;
+  --spacing-0: var(--ds-space-0);
   --spacing-1: var(--ds-space-1);
   --spacing-2: var(--ds-space-2);
   --spacing-3: var(--ds-space-3);

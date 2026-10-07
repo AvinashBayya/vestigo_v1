@@ -61,8 +61,8 @@ describe("the token stylesheet is the design system document (RELEASE-BLOCKING)"
 
   it("reads every table of the document", () => {
     // 14 chrome + 16 claim + 3 failure + 20 entity class + 2 QR colours, 2 families,
-    // 10 type styles x 3 values + 2 trackings, 8 spacing + 4 radius + 2 shadow + 9 sizes.
-    expect(documented.size).toBe(112);
+    // 10 type styles x 3 values + 2 trackings, 9 spacing + 4 radius + 2 shadow + 9 sizes.
+    expect(documented.size).toBe(113);
   });
 
   it("defines every documented token, with the documented value in each theme", () => {

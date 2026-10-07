@@ -638,6 +638,9 @@ describe("entities", () => {
     renderAt(`/runs/${RUN_ID}/entities`);
     await screen.findByRole("table", { name: "Entities" });
     expect(within(rowOf("192.0.2.1")).getByText("IP address")).toBeTruthy();
+    // REGRESSION (live check 2026-10-06): an entity with no claims left its Strength cell
+    // blank. Its strength set is a measured empty one, and says so in words.
+    expect(within(rowOf("192.0.2.1")).getByText("no claims, so no strength")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "example.com" }));
     const panel = await screen.findByRole("region", { name: "Entity" });
     await within(panel).findByText("Stated by a source (1)");
@@ -753,7 +756,7 @@ describe("navigation", () => {
       within(nav)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Progress", "Overview", "Entities", "Evidence", "Graph", "Timeline"]);
+    ).toEqual(["Progress", "Overview", "Entities", "Evidence", "Graph", "Timeline", "Report"]);
     cleanup();
     fakeApi();
     renderAt(`/runs/${RUN_ID}/media`);

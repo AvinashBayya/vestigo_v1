@@ -71,7 +71,7 @@ const merge = extendTailwindMerge({
         "mono-caption",
         "metric",
       ],
-      spacing: ["1", "2", "3", "4", "5", "6", "8", "10", "target", "qr"],
+      spacing: ["0", "1", "2", "3", "4", "5", "6", "8", "10", "target", "qr"],
       container: ["form", "page", "nav", "search", "drawer"],
       radius: ["sm", "md", "lg", "pill"],
       shadow: ["card", "overlay"],

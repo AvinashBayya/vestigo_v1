@@ -165,6 +165,7 @@ Monospace is a signal that a value is literal data. Use it deliberately.
 
 | Token | Value | Use |
 |---|---|---|
+| `space-0` | 0px | Flush: an edge set against its container or the viewport (`top-0`, `right-0`), and `min-w-0` letting a flex child shrink. Added in Phase 6b, after the provenance drawer rendered off-screen without it |
 | `space-1` | 4px | Badge padding, icon-to-label gaps |
 | `space-2` | 8px | Chip rows, tight button groups |
 | `space-3` | 12px | Compact density row padding |

@@ -113,6 +113,7 @@
   --ds-type-metric-weight: 500;
 
   /* §5 Spacing, radius, shadow */
+  --ds-space-0: 0px;
   --ds-space-1: 4px;
   --ds-space-2: 8px;
   --ds-space-3: 12px;

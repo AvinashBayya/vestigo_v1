@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 on the owner's answers to Q1–Q6, awaiting the owner's look; step 5 (report view) next. See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -2428,3 +2428,196 @@ Postgres and Redis up): core 20, access 56, config 180, db 264, integrations 122
 llm 130, osint-engine 104, api 184, ui 10, web 62, worker 4 (1,618 tests).
 
 **Next: step 5, the report view,** after the owner's look.
+
+### Step 0 of the master build sequence: step 4 verified live, step 5 built (2026-10-06)
+
+**How it was checked.** The owner's running stack (`pnpm dev`, Docker), driven in headless Edge
+by a Playwright script kept in the session scratchpad, outside the repo. It used a tenant
+provisioned for the check, `[6b verify 38b0f4]` (owner `verify-6b-38b0f4@example.com`), which is
+left in the dev database.
+- **Sign-in and MFA** through the screens; the TOTP was computed from the key the enrolment
+  screen showed.
+- **A real run of `example.com`** from the dashboard. It finished PARTIAL:
+  - RDAP and DNS each recorded evidence;
+  - Wayback (HTTP 503), crt.sh (502) and Common Crawl (unreachable) were dead-lettered.
+
+**Step 4, end to end:**
+- **Pinning from the run's Evidence tab** ("Create and pin"):
+  - `POST /cases` answered 201, then `POST /cases/{id}/pins` answered 201, with target
+    `{type: evidence}` and the RDAP summary.
+  - **In Postgres,** read inside the tenant: one `case_pins` row, holding only `evidence_id`.
+- **The case, opened from Cases:**
+  - "Pinned items only".
+  - **Overview:** 1 evidence record pinned.
+  - **Evidence:** exactly the RDAP record.
+  - **Entities:** example.com and its two name servers.
+  - **Graph:** drawn on a canvas, with each node's class in words and its class colour.
+  - **Drawer, opened from the source value:** collector and version, run, observed and collected
+    apart, and the full hash.
+  - **The downloaded raw payload:** 2,440 bytes. They hash to the recorded
+    `sha256:b02cbdd5…85121`.
+
+**Defects found live, each fixed with a test that fails on the old code:**
+- **The provenance drawer rendered off-screen.**
+  - **Cause:** the theme resets Tailwind's spacing scale and the design system had no zero, so
+    `top-0` and `right-0` generated no CSS. The fixed drawer took its static position, below the
+    page (measured: y 900 in a 900px viewport). `min-w-0`, used in nine files, generated nothing
+    for the same reason.
+  - **Fix:** a `space-0` token (0px) in DESIGN-SYSTEM §5, `tokens.css` and the theme. The guard
+    now counts 113 tokens.
+  - **Test:** `apps/web/scripts/tailwind-classes.test.ts` (release-blocking).
+    - **How:** compiles the app's real stylesheet with Tailwind and builds every class the UI's
+      source writes, one at a time; a class that adds no CSS fails, with where it is used.
+    - **Before the fix** it reported exactly `min-w-0`, `right-0` and `top-0`.
+- **Graph nodes overlapped and hid each other's names.** The layout did not count the labels the
+  nodes are sized to.
+  - **Fix:** `nodeDimensionsIncludeLabels`, with padding and spacing from the tokens.
+  - **Test:** `src/graph-renderer.test.tsx`, Cytoscape mocked; it fails on the old options.
+  - **Re-checked by screenshot:** no overlap.
+
+**Seen, not changed:**
+- No favicon (`/favicon.ico` 404). It predates 6b-4.
+- The RDAP evidence's observedAt (08:02:47Z) is 44 seconds after its collectedAt (08:02:03Z).
+  The UI shows what is stored. It is the RDAP collector's choice of event time and the
+  registry's clock, a question for that collector.
+
+**Step 5, the report view** (`apps/web/src/workspace/report/`; a **Report** tab on a run; a case
+has none, and says so):
+- **Generate:** with or without a model synthesis.
+  - **Settling:** disabled, with why, until the run has settled.
+  - **Refusals:** `SYNTHESIS_UNAVAILABLE` and `RUN_NOT_SETTLED` show with their codes.
+  - **Polling:** a QUEUED or RUNNING report is read again every 2 s.
+  - **Picking a report:** the run's reports are listed for choosing, newest first.
+- **The PDF:** `GET /reports/{id}/export/pdf` through the generated client (as a blob).
+  - **While rendering:** a 202 shows "rendering" and is asked again after `Retry-After`. The 202's
+    status word is shown only when the API gave it; otherwise "not ready yet", never a guess.
+  - **Then the file:** embedded and downloadable, with the JSON, CSV and Maltego exports too.
+  - **If it failed:** `REPORT_PDF_FAILED` shows as a failure with its code.
+- **The document as stored,** in the report's own wording (`document.wording`), so the screen says
+  what the PDF says:
+  - **Coverage and limitations:** the headline, then what was not collected and why (each
+    source's state chip in the report's words, detail, reason code, evidence count and attempts;
+    a never-attempted source shows an em dash and why, never 0). Then what was collected, what
+    does not apply, and the standing limits.
+  - **A partial run** gets a notice before everything else.
+  - **Synthesis:** none requested, skipped with its reason, or the statements with strength and
+    citations. Model provenance comes from the stored templates:
+    - model, licence and profile;
+    - "Served by: {endpoint}, …It named no upstream provider." when `servedBy` is null;
+    - each region header raw ("bom" stays "bom");
+    - "The endpoint sent no region header." when there is none.
+  - **Findings and relationships:** every claim's strength in words. DERIVED is dashed and says
+    "computed by the platform". `[n]` citations open the cited evidence's provenance. Every
+    claim, entity and relationship can be pinned.
+  - **Also shown:** the evidence basis (both timestamps, hash, URL, pin), untrusted-content
+    warnings, attribution, omitted claims and the glossary.
+- **Live:**
+  - **Synthesis:** refused with `SYNTHESIS_UNAVAILABLE`; no model provider is configured here.
+  - **Report:** generated in about 3 s.
+  - **Coverage:** the three FAILED sources show with their reasons and the HELD GDELT source
+    with its own; the partial notice and the glossary render.
+  - **Citations:** [1] opens the DNS evidence's drawer.
+  - **The PDF:** 844,569 bytes, starting `%PDF-`.
+  - **202 seen in the UI:** with renders queued, it showed "The PDF is rendering. Asking again in
+    5 seconds, as the server asked.", asked again 5 s later, got 200 and showed the PDF.
+- **Not seen live:** a GENERATED synthesis's model provenance, because no provider is configured
+  here. Covered by tests with the stored wording.
+- **Not seen in this check:** the PDF drawn inside the page. Headless Edge has no PDF viewer;
+  the owner's look is the first.
+- **Defects found and fixed:**
+  - **Live:** the report picker said RUNNING beside a generated report (the list was read
+    once). It is now read again when the shown report changes status, with a regression test.
+  - **By the tests:** a 202's JSON body was read with `new Response(blob)`. It is now read with
+    `blob.text()`, which works everywhere.
+- **Tests:** `src/report-view.test.tsx` (9), with the wording captured from a real report. It
+  covers:
+  - partial coverage with failed and held sources;
+  - the em dash for no attempts;
+  - strength labels and citations opening provenance;
+  - model provenance raw, with "bom" kept and no place name, in both served-by forms;
+  - the 202, Retry-After and file sequence;
+  - PDF failure;
+  - generate, poll and the refused synthesis;
+  - an unsettled run;
+  - a failed report and the Locked state;
+  - the stale-list regression.
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean, with
+Postgres and Redis up): core 20, access 56, config 180, db 264, integrations 122, collectors 482,
+llm 130, osint-engine 104, api 184, ui 10, web 74, worker 4 (1,630 tests). On the way the gates
+caught three things in the new code, each fixed:
+- two string or zero fallbacks (`?? "…"`, `?? 0`);
+- raw lengths in a test's token stub;
+- a placeholder shaped like a Tailwind arbitrary value.
+
+### Step 0, second pass: a fresh live run and two independent reviews (2026-10-06)
+
+**Fresh live run.** It repeated the check from scratch: a new run of `example.com` (PARTIAL: RDAP
+and DNS found evidence; Common Crawl, Wayback and crt.sh failed upstream), a new case,
+`[Verification case 38b0f4 rerun]`, and a new pin.
+- **The pin:** the API answered 201 for the case and 201 for the pin. Postgres holds one
+  `case_pins` row with only `evidence_id`.
+- **The case, opened from Cases:** every check passed.
+  - **The drawer:** the downloaded payload hashes to the new evidence's recorded
+    `sha256:db7d9a56…`.
+  - **Seen by screenshot:** the case's Evidence grid, Entities, the graph (class in words and
+    colour, no overlap) and the drawer.
+- **Defect found:** entities with no claims left their Strength cell **blank**. It now says "no
+  claims, so no strength" (`StrengthList`). The regression test fails on the old code.
+- **The report:** the 202 path seen live again. The page showed "The PDF is waiting to render.
+  Asking again in 5 seconds…", got 202, 202, then 200.
+
+**Review 1** (50 agents; six reviewers, one per non-negotiable; every finding put to two
+skeptics told to refute it): 22 raised, 17 confirmed, 3 split, 2 refuted. All 20 confirmed or
+split were fixed. Most were the screen not saying what the stored report and its PDF say
+(`packages/integrations/src/exports/pdf.ts`):
+- **High:** NOTHING_FOUND was listed under "What was collected". It is now under what was not
+  collected, as the PDF lists it.
+- **What the PDF prints:**
+  - the evidence count on COLLECTED rows only;
+  - no hard-coded "partial run" sentence: the stored headline is boxed;
+  - no line, and no invented sentence, when there is no region header;
+  - the finding's identifier;
+  - the cover's `type value` and Run line;
+  - omitted claims with coverage.
+- **Behaviour:**
+  - PDF and report polling stop on an error;
+  - an export that gets no answer is `ApiUnreachable` (`API_TIMEOUT` / `API_UNREACHABLE`);
+  - a stored PDF is fetched once (not again on focus or remount);
+  - a FAILED PDF is not asked for and offers no retry that cannot work;
+  - the report list reads the API maximum and says when it is cut;
+  - Refresh re-reads reports;
+  - the model-token quota refusal is shown in the API's words;
+  - the PDF loading state is announced;
+  - attribution links are 44px.
+
+**Review 2** (45 agents): checked each fix, then three fresh reviewers. 17 of 20 were fixed;
+the 3 partly fixed were finished. 8 new findings survived both skeptics, and all were fixed:
+- **Blank PDF under StrictMode.** A cached PDF's object URL was revoked by StrictMode's second
+  effect run. `useObjectUrl` now defers revocation by a tick, and a setup that follows cancels
+  it.
+  - **The test first missed it:** the PDF arrived after mount. Strengthened to leave the tab and
+    return (the panel mounts with the PDF cached), it now fails on the old code.
+- **The evidence basis** prints each source's claim count (the stored `Claims` column).
+- **A just-generated report** missing from a cut list is offered in the picker, so the picker
+  always names the report shown.
+- **The report list** is read again when it disagrees with the report's own status, not on
+  every mount.
+- **Generate refusals:** `QUEUE_UNAVAILABLE` in the API's words. A refused synthesis says a
+  plain report still works.
+- **Download PDF** saves the PDF already held. A not-ready export is the coded
+  `EXPORT_NOT_READY`.
+- **Announcements:** the live regions are no longer stuck busy, and the generating and
+  downloading pending states are announced.
+- **An unmatched citation** prints the stored `footnote.missing` wording. Source links are
+  44px wide too.
+- **The flaky polling test** has a 10 s timeout.
+
+**Mutation checks:** each main defect was put back one at a time, and each was caught by its
+regression test (NOTHING_FOUND bucketing, polling through errors, an untyped unreachable
+export, Refresh skipping reports, the StrictMode revocation).
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean):
+core 20, access 56, config 188, db 264, integrations 122, collectors 482, llm 130,
+osint-engine 104, api 184, ui 10, web 87, worker 4 (1,651 tests).
+

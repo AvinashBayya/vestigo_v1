@@ -122,7 +122,19 @@ export function CytoscapeGraph({ nodes, edges, selected, onSelect }: GraphRender
         })),
       ],
       style: stylesheet(),
-      layout: { name: "cose", animate: false },
+      // Nodes are sized to their labels, so the layout must count the labels or
+      // nodes land on each other and hide their names (seen in the live check).
+      layout: {
+        name: "cose",
+        animate: false,
+        randomize: false,
+        nodeDimensionsIncludeLabels: true,
+        padding: Number.parseFloat(token("space-8")),
+        componentSpacing: Number.parseFloat(token("space-10")),
+        nodeOverlap: Number.parseFloat(token("space-6")),
+        idealEdgeLength: () => Number.parseFloat(token("space-10")) * 3,
+        nodeRepulsion: () => 1_000_000,
+      },
       selectionType: "single",
     });
     // The tapped element: Cytoscape types an event's target loosely.

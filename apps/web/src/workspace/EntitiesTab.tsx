@@ -1,13 +1,7 @@
-import {
-  ClaimStrength,
-  ENTITY_CLASS_LABEL,
-  ENTITY_CLASSES,
-  EntityClassName,
-  type EntityClass,
-} from "@repo/ui";
+import { ENTITY_CLASS_LABEL, ENTITY_CLASSES, EntityClassName, type EntityClass } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Instant, plural } from "../components/Values.tsx";
+import { Instant, plural, StrengthList } from "../components/Values.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
 import { Grid, gridColumns } from "./Grid.tsx";
 import { PinButton } from "./Pin.tsx";
@@ -54,13 +48,7 @@ function columnsFor(select: (id: string) => void) {
     column.display({
       id: "strengths",
       header: "Strength",
-      cell: (info) => (
-        <span className="flex flex-wrap gap-1">
-          {info.row.original.strengths.map((strength) => (
-            <ClaimStrength key={strength} strength={strength} />
-          ))}
-        </span>
-      ),
+      cell: (info) => <StrengthList strengths={info.row.original.strengths} />,
     }),
     column.accessor("claimCount", {
       header: "Claims",

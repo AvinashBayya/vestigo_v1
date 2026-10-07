@@ -1,6 +1,6 @@
 import { Button, ClaimStrength, cn, EntityClassName, Notice, Panel, Skeleton } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { ClaimValue, Heading, Instant, plural } from "../components/Values.tsx";
+import { ClaimValue, Heading, Instant, plural, StrengthList } from "../components/Values.tsx";
 import { PinButton } from "./Pin.tsx";
 import { ProvenanceLink } from "./Provenance.tsx";
 import { entityQuery, type EntityClaim, type EntityDetail } from "./queries.ts";
@@ -58,11 +58,7 @@ function EntityBody({ detail }: { readonly detail: EntityDetail }) {
               {entity.identifier}
             </p>
           )}
-          <div className="flex flex-wrap gap-1">
-            {entity.strengths.map((strength) => (
-              <ClaimStrength key={strength} strength={strength} />
-            ))}
-          </div>
+          <StrengthList strengths={entity.strengths} />
         </div>
         <PinButton target={{ type: "entity", id: entity.id }} what={entity.displayName} />
       </div>

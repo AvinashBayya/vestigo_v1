@@ -162,5 +162,6 @@ export const scopeKeys = (scope: Scope) => [
         ["case", scope.id],
         ["case-pins", scope.id],
       ]
-    : [["run", scope.id]]),
+    : // A run's report list and its reports too, so Refresh never leaves the Report tab stale.
+      [["run", scope.id], ["run-reports", scope.id], ["report"], ["report-pdf"]]),
 ];
