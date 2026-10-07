@@ -1,0 +1,120 @@
+import type { ReactNode } from "react";
+import { cn } from "./cn.ts";
+
+/**
+ * The empty card (§8 Empty): what would appear here and how to get it, with
+ * the one action that fills it. Never a blank area.
+ */
+export function EmptyState({
+  title,
+  children,
+  action,
+  className,
+}: {
+  readonly title: string;
+  /** What would appear here, and how to get it, in a sentence. */
+  readonly children: ReactNode;
+  readonly action?: ReactNode;
+  readonly className?: string | undefined;
+}) {
+  return (
+    <section
+      className={cn(
+        "flex flex-col items-start gap-2 rounded-lg border border-border-default bg-surface-raised p-4.5",
+        className,
+      )}
+    >
+      <h3 className="text-ui-strong text-ink-primary">{title}</h3>
+      <p className="text-prose-small text-ink-secondary">{children}</p>
+      {action}
+    </section>
+  );
+}
+
+/**
+ * §8 Not built: a tab or panel whose analysis does not exist yet. Titled with
+ * what it will show, saying plainly that it is not built and what it needs.
+ * No sample data and no greyed fake content, ever.
+ */
+export function NotBuilt({
+  title,
+  needs,
+  className,
+}: {
+  /** What this surface will show once it exists. */
+  readonly title: string;
+  /** What it needs before it can be built: the missing endpoint or analysis. */
+  readonly needs: string;
+  readonly className?: string | undefined;
+}) {
+  return (
+    <EmptyState title={title} className={className}>
+      Not built yet. {needs}
+    </EmptyState>
+  );
+}
+
+/**
+ * §8 Loading: blocks in the layout's shape, and a status line saying what is
+ * being read. Never a centred spinner.
+ */
+export function LoadingState({
+  what,
+  children,
+  className,
+}: {
+  /** What is being read, as a sentence: "Reading the evidence." */
+  readonly what: string;
+  /** Skeleton blocks in the shape of what will appear. */
+  readonly children: ReactNode;
+  readonly className?: string | undefined;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-3", className)} aria-busy="true">
+      <p role="status" className="text-caption text-ink-muted">
+        {what}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * §8 Failed: the reason, the code, and what the person can do, on the failure
+ * tint. A failure is a status, so it may carry the failure colours.
+ */
+export function FailedAlert({
+  title,
+  reason,
+  code,
+  action,
+  className,
+}: {
+  readonly title: string;
+  readonly reason: string;
+  /** The machine-readable code, as the API sent it. */
+  readonly code: string;
+  readonly action?: ReactNode;
+  readonly className?: string | undefined;
+}) {
+  return (
+    <div
+      role="alert"
+      className={cn(
+        "flex gap-2.75 rounded-inner border border-status-failed-border bg-status-failed-tint px-3.75 py-3",
+        className,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className="mt-1.25 size-dot-sm shrink-0 rounded-pill bg-status-failed-mark"
+      />
+      <div className="flex flex-col gap-1">
+        <p className="text-ui-strong text-status-failed-ink">{title}</p>
+        <p className="text-prose-small text-ink-secondary">{reason}</p>
+        <p className="font-mono text-mono-caption text-ink-muted">{code}</p>
+        {action}
+      </div>
+    </div>
+  );
+}

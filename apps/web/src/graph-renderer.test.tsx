@@ -45,6 +45,7 @@ beforeEach(() => {
     "--ds-space-6": `24${PX}`,
     "--ds-space-8": `32${PX}`,
     "--ds-space-10": `40${PX}`,
+    "--ds-space-16": `64${PX}`,
   };
   vi.spyOn(window, "getComputedStyle").mockReturnValue({
     getPropertyValue: (name: string) => values[name] ?? "",
@@ -88,13 +89,17 @@ describe("the graph renderer", () => {
     );
     expect(created).toHaveLength(1);
     const layout = created[0]?.["layout"] as Record<string, unknown>;
+    // Concentric by hop (U1-b): deterministic, so a redraw for a theme or font
+    // change puts every node back where it was, with the seed at the centre.
     expect(layout).toMatchObject({
-      name: "cose",
+      name: "concentric",
       nodeDimensionsIncludeLabels: true,
-      padding: 32,
-      componentSpacing: 40,
-      nodeOverlap: 24,
+      padding: 64,
+      minNodeSpacing: 40,
     });
+    const level = layout["concentric"] as (node: { data: (key: string) => unknown }) => number;
+    const at = (hop: number) => level({ data: (key) => (key === "hop" ? hop : undefined) });
+    expect(at(0)).toBeGreaterThan(at(1));
     // Each node is labelled with its class in words, not colour alone.
     const elements = created[0]?.["elements"] as { data: { label?: string } }[];
     expect(elements.map((element) => element.data.label)).toEqual([

@@ -16,10 +16,11 @@
     "./theme.css": "./src/theme.css"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node scripts/no-raw-hex.ts && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint . --max-warnings 0",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:hex": "node scripts/no-raw-hex.ts"
   },
   "peerDependencies": {
     "react": "^19.3.0",

@@ -44,7 +44,7 @@ export const ENTITY_CLASS_TOKEN: Readonly<Record<EntityClass, string>> = {
 };
 
 /** Ring colour as a background, for the dot beside a class name. */
-const DOT: Readonly<Record<EntityClass, string>> = {
+export const ENTITY_CLASS_DOT: Readonly<Record<EntityClass, string>> = {
   PERSON: "bg-entity-person-ring",
   ORGANIZATION: "bg-entity-organisation-ring",
   DOMAIN: "bg-entity-domain-ring",
@@ -63,11 +63,14 @@ export function EntityClassName({
   className,
 }: {
   readonly entityClass: EntityClass;
-  readonly className?: string;
+  readonly className?: string | undefined;
 }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 whitespace-nowrap", className)}>
-      <span aria-hidden="true" className={cn("size-2 shrink-0 rounded-pill", DOT[entityClass])} />
+    <span className={cn("inline-flex items-center gap-1.75 whitespace-nowrap", className)}>
+      <span
+        aria-hidden="true"
+        className={cn("size-dot shrink-0 rounded-pill", ENTITY_CLASS_DOT[entityClass])}
+      />
       {ENTITY_CLASS_LABEL[entityClass]}
     </span>
   );

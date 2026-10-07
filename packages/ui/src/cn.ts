@@ -23,6 +23,7 @@ const merge = extendTailwindMerge({
         "border-default",
         "border-strong",
         "border-control",
+        "border-input",
         "ink-primary",
         "ink-body",
         "ink-secondary",

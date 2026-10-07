@@ -12,7 +12,7 @@ export function Unmeasured({
 }: {
   /** Why there is no value, in plain words. */
   readonly reason: string;
-  readonly className?: string;
+  readonly className?: string | undefined;
 }) {
   return (
     <Tooltip.Provider delayDuration={200}>
@@ -23,7 +23,7 @@ export function Unmeasured({
             aria-label={`Not measured. ${reason}`}
             className={cn(
               "inline-flex min-h-target min-w-target cursor-help items-center justify-center rounded-sm",
-              "font-mono text-mono-body text-ink-muted hover:bg-surface-hover",
+              "font-sans text-ui text-ink-muted hover:bg-surface-hover",
               className,
             )}
           >

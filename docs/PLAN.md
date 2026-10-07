@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. **UI foundation:** U1-a (design system from the mockups) done 2026-10-07, awaiting the owner's review; U1-b (component library) next. See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. **UI foundation:** U1-a (design system from the mockups) done 2026-10-07; U1-b (component library and the dev gallery) done and approved 2026-10-07; U1-c (screens rebuilt from the library) in progress. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -2795,3 +2795,125 @@ The UI shows these as an em dash with its reason, or as **Not built**.
 **Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean, with
 Postgres and Redis up): core 20, access 56, config 188, db 264, integrations 122, collectors 482,
 llm 130, osint-engine 104, api 184, ui 10, web 87, worker 4 (1,651 tests).
+
+## UI foundation U1-b: the shared component library (2026-10-07)
+
+**The brief.** Build the primitives every screen is assembled from, in `packages/ui`.
+Presentational only: components take props, and a dev-only gallery feeds them fixtures. No screen
+rebuilds (U1-c), no API wiring, no new runtime dependency.
+
+**Built** (one file per component, each naming its mockup; every listed state):
+1. **Command palette** (Main): the header button (⌘K / Ctrl K), Ctrl K from anywhere, and the
+   palette as a combobox with a grouped listbox. States: closed, open, query typed, grouped
+   results, no results, loading, empty. Arrow keys move, Enter opens, Escape closes and returns
+   focus to the opener. With it, the **app header row**, the **vetting pill** (every status,
+   neutral, D1) and the **account menu** (Light/Dark radio pair).
+2. **Status chip**: every collector status, plus two new ones, Found nothing and Locked (D7), and
+   the run's own chip (a run's PARTIAL is amber, in capitals). Each has its dot.
+3. **Strength badge**: all six strengths at md and sm, the dot, and a key (mark plus word).
+4. **Filter chip**: removable, toggle on and off (`aria-pressed`), and the add chip. Drawn at
+   `control-sm` with a `target-min` hit area; rows wrap with a `space-3` gap.
+5. **Data table** (the Evidence grid): `th` header, sortable headers with `aria-sort`, rows at
+   `row-compact` or larger holding the checkbox and pin targets, selected rows marked
+   `aria-selected`, loading, empty, and **Not built**. An empty table is never blank.
+6. **Inspector and provenance drawer** (`layout-drawer-width`): evidence, entity, claim and
+   relationship. It shows the registry source label, observed and collected apart (a null
+   observed stays null), version, run, the whole hash, source URL, and the payload as a download.
+7. **Metric card and "arriving now"**: a value; unavailable (em dash with "Not measured — reason",
+   failure ink only when a failure is the cause); Not built. Never 0, "N/A" or a bar.
+8. **Graph shell** (Cytoscape): toolbar and legend overlays, loading, empty, and a required
+   equivalent list. `graphStylesheet` themes nodes by entity class. The selected node keeps its
+   class and gains an accent outline (D3). Edges are neutral; only all-INFERRED edges are amber.
+9. **Runs rail and collector rows**: run rows in the run vocabulary. Each of the five lock
+   reasons shows its heading, the API's detail, the Locked block where given, the code, and the
+   re-check interval in the past tense. Collector rows: ran, running (a bar only where the source
+   reports progress), failed (tinted, with its code), found nothing, needs key, held, skipped, and
+   a locked list.
+10. **Evidence card**: found (badge, claim, registry source, observed and collected, hash, pin);
+    INFERRED (tinted, with "from …"); found nothing (its own neutral card).
+11. **Map shell** (a slot for MapLibre GL): the layers rail, `surface-map` ground, the legend (by
+    entity class, D5), the selected-point card, and keyboard-usable point lists. A point without
+    coordinates is listed with an em dash and its reason, never placed.
+12. **Report surface**: the only place the serif is applied. It goes on the report's own title
+    and prose, never on a container. It also has the inferred passage (rule, tint, "from …"), the
+    coverage limitation callout, and citations (D8).
+
+**Shared:** `EmptyState`, `NotBuilt`, `LoadingState`, `FailedAlert`, `KeyValueList`, `PinButton`,
+and the `hit-area` utility (`components.css`), which gives a small drawn control an invisible
+`target-min` box.
+
+**Checks added:**
+- `packages/ui/scripts/no-raw-hex.ts` runs before every `@repo/ui` build and in its tests. A hex
+  colour anywhere in the package's source except `tokens.css` fails the build.
+- `serif-scope.test.ts`: no serif outside `report-surface.tsx`; the body is sans.
+- `contrast.test.ts`: every mark and ring is at least 3:1 on every ground, in both themes.
+- 57 `@repo/ui` tests (10 before): a render test per component, plus behaviour tests for the
+  honest states.
+
+**Review (mirroring U1-a).** Three independent critics re-read each component's source and its
+gallery render against its mockup and the four rules. They found 49 mismatches; 12 broke a hard
+rule. The rule breaks:
+- a light-theme dot under 3:1, fixed with a token change: light `claim-hypothesis-mark`
+  `#8E9096` → `#808288`, recorded in §2 and §12;
+- Escape not returning focus from the palette;
+- the palette acting on unlisted items while loading;
+- a table header row under 44px with overlapping hit areas;
+- a toolbar wrap gap that let hit areas overlap;
+- a null collector version silently dropped;
+- a PARTIAL run unlabellable in the rail;
+- a lock interval stated in the present tense after the stream had closed;
+- map lists not usable by keyboard;
+- overlapping citation hit areas (D8);
+- block content inside a button;
+- the run lock missing the API's next step.
+
+Every finding was fixed with a regression test, or raised to the owner. A fourth agent re-checked
+all 49. It confirmed every one fixed or raised, except one nit left as §9 has it (the avatar edge
+in dark). It also found four defects that the fixes had introduced, now fixed:
+- hypothesis edges drawn in INFERRED's amber;
+- a key wrapping beside the full hash;
+- bare dashes in a gallery fixture;
+- the search input's hit area painting over its text.
+
+A browser audit (Edge headless, both themes) ends with no text pair under 4.5:1, no control with a
+hit area under 44px, and no serif outside the report. The graph now uses a deterministic concentric
+layout and redraws on a theme or font change; live switching had clipped labels.
+
+**Gallery:** `/dev/gallery` (development builds only, absent from a production build). Every
+component and state, labelled with its mockup, in Light, Dark, or both side by side. Fixtures are
+bracketed placeholders.
+
+**Screens touched** (minimal, no rebuild):
+- `Run.tsx`'s status maps take the new statuses.
+- The Graph tab's renderer uses the shared stylesheet. Its edges were `border-strong`, about
+  1.4:1, and are now neutral at 3:1. It uses the concentric layout.
+
+**Raised for the owner:** D7 (Found nothing and Locked in grey), D8 (citations as standalone
+controls), and R1–R10 in DESIGN-SYSTEM §12:
+- R1: 26px icon buttons;
+- R2: input borders under 3:1;
+- R3: the vetting pill matching the Running chip;
+- R4: the report card's width;
+- R5: run chip sizes;
+- R6: the map card's width;
+- R7: card heading size;
+- R8: IBM Plex Serif not loaded (Georgia fallback);
+- R9: MapLibre GL not installed;
+- R10: edge weight and arrows.
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean, with
+Postgres and Redis up): core 20, access 56, config 188, db 264, integrations 122, collectors 482,
+llm 130, osint-engine 104, api 184, ui 57, web 87, worker 4 (1,698 tests).
+
+**Closed 2026-10-07 on the owner's review.**
+- **Accepted as built:** D7, D8, R1, R4–R7, R10, and the dark avatar's border.
+- **R2 fixed.** A new token, `border-input` (light `#85878D`, dark `#757A84`), is 3:1 or more on
+  every ground in both themes. Every text input takes it (`Input` and the grid's search); the
+  deviation from the mockups is in §12, and `contrast.test.ts` holds it.
+- **R3 fixed.** The vetting pill is told from every status chip by shape: an outline in
+  `border-input`, no fill, no dot. A test checks every vetting status against every collector
+  and run chip.
+- **Deferred:** R8 (IBM Plex Serif, self-hosted later) and R9 (MapLibre GL, with GEOINT).
+- **Moved:** `docs/legacy-classification.md` is now `docs/reclamation/legacy-classification.md`;
+  the generator writes there.
+- **Tokens:** 276 (was 275).

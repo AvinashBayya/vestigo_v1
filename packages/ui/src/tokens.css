@@ -24,6 +24,7 @@
   --ds-border-default: #e3e2db;
   --ds-border-strong: #d6d5cc;
   --ds-border-control: #e3e2db;
+  --ds-border-input: #85878d;
   --ds-ink-primary: #15171c;
   --ds-ink-body: #24262c;
   --ds-ink-secondary: #3c3e45;
@@ -54,7 +55,7 @@
   --ds-claim-inferred-mark: #8a5a12;
   --ds-claim-hypothesis-fill: #ecebe4;
   --ds-claim-hypothesis-ink: #4a4c52;
-  --ds-claim-hypothesis-mark: #8e9096;
+  --ds-claim-hypothesis-mark: #808288;
   --ds-claim-inferred-tint: #fdfaf3;
   --ds-claim-inferred-border: #f0e4cb;
 
@@ -321,6 +322,7 @@
   --ds-border-default: #2a2e36;
   --ds-border-strong: #333944;
   --ds-border-control: #333944;
+  --ds-border-input: #757a84;
   --ds-ink-primary: #ecece7;
   --ds-ink-body: #ecece7;
   --ds-ink-secondary: #b6b8bf;

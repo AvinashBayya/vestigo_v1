@@ -1,46 +1,17 @@
-import { cn } from "./cn.ts";
+import { StrengthBadge, type ClaimStrengthLabel } from "./strength-badge.tsx";
 
-/** The six claim strengths, strongest first (docs/DESIGN-SYSTEM.md §2). */
-export const CLAIM_STRENGTH_LABELS = [
-  "OBSERVED",
-  "REPORTED",
-  "DERIVED",
-  "CORRELATED",
-  "INFERRED",
-  "HYPOTHESIS",
-] as const;
-export type ClaimStrengthLabel = (typeof CLAIM_STRENGTH_LABELS)[number];
-
-/** §2's fill and ink for each strength. Colour is the second channel; the word is the first. */
-const TONE: Readonly<Record<ClaimStrengthLabel, string>> = {
-  OBSERVED: "bg-claim-observed-fill text-claim-observed-ink",
-  REPORTED: "bg-claim-reported-fill text-claim-reported-ink",
-  DERIVED: "bg-claim-derived-fill text-claim-derived-ink",
-  CORRELATED: "bg-claim-correlated-fill text-claim-correlated-ink",
-  INFERRED: "bg-claim-inferred-fill text-claim-inferred-ink",
-  HYPOTHESIS: "bg-claim-hypothesis-fill text-claim-hypothesis-ink",
-};
+export { CLAIM_STRENGTH_LABELS, type ClaimStrengthLabel } from "./strength-badge.tsx";
 
 /**
- * A claim's strength as its word, always (§2: never the colour alone). A badge
- * with the small radius, not a pill: pills are for collector status only (§5).
+ * The small claim badge, under the name the screens built before U1-b use.
+ * U1-c moves them to StrengthBadge; until then this is that badge at `sm`.
  */
 export function ClaimStrength({
   strength,
   className,
 }: {
   readonly strength: ClaimStrengthLabel;
-  readonly className?: string;
+  readonly className?: string | undefined;
 }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-sm px-1 text-eyebrow uppercase whitespace-nowrap",
-        TONE[strength],
-        className,
-      )}
-    >
-      {strength}
-    </span>
-  );
+  return <StrengthBadge strength={strength} size="sm" className={className} />;
 }

@@ -8,7 +8,7 @@ export function Input({ className, ...props }: InputProps) {
   return (
     <input
       className={cn(
-        "min-h-target w-full rounded-md border border-border-strong bg-surface-sunken px-3",
+        "min-h-target w-full rounded-md border border-border-input bg-surface-sunken px-3",
         "text-body text-ink-primary placeholder:text-ink-muted",
         "aria-[invalid=true]:border-status-failed-mark",
         className,

@@ -1,0 +1,24 @@
+/*
+ * Utilities the components need that a token alone cannot express. Every
+ * value reads a design token; nothing here is a raw colour or length.
+ */
+
+/*
+ * §7: a control drawn smaller than target-min keeps its drawn look, and its
+ * hit area extends, invisibly and centred, to target-min in both dimensions
+ * (never smaller than the control itself). Gaps between such controls must
+ * leave room for the extension, or the control grows instead.
+ */
+@utility hit-area {
+  position: relative;
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--ds-target-min));
+    height: max(100%, var(--ds-target-min));
+    transform: translate(-50%, -50%);
+  }
+}

@@ -53,6 +53,9 @@ const DOT: Readonly<Record<CollectorStatus, string>> = {
   HELD: "bg-ink-muted",
   QUEUED: "bg-ink-muted",
   CANCELLED: "bg-ink-muted",
+  UNAVAILABLE: "bg-ink-muted",
+  FOUND_NOTHING: "bg-ink-muted",
+  LOCKED: "bg-ink-muted",
 };
 
 /** How each status is counted in the summary: the word stays the status's own. */
@@ -67,6 +70,9 @@ const COUNT_WORD: Readonly<Record<CollectorStatus, string>> = {
   PARTIAL: "partial",
   HELD: "held",
   READY: "ready",
+  UNAVAILABLE: "unavailable",
+  FOUND_NOTHING: "found nothing",
+  LOCKED: "locked",
 };
 
 /** The statuses a job can have, in the order the summary counts them. */

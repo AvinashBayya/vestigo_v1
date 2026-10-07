@@ -4,6 +4,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Outlet,
   redirect,
   type RouterHistory,
@@ -174,7 +175,23 @@ const caseWorkspace = createRoute({
   },
 });
 
+/**
+ * The component gallery (U1-b review surface): development builds only.
+ * `import.meta.env.DEV` is a literal false in a production build, so this
+ * branch, and the lazy import with it, is removed from the bundle.
+ */
+const devRoutes = import.meta.env.DEV
+  ? [
+      createRoute({
+        getParentRoute: () => root,
+        path: "/dev/gallery",
+        component: lazyRouteComponent(() => import("./gallery/Gallery.tsx"), "Gallery"),
+      }),
+    ]
+  : [];
+
 const routeTree = root.addChildren([
+  ...devRoutes,
   signIn,
   verify,
   enrol,

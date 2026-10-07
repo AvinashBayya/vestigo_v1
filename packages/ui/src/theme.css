@@ -10,6 +10,7 @@
  * Import after Tailwind itself: @import "tailwindcss"; @import "@repo/ui/theme.css";
  */
 @import "./tokens.css";
+@import "./components.css";
 
 @theme inline {
   --color-*: initial;
@@ -25,6 +26,7 @@
   --color-border-default: var(--ds-border-default);
   --color-border-strong: var(--ds-border-strong);
   --color-border-control: var(--ds-border-control);
+  --color-border-input: var(--ds-border-input);
   --color-ink-primary: var(--ds-ink-primary);
   --color-ink-body: var(--ds-ink-body);
   --color-ink-secondary: var(--ds-ink-secondary);
