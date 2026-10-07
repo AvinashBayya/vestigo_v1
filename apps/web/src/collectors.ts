@@ -32,6 +32,20 @@ export function readiness(collector: Collector, list: CollectorList): CollectorS
   return runsHere(collector, list) ? "READY" : "HELD";
 }
 
+/**
+ * The registry split by whether each collector can run here, each part in
+ * registry order: the ones that run, and the held ones (Held, with why).
+ */
+export function byReadiness(list: CollectorList): {
+  readonly ready: readonly Collector[];
+  readonly held: readonly Collector[];
+} {
+  return {
+    ready: list.items.filter((item) => runsHere(item, list)),
+    held: list.items.filter((item) => !runsHere(item, list)),
+  };
+}
+
 /** Why, in words, when that needs saying: held, licence unverified, or a key needed. */
 export function readinessNote(collector: Collector, list: CollectorList): string | null {
   if (collector.availability === "UNVERIFIED") {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "./cn.ts";
 
 /** Drawn at `control-sm`, with the hit area extended to `target-min` (§7). Neutral chrome: no meaning colour. */
@@ -63,18 +63,13 @@ export function FilterToggle({
 }
 
 /** "+ Filter": opens whatever picks a new filter. Dashed, so it reads as an action, not a filter. */
-export function AddFilterChip({
-  onClick,
-  className,
-}: {
-  readonly onClick: () => void;
-  readonly className?: string | undefined;
-}) {
+export function AddFilterChip({ className, ...props }: ComponentProps<"button">) {
+  // Props and ref pass through, so the chip can be a popover's trigger (aria-expanded, focus return).
   return (
     <button
       type="button"
       aria-label="Add filter"
-      onClick={onClick}
+      {...props}
       className={cn(
         CHIP,
         "border-dashed border-border-strong bg-surface-raised text-meta text-ink-secondary hover:bg-surface-hover",

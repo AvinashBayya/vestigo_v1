@@ -1,24 +1,19 @@
-import { Button, Notice, Panel, Skeleton } from "@repo/ui";
+import { Button, EmptyState, FailedAlert, LoadingState, Notice, Skeleton } from "@repo/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { ApiProblem, timed, unwrap } from "../../api.ts";
 import { api } from "../../client/index.ts";
 import { ProblemNotice } from "../../components/ProblemNotice.tsx";
-import { Heading, Instant } from "../../components/Values.tsx";
+import { Instant } from "../../components/Values.tsx";
 import { LIST_LIMIT, runQuery } from "../queries.ts";
-import { Loaded, TableSkeleton } from "../states.tsx";
+import { Loaded } from "../states.tsx";
+import { PdfPanel } from "./PdfPanel.tsx";
 import { ReportDocumentView } from "./ReportDocument.tsx";
-import {
-  ExportNotReady,
-  PDF_RETRY_FALLBACK_SECONDS,
-  readExport,
-  reportPdfQuery,
-  reportQuery,
-  runReportsQuery,
-  type ExportFormat,
-  type Report,
-} from "./queries.ts";
+import { CitationRail, jumpTo, SectionsRail } from "./ReportRails.tsx";
+import { reportQuery, runReportsQuery, type Report, type ReportDocument } from "./queries.ts";
+import { citationsOf, PDF_ANCHOR, sectionId, sectionsOf, type SectionKey } from "./sections.ts";
 
+/** The report's generation status, as a sentence (no chip: §3 has no report vocabulary). */
 const STATUS_TEXT: Readonly<Record<Report["status"], string>> = {
   QUEUED: "Queued: waiting for a worker to generate it.",
   RUNNING: "Generating.",
@@ -29,7 +24,8 @@ const STATUS_TEXT: Readonly<Record<Report["status"], string>> = {
 /**
  * The Report tab (docs/design/mockups/Report.dc.html): generate a report from
  * the settled run, read it here as stored, and open the stored PDF. Reports
- * are per run; there is no case report.
+ * are per run; there is no case report. The drawn review pill and
+ * per-section regeneration have no endpoint, so they are not shown.
  */
 export function ReportTab({ runId }: { readonly runId: string }) {
   const reports = useQuery(runReportsQuery(runId));
@@ -52,115 +48,198 @@ export function ReportTab({ runId }: { readonly runId: string }) {
     },
   });
 
+  // Newest first; the one just generated, or the one chosen, else the newest listed.
+  const list = reports.data;
+  const newestFirst = useMemo(() => list?.items.toReversed() ?? [], [list]);
+  const current = list === undefined ? null : (chosen ?? newestFirst[0]?.id ?? null);
+  // A report just generated may be missing from a list cut at the read limit: it is
+  // offered anyway, so the picker always names the report shown below it.
+  const listed = newestFirst.some((item) => item.id === current);
+  const listedStatus = newestFirst.find((item) => item.id === current)?.status ?? null;
+  const empty = list !== undefined && list.items.length === 0 && chosen === null;
+
+  const report = useQuery({ ...reportQuery(current ?? ""), enabled: current !== null });
+  const shown = current === null ? undefined : report.data;
+  const status = shown?.status;
+  // The list says each report's status too. When it disagrees with this report's own read,
+  // the list is read again, so it never says RUNNING beside a generated report. Agreement
+  // (the usual case on opening the tab) asks for nothing.
+  useEffect(() => {
+    if (status !== undefined && listedStatus !== null && status !== listedStatus) {
+      void queryClient.invalidateQueries({ queryKey: ["run-reports", runId] });
+    }
+  }, [status, listedStatus, runId, queryClient]);
+
   const settled = run.data?.settled ?? null;
+  const controls = (place: "toolbar" | "empty") => (
+    <GenerateControls
+      place={place}
+      disabled={settled !== true || generate.isPending}
+      pending={generate.isPending}
+      onGenerate={(synthesis) => {
+        generate.mutate(synthesis);
+      }}
+    />
+  );
+
+  const picker =
+    current !== null && newestFirst.length + (listed ? 0 : 1) > 1 ? (
+      <label className="inline-flex min-h-target items-center gap-1.75 text-small-strong text-ink-secondary">
+        Report
+        <select
+          value={current}
+          onChange={(event) => {
+            setChosen(event.target.value);
+          }}
+          className="h-control-sm max-w-form cursor-pointer rounded-md border border-border-input bg-surface-sunken px-3.25 text-meta text-ink-primary"
+        >
+          {listed ? null : <option value={current}>The report just asked for</option>}
+          {newestFirst.map((item) => (
+            <option key={item.id} value={item.id}>
+              {new Date(item.createdAt).toLocaleString(undefined, { timeZoneName: "short" })} ·{" "}
+              {item.includeSynthesis ? "with synthesis" : "no synthesis"} · {item.status}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
+
+  const generated = shown?.status === "SUCCEEDED" ? shown.document : null;
   return (
-    <div className="flex flex-col gap-6">
-      <Panel className="flex flex-col gap-3">
-        <Heading>Generate a report</Heading>
-        <p className="text-small text-ink-secondary">
-          A report states what was collected, what was not and why, and cites every claim. A
-          synthesis is written by a model and checked: every statement must cite the evidence.
-        </p>
-        {settled === false ? (
-          <Notice>
-            This run has not settled yet: a report can be generated once every source has finished
-            and its results are merged.
-          </Notice>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            disabled={settled !== true || generate.isPending}
-            onClick={() => {
-              generate.mutate(false);
-            }}
-          >
-            Generate report
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={settled !== true || generate.isPending}
-            onClick={() => {
-              generate.mutate(true);
-            }}
-          >
-            Generate with a model synthesis
-          </Button>
-          {generate.isPending ? (
-            <p role="status" className="text-small text-ink-secondary">
-              Asking for the report…
-            </p>
-          ) : null}
+    <div className="flex grow flex-col gap-4">
+      <div className="flex flex-col rounded-lg border border-border-default bg-surface-raised px-5">
+        <div className="flex min-h-case-header flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <h2 className="text-body-strong break-words text-ink-primary">
+              {generated === null ? "Report" : generated.title}
+            </h2>
+            {picker === null ? null : (
+              <>
+                <span aria-hidden="true" className="h-4.5 w-px bg-border-default" />
+                {picker}
+              </>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2.25">
+            {empty ? null : controls("toolbar")}
+            {generated === null ? null : (
+              <Button asChild size="sm">
+                <a href={`#${PDF_ANCHOR}`} onClick={jumpTo(PDF_ANCHOR)}>
+                  View PDF
+                </a>
+              </Button>
+            )}
+          </div>
         </div>
-        {generate.isError ? (
-          <GenerateProblem error={generate.error} synthesis={generate.variables} />
-        ) : null}
-      </Panel>
+        {shown === undefined ? null : (
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border-subtle py-2">
+            <p role="status" className="text-small text-ink-primary">
+              {STATUS_TEXT[shown.status]}
+            </p>
+            <span className="text-caption text-ink-muted">
+              Asked for <Instant iso={shown.createdAt} />
+              {shown.finishedAt === null ? null : (
+                <>
+                  , finished <Instant iso={shown.finishedAt} />
+                </>
+              )}{" "}
+              · {String(shown.attempts)} attempt{shown.attempts === 1 ? "" : "s"}
+            </span>
+          </div>
+        )}
+      </div>
+      {settled === false ? (
+        <Notice>
+          This run has not settled yet: a report can be generated once every source has finished and
+          its results are merged.
+        </Notice>
+      ) : null}
+      {generate.isError ? (
+        <GenerateProblem error={generate.error} synthesis={generate.variables} />
+      ) : null}
       <Loaded
         query={reports}
-        loading={<TableSkeleton label="Reading this run's reports" rows={2} />}
+        loading={
+          <LoadingState what="Reading this run's reports.">
+            <Skeleton className="h-target" />
+            <Skeleton className="h-target" />
+          </LoadingState>
+        }
       >
-        {(list) => {
-          if (list.items.length === 0 && chosen === null) {
-            return (
-              <Panel className="text-body text-ink-secondary">
+        {(read) => (
+          <div className="flex grow flex-col gap-4">
+            {read.hasMore ? (
+              <Notice className="flex flex-col gap-1">
+                <p className="text-body-strong">
+                  Partial: this run has more than {String(LIST_LIMIT)} reports.
+                </p>
+                <p className="text-small">
+                  The API lists a run's reports oldest first and cannot page past{" "}
+                  {String(LIST_LIMIT)} yet, so newer reports are not listed and the one shown may
+                  not be the newest.
+                </p>
+              </Notice>
+            ) : null}
+            {empty ? (
+              <EmptyState title="No report yet" action={controls("empty")}>
                 No report has been generated for this run yet.
-              </Panel>
-            );
-          }
-          // Newest first; the one just generated, or the one chosen, else the newest listed.
-          const newestFirst = list.items.toReversed();
-          const current = chosen ?? newestFirst[0]?.id ?? null;
-          // A report just generated may be missing from a list cut at the read limit: it is
-          // offered anyway, so the picker always names the report shown below it.
-          const listed = newestFirst.some((item) => item.id === current);
-          return (
-            <div className="flex flex-col gap-6">
-              {list.hasMore ? (
-                <Notice className="flex flex-col gap-1">
-                  <p className="text-body-strong">
-                    Partial: this run has more than {String(LIST_LIMIT)} reports.
-                  </p>
-                  <p className="text-small">
-                    The API lists a run's reports oldest first and cannot page past{" "}
-                    {String(LIST_LIMIT)} yet, so newer reports are not listed and the one shown may
-                    not be the newest.
-                  </p>
-                </Notice>
-              ) : null}
-              {newestFirst.length + (current !== null && !listed ? 1 : 0) > 1 ? (
-                <label className="flex max-w-form flex-col gap-1 text-small text-ink-secondary">
-                  Report
-                  <select
-                    value={current ?? ""}
-                    onChange={(event) => {
-                      setChosen(event.target.value);
-                    }}
-                    className="min-h-target rounded-md border border-border-strong bg-surface-sunken px-3 text-body text-ink-primary"
-                  >
-                    {current !== null && !listed ? (
-                      <option value={current}>The report just asked for</option>
-                    ) : null}
-                    {newestFirst.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {new Date(item.createdAt).toLocaleString()} ·{" "}
-                        {item.includeSynthesis ? "with synthesis" : "no synthesis"} · {item.status}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              {current === null ? null : (
-                <OneReport
-                  key={current}
-                  id={current}
-                  runId={runId}
-                  listedStatus={newestFirst.find((item) => item.id === current)?.status ?? null}
-                />
-              )}
-            </div>
-          );
-        }}
+              </EmptyState>
+            ) : current === null ? null : (
+              <Loaded query={report} loading={<ReportLoading />}>
+                {(data) => <ReportBody key={data.id} data={data} />}
+              </Loaded>
+            )}
+          </div>
+        )}
       </Loaded>
+    </div>
+  );
+}
+
+/**
+ * The whole-report generate controls (they take the drawn "Regenerate
+ * section" slot: no per-section endpoint exists). Exactly one set is on
+ * screen: in the empty card while there is no report, otherwise the toolbar.
+ */
+function GenerateControls({
+  place,
+  disabled,
+  pending,
+  onGenerate,
+}: {
+  readonly place: "toolbar" | "empty";
+  readonly disabled: boolean;
+  readonly pending: boolean;
+  readonly onGenerate: (synthesis: boolean) => void;
+}) {
+  const size = place === "toolbar" ? "sm" : "md";
+  return (
+    <div className="flex flex-wrap items-center gap-2.25">
+      {pending ? (
+        <p role="status" className="text-small text-ink-secondary">
+          Asking for the report…
+        </p>
+      ) : null}
+      <Button
+        variant="secondary"
+        size={size}
+        disabled={disabled}
+        onClick={() => {
+          onGenerate(true);
+        }}
+      >
+        Generate with a model synthesis
+      </Button>
+      <Button
+        variant={place === "toolbar" ? "secondary" : "primary"}
+        size={size}
+        disabled={disabled}
+        onClick={() => {
+          onGenerate(false);
+        }}
+      >
+        Generate report
+      </Button>
     </div>
   );
 }
@@ -189,250 +268,138 @@ function GenerateProblem({
   ) : null;
   if (ownWords) {
     return (
-      <Notice tone="failure" className="flex flex-col gap-1">
-        <p>{error.detail}</p>
-        {nextStep}
-        <p className="font-mono text-mono-caption">Code: {error.code}</p>
-      </Notice>
+      <FailedAlert title="The report was not generated" reason={error.detail} code={error.code}>
+        {nextStep === null ? null : (
+          <div className="text-prose-small text-ink-secondary">{nextStep}</div>
+        )}
+      </FailedAlert>
     );
   }
   return <ProblemNotice error={error}>{nextStep}</ProblemNotice>;
 }
 
-function OneReport({
-  id,
-  runId,
-  listedStatus,
-}: {
-  readonly id: string;
-  readonly runId: string;
-  /** The status the run's list gives this report; null when the list does not hold it. */
-  readonly listedStatus: Report["status"] | null;
-}) {
-  const report = useQuery(reportQuery(id));
-  const queryClient = useQueryClient();
-  const status = report.data?.status;
-  // The list says each report's status too. When it disagrees with this report's own read,
-  // the list is read again, so it never says RUNNING beside a generated report. Agreement
-  // (the usual case on opening the tab) asks for nothing.
-  useEffect(() => {
-    if (status !== undefined && listedStatus !== null && status !== listedStatus) {
-      void queryClient.invalidateQueries({ queryKey: ["run-reports", runId] });
-    }
-  }, [status, listedStatus, runId, queryClient]);
+/** Loading in the report's shape: the sections rail, the document card and the citation rail. */
+function ReportLoading() {
   return (
-    <Loaded query={report} loading={<TableSkeleton label="Reading the report" rows={4} />}>
-      {(data) => (
-        <div className="flex flex-col gap-6">
-          <Panel className="flex flex-wrap items-center gap-4">
-            <p role="status" className="text-body text-ink-primary">
-              {STATUS_TEXT[data.status]}
-            </p>
-            <span className="text-small text-ink-secondary">
-              Asked for <Instant iso={data.createdAt} />
-              {data.finishedAt === null ? null : (
-                <>
-                  , finished <Instant iso={data.finishedAt} />
-                </>
-              )}{" "}
-              · {String(data.attempts)} attempt{data.attempts === 1 ? "" : "s"}
-            </span>
-          </Panel>
-          {data.status === "QUEUED" || data.status === "RUNNING" ? (
-            <Panel className="flex flex-col gap-3">
-              <p className="text-small text-ink-secondary">
-                Generating. This page reads it again every few seconds.
-              </p>
-              <Skeleton className="h-target" />
-              <Skeleton className="h-target" />
-            </Panel>
-          ) : null}
-          {data.status === "FAILED" ? (
-            <Notice tone="failure" className="flex flex-col gap-1">
-              {data.error === null ? (
-                <p>It failed, and no reason was recorded.</p>
-              ) : (
-                <p>{data.error.message}</p>
-              )}
-              {data.error === null ? null : (
-                <p className="font-mono text-mono-caption">Code: {data.error.code}</p>
-              )}
-              <p>Generate it again above.</p>
-            </Notice>
-          ) : null}
-          {data.status === "SUCCEEDED" && data.document !== null ? (
-            <>
-              <PdfPanel id={data.id} stored={data.pdf} />
-              <ReportDocumentView document={data.document} />
-            </>
-          ) : null}
-        </div>
-      )}
-    </Loaded>
-  );
-}
-
-/** A file saved from a Blob the app holds; nothing is opened in the app. */
-function saveBlob(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-const FILE_NAME: Readonly<Record<ExportFormat, (id: string) => string>> = {
-  pdf: (id) => `report-${id}.pdf`,
-  json: (id) => `report-${id}.json`,
-  csv: (id) => `report-${id}.csv`,
-  maltego: (id) => `report-${id}-maltego.csv`,
-};
-
-/** Revocations waiting one tick, by URL: a setup that follows at once cancels its own. */
-const pendingRevocations = new Map<string, ReturnType<typeof setTimeout>>();
-
-/**
- * An object URL for a Blob, revoked only when it is really let go. StrictMode
- * runs a mount's cleanup and setup back to back; revoking in that cleanup
- * would leave the viewer on a dead URL, so the revocation waits a tick and
- * the setup that follows cancels it. A real unmount or a new Blob revokes.
- */
-function useObjectUrl(blob: Blob | null): string | null {
-  const url = useMemo(() => (blob === null ? null : URL.createObjectURL(blob)), [blob]);
-  useEffect(() => {
-    if (url === null) return;
-    const pending = pendingRevocations.get(url);
-    if (pending !== undefined) {
-      clearTimeout(pending);
-      pendingRevocations.delete(url);
-    }
-    return () => {
-      pendingRevocations.set(
-        url,
-        setTimeout(() => {
-          URL.revokeObjectURL(url);
-          pendingRevocations.delete(url);
-        }, 0),
-      );
-    };
-  }, [url]);
-  return url;
-}
-
-/** The stored PDF: polled while it renders (202, Retry-After), then shown and downloadable. */
-function PdfPanel({ id, stored }: { readonly id: string; readonly stored: Report["pdf"] }) {
-  // A PDF that failed to render stays failed: the report says so, and it is not asked for.
-  const failed = stored?.status === "FAILED";
-  const pdf = useQuery({ ...reportPdfQuery(id), enabled: !failed });
-  const blob = pdf.data?.kind === "ready" ? pdf.data.blob : null;
-  const url = useObjectUrl(blob);
-  const download = useMutation({
-    mutationFn: async (format: ExportFormat) => {
-      // The PDF the page already holds is saved as it is: the same stored file.
-      if (format === "pdf" && blob !== null) {
-        saveBlob(blob, FILE_NAME.pdf(id));
-        return;
-      }
-      const result = await readExport(id, format);
-      if (result.kind !== "ready") throw new ExportNotReady(result.retryAfterSeconds);
-      saveBlob(result.blob, FILE_NAME[format](id));
-    },
-  });
-
-  return (
-    <Panel className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <Heading>PDF</Heading>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {download.isPending ? (
-            <p role="status" className="text-small text-ink-secondary">
-              Preparing the download…
-            </p>
-          ) : null}
-          {(["pdf", "json", "csv", "maltego"] as const).map((format) => (
-            <Button
-              key={format}
-              variant="secondary"
-              disabled={download.isPending || (format === "pdf" && blob === null)}
-              onClick={() => {
-                download.mutate(format);
-              }}
-            >
-              Download {format === "maltego" ? "Maltego table" : format.toUpperCase()}
-            </Button>
-          ))}
-        </div>
-      </div>
-      {download.isError ? <ProblemNotice error={download.error} /> : null}
-      {failed ? (
-        <PdfFailed message={stored.error?.message ?? null} code={stored.error?.code ?? null} />
-      ) : pdf.isPending ? (
-        <div className="flex flex-col gap-2">
-          <p role="status" className="text-small text-ink-secondary">
-            Reading the PDF…
-          </p>
+    <LoadingState what="Reading the report.">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="flex shrink-0 flex-col gap-2 lg:w-report-nav">
+          <Skeleton className="h-target" />
+          <Skeleton className="h-target" />
           <Skeleton className="h-target" />
         </div>
-      ) : pdf.isError ? (
-        pdf.error instanceof ApiProblem && pdf.error.code === "REPORT_PDF_FAILED" ? (
-          <PdfFailed message={pdf.error.detail} code={pdf.error.code} />
-        ) : (
-          <ProblemNotice error={pdf.error}>
-            <Button variant="quiet" className="self-start" onClick={() => void pdf.refetch()}>
-              Try again
-            </Button>
-          </ProblemNotice>
-        )
-      ) : pdf.data.kind === "rendering" ? (
-        <Notice>
-          {pdf.data.status === "PENDING"
-            ? "The PDF is waiting to render."
-            : pdf.data.status === "RENDERING"
-              ? "The PDF is rendering."
-              : "The PDF is not ready yet."}{" "}
-          Asking again in {String(pdf.data.retryAfterSeconds ?? PDF_RETRY_FALLBACK_SECONDS)} seconds
-          {pdf.data.retryAfterSeconds === null ? "." : ", as the server asked."}
-        </Notice>
-      ) : url === null ? null : (
-        <object
-          data={url}
-          type="application/pdf"
-          aria-label="The report as a PDF"
-          className="h-screen w-full rounded-md border border-border-default"
-        >
-          <p className="p-4 text-small text-ink-secondary">
-            This browser cannot show the PDF here. Use Download PDF.
-          </p>
-        </object>
-      )}
-    </Panel>
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <Skeleton className="h-target w-1/3" />
+          <Skeleton className="h-target" />
+          <Skeleton className="h-target" />
+          <Skeleton className="h-target" />
+        </div>
+        <div className="hidden shrink-0 flex-col gap-2 xl:flex xl:w-side-rail">
+          <Skeleton className="h-target" />
+          <Skeleton className="h-target" />
+        </div>
+      </div>
+    </LoadingState>
   );
 }
 
+/** One report, by its generation status. */
+function ReportBody({ data }: { readonly data: Report }) {
+  if (data.status === "QUEUED" || data.status === "RUNNING") {
+    return (
+      <div className="flex flex-col gap-3 rounded-lg border border-border-default bg-surface-raised p-4.5">
+        <p className="text-small text-ink-secondary">
+          Generating. This page reads it again every few seconds.
+        </p>
+        <Skeleton className="h-target w-1/3" />
+        <Skeleton className="h-target" />
+        <Skeleton className="h-target" />
+      </div>
+    );
+  }
+  if (data.status === "FAILED") {
+    return (
+      <FailedAlert
+        title="The report could not be generated"
+        reason={data.error === null ? "It failed, and no reason was recorded." : data.error.message}
+        code={data.error === null ? null : data.error.code}
+      >
+        <p className="text-prose-small text-ink-secondary">Generate it again above.</p>
+      </FailedAlert>
+    );
+  }
+  if (data.document === null) {
+    // SUCCEEDED always carries its document; were one missing, it is said, not left blank.
+    return <Notice>The report is marked generated, but its document was not in the answer.</Notice>;
+  }
+  return <ReportView id={data.id} document={data.document} pdf={data.pdf} />;
+}
+
 /**
- * A PDF that could not be rendered. It is rendered once per report and stored,
- * so asking again gets the same refusal: no retry is offered, only what works.
+ * The generated report (Report.png), full-bleed: the sections rail (the full
+ * column height, its nav sticky), the one continuous document card with the
+ * stored PDF under it, and the citation rail with the model's provenance.
+ * Three columns from xl (226 + the card + 330 fit 1280 and up). Below xl the
+ * citation rail is a disclosure placed first, under the toolbar; below lg the
+ * sections rail wraps above the document.
  */
-function PdfFailed({
-  message,
-  code,
+function ReportView({
+  id,
+  document: report,
+  pdf,
 }: {
-  readonly message: string | null;
-  readonly code: string | null;
+  readonly id: string;
+  readonly document: ReportDocument;
+  readonly pdf: Report["pdf"];
 }) {
+  const sections = useMemo(() => sectionsOf(report), [report]);
+  const [active, setActive] = useState<SectionKey | null>(sections[0]?.key ?? null);
+
+  // Where the browser can say which section is in view, the rails follow it. jsdom (and
+  // any browser without it) has no IntersectionObserver: the active section is then the
+  // one last chosen in the rail.
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    // The sections in view; the first of them, in the document's order, is the active one.
+    const inView = new Set<string>();
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const key = entry.target.getAttribute("data-report-section");
+        if (key === null) continue;
+        if (entry.isIntersecting) inView.add(key);
+        else inView.delete(key);
+      }
+      const first = sections.find((section) => inView.has(section.key));
+      if (first !== undefined) setActive(first.key);
+    });
+    for (const section of sections) {
+      const element = window.document.getElementById(sectionId(section.key));
+      if (element !== null) observer.observe(element);
+    }
+    return () => {
+      observer.disconnect();
+    };
+  }, [sections]);
+
+  const activeSection = sections.find((section) => section.key === active) ?? null;
+  const numbers = activeSection === null ? [] : citationsOf(report, activeSection.key);
   return (
-    <Notice tone="failure" className="flex flex-col gap-1">
-      {message === null ? (
-        <p>The PDF could not be rendered, and no reason was recorded.</p>
-      ) : (
-        <p>{message}</p>
-      )}
-      {code === null ? null : <p className="font-mono text-mono-caption">Code: {code}</p>}
-      <p>
-        A report's PDF is rendered once. Generate the report again to render a new one; the JSON,
-        CSV and Maltego exports above do not need it.
-      </p>
-    </Notice>
+    <div className="flex grow flex-col gap-4 xl:flex-row xl:gap-0">
+      {/* First in the source and on screen below xl (under the toolbar); last, beside the
+          card, from xl. */}
+      <CitationRail report={report} section={activeSection} numbers={numbers} />
+      <div className="flex min-w-0 flex-1 flex-col lg:flex-row">
+        <SectionsRail
+          sections={sections}
+          active={active}
+          onChoose={setActive}
+          synthesisGenerated={report.synthesis.status === "GENERATED"}
+        />
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-5 px-4 py-6.5 lg:px-8.5">
+          <ReportDocumentView document={report} />
+          <PdfPanel id={id} stored={pdf} />
+        </div>
+      </div>
+    </div>
   );
 }

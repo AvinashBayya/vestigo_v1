@@ -1,4 +1,4 @@
-import { Button, Notice, Skeleton } from "@repo/ui";
+import { Button, Skeleton } from "@repo/ui";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
@@ -10,33 +10,22 @@ import {
   type RouterHistory,
 } from "@tanstack/react-router";
 import { z } from "zod";
-import { AppShell } from "./components/AppShell.tsx";
 import { AuthFrame } from "./components/AuthFrame.tsx";
 import { ProblemNotice } from "./components/ProblemNotice.tsx";
 import { CasesScreen } from "./screens/Cases.tsx";
 import { EnrolScreen } from "./screens/Enrol.tsx";
 import { HomeScreen } from "./screens/Home.tsx";
+import { MembersScreen } from "./screens/Members.tsx";
 import { RunScreen } from "./screens/Run.tsx";
+import { SettingsScreen } from "./screens/Settings.tsx";
 import { SignInScreen } from "./screens/SignIn.tsx";
 import { TenantScreen } from "./screens/Tenant.tsx";
 import { VerifyScreen } from "./screens/Verify.tsx";
 import { enrolmentToken, homeOf, sessionQuery } from "./session.ts";
-import { RUN_TABS, Workspace, type WorkspaceTab } from "./workspace/Workspace.tsx";
+import { RUN_TABS, UnknownTab, Workspace, type WorkspaceTab } from "./workspace/Workspace.tsx";
 
 const isTab = (value: string): value is WorkspaceTab =>
   (RUN_TABS as readonly string[]).includes(value);
-
-/** A tab the workspace does not have: said plainly, with the way back. */
-function NoSuchTab({ tab }: { readonly tab: string }) {
-  return (
-    <AppShell>
-      <Notice>
-        There is no <span className="font-mono">{tab}</span> tab. The workspace has{" "}
-        {RUN_TABS.join(", ")}.
-      </Notice>
-    </AppShell>
-  );
-}
 
 interface RouterContext {
   readonly queryClient: QueryClient;
@@ -151,7 +140,7 @@ const runResults = createRoute({
   beforeLoad: guard("/"),
   component: function RunResultsRoute() {
     const { runId, tab } = runResults.useParams();
-    if (!isTab(tab)) return <NoSuchTab tab={tab} />;
+    if (!isTab(tab)) return <UnknownTab scope={{ kind: "run", id: runId }} tab={tab} />;
     return <Workspace key={runId} scope={{ kind: "run", id: runId }} tab={tab} />;
   },
 });
@@ -163,6 +152,22 @@ const cases = createRoute({
   component: CasesScreen,
 });
 
+/** The organisation's members (provisional until the admin screens land). */
+const members = createRoute({
+  getParentRoute: () => root,
+  path: "/members",
+  beforeLoad: guard("/"),
+  component: MembersScreen,
+});
+
+/** The organisation's settings (provisional until the admin screens land). */
+const settings = createRoute({
+  getParentRoute: () => root,
+  path: "/settings",
+  beforeLoad: guard("/"),
+  component: SettingsScreen,
+});
+
 /** A case: the same tabs over what is pinned to it, and only that. */
 const caseWorkspace = createRoute({
   getParentRoute: () => root,
@@ -170,7 +175,7 @@ const caseWorkspace = createRoute({
   beforeLoad: guard("/"),
   component: function CaseRoute() {
     const { caseId, tab } = caseWorkspace.useParams();
-    if (!isTab(tab)) return <NoSuchTab tab={tab} />;
+    if (!isTab(tab)) return <UnknownTab scope={{ kind: "case", id: caseId }} tab={tab} />;
     return <Workspace key={caseId} scope={{ kind: "case", id: caseId }} tab={tab} />;
   },
 });
@@ -201,6 +206,8 @@ const routeTree = root.addChildren([
   runResults,
   cases,
   caseWorkspace,
+  members,
+  settings,
 ]);
 
 export function createAppRouter(queryClient: QueryClient, history?: RouterHistory) {

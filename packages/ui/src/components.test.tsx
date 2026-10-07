@@ -65,6 +65,16 @@ describe("Unmeasured", () => {
     fireEvent.focus(dash);
     expect((await screen.findByRole("tooltip")).textContent).toBe("[why there is no value]");
   });
+
+  it("keeps its target size as an overlay, so the dash keeps its column's edge and the row its pitch", () => {
+    render(<Unmeasured reason="[why there is no value]" className="justify-end" />);
+    const dash = screen.getByRole("button", { name: /^Not measured\./ });
+    expect(dash.className).toContain("hit-area");
+    // REGRESSION (U1-c review): a target-sized box centred the dash off the text edge and grew rows.
+    expect(dash.className).not.toContain("min-h-target");
+    expect(dash.className).not.toContain("min-w-target");
+    expect(dash.className).toContain("justify-end");
+  });
 });
 
 describe("StatusChip", () => {

@@ -11,6 +11,15 @@ function tokenAt(element: Element, name: string): string {
   return getComputedStyle(element).getPropertyValue(`--ds-${name}`).trim();
 }
 
+/**
+ * The least zoom the graph is drawn at. Cytoscape scales label text with the
+ * zoom, so below 1 a label would fall under its token size (`mono-caption`,
+ * never under the type floor; the stylesheet's `min-zoomed-font-size` hides it rather
+ * than shrink it). A graph larger than its canvas is panned, never shrunk to
+ * fit; the list beside it holds every node and edge in words.
+ */
+const GRAPH_MIN_ZOOM = 1;
+
 /** Strength is said by the edge: the weakest kinds (§2: inferred, hypothesis) are dashed, with their word. */
 const WEAK = new Set(["INFERRED", "HYPOTHESIS"]);
 
@@ -71,7 +80,7 @@ export function CytoscapeGraph({
   onSelect,
   className,
 }: GraphRendererProps & {
-  /** How the canvas is sized and framed; by default a framed 16:9 panel (the tab as it is today). */
+  /** How the canvas is sized; by default 16:9 at full width, unframed (the graph shell frames it). */
   readonly className?: string | undefined;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -128,8 +137,14 @@ export function CytoscapeGraph({
               source: edge.sourceEntityId,
               target: edge.targetEntityId,
               kind: edge.kind,
-              // A weak edge says its strength in words, not by its dashes alone (§9).
-              label: weak ? `${edge.kind} · ${edge.strengths.join(" / ")}` : edge.kind,
+              // A weak edge says its strength in words, not by its dashes alone (§9);
+              // an edge no claim stands behind says so, so it never reads as a stated one.
+              label:
+                edge.strengths.length === 0
+                  ? `${edge.kind} · no claims`
+                  : weak
+                    ? `${edge.kind} · ${edge.strengths.join(" / ")}`
+                    : edge.kind,
               weak,
               // Amber is INFERRED's alone: a hypothesis edge stays neutral (§2).
               inferred:
@@ -143,6 +158,8 @@ export function CytoscapeGraph({
       // Nodes are sized to their labels, so the layout must count the labels or
       // nodes land on each other and hide their names (seen in the live check).
       layout: layout(),
+      // Fitting clamps to this: a large graph is centred on its seed at full size.
+      minZoom: GRAPH_MIN_ZOOM,
       selectionType: "single",
     });
     // The tapped element: Cytoscape types an event's target loosely.
@@ -174,8 +191,8 @@ export function CytoscapeGraph({
 
   if (!drawable) {
     return (
-      <p className="rounded-lg border border-dashed border-border-strong p-4 text-small text-ink-secondary">
-        This browser cannot draw the graph. Every node and relationship is listed beside it.
+      <p className="mx-4 my-16 rounded-inner border border-dashed border-border-strong bg-surface-raised p-4 text-small text-ink-secondary">
+        This browser cannot draw the graph. Every node and relationship is listed below it.
       </p>
     );
   }
@@ -183,11 +200,8 @@ export function CytoscapeGraph({
     <div
       ref={container}
       role="img"
-      aria-label={`Graph of ${String(nodes.length)} entities and ${String(edges.length)} relationships. The same graph is listed in words beside it.`}
-      className={cn(
-        className ?? "aspect-video w-full rounded-lg border border-border-default",
-        "bg-surface-sunken",
-      )}
+      aria-label={`Graph of ${String(nodes.length)} entities and ${String(edges.length)} relationships. The same graph is listed in words below it.`}
+      className={cn(className ?? "aspect-video w-full", "bg-surface-sunken")}
     />
   );
 }

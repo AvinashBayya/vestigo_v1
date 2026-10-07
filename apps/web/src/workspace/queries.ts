@@ -44,6 +44,20 @@ const scopeQuery = (scope: Scope) =>
  */
 export const LIST_LIMIT = 500;
 
+/** Why a pin count is not given when the pins read was cut: a count over it would be short. */
+export const PINS_UNCOUNTED = `More than ${String(LIST_LIMIT)} pins: counted over the first ${String(LIST_LIMIT)} only, so a count here would be short.`;
+
+/** Each kind of pin in words, one and many. */
+export const PIN_WORDS: Readonly<Record<PinTarget["type"], readonly [string, string]>> = {
+  evidence: ["evidence record", "evidence records"],
+  entity: ["entity", "entities"],
+  claim: ["claim", "claims"],
+  relationship: ["relationship", "relationships"],
+};
+
+/** The kinds of pin, in the order they are counted. */
+export const PIN_TYPES = Object.keys(PIN_WORDS) as PinTarget["type"][];
+
 export const entitiesQuery = (scope: Scope) =>
   queryOptions({
     queryKey: ["entities", scope.kind, scope.id],

@@ -5,6 +5,8 @@
  * count or date.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -31,14 +33,17 @@ import { ArrivingNow, MetricCard } from "./metric-card.tsx";
 import {
   CitationMarker,
   Citations,
+  CoverageLimitation,
   InferredPassage,
   ReportProse,
+  ReportSectionHeading,
   ReportSurface,
 } from "./report-surface.tsx";
 import {
   CollectorList,
   LOCK_REASONS,
   LOCK_REASON_TITLE,
+  LockDetail,
   recheckInterval,
   RunsRail,
   type RunRailItem,
@@ -52,6 +57,21 @@ import {
   StatusDot,
 } from "./status-chip.tsx";
 import { CLAIM_STRENGTH_LABELS, StrengthBadge, StrengthKey } from "./strength-badge.tsx";
+import { Button } from "./button.tsx";
+import { Card, DashedNote, NestedCard } from "./card.tsx";
+import { ContextHeader } from "./context-header.tsx";
+import { CreditsMeter } from "./credits-meter.tsx";
+import { DensityToggle } from "./density-toggle.tsx";
+import { Field, Input, ToolbarInput } from "./field.tsx";
+import { HeroSearch } from "./hero-search.tsx";
+import { PinButton } from "./pin-button.tsx";
+import { ProductMark } from "./product-mark.tsx";
+import { NavItem, SideNav } from "./side-nav.tsx";
+import { FailedAlert } from "./states.tsx";
+import { KeyValueList } from "./key-value.tsx";
+import { TabBar, TabLink } from "./tab-bar.tsx";
+import { Tag, TagList } from "./tag.tsx";
+import { BackLink, TextLink } from "./text-link.tsx";
 
 afterEach(() => {
   cleanup();
@@ -552,6 +572,17 @@ describe("MetricCard", () => {
     rerender(<MetricCard title="Cost" rows={[]} notBuilt="[WHAT IT NEEDS]" />);
     expect(screen.getByText(/Not built yet\./).textContent).toContain("[WHAT IT NEEDS]");
   });
+
+  it("headings are h3 by default and h2 when titleLevel is 2", () => {
+    const { rerender } = render(<MetricCard title="[TITLE]" rows={[]} />);
+    expect(screen.getByRole("heading", { name: "[TITLE]", level: 3 })).toBeTruthy();
+    rerender(<MetricCard title="[TITLE]" rows={[]} titleLevel={2} />);
+    expect(screen.getByRole("heading", { name: "[TITLE]", level: 2 })).toBeTruthy();
+    rerender(<ArrivingNow title="[TITLE]" rows={[]} />);
+    expect(screen.getByRole("heading", { name: "[TITLE]", level: 3 })).toBeTruthy();
+    rerender(<ArrivingNow title="[TITLE]" rows={[]} titleLevel={2} />);
+    expect(screen.getByRole("heading", { name: "[TITLE]", level: 2 })).toBeTruthy();
+  });
 });
 
 describe("GraphShell", () => {
@@ -598,6 +629,18 @@ describe("GraphShell", () => {
     // Only an all-INFERRED edge is amber; the weak rule sets no colour.
     expect(rule("edge[?weak]")?.["line-color"]).toBeUndefined();
     expect(rule("edge[?inferred]")?.["line-color"]).toBe("[claim-inferred-mark]");
+  });
+
+  it("never draws a label below its token size: smaller than that, Cytoscape hides it", () => {
+    // REGRESSION (U1-c review): a fitted graph scaled its labels under their token size.
+    const sizes: Record<string, string> = { "type-mono-caption-size": "11.5" };
+    const rules = graphStylesheet((name) => sizes[name] ?? "1");
+    const labelled = rules.filter((rule) => rule.style["label"] !== undefined);
+    expect(labelled.map((rule) => rule.selector)).toEqual(["node", "edge"]);
+    for (const rule of labelled) {
+      expect(rule.style["font-size"]).toBe(11.5);
+      expect(rule.style["min-zoomed-font-size"]).toBe(rule.style["font-size"]);
+    }
   });
 });
 
@@ -860,6 +903,45 @@ describe("ReportSurface", () => {
       expect(button.className).not.toContain("hit-area");
     }
   });
+
+  it("names each citation for its source, keeps the underline, and says a number no source matches in words, not as a control", () => {
+    const onOpen = vi.fn();
+    render(
+      <Citations
+        numbers={[1, 9]}
+        onOpen={onOpen}
+        labels={new Map([[1, "[SOURCE LABEL]"]])}
+        missing={(n) => `${String(n)}. [NO SUCH SOURCE]`}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Source 1: [SOURCE LABEL]" });
+    expect(button.className).toContain("underline");
+    expect(button.className).toContain("size-target");
+    fireEvent.click(button);
+    expect(onOpen).toHaveBeenCalledWith(1);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByText("9. [NO SUCH SOURCE]").tagName).toBe("SPAN");
+  });
+
+  it("a section heading is serif-title in ink-primary, at the level asked for; a limitation callout can sit under it", () => {
+    render(
+      <ReportSurface title="[TITLE]">
+        <ReportSectionHeading id="[id]">[SECTION]</ReportSectionHeading>
+        <ReportSectionHeading level={4}>[SUB]</ReportSectionHeading>
+        <CoverageLimitation title="[LIMIT]" level={4}>
+          [WHY]
+        </CoverageLimitation>
+      </ReportSurface>,
+    );
+    const heading = screen.getByRole("heading", { level: 3, name: "[SECTION]" });
+    expect(heading.className).toContain("font-serif");
+    expect(heading.className).toContain("text-serif-title");
+    expect(heading.className).toContain("text-ink-primary");
+    expect(heading.id).toBe("[id]");
+    expect(screen.getByRole("heading", { level: 4, name: "[SUB]" })).toBeTruthy();
+    const limit = screen.getByRole("heading", { level: 4, name: "[LIMIT]" });
+    expect(limit.className).not.toContain("serif");
+  });
 });
 
 describe("U1-b review regressions", () => {
@@ -971,5 +1053,652 @@ describe("U1-b review regressions", () => {
     fireEvent.click(screen.getByRole("button", { name: /\[A\]/ }));
     expect(onSelect).toHaveBeenCalledWith("a");
     expect(screen.getByRole("button", { name: /\[B\]/ }).getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+/*
+ * U1-c: the components the rebuilt screens need (U1-c DECISIONS, "New library
+ * components"), each with its honest states.
+ */
+describe("U1-c: Button sizes", () => {
+  it("lg is the target height; md and sm are drawn smaller with a hit area; no size keeps the earlier look", () => {
+    const { container } = render(
+      <>
+        <Button size="lg">[LG]</Button>
+        <Button size="md" variant="secondary">
+          [MD]
+        </Button>
+        <Button size="sm">[SM]</Button>
+        <Button variant="secondary">[UNSIZED]</Button>
+      </>,
+    );
+    const lg = screen.getByRole("button", { name: "[LG]" }).className;
+    expect(lg).toContain("min-h-target");
+    expect(lg).toContain("px-5");
+    expect(lg).toContain("text-body-strong");
+    const md = screen.getByRole("button", { name: "[MD]" }).className;
+    expect(md).toContain("hit-area");
+    expect(md).toContain("h-control-md");
+    expect(md).toContain("px-3.25");
+    expect(md).toContain("text-small-strong");
+    expect(md).toContain("text-ink-secondary");
+    const sm = screen.getByRole("button", { name: "[SM]" }).className;
+    expect(sm).toContain("hit-area");
+    expect(sm).toContain("h-control-sm");
+    expect(sm).toContain("px-3.75");
+    expect(sm).toContain("hover:bg-accent-hover");
+    // A caller that passes no size is not restyled under it (unrebuilt screens do not shift).
+    const unsized = screen.getByRole("button", { name: "[UNSIZED]" }).className;
+    expect(unsized).toContain("min-h-target");
+    expect(unsized).toContain("px-4");
+    expect(unsized).toContain("text-ink-primary");
+    expectTargets(container);
+  });
+});
+
+describe("U1-c: TextLink and BackLink", () => {
+  it("a standalone link in the link tokens with a hit area; the back link's chevron is not in its name", () => {
+    const { container } = render(
+      <>
+        <TextLink href="/all" size="meta">
+          [ALL]
+        </TextLink>
+        <BackLink href="/cases">Cases</BackLink>
+        <BackLink asChild chevron={false}>
+          <a href="/search">Search</a>
+        </BackLink>
+      </>,
+    );
+    const all = screen.getByRole("link", { name: "[ALL]" });
+    expect(all.className).toContain("hit-area");
+    expect(all.className).toContain("text-link");
+    expect(all.className).toContain("text-meta-strong");
+    const back = screen.getByRole("link", { name: "Cases" });
+    expect(back.getAttribute("href")).toBe("/cases");
+    expect(back.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(back.className).toContain("text-ui-strong");
+    // asChild: the child link takes the look; with no chevron its text is its words alone.
+    const search = screen.getByRole("link", { name: "Search" });
+    expect(search.className).toContain("hit-area");
+    expect(search.querySelector("svg")).toBeNull();
+    expectTargets(container);
+  });
+
+  it("asChild keeps the chevron inside the child link", () => {
+    render(
+      <BackLink asChild>
+        <a href="/cases">Cases</a>
+      </BackLink>,
+    );
+    const link = screen.getByRole("link", { name: "Cases" });
+    expect(link.textContent).toBe("Cases");
+    expect(link.querySelector("svg")).not.toBeNull();
+  });
+});
+
+describe("U1-c: Tag", () => {
+  it("is one string, radius-sm with the control edge: never a pill, never a meaning colour", () => {
+    render(
+      <>
+        <Tag>Detected: domain</Tag>
+        <Tag mono={false}>[SETTING]</Tag>
+        <TagList label="Detects automatically:" tags={["[TYPE A]", "[TYPE B]"]} />
+      </>,
+    );
+    const tag = screen.getByText("Detected: domain");
+    expect(tag.className).toContain("rounded-sm");
+    expect(tag.className).toContain("border-border-control");
+    expect(tag.className).toContain("font-mono");
+    expect(tag.className).not.toMatch(/rounded-pill|claim-|status-|accent/);
+    expect(screen.getByText("[SETTING]").className).toContain("text-meta-strong");
+    const list = screen.getByRole("list", { name: "Detects automatically:" });
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["[TYPE A]", "[TYPE B]"]);
+  });
+});
+
+describe("U1-c: ProductMark, SideNav and NavItem", () => {
+  it("the mark's text is the name it is given; the current item says so in aria-current and weight; the foot is outside the landmark", () => {
+    const { container } = render(
+      <SideNav mark={<ProductMark name="[PRODUCT]" />} foot={<p>[FOOT]</p>}>
+        <NavItem href="/" current icon={<svg />}>
+          Search
+        </NavItem>
+        <NavItem href="/cases" current={false}>
+          Cases
+        </NavItem>
+      </SideNav>,
+    );
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(nav.textContent).toBe("[PRODUCT]SearchCases");
+    expect(within(nav).queryByText("[FOOT]")).toBeNull();
+    expect(screen.getByText("[FOOT]")).toBeTruthy();
+    const current = screen.getByRole("link", { name: "Search" });
+    expect(current.getAttribute("aria-current")).toBe("page");
+    expect(current.className).toContain("text-body-strong");
+    expect(current.className).toContain("bg-accent-soft");
+    const other = screen.getByRole("link", { name: "Cases" });
+    expect(other.hasAttribute("aria-current")).toBe(false);
+    expect(other.className).toContain("text-body");
+    expect(other.className).not.toContain("text-body-strong");
+    expectTargets(container);
+  });
+
+  it("asChild: the router's link takes the look and the icon; the rail size is ui", () => {
+    render(
+      <ul>
+        <NavItem asChild current size="rail" icon={<svg data-testid="icon" />}>
+          <a href="/x">[SECTION]</a>
+        </NavItem>
+      </ul>,
+    );
+    const link = screen.getByRole("link", { name: "[SECTION]" });
+    expect(link.getAttribute("aria-current")).toBe("page");
+    expect(link.className).toContain("text-ui-strong");
+    expect(within(link).getByTestId("icon")).toBeTruthy();
+  });
+});
+
+describe("U1-c: CreditsMeter", () => {
+  it("unmeasured: one em dash whose name says why, the reason in words, no bar, no meter role, no number", () => {
+    const { container } = render(
+      <CreditsMeter
+        used={{ value: null, reason: "[WHY NO CREDITS]" }}
+        limit={{ value: null, reason: "[WHY NO LIMIT]" }}
+      />,
+    );
+    const box = screen.getByRole("region", { name: "Credits this month" });
+    const dashes = within(box).getAllByRole("button");
+    expect(dashes).toHaveLength(1);
+    expect(dashes[0]?.textContent).toBe("—");
+    expect(dashes[0]?.getAttribute("aria-label")).toBe("Not measured. [WHY NO CREDITS]");
+    expect(box.textContent).toContain("Not measured — [WHY NO CREDITS]");
+    expect(box.textContent).not.toMatch(/\d|N\/A|of /);
+    expect(
+      container.querySelector("[role='meter'], meter, progress, [role='progressbar']"),
+    ).toBeNull();
+    expectTargets(container);
+  });
+
+  it("measured: the figure, of the limit, and a native meter; no bar when the limit is unmeasured or zero", () => {
+    const { rerender, container } = render(
+      <CreditsMeter used={{ value: 3 }} limit={{ value: 10 }} />,
+    );
+    const meter = screen.getByRole("meter", { name: "Credits this month" });
+    expect(meter.getAttribute("min")).toBe("0");
+    expect(meter.getAttribute("max")).toBe("10");
+    expect(meter.getAttribute("value")).toBe("3");
+    expect(screen.getByText("of 10")).toBeTruthy();
+
+    rerender(<CreditsMeter used={{ value: 3 }} limit={{ value: null, reason: "[WHY]" }} />);
+    expect(container.querySelector("meter")).toBeNull();
+    expect(screen.getByRole("button", { name: "Not measured. [WHY]" })).toBeTruthy();
+
+    rerender(<CreditsMeter used={{ value: 3 }} limit={{ value: 0 }} />);
+    expect(container.querySelector("meter")).toBeNull();
+  });
+});
+
+describe("U1-c: ContextHeader", () => {
+  it("case and run headers: the way back, the title as the page heading, meta and actions", () => {
+    const { rerender } = render(
+      <ContextHeader
+        kind="case"
+        back={<BackLink href="/cases">Cases</BackLink>}
+        title="[CASE NAME]"
+        actions={<Button size="sm">[ACTION]</Button>}
+        account={<button type="button">Account</button>}
+      />,
+    );
+    const header = screen.getByRole("banner");
+    expect(header.className).toContain("min-h-case-header");
+    expect(screen.getByRole("heading", { level: 1, name: "[CASE NAME]" }).className).toContain(
+      "text-body-strong",
+    );
+    expect(header.textContent).toBe("Cases[CASE NAME][ACTION]Account");
+
+    rerender(
+      <ContextHeader
+        kind="run"
+        back={<BackLink href="/">Search</BackLink>}
+        title="[TARGET]"
+        meta={<Tag>Detected: domain</Tag>}
+      />,
+    );
+    expect(screen.getByRole("banner").className).toContain("min-h-header");
+    expect(screen.getByRole("heading", { level: 1, name: "[TARGET]" }).className).toContain(
+      "font-mono",
+    );
+    expect(screen.getByText("Detected: domain")).toBeTruthy();
+  });
+});
+
+describe("U1-c: TabBar and TabLink", () => {
+  it("links (never role=tab), aria-current only on the current one, which also changes weight and carries the underline", () => {
+    const { container } = render(
+      <TabBar label="Workspace">
+        <TabLink href="/o" current>
+          Overview
+        </TabLink>
+        <TabLink href="/e" current={false}>
+          Entities
+        </TabLink>
+      </TabBar>,
+    );
+    const bar = screen.getByRole("navigation", { name: "Workspace" });
+    expect(within(bar).queryByRole("tab")).toBeNull();
+    const links = within(bar).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual(["Overview", "Entities"]);
+    expect(links[0]?.getAttribute("aria-current")).toBe("page");
+    expect(links[0]?.className).toContain("tab-indicator-current");
+    expect(links[0]?.className).toContain("text-ui-strong");
+    expect(links[1]?.hasAttribute("aria-current")).toBe(false);
+    expect(links[1]?.className).not.toContain("tab-indicator-current");
+    expect(links[1]?.className).toContain("tab-indicator");
+    expectTargets(container);
+  });
+  it("the current tab's underline is not clipped: the bar's content box holds a whole target-sized tab", () => {
+    render(
+      <TabBar label="Workspace">
+        <TabLink href="/o" current>
+          Overview
+        </TabLink>
+      </TabBar>,
+    );
+    const bar = screen.getByRole("navigation", { name: "Workspace" });
+    const link = within(bar).getByRole("link");
+    // REGRESSION (U1-c review): a border-box bar of the tab's own height lost its rule's width to its
+    // rule, the tab overflowed, and the bar's overflow-x scrolling clipped the underline.
+    // Content-box: the rule is drawn outside the tab bar's height, never inside it.
+    expect(bar.className).toContain("box-content");
+    expect(bar.className).not.toContain("box-border");
+    expect(bar.className).toContain("h-tabbar");
+    expect(bar.className).toContain("border-b");
+    // The tab fills the bar's height and carries the underline as its own bottom edge.
+    expect(link.className).toContain("tab-indicator-current");
+    expect(link.className).toContain("h-full");
+    // And that height is the target size, so a whole tab fits inside the content box.
+    const tokens = readFileSync(join(import.meta.dirname, "tokens.css"), "utf8");
+    const value = (name: string) => new RegExp(`--ds-${name}:\\s*([^;]+);`).exec(tokens)?.[1];
+    expect(value("layout-tabbar-height")).toBeDefined();
+    expect(value("layout-tabbar-height")).toBe(value("target-min"));
+  });
+});
+
+describe("U1-c: Card, NestedCard and DashedNote", () => {
+  it("a card is named by its section-label title, with its end slot; a nested card and a dashed note", () => {
+    render(
+      <>
+        <Card
+          title="[RECENT]"
+          end={
+            <TextLink href="/all" size="meta">
+              [ALL]
+            </TextLink>
+          }
+        >
+          <NestedCard>[NESTED]</NestedCard>
+          <NestedCard tone="inferred">[INFERRED ITEM]</NestedCard>
+        </Card>
+        <DashedNote icon={<svg />}>[NOTE]</DashedNote>
+      </>,
+    );
+    const card = screen.getByRole("region", { name: "[RECENT]" });
+    expect(screen.getByRole("heading", { level: 2, name: "[RECENT]" }).className).toContain(
+      "text-section-label",
+    );
+    expect(within(card).getByRole("link", { name: "[ALL]" })).toBeTruthy();
+    expect(screen.getByText("[NESTED]").className).toContain("border-border-subtle");
+    expect(screen.getByText("[INFERRED ITEM]").className).toContain("bg-claim-inferred-tint");
+    const note = screen.getByRole("note");
+    expect(note.textContent).toBe("[NOTE]");
+    expect(note.className).toContain("border-dashed");
+  });
+});
+
+describe("U1-c: DensityToggle", () => {
+  it("two buttons named in words, aria-pressed on the chosen one, no clipping of their hit areas", () => {
+    const onChange = vi.fn();
+    const { container } = render(<DensityToggle value="compact" onChange={onChange} />);
+    const group = screen.getByRole("group", { name: "Row density" });
+    expect(group.className).not.toContain("overflow-hidden");
+    const comfortable = screen.getByRole("button", { name: "Comfortable" });
+    const compact = screen.getByRole("button", { name: "Compact" });
+    expect(comfortable.getAttribute("aria-pressed")).toBe("false");
+    expect(compact.getAttribute("aria-pressed")).toBe("true");
+    expect(compact.className).toContain("text-small-strong");
+    expect(comfortable.className).toContain("text-small");
+    expect(comfortable.className).not.toContain("text-small-strong");
+    fireEvent.click(comfortable);
+    expect(onChange).toHaveBeenCalledWith("comfortable");
+    expectTargets(container);
+  });
+});
+
+describe("U1-c: inputs", () => {
+  it("every variant is labelled, edged in border-input, and the toolbar input sits in a target-tall label", () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <>
+        <Field label="Work email" variant="auth" />
+        <Field label="Code" variant="otp" />
+        <ToolbarInput label="Filter entities" placeholder="[FILTER]" value="" onChange={onChange} />
+      </>,
+    );
+    const email = screen.getByLabelText("Work email");
+    expect(email.className).toContain("h-target");
+    expect(email.className).toContain("bg-surface-field");
+    const code = screen.getByLabelText("Code");
+    expect(code.className).toContain("h-otp");
+    expect(code.className).toContain("text-mono-otp");
+    expect(code.getAttribute("autocomplete")).toBe("one-time-code");
+    const filter = screen.getByLabelText("Filter entities");
+    expect(filter.className).toContain("h-control-sm");
+    expect(filter.closest("label")?.className).toContain("min-h-target");
+    fireEvent.change(filter, { target: { value: "[X]" } });
+    expect(onChange).toHaveBeenCalledWith("[X]");
+    for (const input of container.querySelectorAll("input")) {
+      expect(input.className).toContain("border-border-input");
+    }
+    // The auth label is small-strong in ink-secondary (§9).
+    expect(screen.getByText("Work email").className).toContain("text-small-strong");
+    expectTargets(container);
+  });
+
+  it("REGRESSION: a Field's className styles its input, never its label", () => {
+    render(<Field label="[LABEL]" className="font-mono" />);
+    expect(screen.getByLabelText("[LABEL]").className).toContain("font-mono");
+    expect(screen.getByText("[LABEL]").className).not.toContain("font-mono");
+    expect(screen.getByText("[LABEL]").parentElement?.className).not.toContain("font-mono");
+  });
+
+  it("the default input is unchanged for screens not yet rebuilt", () => {
+    render(<Input aria-label="[DEFAULT]" />);
+    const input = screen.getByRole("textbox", { name: "[DEFAULT]" });
+    expect(input.className).toContain("min-h-target");
+    expect(input.className).toContain("bg-surface-sunken");
+  });
+});
+
+describe("U1-c: HeroSearch", () => {
+  it("a search landmark with a labelled input edged in border-input; submit is a real button that waits for a value", () => {
+    const onSubmit = vi.fn();
+    function Harness() {
+      const [value, setValue] = useState("");
+      return (
+        <HeroSearch
+          label="Target to investigate"
+          placeholder="[PLACEHOLDER]"
+          value={value}
+          onValueChange={setValue}
+          onSubmit={onSubmit}
+          submitLabel="Investigate"
+          submitDisabled={value === ""}
+        />
+      );
+    }
+    const { container } = render(<Harness />);
+    const form = screen.getByRole("search");
+    expect(form.className).toContain("border-border-input");
+    expect(form.className).not.toContain("border-border-strong");
+    const submit = screen.getByRole("button", { name: "Investigate" });
+    expect(submit.hasAttribute("disabled")).toBe(true);
+    fireEvent.change(screen.getByLabelText("Target to investigate"), {
+      target: { value: "[TARGET]" },
+    });
+    expect(submit.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(submit);
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expectTargets(container);
+  });
+
+  it("while submitting the button is busy and disabled, with the caller's words", () => {
+    render(
+      <HeroSearch
+        label="[LABEL]"
+        placeholder=""
+        value="[V]"
+        onValueChange={vi.fn()}
+        onSubmit={vi.fn()}
+        submitLabel="[STARTING]"
+        submitting
+      />,
+    );
+    const submit = screen.getByRole("button", { name: "[STARTING]" });
+    expect(submit.getAttribute("aria-busy")).toBe("true");
+    expect(submit.hasAttribute("disabled")).toBe(true);
+  });
+});
+
+describe("U1-c: extensions to U1-b components", () => {
+  it("FailedAlert writes the code as Code: X, and invents none when there is none", () => {
+    const { rerender } = render(
+      <FailedAlert
+        title="[TITLE]"
+        reason="[REASON]"
+        code="[CODE]"
+        action={<Button size="sm">Try again</Button>}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toBe("[TITLE][REASON]Code: [CODE]Try again");
+    rerender(<FailedAlert title="[TITLE]" code={null} />);
+    expect(screen.getByRole("alert").textContent).toBe("[TITLE]");
+  });
+
+  it("PinButton: an unknown pinned state asserts nothing; it spreads props, so it can be a trigger", () => {
+    const onClick = vi.fn();
+    render(
+      <>
+        <PinButton pinned={null} label="[UNKNOWN]" onClick={onClick} aria-expanded={false} />
+        <PinButton pinned label="[PINNED]" />
+      </>,
+    );
+    const unknown = screen.getByRole("button", { name: "[UNKNOWN]" });
+    expect(unknown.hasAttribute("aria-pressed")).toBe(false);
+    expect(unknown.getAttribute("aria-expanded")).toBe("false");
+    expect(unknown.textContent).toBe("+");
+    fireEvent.click(unknown);
+    expect(onClick).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "[PINNED]" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  });
+
+  it("DataTable: a pin column header named by the caller, a pin rendered per row, the active row marked beyond its tint", () => {
+    const { container } = render(
+      <DataTable
+        caption="[TABLE]"
+        columns={[
+          { id: "source", header: "Source" },
+          { id: "time", header: "Time", kind: "mono" },
+        ]}
+        rows={[
+          { id: "a", cells: { source: "[A]", time: "[T A]" } },
+          { id: "b", cells: { source: "[B]", time: "[T B]" } },
+        ]}
+        empty={{ kind: "empty", title: "[T]", body: "[B]" }}
+        activeRowId="b"
+        pins={{
+          header: "[PIN HEADER]",
+          render: (row) => <PinButton pinned={null} label={`[PIN ${row.id}]`} />,
+        }}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "[PIN HEADER]" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "[PIN a]" })).toBeTruthy();
+    const rows = within(screen.getByRole("table")).getAllByRole("row");
+    expect(rows[1]?.hasAttribute("aria-current")).toBe(false);
+    expect(rows[2]?.getAttribute("aria-current")).toBe("true");
+    expect(screen.getByText("[B]").className).toContain("text-meta-strong");
+    expect(screen.getByText("[A]").className).not.toContain("text-meta-strong");
+    expectTargets(container);
+  });
+
+  it("InspectorDrawer: the caller's pin control in place of the toggle; the footer pair at control-md", () => {
+    const { container } = render(
+      <InspectorDrawer
+        subject={{ kind: "claim", text: "[CLAIM]", strength: "OBSERVED", provenance: PROVENANCE }}
+        onClose={vi.fn()}
+        pin={{ slot: <PinButton pinned={null} label="[PIN THE CLAIM]" /> }}
+        actions={{
+          secondary: { label: "[SECONDARY]", onClick: vi.fn() },
+          primary: { label: "[PRIMARY]", onClick: vi.fn() },
+        }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "[PIN THE CLAIM]" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Pin to case" })).toBeNull();
+    for (const name of ["[SECONDARY]", "[PRIMARY]"]) {
+      expect(screen.getByRole("button", { name }).className).toContain("h-control-md");
+    }
+    expectTargets(container);
+  });
+
+  it("MetricCard: rows that share a label stay apart by id", () => {
+    render(
+      <MetricCard
+        title="[CARD]"
+        rows={[
+          { id: "one", label: "[SAME]", value: { kind: "value", value: "[ONE]" } },
+          { id: "two", label: "[SAME]", value: { kind: "value", value: "[TWO]" } },
+        ]}
+      />,
+    );
+    expect(screen.getByText("[ONE]")).toBeTruthy();
+    expect(screen.getByText("[TWO]")).toBeTruthy();
+  });
+
+  it("GraphShell: the toolbar is a group (it has no roving focus to be a toolbar)", () => {
+    render(
+      <GraphShell
+        label="Graph"
+        classes={[]}
+        state={{ kind: "ready", renderer: <div /> }}
+        toolbar={<button type="button">[HOPS]</button>}
+        list={<ul />}
+      />,
+    );
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    expect(screen.getByRole("group", { name: "Graph controls" })).toBeTruthy();
+  });
+});
+
+describe("U1-c: LockDetail", () => {
+  it("the check time can be the caller's own element (a <time> with its instant)", () => {
+    render(
+      <LockDetail
+        lock={{
+          reason: "PERMISSION_LOST",
+          code: "[CODE]",
+          detail: "[DETAIL]",
+          locked: null,
+          recheckIntervalMs: 5_000,
+          checkedAt: <time dateTime="[ISO]">[LOCAL TIME]</time>,
+        }}
+      />,
+    );
+    expect(screen.getByText("[LOCAL TIME]").tagName).toBe("TIME");
+  });
+});
+
+describe("U1-c review: wrapping, the unmeasured credit figure, the palette", () => {
+  it("KeyValueList breaks a mono value anywhere, but prose only between words", () => {
+    render(
+      <KeyValueList
+        rows={[
+          { key: "[MONO KEY]", value: "[MONO VALUE]" },
+          { key: "[PROSE KEY]", value: "[PROSE VALUE]", mono: false },
+        ]}
+      />,
+    );
+    const mono = screen.getByText("[MONO VALUE]");
+    expect(mono.className).toContain("break-all");
+    expect(mono.className).toContain("font-mono");
+    const prose = screen.getByText("[PROSE VALUE]");
+    expect(prose.className).toContain("break-words");
+    expect(prose.className).not.toContain("break-all");
+    expect(prose.className).not.toContain("font-mono");
+  });
+
+  it("CreditsMeter draws the unmeasured em dash at the figure's size, in sans", () => {
+    render(
+      <CreditsMeter
+        used={{ value: null, reason: "[WHY NO CREDITS]" }}
+        limit={{ value: null, reason: "[WHY NO LIMIT]" }}
+      />,
+    );
+    const dash = screen.getByRole("button", { name: "Not measured. [WHY NO CREDITS]" });
+    expect(dash.className).toContain("text-metric");
+    expect(dash.className).not.toContain("text-ui");
+    expect(dash.className).toContain("font-sans");
+  });
+
+  it("the account menu wraps a long email between words, never mid-word", () => {
+    render(
+      <AccountMenu
+        initials="[AB]"
+        name="[NAME]"
+        email="[EMAIL]"
+        organisation={null}
+        theme="light"
+        onThemeChange={vi.fn()}
+        onSignOut={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Account" }));
+    const email = screen.getByText("[EMAIL]");
+    expect(email.className).toContain("break-words");
+    expect(email.className).not.toContain("break-all");
+  });
+
+  it("a palette hint may hold markup; the filter matches its words through hintText", () => {
+    render(
+      <CommandPalettePanel
+        groups={[
+          {
+            label: "[GROUP]",
+            items: [
+              {
+                id: "a",
+                label: "[LABEL A]",
+                hint: (
+                  <>
+                    [WORDS A] <time dateTime="2026-01-01T00:00:00.000Z">[TIME]</time>
+                  </>
+                ),
+                hintText: "[WORDS A]",
+              },
+              { id: "b", label: "[LABEL B]", hint: "[WORDS B]" },
+            ],
+          },
+        ]}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("[TIME]").tagName).toBe("TIME");
+    const input = screen.getByRole("combobox");
+    // The input has its own inner padding, so the focus ring does not sit on the text.
+    expect(input.className).toContain("px-2");
+    fireEvent.change(input, { target: { value: "words a" } });
+    expect(screen.getAllByRole("option").map((option) => option.firstChild?.textContent)).toEqual([
+      "[LABEL A]",
+    ]);
+    fireEvent.change(input, { target: { value: "words b" } });
+    expect(screen.getAllByRole("option").map((option) => option.firstChild?.textContent)).toEqual([
+      "[LABEL B]",
+    ]);
+  });
+
+  it("the open palette sits over a neutral scrim from the surface tokens", () => {
+    render(<CommandPalette open onOpenChange={vi.fn()} groups={[]} onSelect={vi.fn()} />);
+    expect(screen.getByRole("dialog", { name: "Command palette" })).toBeTruthy();
+    const scrim = [...document.querySelectorAll("div")].find((node) =>
+      node.classList.contains("bg-surface-page/70"),
+    );
+    expect(scrim).not.toBeNull();
+    expect(scrim?.className).toContain("fixed");
   });
 });

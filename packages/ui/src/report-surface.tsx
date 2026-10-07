@@ -36,6 +36,28 @@ export function ReportSurface({
   );
 }
 
+/**
+ * A section heading inside the report document (§9: `serif-title` is the
+ * report document section title), in `ink-primary`. An h3 under the card's
+ * own h2 title by default; `id` lets the section be labelled by it.
+ */
+export function ReportSectionHeading({
+  children,
+  id,
+  level = 3,
+}: {
+  readonly children: ReactNode;
+  readonly id?: string | undefined;
+  readonly level?: 3 | 4 | undefined;
+}) {
+  const Heading = level === 3 ? "h3" : "h4";
+  return (
+    <Heading id={id} className="font-serif text-serif-title text-ink-primary">
+      {children}
+    </Heading>
+  );
+}
+
 /** A paragraph of report prose: `serif-body` in `ink-body`. */
 export function ReportProse({ children }: { readonly children: ReactNode }) {
   return <p className="font-serif text-serif-body text-ink-body">{children}</p>;
@@ -78,13 +100,24 @@ export function CitationMarker({ n }: { readonly n: number }) {
 /**
  * The paragraph's citations as standalone controls, each a `target-min` button that
  * opens the cited evidence; placed after the paragraph, never inside it (D8).
+ *
+ * With `labels`, each button is named for its source ("Source 2: [label]").
+ * A number `labels` does not hold cites no known source: with `missing`, it
+ * is that wording, as text in the failed ink, never a control that opens
+ * nothing; without `missing`, it stays a control with the generic name.
  */
 export function Citations({
   numbers,
   onOpen,
+  labels,
+  missing,
 }: {
   readonly numbers: readonly number[];
   readonly onOpen: (n: number) => void;
+  /** Each cited number's source, in words, for the button's accessible name. */
+  readonly labels?: ReadonlyMap<number, string> | undefined;
+  /** The wording for a number no source matches. */
+  readonly missing?: ((n: number) => string) | undefined;
 }) {
   return (
     <div
@@ -93,19 +126,33 @@ export function Citations({
       className="flex flex-wrap items-center gap-x-0 font-sans"
     >
       <span className="mr-1 text-caption text-ink-muted">Sources</span>
-      {numbers.map((n) => (
-        <button
-          key={n}
-          type="button"
-          aria-label={`Citation ${String(n)}: open the cited evidence`}
-          onClick={() => {
-            onOpen(n);
-          }}
-          className="inline-flex size-target cursor-pointer items-center justify-center rounded-sm font-mono text-mono-caption text-link underline hover:bg-surface-hover hover:text-link-hover"
-        >
-          [{n}]
-        </button>
-      ))}
+      {numbers.map((n) => {
+        const label = labels?.get(n);
+        if (labels !== undefined && label === undefined && missing !== undefined) {
+          return (
+            <span key={n} className="mx-1 text-caption text-status-failed-ink">
+              {missing(n)}
+            </span>
+          );
+        }
+        return (
+          <button
+            key={n}
+            type="button"
+            aria-label={
+              label === undefined
+                ? `Citation ${String(n)}: open the cited evidence`
+                : `Source ${String(n)}: ${label}`
+            }
+            onClick={() => {
+              onOpen(n);
+            }}
+            className="inline-flex size-target cursor-pointer items-center justify-center rounded-sm font-mono text-mono-caption text-link underline hover:bg-surface-hover hover:text-link-hover"
+          >
+            [{n}]
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -117,13 +164,17 @@ export function Citations({
 export function CoverageLimitation({
   title,
   children,
+  level = 3,
 }: {
   readonly title: string;
   readonly children: ReactNode;
+  /** h3 by default; h4 when the callout sits under a report section heading. */
+  readonly level?: 3 | 4 | undefined;
 }) {
+  const Heading = level === 3 ? "h3" : "h4";
   return (
     <aside className="flex flex-col gap-1.25 rounded-inner border border-status-failed-border bg-status-failed-tint px-3.5 py-3 font-sans">
-      <h3 className="text-small-strong text-status-failed-ink">{title}</h3>
+      <Heading className="text-small-strong text-status-failed-ink">{title}</Heading>
       <div className="text-prose-small text-ink-secondary">{children}</div>
     </aside>
   );

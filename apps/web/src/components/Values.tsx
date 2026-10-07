@@ -12,11 +12,14 @@ export function Heading({
   return <h2 className={cn("text-eyebrow uppercase text-ink-muted", className)}>{children}</h2>;
 }
 
-/** An instant in the reader's local time, in mono, with the exact value for machines. */
+/**
+ * An instant in the reader's local time with its zone written out, in mono,
+ * with the exact value for machines. The same form on every screen.
+ */
 export function Instant({ iso, className }: { readonly iso: string; readonly className?: string }) {
   return (
     <time dateTime={iso} className={cn("font-mono text-mono-caption", className)}>
-      {new Date(iso).toLocaleString()}
+      {new Date(iso).toLocaleString(undefined, { timeZoneName: "short" })}
     </time>
   );
 }

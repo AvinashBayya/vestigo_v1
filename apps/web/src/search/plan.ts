@@ -1,5 +1,6 @@
 import type { CollectorStatus } from "@repo/ui";
 import type { paths } from "../client/index.ts";
+import { runsHere, type CollectorList } from "../collectors.ts";
 
 /** What POST /api/v1/estimates answers: the plan a run would follow. */
 export type Estimate =
@@ -66,4 +67,17 @@ export function unmeasuredReason(cost: Cost): string {
 /** A measured credit count in words. */
 export function creditsText(credits: number): string {
   return credits === 1 ? "1 credit" : `${String(credits)} credits`;
+}
+
+/**
+ * The kinds of target some source that runs here takes, in TYPE_LABEL order.
+ * FILE is never offered: nothing can upload a file to investigate yet.
+ */
+export function acceptedTypes(list: CollectorList): TargetType[] {
+  const taken = new Set<string>(
+    list.items.filter((item) => runsHere(item, list)).flatMap((item) => item.targetTypes),
+  );
+  return (Object.keys(TYPE_LABEL) as TargetType[]).filter(
+    (type) => type !== "FILE" && taken.has(type),
+  );
 }

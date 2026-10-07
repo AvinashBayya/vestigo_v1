@@ -80,6 +80,8 @@ export function AccountMenu({
   onThemeChange,
   onSwitchOrganisation,
   onSignOut,
+  signingOut = false,
+  footer,
 }: {
   readonly initials: string;
   readonly name: string;
@@ -90,6 +92,10 @@ export function AccountMenu({
   readonly onThemeChange: (theme: ThemeChoice) => void;
   readonly onSwitchOrganisation?: (() => void) | undefined;
   readonly onSignOut: () => void;
+  /** While the sign-out is in flight: the row says so and does nothing more. */
+  readonly signingOut?: boolean | undefined;
+  /** Below Sign out: the service's health, or why the sign-out failed. */
+  readonly footer?: ReactNode;
 }) {
   return (
     <Popover>
@@ -110,7 +116,7 @@ export function AccountMenu({
       <PopoverContent aria-label="Account" className="gap-1">
         <div className="flex flex-col gap-0.5 px-2.5 pb-2">
           <p className="text-body-strong text-ink-primary">{name}</p>
-          <p className="text-caption break-all text-ink-muted">{email}</p>
+          <p className="text-caption break-words text-ink-muted">{email}</p>
           {organisation !== null && (
             <p className="text-caption text-ink-secondary">{organisation}</p>
           )}
@@ -141,10 +147,17 @@ export function AccountMenu({
         <button
           type="button"
           onClick={onSignOut}
-          className={cn(MENU_ROW, "border-t border-border-subtle")}
+          disabled={signingOut}
+          aria-busy={signingOut}
+          className={cn(MENU_ROW, "border-t border-border-subtle disabled:cursor-wait")}
         >
-          Sign out
+          {signingOut ? "Signing out…" : "Sign out"}
         </button>
+        {footer !== undefined && (
+          <div className="flex flex-col gap-2 border-t border-border-subtle px-2.5 pt-2.5 text-caption text-ink-muted">
+            {footer}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

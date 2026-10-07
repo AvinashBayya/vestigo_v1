@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { cn } from "./cn.ts";
 
@@ -14,7 +15,12 @@ export interface PaletteItem {
   readonly id: string;
   readonly label: string;
   /** A second line: where it goes, or what kind of thing it is. */
-  readonly hint?: string | undefined;
+  readonly hint?: ReactNode;
+  /**
+   * The hint's words for the filter, when the hint is not plain text (it
+   * holds a formatted time, say). A string hint is matched as it is.
+   */
+  readonly hintText?: string | undefined;
 }
 
 export interface PaletteGroup {
@@ -72,6 +78,11 @@ export function CommandPaletteButton({
   );
 }
 
+function hintTextOf(item: PaletteItem): string {
+  if (item.hintText !== undefined) return item.hintText;
+  return typeof item.hint === "string" ? item.hint : "";
+}
+
 function filtered(groups: readonly PaletteGroup[], query: string): PaletteGroup[] {
   const needle = query.trim().toLowerCase();
   return groups
@@ -83,7 +94,7 @@ function filtered(groups: readonly PaletteGroup[], query: string): PaletteGroup[
           : group.items.filter(
               (item) =>
                 item.label.toLowerCase().includes(needle) ||
-                (item.hint ?? "").toLowerCase().includes(needle),
+                hintTextOf(item).toLowerCase().includes(needle),
             ),
     }))
     .filter((group) => group.items.length > 0);
@@ -100,6 +111,11 @@ export function CommandPalettePanel({
   initialQuery = "",
   loading,
   autoFocus = false,
+  placeholder = "Go to a case or a page",
+  label = "Search pages and cases",
+  emptyText = "Nothing to open yet.",
+  noMatchText = (query: string) => `Nothing matches “${query}”. Try a case name or a page.`,
+  notice,
   className,
 }: {
   readonly groups: readonly PaletteGroup[];
@@ -108,6 +124,13 @@ export function CommandPalettePanel({
   /** While results are read: what is being read (§8). */
   readonly loading?: string | undefined;
   readonly autoFocus?: boolean | undefined;
+  /** The copy, so a host never promises what it cannot list. */
+  readonly placeholder?: string | undefined;
+  readonly label?: string | undefined;
+  readonly emptyText?: string | undefined;
+  readonly noMatchText?: ((query: string) => string) | undefined;
+  /** Said above the results: a read that failed, or a list cut at its limit. */
+  readonly notice?: ReactNode;
   readonly className?: string | undefined;
 }) {
   const [query, setQuery] = useState(initialQuery);
@@ -163,13 +186,13 @@ export function CommandPalettePanel({
   } else if (groups.every((group) => group.items.length === 0)) {
     body = (
       <p role="status" className="px-4 py-3.5 text-meta text-ink-muted">
-        Nothing to open yet. Run a search, and its runs and cases appear here.
+        {emptyText}
       </p>
     );
   } else if (flat.length === 0) {
     body = (
       <p role="status" className="px-4 py-3.5 text-meta text-ink-muted">
-        Nothing matches “{query.trim()}”. Try a target, a case name or a page.
+        {noMatchText(query.trim())}
       </p>
     );
   } else {
@@ -241,8 +264,8 @@ export function CommandPalettePanel({
         className,
       )}
     >
-      <label className="flex shrink-0 items-center border-b border-border-subtle px-4 py-1">
-        <span className="sr-only">Search commands, runs and cases</span>
+      <label className="flex shrink-0 items-center border-b border-border-subtle px-2 py-1">
+        <span className="sr-only">{label}</span>
         <input
           ref={input}
           role="combobox"
@@ -251,15 +274,21 @@ export function CommandPalettePanel({
           aria-autocomplete="list"
           aria-activedescendant={current === undefined ? undefined : optionId(at)}
           value={query}
-          placeholder="Go to a run, a case or a page"
+          placeholder={placeholder}
           onChange={(event) => {
             setQuery(event.target.value);
             setActive(0);
           }}
           onKeyDown={onKeyDown}
-          className="h-target w-full bg-transparent text-body text-ink-primary placeholder:text-ink-muted"
+          // Inner padding, so the focus ring sits clear of the text.
+          className="h-target w-full rounded-md bg-transparent px-2 text-body text-ink-primary placeholder:text-ink-muted"
         />
       </label>
+      {notice !== undefined && (
+        <div className="shrink-0 border-b border-border-subtle px-4 py-2.5 text-meta text-ink-secondary">
+          {notice}
+        </div>
+      )}
       {body}
       <p className="shrink-0 border-t border-border-subtle px-4 py-2 text-caption text-ink-muted">
         ↑ ↓ to move · Enter to open · Esc to close
@@ -281,12 +310,18 @@ export function CommandPalette({
   groups,
   onSelect,
   loading,
+  ...copy
 }: {
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly groups: readonly PaletteGroup[];
   readonly onSelect: (id: string) => void;
   readonly loading?: string | undefined;
+  readonly placeholder?: string | undefined;
+  readonly label?: string | undefined;
+  readonly emptyText?: string | undefined;
+  readonly noMatchText?: ((query: string) => string) | undefined;
+  readonly notice?: ReactNode;
 }) {
   // Radix returns focus to a Dialog.Trigger; this palette has none (it opens
   // from a button or a shortcut), so remember what had focus and return there.
@@ -299,6 +334,8 @@ export function CommandPalette({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
+        {/* A neutral scrim: the page behind recedes, so the palette reads as the layer in front. */}
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-surface-page/70" />
         <Dialog.Content
           aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
@@ -314,6 +351,7 @@ export function CommandPalette({
             className="pointer-events-auto"
             groups={groups}
             loading={loading}
+            {...copy}
             autoFocus
             onSelect={(id) => {
               onOpenChange(false);

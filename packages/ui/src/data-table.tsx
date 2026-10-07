@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "./cn.ts";
+import { ToolbarInput } from "./field.tsx";
 import { PinButton } from "./pin-button.tsx";
 import { Skeleton } from "./panel.tsx";
 import { EmptyState, NotBuilt } from "./states.tsx";
@@ -40,9 +41,26 @@ const CELL_TEXT: Readonly<Record<NonNullable<DataTableColumn["kind"]>, string>> 
 
 const DENSITY = {
   /** The default in the Evidence grid. Never below `target-min`: rows hold targets (§5). */
-  compact: { row: "h-row-compact", cell: "px-2.5 text-meta" },
-  comfortable: { row: "h-row-comfortable", cell: "px-3 text-small" },
+  compact: { row: "h-row-compact", cell: "px-2.5 text-meta", strong: "text-meta-strong" },
+  comfortable: { row: "h-row-comfortable", cell: "px-3 text-small", strong: "text-small-strong" },
 } as const;
+
+/**
+ * The per-row pin (§9: on every result surface). Either the library toggle,
+ * when the pinned state is known, or the caller's own trigger (a case-picker
+ * popover, say) rendered per row. `header` is the column's name for assistive
+ * technology.
+ */
+export type DataTablePins =
+  | {
+      readonly pinned: ReadonlySet<string>;
+      readonly onToggle: (id: string) => void;
+      readonly header?: string | undefined;
+    }
+  | {
+      readonly render: (row: DataTableRow, index: number) => ReactNode;
+      readonly header?: string | undefined;
+    };
 
 function Chevron({ direction }: { readonly direction: SortDirection | null }) {
   return (
@@ -83,6 +101,7 @@ export function DataTable({
   onSortChange,
   selection,
   pins,
+  activeRowId,
   toolbar,
   footer,
   className,
@@ -104,8 +123,12 @@ export function DataTable({
         readonly onToggleAll: () => void;
       }
     | undefined;
-  readonly pins?:
-    { readonly pinned: ReadonlySet<string>; readonly onToggle: (id: string) => void } | undefined;
+  readonly pins?: DataTablePins | undefined;
+  /**
+   * The row open elsewhere (its provenance in the drawer): `aria-current` and
+   * a weight change as well as the tint, never the tint alone (§7).
+   */
+  readonly activeRowId?: string | undefined;
   readonly toolbar?: ReactNode;
   readonly footer?: { readonly start: ReactNode; readonly end?: ReactNode } | undefined;
   readonly className?: string | undefined;
@@ -201,7 +224,7 @@ export function DataTable({
               })}
               {pins !== undefined && (
                 <th scope="col" className="w-target border-b border-border-subtle px-2.5 py-2">
-                  <span className="sr-only">Pin</span>
+                  <span className="sr-only">{pins.header === undefined ? "Pin" : pins.header}</span>
                 </th>
               )}
             </tr>
@@ -209,14 +232,16 @@ export function DataTable({
           <tbody>
             {rows.map((row, index) => {
               const selected = selection?.selected.has(row.id) === true;
+              const active = activeRowId === row.id;
               return (
                 <tr
                   key={row.id}
                   aria-selected={selection === undefined ? undefined : selected}
+                  aria-current={active ? "true" : undefined}
                   className={cn(
                     sizes.row,
                     "border-b border-border-subtle last:border-b-0",
-                    selected && "bg-surface-hover",
+                    (selected || active) && "bg-surface-hover",
                   )}
                 >
                   {selection !== undefined && (
@@ -240,6 +265,7 @@ export function DataTable({
                       className={cn(
                         sizes.cell,
                         CELL_TEXT[column.kind ?? "text"],
+                        active && !(column.kind ?? "text").startsWith("mono") && sizes.strong,
                         column.align === "end" && "text-right",
                       )}
                     >
@@ -248,13 +274,17 @@ export function DataTable({
                   ))}
                   {pins !== undefined && (
                     <td className="px-2.5">
-                      <PinButton
-                        pinned={pins.pinned.has(row.id)}
-                        onToggle={() => {
-                          pins.onToggle(row.id);
-                        }}
-                        label={`Pin row ${String(index + 1)} to case`}
-                      />
+                      {"render" in pins ? (
+                        pins.render(row, index)
+                      ) : (
+                        <PinButton
+                          pinned={pins.pinned.has(row.id)}
+                          onToggle={() => {
+                            pins.onToggle(row.id);
+                          }}
+                          label={`Pin row ${String(index + 1)} to case`}
+                        />
+                      )}
                     </td>
                   )}
                 </tr>
@@ -292,8 +322,7 @@ export function DataTable({
 
 /**
  * The grid's search input (§9: `control-sm`, `surface-sunken`, a visually
- * hidden label). Drawn at `control-sm`, inside a label `target-min` tall, so a
- * click anywhere in that height focuses it and nothing covers the text.
+ * hidden label): a ToolbarInput, inside a label `target-min` tall.
  */
 export function TableSearch({
   label,
@@ -306,18 +335,5 @@ export function TableSearch({
   readonly value: string;
   readonly onChange: (value: string) => void;
 }) {
-  return (
-    <label className="flex min-h-target min-w-0 grow items-center">
-      <span className="sr-only">{label}</span>
-      <input
-        type="search"
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        className="h-control-sm w-full min-w-0 rounded-md border border-border-input bg-surface-sunken px-2.75 text-meta text-ink-primary placeholder:text-ink-muted"
-      />
-    </label>
-  );
+  return <ToolbarInput label={label} placeholder={placeholder} value={value} onChange={onChange} />;
 }

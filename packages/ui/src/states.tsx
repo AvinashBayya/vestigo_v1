@@ -81,19 +81,25 @@ export function LoadingState({
 
 /**
  * §8 Failed: the reason, the code, and what the person can do, on the failure
- * tint. A failure is a status, so it may carry the failure colours.
+ * tint. A failure is a status, so it may carry the failure colours. The code
+ * is written "Code: X" where the API gave one; an unexpected failure has
+ * none, and no code is ever made up for it.
  */
 export function FailedAlert({
   title,
   reason,
   code,
+  children,
   action,
   className,
 }: {
-  readonly title: string;
-  readonly reason: string;
-  /** The machine-readable code, as the API sent it. */
-  readonly code: string;
+  readonly title: ReactNode;
+  /** Why it failed, in plain words. Absent when the title already says it. */
+  readonly reason?: ReactNode;
+  /** The machine-readable code, as the API sent it; null or absent when there is none. */
+  readonly code?: string | null | undefined;
+  /** More of what the person can do, between the reason and the code. */
+  readonly children?: ReactNode;
   readonly action?: ReactNode;
   readonly className?: string | undefined;
 }) {
@@ -109,11 +115,16 @@ export function FailedAlert({
         aria-hidden="true"
         className="mt-1.25 size-dot-sm shrink-0 rounded-pill bg-status-failed-mark"
       />
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-1">
         <p className="text-ui-strong text-status-failed-ink">{title}</p>
-        <p className="text-prose-small text-ink-secondary">{reason}</p>
-        <p className="font-mono text-mono-caption text-ink-muted">{code}</p>
-        {action}
+        {reason !== undefined && reason !== null && (
+          <p className="text-prose-small text-ink-secondary">{reason}</p>
+        )}
+        {children}
+        {code !== undefined && code !== null && (
+          <p className="font-mono text-mono-caption text-ink-muted">Code: {code}</p>
+        )}
+        {action !== undefined && action !== null && <div className="mt-1.25 flex">{action}</div>}
       </div>
     </div>
   );

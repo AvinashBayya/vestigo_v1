@@ -406,7 +406,7 @@ Exact values from the mockups; tokens from §2–§5. Each names the mockup it m
 
 **Buttons.** *Primary*: `accent`, `on-accent`, hover `accent-hover`, `radius-md`, weight 600. *Secondary*: `surface-raised`, 1px `border-strong`, `ink-secondary`, weight 600. Visual heights: 44 (auth and dashboard, `body-strong`, padding 0 `space-5`), `control-md` 36 and `control-sm` 32 (`small-strong`, padding 0 `space-3.25` secondary, `space-3.75` primary) — every one with a 44px hit area.
 
-**Inputs.** Every text input's edge is 1px `border-input` (3:1, §12 R2), whatever the mockup draws. Auth: 44px, padding 0 `space-3.25`, `radius-md`, `surface-field`, `body`. One-time code: `otp-height`, `surface-sunken`, `mono-otp`. Workspace search and filters: `control-sm`, `surface-sunken`, `meta`. Hero search shell: `layout-search-width`, `surface-field`, 1px `border-strong`, `radius-xl`, padding `space-3.5` `space-4`, `shadow-card`, a borderless input and 44px buttons (`radius-inner`; the attach button `surface-control` with `border-control`). Labels `small-strong` `ink-secondary`, gap `space-1.75`.
+**Inputs.** Every text input's edge is 1px `border-input` (3:1, §12 R2), whatever the mockup draws. Auth: 44px, padding 0 `space-3.25`, `radius-md`, `surface-field`, `body`. One-time code: `otp-height`, `surface-sunken`, `mono-otp`. Workspace search and filters: `control-sm`, `surface-sunken`, `meta`. Hero search shell: `layout-search-width`, `surface-field`, 1px `border-input` (R2; the mockup's `border-strong` is 1.43:1), `radius-xl`, padding `space-3.5` `space-4`, `shadow-card`, a borderless input and 44px buttons (`radius-inner`; the attach button `surface-control` with `border-control`). Labels `small-strong` `ink-secondary`, gap `space-1.75`.
 
 **Report document card** (Report). The run's report as stored, on a card with the text column `layout-document-width`: `serif-title`, `serif-body` in `ink-body`, citation markers as superscript numbers in the prose, opened from a row of standalone 44px citation buttons after the paragraph (D8); INFERRED sentences with a 3px `claim-inferred-mark` rule on `claim-inferred-tint`; coverage limitations in a failed-tint callout. A section rail `layout-report-nav-width` and a citation rail `layout-side-rail-width`.
 
@@ -499,3 +499,28 @@ The mockups are binding; these are the only places they are not followed, each b
 - **R8. Deferred.** The IBM Plex Serif face is not loaded (it would be a new dependency, `@fontsource/ibm-plex-serif`); the report card falls back to Georgia until it is.
 - **R9. Deferred** to GEOINT. MapLibre GL is not installed (a new runtime dependency); MapShell takes the map as a slot and draws nothing in its place.
 - **R10. Graph edges** are drawn at `focus-ring-width` (2px) with arrowheads, where the mockup draws 1.4px lines with none: direction is information the relationship carries.
+
+**U1-c, the screens rebuilt from the component library (2026-10-07).** Where a screen yields to a rule or to the data, built as follows; each is listed in the U1-c checkpoint.
+
+| Mockup draws | Rule or fact | Built as |
+|---|---|---|
+| The hero search shell's edge in `border-strong` (1.43:1) | Non-text 3:1 (R2): the shell is the borderless input's only edge | `border-input` |
+| No organisation name in the app header | Tenant isolation: the analyst must see which tenant they are in | The organisation's name before the vetting pill |
+| Run view and workspace with no account menu | The theme toggle, organisation and sign-out stay reachable everywhere | The account button at the context header's end |
+| Report sections one per card | The stored report is read whole, and its tests read it whole | One continuous document card; the sections rail jumps within it |
+| Report "Unreviewed" pill, "Regenerate section", the citation check figure | No review state or per-section regeneration exists; no citation check is recorded | Hidden actions; the citation check is a Not built card |
+| Monitor alerts, contradictions, the written summary, merge candidates, Media, Map, a case's Report | No endpoint or analysis backs them | Not built cards, never hidden and never a number |
+| Credits "[N] of [PLAN LIMIT]" | No credit metering exists | The em dash with "credit metering is not built", no bar |
+| A run's lock leaving earlier rows on screen | A read resting on person data is refused whole (CLAUDE.md §9); the web app never decides what is person data | Any lock withholds everything the stream had sent |
+| Tab bar with a "Progress" tab (the app's, not drawn) | D6 draws eight tabs | The run's live view is reached from the run header |
+| Mockup sizes with no token (SignIn's 32px tile, 16px wordmark, 40/38px secondary buttons, 7px key radius, 48px OTP, 250px map card) | Tokens only | The nearest token, as R1 |
+| Graph labels at fitted zoom | `ink-muted` never below 11px | The graph pans rather than shrink a label below its token size |
+
+**Raised at U1-c, not built** (the nearest existing component stands in, or the item waits for an endpoint):
+- **Components §9 does not specify, or no mockup draws:** a count chip (StatusChip with words), the §8 Partial, Locked and Stale notices as library components (the app's own stand in), a gaps list, a strength badge with a count, a timeline event row, a report sections nav and citation card, a generic segmented toggle, an inspector frame, a mobile navigation sheet (below `md` the side nav is not drawn).
+- **Endpoints that do not exist:** a tenant-wide runs list (the palette lists pages and cases only); `GET` of the report handling marking (Settings shows an em dash); per-entity evidence (the entity inspector shows no evidence cards); per-run cost, credits, monitors, media and coordinates.
+- **Backed but new state-changing features, not built in U1-c:** entity merges and undo, job replay, member invite, role change and removal, retention and marking edits, API keys, credentials, scope authorisations, usage.
+- **Members and Settings have no mockup:** built provisionally from existing components in the standard page shell, read-only, labelled "Provisional: no screen design yet".
+- **The report's PDF panel** keeps `h-screen` (no page-height token).
+- **Small library gaps found in U1-c:** `HeroSearch` has no `error` prop (the dashboard's empty-submit message is an alert line under it, not tied to the input); `RunRailItem.meta` is text, so the graph rail's run times use the shared text form rather than the `Instant` element.
+- **Account menu:** "Switch organisation" is shown only when there is another organisation to switch to (hidden, not disabled); the service's health line sits in the menu's footer (not drawn).

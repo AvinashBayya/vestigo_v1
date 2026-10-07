@@ -72,7 +72,10 @@ export function GraphLegend({
       <ul className="flex flex-wrap items-center gap-x-3.5 gap-y-2" aria-label="Edges">
         <li className="inline-flex items-center gap-1.75 text-caption text-ink-secondary">
           <span aria-hidden="true" className="w-4 border-t-2 border-claim-hypothesis-mark" />
-          Solid: stated or derived
+          Solid: observed, reported, derived or correlated
+        </li>
+        <li className="text-caption text-ink-secondary">
+          Labelled “no claims”: nothing asserts it
         </li>
         <li className="inline-flex items-center gap-1.75 text-caption text-ink-secondary">
           <span
@@ -122,7 +125,7 @@ export function GraphShell({
       <div className="relative flex min-h-0 grow flex-col overflow-hidden bg-surface-sunken">
         {toolbar !== undefined && (
           <div
-            role="toolbar"
+            role="group"
             aria-label="Graph controls"
             className="absolute top-3.5 left-4 z-10 flex gap-1.75"
           >
@@ -172,10 +175,14 @@ export interface GraphStyleRule {
  * are neutral `claim-hypothesis-mark` (3:1 on the canvas); weak edges
  * (`data(weak)`: every claim inferred or hypothesis) are dashed, and only an
  * all-INFERRED edge (`data(inferred)`) takes `claim-inferred-mark`.
+ * Labels are `mono-caption` and never drawn smaller (`min-zoomed-font-size`):
+ * the renderer also keeps its zoom at 1 or more, panning a large graph rather
+ * than shrinking it, and the list beside the graph has every label in words.
  */
 export function graphStylesheet(token: TokenReader): GraphStyleRule[] {
   const px = (name: string) => Number.parseFloat(token(name));
   const line = px("focus-ring-width");
+  const label = px("type-mono-caption-size");
   return [
     {
       selector: "node",
@@ -189,7 +196,9 @@ export function graphStylesheet(token: TokenReader): GraphStyleRule[] {
         "text-valign": "center",
         "text-halign": "center",
         "font-family": token("font-mono"),
-        "font-size": px("type-mono-caption-size"),
+        "font-size": label,
+        // A label drawn smaller than its token size is not drawn at all (the list has it).
+        "min-zoomed-font-size": label,
         color: token("ink-primary"),
         "background-color": "data(fill)",
         "border-color": "data(ring)",
@@ -217,7 +226,8 @@ export function graphStylesheet(token: TokenReader): GraphStyleRule[] {
         "target-arrow-color": token("claim-hypothesis-mark"),
         label: "data(label)",
         "font-family": token("font-mono"),
-        "font-size": px("type-mono-caption-size"),
+        "font-size": label,
+        "min-zoomed-font-size": label,
         color: token("ink-muted"),
         "text-background-color": token("surface-sunken"),
         "text-background-opacity": 1,

@@ -217,7 +217,10 @@ describe("the search dashboard", () => {
     expect(
       await screen.findByRole("heading", { name: "What are you investigating?" }),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Investigate" }).hasAttribute("disabled")).toBe(true);
+    // Investigate stays enabled; an empty box is refused on submit (asserted in its own test).
+    expect(screen.getByRole("button", { name: "Investigate" }).hasAttribute("disabled")).toBe(
+      false,
+    );
 
     // Newest first by creation (cases record no update time), archived left out, three shown.
     const cases = (await screen.findByText("[Newest case]")).closest("ul");
@@ -231,17 +234,95 @@ describe("the search dashboard", () => {
     expect(cases?.textContent).toContain("0 pinned · created");
 
     const rowOf = (label: string) => screen.getByText(label).closest("li")?.textContent;
-    expect(rowOf("[Permitted source]")).toBe("[Permitted source]TECHINTReady");
+    expect(rowOf("[Permitted source]")).toBe("[Permitted source]Ready");
     // This deployment does not allow unverified sources, so that one is held, and says so.
     expect(rowOf("[Unverified source]")).toBe(
-      "[Unverified source]TECHINT · Its licence is unverified, and this deployment does not allow unverified sources.Held",
+      "[Unverified source]Its licence is unverified, and this deployment does not allow unverified sources.Held",
     );
-    expect(rowOf("[Blocked source]")).toBe("[Blocked source]TECHINT · [why it is blocked]Held");
+    expect(rowOf("[Blocked source]")).toBe("[Blocked source][why it is blocked]Held");
+    // The held ones sit behind a disclosure that states how many there are; none is dropped.
+    const held = screen.getByText("2 held: not enabled here").closest("details");
+    expect(held?.textContent).toContain("[Unverified source]");
+    expect(held?.textContent).toContain("[Blocked source]");
+    expect(held?.textContent).not.toContain("[Permitted source]");
+    // No live health is measured, so nothing claims a key is missing or a source is down.
+    const health = screen.getByRole("region", { name: "Collector health" });
+    expect(health.textContent).toContain("Live health is not measured.");
+    expect(health.textContent).not.toMatch(/Needs key|Unavailable/);
+
+    // Monitors do not exist: the Not built card says so, with no count, no rows and no number at all.
+    const monitors = screen.getByRole("region", { name: "Monitor alerts" });
+    expect(within(monitors).getByRole("heading", { name: "Monitor alerts" })).toBeTruthy();
+    expect(within(monitors).getByText(/^Not built yet\. Monitors do not exist/)).toBeTruthy();
+    expect(monitors.textContent).toContain("Not built yet.");
+    expect(monitors.textContent).not.toMatch(/\d/);
+    expect(within(monitors).queryByRole("listitem")).toBeNull();
     // Only types some source here can take are offered as examples.
     expect(screen.getByText("Sources here run for:").parentElement?.textContent).toBe(
       "Sources here run for:domain",
     );
     expect(requests("POST", "/api/v1/estimates")).toHaveLength(0);
+  });
+
+  it("refuses an empty Investigate with a message under the shell, and sends nothing", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(session),
+      "POST /api/v1/estimates": (body) => Response.json(estimateFor(String(body["target"]))),
+    });
+    renderHome();
+    await screen.findByLabelText("Target to investigate");
+    expect(screen.queryByRole("alert")).toBeNull();
+    // Blank, then spaces only: both are empty.
+    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Enter a target to investigate",
+    );
+    typeTarget("   ");
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
+    expect(screen.getByRole("alert").textContent).toContain("Enter a target to investigate");
+    expect(requests("POST", "/api/v1/estimates")).toHaveLength(0);
+    // Typing a target clears it, and a real target is checked.
+    await checkTarget("example.org");
+    expect(screen.queryByText(/Enter a target to investigate/)).toBeNull();
+    expect(requests("POST", "/api/v1/estimates")).toHaveLength(1);
+  });
+
+  it("says a note every collector row shares once, not on each row", async () => {
+    const unverified = (id: string, label: string) => ({
+      id,
+      version: "1.0.0",
+      label,
+      discipline: "TECHINT",
+      targetTypes: ["DOMAIN"],
+      collectionMode: "PASSIVE_API",
+      claimStrength: "REPORTED",
+      credentials: { vaultIds: [], runsWithout: true },
+      availability: "UNVERIFIED",
+      availabilityReason: "[licence reason]",
+    });
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(session),
+      "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
+      "GET /api/v1/collectors": () =>
+        Response.json({
+          unverifiedSourcesAllowed: false,
+          items: [unverified("a", "[Source A]"), unverified("b", "[Source B]")],
+        }),
+    });
+    renderHome();
+    const health = await screen.findByRole("region", { name: "Collector health" });
+    await within(health).findByText("[Source A]");
+    const note =
+      "Its licence is unverified, and this deployment does not allow unverified sources.";
+    expect(within(health).getAllByText(note)).toHaveLength(1);
+    // Each row is its label and its status only; the note sits above them.
+    expect(within(health).getByText("[Source A]").closest("li")?.textContent).toBe(
+      "[Source A]Held",
+    );
+    expect(within(health).getByText("[Source B]").closest("li")?.textContent).toBe(
+      "[Source B]Held",
+    );
   });
 
   it("shows the plan: type, sources with their key needs, sources left out with their status, and no number for an unestimated cost", async () => {

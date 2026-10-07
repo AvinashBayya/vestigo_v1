@@ -16,7 +16,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
-| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. **UI foundation:** U1-a (design system from the mockups) done 2026-10-07; U1-b (component library and the dev gallery) done and approved 2026-10-07; U1-c (screens rebuilt from the library) in progress. See the Phase 6a and 6b records below. |
+| 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. **UI foundation:** U1-a (design system from the mockups) done 2026-10-07; U1-b (component library and the dev gallery) done and approved 2026-10-07; U1-c (every screen rebuilt from the library) done 2026-10-07, awaiting the owner's review. See the Phase 6a and 6b records below. |
 | 7     | Commercial layer                        | Not started                                                                                                                                              |
 | 8     | Infrastructure, observability and CI    | Not started                                                                                                                                              |
 | 9     | Hardening and launch readiness          | Not started                                                                                                                                              |
@@ -2917,3 +2917,83 @@ llm 130, osint-engine 104, api 184, ui 57, web 87, worker 4 (1,698 tests).
 - **Moved:** `docs/legacy-classification.md` is now `docs/reclamation/legacy-classification.md`;
   the generator writes there.
 - **Tokens:** 276 (was 275).
+
+## UI foundation U1-c: every screen rebuilt from the component library (2026-10-07)
+
+**The brief.** Rebuild every existing screen from `packages/ui` to match its mockup. No new
+endpoints, no new runtime dependencies, no new components unless §9 specifies one and a mockup
+draws it. Every capability without a backing endpoint shows its designed Not built card or an em
+dash with its reason. Add a favicon.
+
+**How it was done:**
+- Seven readers specced each screen group against its mockups, the API and the tests.
+- A foundation pass built the approved components and the shared pieces.
+- Seven implementers then worked in parallel, each owning its own files.
+- Four independent critics compared the source and live screenshots with each mockup and the
+  rules. They found 45 mismatches, 7 of them rule breaks. Each was fixed with a test, or raised.
+- A fifth agent re-checked all 45. It found one new rule break (below), since fixed with a
+  mutation-proven test.
+
+**Screens, and the mockup each matches:**
+
+| Screen | Mockup | Notes |
+|---|---|---|
+| Sign in | SignIn (left) | Primary stays enabled; an empty field is refused with its error |
+| MFA challenge | SignIn (right) | Own route on the raised ground; backup-code path |
+| MFA enrolment | MfaEnrol | Link state is a tag; backup codes before confirm |
+| Dashboard (search) and the app frame | Main, Dashboard-dark | The frame: side nav, header, outlined vetting pill, account menu with the Light/Dark toggle, Ctrl/⌘K palette. Credits as an em dash. Monitor alerts Not built |
+| Cases | (none; the frame's list pattern) | Created date, Partial when cut |
+| Tenant chooser | (none) | In the app frame when a tenant is open, the sign-in frame otherwise |
+| Members, Settings | **No mockup: provisional** | Read-only, existing components only; actions not built |
+| Run view | RunLive | Full-bleed. Any lock, or a refused reconnect, withholds everything held |
+| Workspace frame and tabs (D6 order) | Workspace, Overview, Entities, Timeline, Evidence | Runs rail and docked inspector on Graph as drawn; current tab underlined |
+| Graph | Workspace | Labels never below 11px; Hide inferred says what it hides |
+| Media, Map; a case's Report | Media, Map | Not built cards |
+| Report view | Report | One continuous serif document card, the sections rail, the citation rail (beside it from `xl`), citations as standalone controls (D8), View PDF |
+
+**New components** (approved: §9 specifies them and a mockup draws them; each is in the gallery
+with all its states and tested):
+- Button sizes; TextLink and BackLink; Tag;
+- ProductMark, SideNav and NavItem; CreditsMeter;
+- ContextHeader; TabBar and TabLink;
+- Card, NestedCard and DashedNote; DensityToggle;
+- Input variants and ToolbarInput; HeroSearch;
+- ReportSectionHeading.
+
+Small extensions to U1-b components are listed in the foundation report.
+
+**Favicon:** `apps/web/public/favicon.svg`. A guard holds its colours to the tokens. It clears the
+earlier 404.
+
+**Live audit** (Edge, headless, real API, worker and data: a PARTIAL run, a case with a pin, a
+generated report):
+- **Coverage:** every screen and open state in both themes, 58 screen-states including both
+  enrolment steps.
+- **Result:** no text pair under 4.5:1, no input edge under 3:1, no hit area under 44px, no
+  serif outside the report, no console errors, no horizontal scroll.
+- **What the audit could not see** (the critics caught it): the current tab's underline was
+  clipped, and then lost the cascade. Both are fixed, now pinned by a test on the compiled CSS,
+  and the pixels were checked in both themes.
+
+**Rule breaks fixed in review:**
+- the tab underline;
+- graph labels shrinking below 11px;
+- the elapsed time ticking after the stream dropped;
+- a locally computed person-access verdict;
+- retention wording not read from the API;
+- prose broken mid-word;
+- a run's earlier data left on screen after a refused reconnect.
+
+**Raised, not built:** listed in DESIGN-SYSTEM §12 under U1-c:
+- components outside the approval rule, and a mobile navigation sheet;
+- endpoints that do not exist (a tenant-wide runs list, reading the report marking, per-entity
+  evidence, cost, credits, monitors, media, coordinates);
+- backed but state-changing features not built here (merges, replay, member and settings edits,
+  API keys, credentials, scope authorisations, usage);
+- the PDF panel's page height.
+
+**Checkpoint** (`pnpm turbo lint typecheck test`, 50 of 50 tasks, fabrication check clean on 447
+files, with Postgres and Redis up): core 20, access 56, config 188, db 264, integrations 122,
+collectors 482, llm 130, osint-engine 104, api 184, ui 93, web 176, worker 4 (1,823 tests). A
+load-sensitive timing test in integrations failed once with the whole stack running, then passed
+three times alone; the package has no changes.

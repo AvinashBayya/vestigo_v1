@@ -53,8 +53,8 @@ export interface RunLock {
   readonly locked: LockedModule | null;
   /** How often access was re-checked while the stream was open, in milliseconds. */
   readonly recheckIntervalMs: number;
-  /** When the refusing check ran, as the caller formats it. */
-  readonly checkedAt: string;
+  /** When the refusing check ran, as the caller formats it (a <time> element, say). */
+  readonly checkedAt: ReactNode;
 }
 
 /** A re-check interval in words: "every 5 s", "every 1 min", "every 250 ms". */

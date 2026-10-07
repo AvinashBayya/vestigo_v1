@@ -4,8 +4,7 @@
  * over a fetch stub that answers as the API's session routes do; every
  * request goes through the generated client.
  */
-import { PRODUCT_NAME } from "@repo/config/product";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -97,6 +96,7 @@ describe("sign in", () => {
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Not signed in")).toBeTruthy();
     expect(alert.textContent).toContain("That email address and password do not match an account.");
     expect(alert.textContent).toContain("Code: INVALID_EMAIL_OR_PASSWORD");
   });
@@ -199,7 +199,45 @@ describe("the MFA challenge", () => {
     typeInto("Six-digit code", "123456");
     fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
     expect((await screen.findByRole("alert")).textContent).toContain("This sign-in has expired.");
-    expect(screen.getByRole("link", { name: "Sign in again" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in again" }).getAttribute("href")).toBe(
+      "/sign-in",
+    );
+  });
+
+  it.each([
+    ["TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE", "Too many wrong codes. Sign in again."],
+    [
+      "ACCOUNT_TEMPORARILY_LOCKED",
+      "Too many wrong codes, so this account is locked for now. Wait, then sign in again.",
+    ],
+  ])("offers a fresh sign-in after the lockout %s", async (code, message) => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "SIGNED_OUT" }),
+      "POST /api/v1/session/mfa/verify": () => problem(401, code, "Refused"),
+    });
+    renderAt("/sign-in/verify");
+    await screen.findByRole("heading", { name: "Enter your authentication code" });
+    typeInto("Six-digit code", "123456");
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(message);
+    expect(alert.textContent).toContain(`Code: ${code}`);
+    expect(screen.getByRole("link", { name: "Sign in again" }).getAttribute("href")).toBe(
+      "/sign-in",
+    );
+  });
+
+  it("offers no fresh sign-in for a wrong code, which can simply be retried", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "SIGNED_OUT" }),
+      "POST /api/v1/session/mfa/verify": () => problem(401, "INVALID_CODE", "Invalid code"),
+    });
+    renderAt("/sign-in/verify");
+    await screen.findByRole("heading", { name: "Enter your authentication code" });
+    typeInto("Six-digit code", "000000");
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("link", { name: "Sign in again" })).toBeNull();
   });
 });
 
@@ -309,10 +347,11 @@ describe("the screen designs, with their copy corrected for what is true", () =>
     fakeApi({ "GET /api/v1/session": () => Response.json({ state: "SIGNED_OUT" }) });
     renderAt("/sign-in/verify");
     await screen.findByRole("heading", { name: "Enter your authentication code" });
-    expect(document.body.textContent).toContain(
-      "Lost your device? Sign in with one of the backup codes",
+    // The README's copy correction for the drawn "an administrator can reset" line.
+    expect(screen.getByText("Lost your device? Use one of your backup codes.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(
+      /reset (your )?(second factor|two-factor|MFA)|administrator.*reset/i,
     );
-    expect(document.body.textContent).not.toMatch(/reset your second factor/i);
     expect(screen.getByText("Step 2 of 2")).toBeTruthy();
   });
 
@@ -354,42 +393,184 @@ describe("the screen designs, with their copy corrected for what is true", () =>
     const text = await saved[0]?.text();
     expect(text).toContain("aaaaa-11111\nbbbbb-22222");
   });
+
+  it("says the enrolment link is verified only after the server accepted its token", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "MFA_ENROLMENT_REQUIRED", user }),
+      "POST /api/v1/session/mfa/enrolment": () =>
+        Response.json({
+          totpUri: "otpauth://totp/Test:analyst?secret=JBSWY3DPEHPK3PXP&issuer=Test",
+          secret: "JBSWY3DPEHPK3PXP",
+          backupCodes: ["aaaaa-11111"],
+        }),
+    });
+    renderAt("/enrol#token=mfa_fromlink");
+    expect(await screen.findByText("Enrolment link received")).toBeTruthy();
+    expect(screen.queryByText("Enrolment link verified")).toBeNull();
+    typeInto("Password", "[password]");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Enrolment link verified")).toBeTruthy();
+    expect(screen.queryByText("Enrolment link received")).toBeNull();
+  });
+
+  it("drops the link's tag and asks for a token when the link's token is refused", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "MFA_ENROLMENT_REQUIRED", user }),
+      "POST /api/v1/session/mfa/enrolment": () =>
+        problem(403, "MFA_ENROLMENT_TOKEN_INVALID", "The enrolment token is not valid."),
+    });
+    renderAt("/enrol#token=mfa_fromlink");
+    await screen.findByText("Enrolment link received");
+    expect(screen.queryByLabelText("Enrolment token")).toBeNull();
+    typeInto("Password", "[password]");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "That enrolment token is not valid for this account, or it has expired.",
+    );
+    expect(screen.getByLabelText("Enrolment token")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Enrolment link (received|verified)/);
+  });
+
+  it("says so when an enrolment issues no backup codes, and pads nothing", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "MFA_ENROLMENT_REQUIRED", user }),
+      "POST /api/v1/session/mfa/enrolment": () =>
+        Response.json({
+          totpUri: "otpauth://totp/Test:analyst?secret=JBSWY3DPEHPK3PXP&issuer=Test",
+          secret: "JBSWY3DPEHPK3PXP",
+          backupCodes: [],
+        }),
+    });
+    renderAt("/enrol#token=mfa_fromlink");
+    await screen.findByRole("heading", { name: "Set up two-factor authentication" });
+    typeInto("Password", "[password]");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("img", { name: "QR code for your authenticator app" });
+    expect(
+      screen.getByText(
+        "No backup codes were issued. Without them, a lost device cannot be recovered.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Download codes" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+  });
 });
 
-describe("the signed-in frame", () => {
-  it("shows the organisation's vetting status as the API states it, and switches theme from the account menu", async () => {
+describe("no sign-up, by design (CLAUDE.md section 1: no sign-up screen ships)", () => {
+  it("offers no sign-up affordance and never calls sign-up during the whole sign-in flow", async () => {
+    let session: SessionState = { state: "SIGNED_OUT" };
     fakeApi({
-      "GET /api/v1/session": () => Response.json(signedIn(acme.id)),
-      "GET /api/v1/me": () =>
-        Response.json({
-          authMethod: "SESSION",
-          user: { id: user.id, email: user.email, displayName: null },
-          apiKeyId: null,
-          tenant: {
-            id: acme.id,
-            name: acme.name,
-            plan: "TECHINT",
-            vettingStatus: "NOT_SUBMITTED",
-            planModules: ["TECHINT"],
-          },
-          permissions: ["run:read"],
-        }),
-      "GET /health": () => Response.json({ status: "ok" }),
+      "GET /api/v1/session": () => Response.json(session),
+      "POST /api/v1/session/sign-in": () => Response.json({ next: "MFA_CHALLENGE" }),
+      "POST /api/v1/session/mfa/verify": () => {
+        session = signedIn(acme.id);
+        return Response.json(session);
+      },
     });
-    renderAt("/");
-    // Not "Verified tenant": that is said only when vetting is approved.
-    expect(await screen.findByText("Vetting not submitted")).toBeTruthy();
-    expect(screen.queryByText("Verified tenant")).toBeNull();
-    // Only what is built: search, and the cases that results are pinned to.
-    expect(screen.getByRole("navigation", { name: "Main" }).textContent).toBe(
-      `${PRODUCT_NAME}SearchCases`,
-    );
+    const router = renderAt("/sign-in");
+    await screen.findByRole("heading", { name: "Sign in" });
+    const signUp = /sign ?up|create (an )?account|register/i;
+    expect(screen.queryByRole("link", { name: signUp })).toBeNull();
+    expect(screen.queryByRole("button", { name: signUp })).toBeNull();
+    typeInto("Work email", user.email);
+    typeInto("Password", "[password]");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Account" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Use dark theme" }));
-    expect(document.documentElement.dataset["theme"]).toBe("dark");
-    expect(screen.getByRole("button", { name: "Use light theme" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Use light theme" }));
-    expect(document.documentElement.dataset["theme"]).toBe("light");
+    await screen.findByRole("heading", { name: "Enter your authentication code" });
+    expect(screen.queryByRole("link", { name: signUp })).toBeNull();
+    expect(screen.queryByRole("button", { name: signUp })).toBeNull();
+    typeInto("Six-digit code", "123456");
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/");
+    });
+    expect(requests("POST", "/api/v1/session/mfa/verify")).toHaveLength(1);
+    const signUpCalls = fetchMock.mock.calls.filter(([request]) =>
+      new URL(request.url).pathname.startsWith("/api/auth/sign-up"),
+    );
+    expect(signUpCalls).toHaveLength(0);
+  });
+});
+
+describe("an empty submit is refused on the page, and nothing is sent", () => {
+  /** The field's error, tied to it for screen readers. */
+  const errorOf = (label: string) => {
+    const field = screen.getByLabelText(label);
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    const id = field.getAttribute("aria-describedby") ?? "";
+    return document.getElementById(id.split(" ").at(-1) ?? "")?.textContent;
+  };
+
+  it("sign-in: Continue stays enabled; each empty field says what it needs", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "SIGNED_OUT" }),
+      "POST /api/v1/session/sign-in": () => Response.json({ next: "MFA_CHALLENGE" }),
+    });
+    renderAt("/sign-in");
+    await screen.findByRole("heading", { name: "Sign in" });
+    const submit = screen.getByRole("button", { name: "Continue" });
+    expect(submit.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(submit);
+    expect(errorOf("Work email")).toBe("Enter your work email.");
+    expect(errorOf("Password")).toBe("Enter your password.");
+    typeInto("Work email", user.email);
+    expect(screen.getByLabelText("Work email").getAttribute("aria-invalid")).toBeNull();
+    fireEvent.click(submit);
+    expect(errorOf("Password")).toBe("Enter your password.");
+    expect(requests("POST", "/api/v1/session/sign-in")).toHaveLength(0);
+  });
+
+  it("the challenge: an empty code, by app or backup code, is never sent", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "SIGNED_OUT" }),
+      "POST /api/v1/session/mfa/verify": () => problem(401, "INVALID_CODE", "Invalid code"),
+    });
+    renderAt("/sign-in/verify");
+    await screen.findByRole("heading", { name: "Enter your authentication code" });
+    const submit = screen.getByRole("button", { name: "Verify and sign in" });
+    expect(submit.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(submit);
+    expect(errorOf("Six-digit code")).toBe("Enter the six-digit code from your app.");
+    // Switching method starts clean, and the backup code is refused the same way.
+    fireEvent.click(screen.getByRole("button", { name: "Use a backup code instead" }));
+    expect(screen.getByLabelText("Backup code").getAttribute("aria-invalid")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Verify and sign in" }));
+    expect(errorOf("Backup code")).toBe("Enter one of your backup codes.");
+    expect(requests("POST", "/api/v1/session/mfa/verify")).toHaveLength(0);
+  });
+
+  it("enrolment: an empty token or password is not sent, nor an empty confirmation code", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json({ state: "MFA_ENROLMENT_REQUIRED", user }),
+      "POST /api/v1/session/mfa/enrolment": () =>
+        Response.json({
+          totpUri: "otpauth://totp/Test:analyst?secret=JBSWY3DPEHPK3PXP&issuer=Test",
+          secret: "JBSWY3DPEHPK3PXP",
+          backupCodes: ["aaaaa-11111"],
+        }),
+      "POST /api/v1/session/mfa/enrolment/confirm": () =>
+        problem(401, "INVALID_CODE", "Invalid code"),
+    });
+    renderAt("/enrol");
+    await screen.findByRole("heading", { name: "Set up two-factor authentication" });
+    const start = screen.getByRole("button", { name: "Continue" });
+    expect(start.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(start);
+    expect(errorOf("Enrolment token")).toBe("Enter the enrolment token.");
+    expect(errorOf("Password")).toBe("Enter your password.");
+    expect(requests("POST", "/api/v1/session/mfa/enrolment")).toHaveLength(0);
+
+    typeInto("Enrolment token", "mfa_typed");
+    typeInto("Password", "[password]");
+    fireEvent.click(start);
+    await screen.findByRole("img", { name: "QR code for your authenticator app" });
+    const confirm = screen.getByRole("button", { name: "Confirm and finish" });
+    expect(confirm.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(confirm);
+    expect(errorOf("Six-digit code from your app")).toBe("Enter the six-digit code from your app.");
+    expect(requests("POST", "/api/v1/session/mfa/enrolment/confirm")).toHaveLength(0);
   });
 });

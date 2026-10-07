@@ -86,11 +86,7 @@ export function SelectedPointCard({
         )}
       </div>
       {action !== undefined && (
-        <Button
-          variant="secondary"
-          onClick={action.onClick}
-          className="hit-area min-h-control-md w-full text-small-strong"
-        >
+        <Button variant="secondary" size="md" onClick={action.onClick} className="w-full">
           {action.label}
         </Button>
       )}

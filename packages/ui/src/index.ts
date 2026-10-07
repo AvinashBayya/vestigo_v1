@@ -7,6 +7,7 @@ export {
 } from "./app-header.tsx";
 export type { ThemeChoice, VettingStatus } from "./app-header.tsx";
 export { Button, type ButtonProps } from "./button.tsx";
+export { Card, DashedNote, NestedCard } from "./card.tsx";
 export { ClaimStrength } from "./claim-strength.tsx";
 export { cn } from "./cn.ts";
 export {
@@ -17,13 +18,17 @@ export {
   useCommandPaletteShortcut,
 } from "./command-palette.tsx";
 export type { PaletteGroup, PaletteItem } from "./command-palette.tsx";
+export { ContextHeader } from "./context-header.tsx";
+export { CreditsMeter, type MeasuredCount } from "./credits-meter.tsx";
 export { DataTable, TableSearch } from "./data-table.tsx";
 export type {
   DataTableColumn,
   DataTableEmpty,
+  DataTablePins,
   DataTableRow,
   SortDirection,
 } from "./data-table.tsx";
+export { DensityToggle, type Density } from "./density-toggle.tsx";
 export { Drawer } from "./drawer.tsx";
 export {
   ENTITY_CLASSES,
@@ -35,10 +40,11 @@ export {
 } from "./entity-class.tsx";
 export { EvidenceCard } from "./evidence-card.tsx";
 export type { EvidenceCardProps, FoundEvidence, NothingFound } from "./evidence-card.tsx";
-export { Field, Input, type InputProps } from "./field.tsx";
+export { Field, Input, ToolbarInput, type InputProps, type InputVariant } from "./field.tsx";
 export { AddFilterChip, FilterChip, FilterChipRow, FilterToggle } from "./filter-chip.tsx";
 export { GraphLegend, GraphShell, GraphToolbarButton, graphStylesheet } from "./graph-shell.tsx";
 export type { GraphShellState, GraphStyleRule, TokenReader } from "./graph-shell.tsx";
+export { HeroSearch } from "./hero-search.tsx";
 export {
   InspectorDrawer,
   InspectorSection,
@@ -55,12 +61,14 @@ export { Notice } from "./notice.tsx";
 export { Panel, Skeleton } from "./panel.tsx";
 export { PinButton } from "./pin-button.tsx";
 export { Popover, PopoverContent, PopoverTrigger } from "./popover.tsx";
+export { ProductMark } from "./product-mark.tsx";
 export {
   CitationMarker,
   Citations,
   CoverageLimitation,
   InferredPassage,
   ReportProse,
+  ReportSectionHeading,
   ReportSurface,
 } from "./report-surface.tsx";
 export {
@@ -80,6 +88,7 @@ export type {
   RunLock,
   RunRailItem,
 } from "./runs-rail.tsx";
+export { NavItem, SideNav } from "./side-nav.tsx";
 export { EmptyState, FailedAlert, LoadingState, NotBuilt } from "./states.tsx";
 export {
   COLLECTOR_STATUSES,
@@ -99,4 +108,7 @@ export {
   StrengthKey,
   type ClaimStrengthLabel,
 } from "./strength-badge.tsx";
+export { TabBar, TabLink } from "./tab-bar.tsx";
+export { Tag, TagList } from "./tag.tsx";
+export { BackLink, TextLink, type TextLinkProps } from "./text-link.tsx";
 export { Unmeasured } from "./unmeasured.tsx";

@@ -1,5 +1,4 @@
 import { Notice } from "@repo/ui";
-import { Link } from "@tanstack/react-router";
 import type { Locked } from "../api.ts";
 import type { LockedEventData } from "../run/progress.ts";
 
@@ -9,15 +8,23 @@ const WHY: Readonly<Record<Locked["reason"], string>> = {
 };
 
 /**
- * The Locked state (DESIGN-SYSTEM §8): what the module does, why it is off and
- * the next step, all as the API stated them. Information, never a scolding.
+ * The Locked notice's frame (§8 Locked): a neutral notice, never the failure
+ * palette, announced politely (role="status"). Its lines are direct children,
+ * so the next step sits beside the eyebrow and what the module does.
+ */
+const LOCKED_FRAME = "flex flex-col gap-1.75 rounded-inner px-3.75 py-3";
+
+/**
+ * The Locked state (DESIGN-SYSTEM §8): the eyebrow, what the module does, what
+ * was withheld and why, the next step in `body-strong` and the reason code in
+ * `mono-caption`, all as the API stated them. Information, never a scolding.
  */
 export function LockedNotice({ locked }: { readonly locked: Locked }) {
   return (
-    <Notice className="flex flex-col gap-2">
+    <Notice className={LOCKED_FRAME}>
       <p className="text-eyebrow uppercase">Locked</p>
-      <p>{locked.moduleSummary}</p>
-      <p>
+      <p className="text-body">{locked.moduleSummary}</p>
+      <p className="text-prose-small">
         {WHY[locked.reason]} {locked.withheld}
       </p>
       <p className="text-body-strong">{locked.nextStep}</p>
@@ -33,7 +40,7 @@ type AccessReason = Exclude<LockedEventData["reason"], Locked["reason"]>;
  * data. Each is something this app can do: sign in, choose an organisation, or
  * ask the roles that can change members (owner and admin hold member:update).
  */
-const ACCESS_NEXT_STEP: Readonly<
+export const ACCESS_NEXT_STEP: Readonly<
   Record<AccessReason, { text: string; link: "/sign-in" | "/tenant" | null }>
 > = {
   CREDENTIAL_REVOKED: { text: "Sign in again to keep following this run.", link: "/sign-in" },
@@ -43,44 +50,6 @@ const ACCESS_NEXT_STEP: Readonly<
     link: null,
   },
 };
-
-/**
- * The Locked state for a stream whose re-check refused the reader's access
- * (session, membership or permission). What is withheld, why (the API's own
- * detail), and the next step. A policy decision, so never shown as a failure.
- */
-export function AccessLockedNotice({
-  reason,
-  code,
-  detail,
-  asOf,
-}: {
-  readonly reason: AccessReason;
-  readonly code: string;
-  readonly detail: string;
-  readonly asOf: string;
-}) {
-  const next = ACCESS_NEXT_STEP[reason];
-  return (
-    <Notice className="flex flex-col gap-2">
-      <p className="text-eyebrow uppercase">Locked</p>
-      <p>
-        Live updates for this run are withheld. What is shown is as of the check at{" "}
-        <time className="font-mono" dateTime={asOf}>
-          {asOf}
-        </time>
-        .
-      </p>
-      <p>{detail}</p>
-      <p className="text-body-strong">
-        {next.link === null ? next.text : <Link to={next.link}>{next.text}</Link>}
-      </p>
-      <p className="font-mono text-mono-caption">
-        Reason: {reason} · Code: {code}
-      </p>
-    </Notice>
-  );
-}
 
 export function isAccessReason(reason: LockedEventData["reason"]): reason is AccessReason {
   return reason in ACCESS_NEXT_STEP;

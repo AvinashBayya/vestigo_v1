@@ -894,4 +894,323 @@ describe("the report view", () => {
     });
     expect(requestsTo("GET", `/api/v1/reports/${REPORT_ID}/export/pdf`)).toHaveLength(1);
   });
+  it("the sections rail lists the stored headings in the PDF's order and links to each section; relationships and untrusted content appear only when present", async () => {
+    fakeApi();
+    renderReport();
+    await screen.findByRole("article", { name: "Report" });
+    const rail = screen.getByRole("navigation", { name: "Report sections" });
+    const links = within(rail).getAllByRole("link");
+    // The stored headings, never the mockup's titles, in the order the PDF prints them.
+    expect(links.map((link) => link.textContent)).toEqual([
+      WORDING.headings.coverage,
+      WORDING.headings.glossary,
+      WORDING.headings.synthesis,
+      WORDING.headings.findings,
+      WORDING.headings.evidenceBasis,
+      WORDING.headings.attribution,
+      "PDF",
+    ]);
+    expect(
+      within(rail).queryByText(/Executive summary|Infrastructure|Timeline of events/),
+    ).toBeNull();
+    // Each link points at its section, which is in the report under that heading.
+    const article = screen.getByRole("article", { name: "Report" });
+    for (const link of links.slice(0, -1)) {
+      const id = (link.getAttribute("href") ?? "").slice(1);
+      const section = article.querySelector(`#${id}`);
+      expect(section?.querySelector("h3")?.textContent).toBe(link.textContent);
+    }
+    expect(links.at(-1)?.getAttribute("href")).toBe("#report-pdf");
+    expect(document.getElementById("report-pdf")).not.toBeNull();
+    // The section chosen is the current one, and the citation rail follows it.
+    expect(links[0]?.getAttribute("aria-current")).toBe("location");
+    fireEvent.click(links[3] as HTMLElement);
+    expect(links[3]?.getAttribute("aria-current")).toBe("location");
+    expect(links[0]?.getAttribute("aria-current")).toBeNull();
+    cleanup();
+
+    fakeApi({
+      [`GET /api/v1/reports/${REPORT_ID}`]: () =>
+        Response.json(
+          report({
+            document: {
+              ...documentWith({ status: "NOT_REQUESTED" }),
+              relationships: [
+                {
+                  relationshipId: "88888888-8888-4888-8888-888888888881",
+                  from: {
+                    entityId: ENTITY_ID,
+                    kind: "DOMAIN",
+                    displayName: "[entity]",
+                    identifier: null,
+                  },
+                  kind: "[RELATES_TO]",
+                  to: {
+                    entityId: "77777777-7777-4777-8777-777777777772",
+                    kind: "IP_ADDRESS",
+                    displayName: "[other entity]",
+                    identifier: null,
+                  },
+                  strength: "OBSERVED",
+                  citations: [1],
+                },
+              ],
+              untrustedContent: [{ sourceNumber: 1, patterns: ["[pattern]"] }],
+            },
+          }),
+        ),
+    });
+    renderReport();
+    await screen.findByRole("article", { name: "Report" });
+    const withAll = within(screen.getByRole("navigation", { name: "Report sections" }))
+      .getAllByRole("link")
+      .map((link) => link.textContent);
+    expect(withAll).toEqual([
+      WORDING.headings.coverage,
+      WORDING.headings.glossary,
+      WORDING.headings.synthesis,
+      WORDING.headings.findings,
+      WORDING.headings.relationships,
+      WORDING.headings.untrustedContent,
+      WORDING.headings.evidenceBasis,
+      WORDING.headings.attribution,
+      "PDF",
+    ]);
+  });
+
+  it("the citation rail lists the chosen section's sources from the stored report: number, strength in words, source, and the stored wording for a number no source matches", async () => {
+    fakeApi();
+    renderReport();
+    await screen.findByRole("article", { name: "Report" });
+    const rail = screen.getByRole("complementary", { name: "Citations" });
+    // Coverage, the first section, cites nothing: said so, with a count of 0.
+    expect(within(rail).getByText("This section cites no evidence.")).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole("navigation", { name: "Report sections" })).getByRole("link", {
+        name: WORDING.headings.findings,
+      }),
+    );
+    // Findings cite [1] and [9]; [9] matches no source.
+    expect(rail.textContent).toContain("9. Source not found in this report.");
+    expect(within(rail).getByText("REPORTED")).toBeTruthy();
+    expect(within(rail).getByText("[Source label]")).toBeTruthy();
+    expect(within(rail).queryByText("This section cites no evidence.")).toBeNull();
+    fireEvent.click(within(rail).getByRole("button", { name: "Open source 1: [Source label]" }));
+    const drawer = await screen.findByRole("dialog");
+    expect(await within(drawer).findByText("sha256:[content hash]")).toBeTruthy();
+  });
+
+  it("no Unreviewed pill, no Regenerate section, no Residency, no Rejected drafts, and the citation check is Not built with no count", async () => {
+    fakeApi({
+      [`GET /api/v1/reports/${REPORT_ID}`]: () =>
+        Response.json(
+          report({
+            includeSynthesis: true,
+            document: documentWith(
+              GENERATED({ regionHeaders: [{ name: "[region header name]", value: "bom" }] }),
+            ),
+          }),
+        ),
+    });
+    renderReport();
+    await screen.findByRole("region", { name: "Model provenance" });
+    expect(
+      screen.queryByText(
+        /Unreviewed|Regenerate section|In-region|Rejected drafts|claims cite a source/,
+      ),
+    ).toBeNull();
+    expect(screen.queryByText(/Residency/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Regenerate/ })).toBeNull();
+    const check = screen.getByRole("heading", { name: "Citation check" }).closest("section");
+    expect(check?.textContent).toContain(
+      "Not built yet. The API does not record a citation check for a stored report.",
+    );
+    expect(check?.textContent).not.toMatch(/\d/);
+    // The corrected sentence ("this run's", not "pinned"), shown only for a generated synthesis.
+    expect(
+      screen.getByText(
+        "A synthesis sentence that cannot cite this run's evidence is rejected before it is stored.",
+      ),
+    ).toBeTruthy();
+    // View PDF is the in-page link to the stored file, not a second download button.
+    expect(screen.getByRole("link", { name: "View PDF" }).getAttribute("href")).toBe("#report-pdf");
+  });
+
+  it("an INFERRED statement says INFERRED and what it is from (its cited sources); a NOTHING_FOUND coverage row uses the Found nothing chip with the stored word", async () => {
+    fakeApi({
+      [`GET /api/v1/reports/${REPORT_ID}`]: () =>
+        Response.json(report({ includeSynthesis: true, document: documentWith(GENERATED({})) })),
+    });
+    renderReport();
+    const article = await screen.findByRole("article", { name: "Report" });
+    const statement = within(article).getByText("[a cited statement]").closest("li");
+    expect(statement?.textContent).toContain("INFERRED");
+    expect(statement?.textContent).toContain("from source [1]");
+    // Its citation opens the evidence from a standalone control after the passage (D8).
+    expect(
+      within(statement as HTMLElement).getByRole("button", { name: "Source 1: [Source label]" }),
+    ).toBeTruthy();
+    const missed = within(article).getByRole("region", { name: WORDING.headings.notCollected });
+    const chip = within(missed).getByText(WORDING.states.NOTHING_FOUND);
+    // The stored word, on the Found nothing colours (D7): never the Ran green.
+    expect(chip.className).toContain("bg-claim-hypothesis-fill");
+    expect(chip.className).not.toContain("claim-observed");
+    const collected = within(article).getByRole("region", { name: WORDING.headings.collected });
+    expect(within(collected).getByText(WORDING.states.COLLECTED).className).toContain(
+      "bg-claim-observed-fill",
+    );
+  });
+
+  it("sets the serif only on the report's own title and prose, never on a container or the screen around it", async () => {
+    fakeApi({
+      [`GET /api/v1/reports/${REPORT_ID}`]: () =>
+        Response.json(report({ includeSynthesis: true, document: documentWith(GENERATED({})) })),
+    });
+    renderReport();
+    const article = await screen.findByRole("article", { name: "Report" });
+    const serif = [...document.querySelectorAll(".font-serif")];
+    expect(serif.length).toBeGreaterThan(0);
+    for (const element of serif) {
+      // Inside the report's document only, and only on text elements: a heading or a paragraph.
+      expect(article.contains(element)).toBe(true);
+      expect(["H2", "H3", "P"]).toContain(element.tagName);
+      expect(element.querySelector("ul, ol, section, article, button")).toBeNull();
+    }
+    expect(serif.map((element) => element.textContent)).toEqual(
+      expect.arrayContaining([
+        "[Report title]",
+        WORDING.headings.coverage,
+        "[a standing limit]",
+        "[the model-written notice as stored]",
+        WORDING.evidence.intro,
+      ]),
+    );
+    // A partial run's headline is the coverage callout's, and the callout is a status: sans.
+    expect(screen.getByRole("status", { name: "Coverage" }).className).not.toContain("serif");
+    expect(screen.getByRole("status", { name: "Coverage" }).closest(".font-serif")).toBeNull();
+    expect(serif.some((element) => element.textContent.includes("[a cited statement]"))).toBe(true);
+    // The rails and the PDF card stay in sans.
+    expect(
+      screen.getByRole("navigation", { name: "Report sections" }).querySelector(".font-serif"),
+    ).toBeNull();
+    expect(
+      screen.getByRole("complementary", { name: "Citations" }).querySelector(".font-serif"),
+    ).toBeNull();
+    expect(document.getElementById("report-pdf")?.querySelector(".font-serif")).toBeNull();
+  });
+
+  it("shows the generate controls once: in the empty card while there is no report, in the toolbar after", async () => {
+    fakeApi({
+      [`GET /api/v1/runs/${RUN_ID}/reports`]: () => Response.json({ items: [], hasMore: false }),
+    });
+    renderReport();
+    await screen.findByText("No report has been generated for this run yet.");
+    expect(screen.getAllByRole("button", { name: "Generate report" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Generate with a model synthesis" })).toHaveLength(
+      1,
+    );
+    expect(screen.queryByRole("link", { name: "View PDF" })).toBeNull();
+    cleanup();
+
+    fakeApi();
+    renderReport();
+    await screen.findByRole("article", { name: "Report" });
+    expect(screen.getAllByRole("button", { name: "Generate report" })).toHaveLength(1);
+    // The toolbar names the report by its stored title once it is generated.
+    expect(screen.getAllByRole("heading", { level: 2, name: "[Report title]" }).length).toBe(2);
+  });
+
+  it("every section heading is the library's serif section heading, and names its section", async () => {
+    fakeApi();
+    renderReport();
+    const article = await screen.findByRole("article", { name: "Report" });
+    const sections = [...article.querySelectorAll("section[data-report-section]")];
+    expect(sections.length).toBe(6);
+    for (const section of sections) {
+      const heading = section.querySelector("h3");
+      // ReportSectionHeading: serif-title in ink-primary, never the sans title style.
+      expect(heading?.className).toContain("font-serif");
+      expect(heading?.className).toContain("text-serif-title");
+      expect(heading?.className).toContain("text-ink-primary");
+      expect(heading?.className).not.toMatch(/(^|s)text-title(s|$)/);
+      expect(section.getAttribute("aria-labelledby")).toBe(heading?.id);
+    }
+    expect(within(article).getByRole("region", { name: WORDING.headings.findings })).toBeTruthy();
+  });
+
+  it("states the coverage headline once: in the callout under the coverage heading when partial, as prose when not", async () => {
+    const occurrences = (root: HTMLElement) =>
+      root.textContent.split("[coverage headline as the report states it]").length - 1;
+    fakeApi();
+    renderReport();
+    const article = await screen.findByRole("article", { name: "Report" });
+    expect(occurrences(article)).toBe(1);
+    const coverage = within(article).getByRole("region", { name: WORDING.headings.coverage });
+    const status = within(coverage).getByRole("status", { name: "Coverage" });
+    expect(status.textContent).toBe("[coverage headline as the report states it]");
+    // Under the section's heading, not before it.
+    const heading = within(coverage).getByRole("heading", { level: 3 });
+    expect(heading.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    cleanup();
+
+    fakeApi({
+      [`GET /api/v1/reports/${REPORT_ID}`]: () =>
+        Response.json(report({ document: documentWith({ status: "NOT_REQUESTED" }, false) })),
+    });
+    renderReport();
+    const whole = await screen.findByRole("article", { name: "Report" });
+    expect(occurrences(whole)).toBe(1);
+    expect(screen.queryByRole("status", { name: "Coverage" })).toBeNull();
+    expect(
+      within(whole).getByText("[coverage headline as the report states it]").className,
+    ).toContain("font-serif");
+  });
+
+  it("groups each finding's claims behind a disclosure that states the count; every claim stays reachable, and a shortened value says so", async () => {
+    const base = documentWith({ status: "NOT_REQUESTED" });
+    const [finding] = base.findings;
+    const claims = [
+      ...(finding?.claims ?? []),
+      {
+        claimId: "99999999-9999-4999-8999-999999999993",
+        attribute: "[long attribute]",
+        value: "[the full long value]",
+        display: { text: "[the shortened value]", truncated: true },
+        strength: "OBSERVED",
+        citations: [1],
+      },
+    ];
+    fakeApi({
+      [`GET /api/v1/reports/${REPORT_ID}`]: () =>
+        Response.json(report({ document: { ...base, findings: [{ ...finding, claims }] } })),
+    });
+    renderReport();
+    const article = await screen.findByRole("article", { name: "Report" });
+    const entity = within(article).getByRole("region", { name: "[entity]" });
+    const details = entity.querySelector("details");
+    expect(details).not.toBeNull();
+    const summary = details?.querySelector("summary");
+    expect(summary?.textContent).toContain("3 claims");
+    expect(summary?.textContent).toContain("1 value shortened");
+    // Closed until asked for; opening it shows every claim, none dropped.
+    expect(details?.open).toBe(false);
+    fireEvent.click(summary as HTMLElement);
+    expect(details?.open).toBe(true);
+    const rows = [...(details?.querySelectorAll("li") ?? [])];
+    expect(rows).toHaveLength(3);
+    for (const attribute of ["[stated attribute]", "[derived attribute]", "[long attribute]"]) {
+      const row = within(details as HTMLElement)
+        .getByText(attribute)
+        .closest("li");
+      expect(within(row as HTMLElement).getByRole("button", { name: /Pin claim/ })).toBeTruthy();
+    }
+    // The stored shortened text and the stored wording that says it is shortened; the full
+    // value is the JSON export's, never invented or cut here.
+    const long = within(details as HTMLElement)
+      .getByText("[long attribute]")
+      .closest("li");
+    expect(long?.textContent).toContain("[the shortened value]");
+    expect(long?.textContent).toContain(WORDING.findings.shortened);
+    expect(long?.textContent).not.toContain("[the full long value]");
+  });
 });

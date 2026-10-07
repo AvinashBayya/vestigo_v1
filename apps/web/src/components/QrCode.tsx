@@ -1,3 +1,4 @@
+import { cn } from "@repo/ui";
 import { useMemo } from "react";
 import { encode } from "uqr";
 
@@ -7,8 +8,18 @@ const QUIET_ZONE = 4;
 /**
  * A QR code drawn as SVG from the design tokens: always dark modules on a
  * light ground (qr-module, qr-ground), in either theme, so it scans.
+ * `framed` sets it in the enrolment frame (MfaEnrol): `qr-frame` square,
+ * `radius-box`, a `border-default` edge, on `qr-ground` in both themes.
  */
-export function QrCode({ value, label }: { readonly value: string; readonly label: string }) {
+export function QrCode({
+  value,
+  label,
+  framed = false,
+}: {
+  readonly value: string;
+  readonly label: string;
+  readonly framed?: boolean | undefined;
+}) {
   const { size, path } = useMemo(() => {
     const qr = encode(value, { ecc: "M", border: QUIET_ZONE });
     const squares: string[] = [];
@@ -20,7 +31,7 @@ export function QrCode({ value, label }: { readonly value: string; readonly labe
     return { size: qr.size, path: squares.join("") };
   }, [value]);
 
-  return (
+  const code = (
     <svg
       role="img"
       aria-label={label}
@@ -30,5 +41,16 @@ export function QrCode({ value, label }: { readonly value: string; readonly labe
     >
       <path d={path} fill="currentColor" />
     </svg>
+  );
+  if (!framed) return code;
+  return (
+    <div
+      className={cn(
+        "flex size-qr-frame shrink-0 items-center justify-center self-center",
+        "rounded-box border border-border-default bg-qr-ground",
+      )}
+    >
+      {code}
+    </div>
   );
 }

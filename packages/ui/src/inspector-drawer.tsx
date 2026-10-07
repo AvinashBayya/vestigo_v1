@@ -173,11 +173,19 @@ function EvidenceList({ evidence }: { readonly evidence: readonly EvidenceCardPr
   );
 }
 
-type Pin = { readonly pinned: boolean; readonly onToggle: () => void } | undefined;
+/**
+ * Pin-to-case for the subject: the library toggle when its state is known, or
+ * the caller's own control (a case-picker popover trigger) as `slot`.
+ */
+type Pin =
+  | { readonly pinned: boolean; readonly onToggle: () => void }
+  | { readonly slot: ReactNode }
+  | undefined;
 
 /** Pin-to-case for the subject, beside its name (§9: "the subject (heading, badges, Pin)"). */
 function PinToggle({ pin }: { readonly pin: Pin }) {
   if (pin === undefined) return null;
+  if ("slot" in pin) return <div className="shrink-0">{pin.slot}</div>;
   return (
     <button
       type="button"
@@ -331,8 +339,11 @@ export function InspectorDrawer({
 }: {
   readonly subject: InspectorSubject;
   readonly onClose: () => void;
-  /** Pin-to-case for the subject (§9: on every result surface). */
-  readonly pin?: { readonly pinned: boolean; readonly onToggle: () => void } | undefined;
+  /**
+   * Pin-to-case for the subject (§9: on every result surface): a known state
+   * and its toggle, or `{ slot }`, the caller's own pin control.
+   */
+  readonly pin?: Pin;
   readonly actions?:
     | {
         readonly secondary?: InspectorAction | undefined;
@@ -372,17 +383,15 @@ export function InspectorDrawer({
             {actions.secondary !== undefined && (
               <Button
                 variant="secondary"
+                size="md"
                 onClick={actions.secondary.onClick}
-                className="hit-area min-h-control-md grow basis-0 text-small-strong"
+                className="grow basis-0"
               >
                 {actions.secondary.label}
               </Button>
             )}
             {actions.primary !== undefined && (
-              <Button
-                onClick={actions.primary.onClick}
-                className="hit-area min-h-control-md grow basis-0 text-small-strong"
-              >
+              <Button size="md" onClick={actions.primary.onClick} className="grow basis-0">
                 {actions.primary.label}
               </Button>
             )}

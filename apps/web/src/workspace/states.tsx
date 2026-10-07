@@ -1,8 +1,11 @@
-import { Button, Notice, Panel, Skeleton } from "@repo/ui";
+import { Notice, Panel, Skeleton } from "@repo/ui";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { ProblemNotice } from "../components/ProblemNotice.tsx";
 import { LIST_LIMIT } from "./queries.ts";
+
+/** A Not built body inside a titled card: the card draws the edge, so the body draws none. */
+export const NOT_BUILT_BODY = "rounded-none border-0 bg-transparent p-0";
 
 /** Loading in the shape of a table (§8): rows, never a centred spinner. */
 export function TableSkeleton({
@@ -24,7 +27,8 @@ export function TableSkeleton({
 
 /**
  * A read's pending and failed states (§8), or its content once it is in. A
- * refusal carrying `locked` renders as the Locked state, through ProblemNotice.
+ * failure is the §8 Failed alert with "Try again"; a refusal carrying
+ * `locked` renders as the Locked state instead, through ProblemNotice.
  */
 export function Loaded<T>({
   query,
@@ -37,13 +41,8 @@ export function Loaded<T>({
 }) {
   if (query.isPending) return <>{loading}</>;
   if (query.isError) {
-    return (
-      <ProblemNotice error={query.error}>
-        <Button variant="quiet" className="self-start" onClick={() => void query.refetch()}>
-          Try again
-        </Button>
-      </ProblemNotice>
-    );
+    // §8 Failed, with its retry: the same design as every other failure.
+    return <ProblemNotice error={query.error} onRetry={() => void query.refetch()} />;
   }
   return <>{children(query.data)}</>;
 }

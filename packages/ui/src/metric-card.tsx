@@ -16,6 +16,8 @@ export type MetricValue =
     };
 
 export interface MetricRow {
+  /** Keys the row when two rows can share a label (one source, two targets); the label otherwise. */
+  readonly id?: string | undefined;
   readonly label: string;
   readonly value: MetricValue;
 }
@@ -66,8 +68,10 @@ function Row({
   );
 }
 
-function Header({ title }: { readonly title: string }) {
-  return <h3 className="text-section-label text-ink-muted uppercase">{title}</h3>;
+/** The card's heading: h3 by default, h2 where the card sits directly under the page's h1. */
+function Header({ title, level }: { readonly title: string; readonly level: 2 | 3 }) {
+  const Heading = level === 2 ? "h2" : "h3";
+  return <Heading className="text-section-label text-ink-muted uppercase">{title}</Heading>;
 }
 
 /**
@@ -81,6 +85,7 @@ export function MetricCard({
   rows,
   footnote,
   notBuilt,
+  titleLevel = 3,
   className,
 }: {
   readonly title: string;
@@ -88,6 +93,8 @@ export function MetricCard({
   readonly footnote?: string | undefined;
   /** What the card needs before it can show anything; rows are ignored while it is set. */
   readonly notBuilt?: string | undefined;
+  /** The heading level, so the page's outline has no gap: 3 (the default) or 2. */
+  readonly titleLevel?: 2 | 3 | undefined;
   readonly className?: string | undefined;
 }) {
   return (
@@ -98,13 +105,13 @@ export function MetricCard({
         className,
       )}
     >
-      <Header title={title} />
+      <Header title={title} level={titleLevel} />
       {notBuilt !== undefined ? (
         <p className="text-prose-small text-ink-secondary">Not built yet. {notBuilt}</p>
       ) : (
         <dl className="flex flex-col gap-3">
           {rows.map((row) => (
-            <Row key={row.label} row={row} labelClass="text-ink-muted" />
+            <Row key={row.id ?? row.label} row={row} labelClass="text-ink-muted" />
           ))}
         </dl>
       )}
@@ -122,10 +129,13 @@ export function MetricCard({
 export function ArrivingNow({
   rows,
   title = "Arriving now",
+  titleLevel = 3,
   className,
 }: {
   readonly rows: readonly MetricRow[];
   readonly title?: string | undefined;
+  /** The heading level, so the page's outline has no gap: 3 (the default) or 2. */
+  readonly titleLevel?: 2 | 3 | undefined;
   readonly className?: string | undefined;
 }) {
   return (
@@ -136,11 +146,11 @@ export function ArrivingNow({
         className,
       )}
     >
-      <Header title={title} />
+      <Header title={title} level={titleLevel} />
       <dl className="flex flex-col">
         {rows.map((row) => (
           <Row
-            key={row.label}
+            key={row.id ?? row.label}
             row={row}
             labelClass="text-ink-primary"
             className="border-b border-border-subtle py-3.25 first:pt-0 last:border-b-0 last:pb-0"

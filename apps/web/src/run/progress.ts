@@ -1,7 +1,8 @@
 import { AppError } from "@repo/core";
-import type { CollectorStatus } from "@repo/ui";
+import type { CollectorRowItem, CollectorStatus, MetricRow } from "@repo/ui";
 import { z } from "zod";
 import type { components } from "../client/schema.gen.ts";
+import { TYPE_LABEL, type TargetType } from "../search/plan.ts";
 
 type Schemas = components["schemas"];
 export type RunStreamEvent = Schemas["RunStreamEvent"];
@@ -211,4 +212,276 @@ export function formatDuration(milliseconds: number): string {
 export function durationBetween(from: string | null, to: string | null): number | null {
   if (from === null || to === null) return null;
   return Date.parse(to) - Date.parse(from);
+}
+
+/**
+ * A job's status as its row and the summary's count chips show it (§3, D7):
+ * jobStatus, except that a job that succeeded and found nothing is
+ * FOUND_NOTHING, a measured zero, never confused with one that found
+ * something. jobStatus keeps the run report's reading (RAN) for the report.
+ */
+export function jobRowStatus(job: JobData): CollectorStatus {
+  if (job.status === "SUCCEEDED" && job.outcome === "NOT_FOUND") return "FOUND_NOTHING";
+  return jobStatus(job);
+}
+
+/** A count and its noun: "1 attempt", "3 attempts". */
+export const plural = (count: number, word: string): string =>
+  `${String(count)} ${word}${count === 1 ? "" : "s"}`;
+
+/**
+ * An instant in the reader's local time with its zone visible, as text (a
+ * row's meta line is text). The same form wherever this page shows a time.
+ */
+export function formatInstant(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { timeZoneName: "short" });
+}
+
+const joinParts = (parts: readonly string[]): string => parts.join(" · ");
+
+/**
+ * One job as a collector row: its registry label (never a collector-supplied
+ * string), its row status, and in words what it found or why not. A failed
+ * job states its code, the API's message, the attempts and any dead-lettering;
+ * a failed job with no recorded error says so, and no code is made up for it.
+ * `discipline` is the collector list's word for it, or null when the list
+ * does not have it (then it is left out, never guessed).
+ */
+export function jobRowItem(job: JobData, discipline: string | null): CollectorRowItem {
+  const status = jobRowStatus(job);
+  const parts: string[] = discipline === null ? [] : [discipline];
+  const attempts = plural(job.attempts, "attempt");
+  const reason = job.error === null ? null : `${job.error.code}: ${job.error.message}`;
+  const took = durationBetween(job.startedAt, job.finishedAt);
+  const base = { id: job.id, label: job.sourceLabel, status };
+  switch (status) {
+    case "RAN":
+      parts.push(plural(job.evidenceIds.length, "evidence record"));
+      if (job.fusedAt === null) parts.push("merging into the results");
+      if (took !== null) parts.push(formatDuration(took));
+      if (job.attempts > 1) parts.push(`recovered on attempt ${String(job.attempts)}`);
+      break;
+    case "FOUND_NOTHING":
+      parts.push(job.outcomeDetail ?? "the source had nothing for this target");
+      if (took !== null) parts.push(formatDuration(took));
+      if (job.attempts > 1) parts.push(`recovered on attempt ${String(job.attempts)}`);
+      break;
+    case "NEEDS_KEY":
+      parts.push(reason ?? "needs a key that is not set for your organisation");
+      break;
+    case "SKIPPED":
+      parts.push(reason ?? "refused before it ran");
+      break;
+    case "FAILED": {
+      const ending =
+        job.deadLetteredAt === null
+          ? [`stopped after ${attempts}`]
+          : [
+              `gave up after ${attempts}`,
+              `dead-lettered ${formatInstant(job.deadLetteredAt)}, kept for review`,
+            ];
+      if (job.error === null) {
+        return {
+          ...base,
+          meta: joinParts([...parts, "failed, and no reason was recorded", ...ending]),
+        };
+      }
+      return {
+        ...base,
+        meta: joinParts(parts),
+        failure: { code: job.error.code, message: joinParts([job.error.message, ...ending]) },
+      };
+    }
+    case "QUEUED":
+      if (job.nextAttemptAt === null) {
+        parts.push("waiting for a worker");
+      } else {
+        if (reason !== null) parts.push(reason);
+        parts.push(`next attempt ${formatInstant(job.nextAttemptAt)} (after ${attempts})`);
+      }
+      break;
+    case "RUNNING":
+      // No endpoint reports a job's progress, so the row has no bar: a guessed width is fabricated.
+      parts.push(job.attempts > 1 ? `collecting: attempt ${String(job.attempts)}` : "collecting");
+      break;
+    case "CANCELLED":
+      parts.push("cancelled before it finished");
+      break;
+    case "PARTIAL":
+    case "HELD":
+    case "READY":
+    case "UNAVAILABLE":
+    case "LOCKED":
+      // Not a job status: jobRowStatus never returns these.
+      break;
+  }
+  return { ...base, meta: joinParts(parts) };
+}
+
+/** A collector the plan left out, as the run event lists it. */
+export type ExcludedData = Extract<
+  NonNullable<RunData["plan"]>,
+  { readonly excluded: unknown }
+>["excluded"][number];
+
+/**
+ * A collector the plan left out, as a row: labelled from the collector list
+ * when it has it (else its id), with its §3 status and the API's reason. An
+ * admission failure is FAILED, with the API's reason as its code.
+ */
+export function excludedRowItem(
+  row: ExcludedData,
+  index: number,
+  status: CollectorStatus,
+  collector: { readonly label: string; readonly discipline: string } | undefined,
+): CollectorRowItem {
+  const parts = collector === undefined ? [] : [collector.discipline];
+  const base = {
+    id: `excluded:${String(index)}:${row.collectorId}:${row.targetType ?? "any"}`,
+    label: collector?.label ?? row.collectorId,
+    status,
+  };
+  if (status === "FAILED") {
+    return {
+      ...base,
+      ...(parts.length === 0 ? {} : { meta: joinParts(parts) }),
+      failure: { code: row.reason, message: row.message },
+    };
+  }
+  return { ...base, meta: joinParts([...parts, row.message]) };
+}
+
+/** A target type in words, inside a sentence, with its article: "a domain", "an IP address". */
+export function typeInWords(type: TargetType): string {
+  const label = TYPE_LABEL[type];
+  // Lower-case a word ("Domain"), never an initialism ("IP address", "URL").
+  const word = /^[A-Z][a-z]/.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label;
+  // "an" before a vowel sound: email, IP, organisation; "a" before URL and username.
+  return `${/^[aeioAEIO]/.test(word) ? "an" : "a"} ${word}`;
+}
+
+/**
+ * Why a collector does not apply to this run, in words, from the types the
+ * plan read the target as and, when the collector list has it, the types the
+ * collector takes. Nothing is added that the plan and the list do not state.
+ */
+export function notApplicableMessage(
+  targetTypes: readonly TargetType[],
+  accepts: readonly TargetType[] | null,
+): string {
+  const target =
+    targetTypes.length === 0
+      ? "Does not apply to this target"
+      : `Does not apply to ${targetTypes.map(typeInWords).join(" or ")} target`;
+  if (accepts === null || accepts.length === 0) return `${target}.`;
+  return `${target}: it takes ${accepts.map(typeInWords).join(" or ")}.`;
+}
+
+/** How each row status is counted in the summary: the word stays the status's own. */
+export const COUNT_WORD: Readonly<Record<CollectorStatus, string>> = {
+  RAN: "ran",
+  FOUND_NOTHING: "found nothing",
+  RUNNING: "running",
+  QUEUED: "queued",
+  FAILED: "failed",
+  NEEDS_KEY: "need a key",
+  SKIPPED: "skipped",
+  CANCELLED: "cancelled",
+  LOCKED: "locked",
+  PARTIAL: "partial",
+  HELD: "held",
+  READY: "ready",
+  UNAVAILABLE: "unavailable",
+};
+
+/** The row statuses a job can have, in the order the summary counts them. */
+const COUNT_ORDER: readonly CollectorStatus[] = [
+  "RAN",
+  "FOUND_NOTHING",
+  "RUNNING",
+  "QUEUED",
+  "FAILED",
+  "NEEDS_KEY",
+  "SKIPPED",
+  "CANCELLED",
+];
+
+export interface CountChip {
+  readonly status: CollectorStatus;
+  readonly text: string;
+}
+
+/**
+ * The summary's count chips: one per row status some job has, in a fixed
+ * order, then the plan's exclusions as "n not run". A status no job has gets
+ * no chip: an absent status is never shown as "0".
+ */
+export function countChips(
+  statuses: readonly CollectorStatus[],
+  excludedCount: number,
+): CountChip[] {
+  const chips: CountChip[] = [];
+  for (const status of COUNT_ORDER) {
+    const count = statuses.filter((entry) => entry === status).length;
+    if (count > 0) chips.push({ status, text: `${String(count)} ${COUNT_WORD[status]}` });
+  }
+  if (excludedCount > 0)
+    chips.push({ status: "SKIPPED", text: `${String(excludedCount)} not run` });
+  return chips;
+}
+
+const INCOMPLETE: ReadonlySet<CollectorStatus> = new Set([
+  "FAILED",
+  "NEEDS_KEY",
+  "SKIPPED",
+  "CANCELLED",
+]);
+
+/**
+ * "Arriving now", counted from the run's own job events: evidence records,
+ * collectors that found something and that found nothing (a measured 0 is a
+ * true zero), the claims the stream does not count, and for each collector
+ * that did not complete an unmeasured row naming it (failure ink for a
+ * failure, muted otherwise).
+ */
+export function arrivingRows(jobs: readonly JobData[]): MetricRow[] {
+  const count = (value: number): MetricRow["value"] => ({ kind: "value", value: String(value) });
+  const rows: MetricRow[] = [
+    {
+      label: "Evidence records",
+      value: count(jobs.reduce((sum, job) => sum + job.evidenceIds.length, 0)),
+    },
+    {
+      label: "Collectors that found something",
+      value: count(
+        jobs.filter((job) => job.status === "SUCCEEDED" && job.outcome === "FOUND").length,
+      ),
+    },
+    {
+      label: "Collectors that found nothing",
+      value: count(jobs.filter((job) => jobRowStatus(job) === "FOUND_NOTHING").length),
+    },
+    {
+      label: "Claims",
+      value: {
+        kind: "unavailable",
+        reason: "the progress stream does not count claims",
+        cause: "not-recorded",
+      },
+    },
+  ];
+  for (const job of jobs) {
+    const status = jobRowStatus(job);
+    if (!INCOMPLETE.has(status)) continue;
+    rows.push({
+      id: job.id,
+      label: `From ${job.sourceLabel}`,
+      value: {
+        kind: "unavailable",
+        reason: `${job.sourceLabel} did not complete`,
+        cause: status === "FAILED" ? "failed" : "not-recorded",
+      },
+    });
+  }
+  return rows;
 }

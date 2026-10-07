@@ -34,8 +34,11 @@ export function KeyValueList({
             ) : (
               <span
                 className={cn(
-                  "break-all text-ink-primary",
-                  row.mono === false ? "text-meta" : "font-mono text-mono-meta",
+                  "text-ink-primary",
+                  // An identifier or hash may break anywhere; prose breaks only between words.
+                  row.mono === false
+                    ? "text-meta break-words"
+                    : "font-mono text-mono-meta break-all",
                 )}
               >
                 {row.value}

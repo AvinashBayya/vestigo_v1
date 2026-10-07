@@ -22,3 +22,43 @@
     transform: translate(-50%, -50%);
   }
 }
+
+/*
+ * §9 Case header and tabs: the current tab's underline, `tab-indicator-width`
+ * in `accent`. Every tab carries the transparent edge, so the current one
+ * does not shift. A border, not a shadow, so it survives forced-colours mode.
+ */
+@utility tab-indicator {
+  border-bottom: var(--ds-tab-indicator-width) solid transparent;
+}
+
+/*
+ * The whole border, not only its colour: both utilities have the same
+ * specificity, and the compiled order is not theirs to choose, so a colour-only
+ * rule lost to the transparent shorthand (U1-c, found in the live check).
+ */
+@utility tab-indicator-current {
+  border-bottom: var(--ds-tab-indicator-width) solid var(--ds-accent);
+}
+
+/*
+ * A control whose weight changes when it is on (the density toggle) keeps its
+ * width: a hidden copy of its label (the `data-label` attribute) in the strong
+ * weight reserves the room. Hidden, so it is never read or seen.
+ */
+@utility reserve-strong-width {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  &::after {
+    content: attr(data-label);
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    user-select: none;
+    font-weight: var(--ds-type-small-strong-weight);
+  }
+}

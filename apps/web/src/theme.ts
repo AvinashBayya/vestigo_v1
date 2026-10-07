@@ -33,3 +33,10 @@ export function applyTheme(theme: Theme): void {
     // Without storage the choice lasts until the page is reloaded.
   }
 }
+
+/** The theme the page shows now (set before first paint by main.tsx), else the viewer's stored choice. */
+export function currentTheme(): Theme {
+  const shown = document.documentElement.dataset["theme"];
+  if (shown === "dark" || shown === "light") return shown;
+  return initialTheme();
+}

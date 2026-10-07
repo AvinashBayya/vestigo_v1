@@ -11,12 +11,3 @@ export const meQuery = (tenantId: string) =>
     queryKey: ["me", tenantId],
     queryFn: ({ signal }): Promise<Me> => unwrap(api.GET("/api/v1/me", { signal: timed(signal) })),
   });
-
-/** The tenant's vetting status in words, as the API states it. */
-export const VETTING_TEXT: Readonly<Record<VettingStatus, string>> = {
-  APPROVED: "Verified tenant",
-  PENDING: "Vetting pending",
-  NOT_SUBMITTED: "Vetting not submitted",
-  REJECTED: "Vetting rejected",
-  SUSPENDED: "Vetting suspended",
-};

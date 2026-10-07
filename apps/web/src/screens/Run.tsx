@@ -1,156 +1,156 @@
-import { Button, cn, Notice, Panel, Skeleton, StatusChip, Unmeasured } from "@repo/ui";
-import type { CollectorStatus } from "@repo/ui";
+import {
+  ArrivingNow,
+  BackLink,
+  Button,
+  Card,
+  CollectorList,
+  ContextHeader,
+  DashedNote,
+  EmptyState,
+  FailedAlert,
+  LoadingState,
+  MetricCard,
+  LockDetail,
+  RunStatusChip,
+  Skeleton,
+  StatusChip,
+  Tag,
+  TextLink,
+  Unmeasured,
+  type CollectorRowItem,
+  type RunLock,
+} from "@repo/ui";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiProblem } from "../api.ts";
 import { collectorsQuery, DISCIPLINE_TEXT, type Collector } from "../collectors.ts";
-import { AppShell } from "../components/AppShell.tsx";
-import { AccessLockedNotice, isAccessReason, LockedNotice } from "../components/LockedNotice.tsx";
-import { ProblemNotice } from "../components/ProblemNotice.tsx";
-import { meQuery } from "../me.ts";
+import { AccountButton } from "../components/Account.tsx";
+import { CommandPaletteHost } from "../components/CommandPaletteHost.tsx";
+import { ACCESS_NEXT_STEP, isAccessReason, LockedNotice } from "../components/LockedNotice.tsx";
+import { Instant } from "../components/Values.tsx";
+import { meQuery, type VettingStatus } from "../me.ts";
+import { messageFor } from "../messages.ts";
 import {
-  durationBetween,
+  arrivingRows,
+  countChips,
+  excludedRowItem,
   formatDuration,
-  jobStatus,
+  jobRowItem,
+  jobRowStatus,
+  notApplicableMessage,
   RUN_STATUS_TEXT,
   StreamDropped,
   type JobData,
   type LockedEventData,
   type RunData,
-  type RunStatus,
 } from "../run/progress.ts";
 import { useRunStream, type Connection } from "../run/useRunStream.ts";
-import { exclusionStatus, NOT_APPLICABLE_REASON, TYPE_LABEL } from "../search/plan.ts";
+import {
+  exclusionStatus,
+  NOT_APPLICABLE_REASON,
+  TYPE_LABEL,
+  type TargetType,
+} from "../search/plan.ts";
 import { sessionQuery } from "../session.ts";
-import { WorkspaceTabs } from "../workspace/Workspace.tsx";
 
 /** Neither cost is recorded on a run yet; each says so rather than showing a number. */
 const NO_ESTIMATE_RECORDED =
-  "This run does not record a cost estimate. Estimates are made before a run starts, and none is stored with it.";
-const NO_COST_RECORDED =
-  "This run does not record what it cost: per-run cost metering is not built yet.";
+  "no collector declares a credit cost yet, and the run stores no estimate";
+const NO_COST_RECORDED = "per-run cost metering is not built yet";
+const NO_MODEL_RECORDED =
+  "the run does not record a model; the model is named on each report when one is generated";
 
-/** A run's status as a §3 chip; a run that finished with every source succeeding ran. */
-const RUN_CHIP: Readonly<Record<RunStatus, CollectorStatus>> = {
-  QUEUED: "QUEUED",
-  RUNNING: "RUNNING",
-  SUCCEEDED: "RAN",
-  PARTIAL: "PARTIAL",
-  FAILED: "FAILED",
-  CANCELLED: "CANCELLED",
+/** An organisation's vetting status in words, as /me states it. */
+const VETTING_TEXT: Readonly<Record<VettingStatus, string>> = {
+  NOT_SUBMITTED: "not submitted",
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+  SUSPENDED: "suspended",
 };
 
-/** The status dot beside a source: the chip's colour, never its only sign. */
-const DOT: Readonly<Record<CollectorStatus, string>> = {
-  RAN: "bg-claim-observed-mark",
-  PARTIAL: "bg-claim-observed-mark",
-  READY: "bg-claim-observed-mark",
-  RUNNING: "bg-accent",
-  FAILED: "bg-status-failed-mark",
-  NEEDS_KEY: "bg-claim-inferred-mark",
-  SKIPPED: "bg-ink-muted",
-  HELD: "bg-ink-muted",
-  QUEUED: "bg-ink-muted",
-  CANCELLED: "bg-ink-muted",
-  UNAVAILABLE: "bg-ink-muted",
-  FOUND_NOTHING: "bg-ink-muted",
-  LOCKED: "bg-ink-muted",
-};
-
-/** How each status is counted in the summary: the word stays the status's own. */
-const COUNT_WORD: Readonly<Record<CollectorStatus, string>> = {
-  RAN: "ran",
-  RUNNING: "running",
-  QUEUED: "queued",
-  FAILED: "failed",
-  NEEDS_KEY: "need a key",
-  SKIPPED: "skipped",
-  CANCELLED: "cancelled",
-  PARTIAL: "partial",
-  HELD: "held",
-  READY: "ready",
-  UNAVAILABLE: "unavailable",
-  FOUND_NOTHING: "found nothing",
-  LOCKED: "locked",
-};
-
-/** The statuses a job can have, in the order the summary counts them. */
-const JOB_CHIP_ORDER: readonly CollectorStatus[] = [
-  "RAN",
-  "RUNNING",
-  "QUEUED",
-  "FAILED",
-  "NEEDS_KEY",
-  "SKIPPED",
-  "CANCELLED",
-];
-
-const plural = (count: number, word: string) => `${String(count)} ${word}${count === 1 ? "" : "s"}`;
+/** A refusal at connect that says the run does not exist (or is not this organisation's). */
+const isNotFound = (error: unknown): boolean =>
+  error instanceof ApiProblem && (error.status === 404 || error.code === "NOT_FOUND");
 
 /**
- * A run's live progress (docs/design/mockups/RunLive.dc.html): every source
- * with its status and, in words, what it found or why not; what has arrived;
- * the cost; and the run's settings. Only what the API states is shown.
+ * A run's live progress (docs/design/mockups/RunLive.dc.html), full-bleed: the
+ * run header, then every collector with its status and, in words, what it
+ * found or why not; what has arrived; the cost; and the run's settings. Only
+ * what the API states is shown.
  */
 export function RunScreen({ runId }: { readonly runId: string }) {
   const { progress, connection, lastUpdate, reconnect } = useRunStream(runId);
-  const { run, jobs, ended, locked } = progress;
+  const { jobs, ended, locked } = progress;
+  const dropped = connection.kind === "dropped" ? connection.error : undefined;
+  // The run no longer exists (the stream said so), or never did (a 404 at connect).
+  const gone = (ended !== null && ended.status === null) || isNotFound(dropped);
+  // A lock on the stream, or a person-data refusal at connect.
+  const refused = locked !== null || (dropped instanceof ApiProblem && dropped.locked !== null);
+  // A refused (re)connection: a 401 or 403, with or without a Locked block. The
+  // access that read what is held is no longer there, whatever the reason.
+  const accessGone =
+    refused ||
+    (dropped instanceof ApiProblem && (dropped.status === 401 || dropped.status === 403));
+  // A run that no longer exists, a lock, or a refused reconnect (CLAUDE.md §2,
+  // §9: the access that read it is gone) leaves nothing received on screen:
+  // never "as of" the check. REGRESSION (U1-c re-check): a refused reconnect
+  // after a stream timeout left the earlier run on screen under the Locked notice.
+  const run = gone || accessGone ? null : progress.run;
+  // Nothing has said what the run is yet, and nothing has stopped it saying so.
+  // A stream that closed before saying it never will: that is not loading.
+  const waiting =
+    run === null &&
+    !gone &&
+    locked === null &&
+    connection.kind !== "dropped" &&
+    connection.kind !== "closed";
+  const closedEarly = run === null && !gone && locked === null && connection.kind === "closed";
   const collectors = useQuery(collectorsQuery);
   const byId = new Map((collectors.data?.items ?? []).map((item) => [item.id, item]));
 
   return (
-    <AppShell>
-      <div className="flex flex-col gap-6">
-        <RunHeader run={run} />
-        <WorkspaceTabs scope={{ kind: "run", id: runId }} tab="progress" />
-        <ConnectionNotice
+    <div className="flex min-h-screen flex-col bg-surface-page">
+      {/* Full-bleed, so no app frame mounts the palette: Ctrl/⌘K works here too. */}
+      <CommandPaletteHost button={false} />
+      <RunHeader runId={runId} run={run} loading={waiting} results={!gone && !accessGone} />
+      <main className="flex flex-1 flex-col gap-6 px-4 py-6 sm:px-9">
+        <PageNotice
           connection={connection}
           locked={locked}
-          runGone={ended !== null && ended.status === null}
+          gone={gone}
+          holding={run !== null}
           lastUpdate={lastUpdate}
           onReconnect={reconnect}
         />
         {run === null ? (
-          connection.kind === "connecting" ? (
-            <RunSkeleton />
+          waiting ? (
+            <RunSkeleton connection={connection} />
+          ) : closedEarly ? (
+            <EmptyState
+              title="The run's details did not arrive"
+              action={
+                <Button variant="secondary" size="md" onClick={reconnect}>
+                  Reconnect
+                </Button>
+              }
+            >
+              {WAITING_TEXT.closed} Nothing about this run is shown, so nothing here is stale.
+            </EmptyState>
           ) : null
         ) : (
-          <div className="grid gap-6 lg:grid-cols-12">
-            <div className="flex flex-col gap-6 lg:col-span-8">
-              <SummaryPanel run={run} jobs={jobs} live={connection.kind === "live"} />
-              <SourcesPanel run={run} jobs={jobs} byId={byId} />
-            </div>
-            <div className="flex flex-col gap-6 lg:col-span-4">
-              <ArrivingPanel jobs={jobs} />
-              <Panel className="flex flex-col gap-3">
-                <Heading>Cost</Heading>
-                <CostLine label="Estimated before the run" reason={NO_ESTIMATE_RECORDED} />
-                <CostLine label="Spent so far" reason={NO_COST_RECORDED} />
-              </Panel>
-              <SettingsPanel jobs={jobs} byId={byId} collectorsFailed={collectors.isError} />
-              <p className="rounded-lg border border-dashed border-border-strong p-4 text-small text-ink-secondary">
-                Nothing is inferred to fill a gap. A source that failed is shown as failed, and what
-                it would have found stays unmeasured.
-              </p>
-            </div>
-          </div>
+          <RunBody
+            run={run}
+            jobs={jobs}
+            byId={byId}
+            collectors={collectors}
+            live={connection.kind === "live"}
+            lastUpdate={lastUpdate}
+          />
         )}
-      </div>
-    </AppShell>
-  );
-}
-
-function Heading({ children }: { readonly children: ReactNode }) {
-  return <h2 className="text-eyebrow uppercase text-ink-muted">{children}</h2>;
-}
-
-/** An instant in the reader's local time, in mono, with the exact value for machines. */
-function Instant({ iso }: { readonly iso: string }) {
-  return (
-    <time dateTime={iso} className="font-mono text-mono-caption">
-      {new Date(iso).toLocaleString()}
-    </time>
+      </main>
+    </div>
   );
 }
 
@@ -159,140 +159,267 @@ function useNow(ticking: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!ticking) return;
+    // Ticking resumes (a reconnect): the time held from before is stale, so refresh at once.
+    const resume = setTimeout(() => {
+      setNow(Date.now());
+    }, 0);
     const timer = setInterval(() => {
       setNow(Date.now());
     }, 1000);
     return () => {
+      clearTimeout(resume);
       clearInterval(timer);
     };
   }, [ticking]);
   return now;
 }
 
-function RunSkeleton() {
-  return (
-    <div className="flex flex-col gap-6" aria-busy="true" aria-label="Connecting to the run">
-      {[0, 1].map((panel) => (
-        <Panel key={panel} className="flex flex-col gap-3">
-          <Skeleton className="h-5 w-1/4" />
-          <Skeleton className="h-target" />
-          <Skeleton className="h-target" />
-        </Panel>
-      ))}
-    </div>
-  );
-}
+const planOf = (run: RunData | null) =>
+  run !== null && run.plan !== null && "input" in run.plan ? run.plan : null;
 
-/** Back to search, the target, what it was taken as, and the run's status. */
-function RunHeader({ run }: { readonly run: RunData | null }) {
-  const plan = run !== null && run.plan !== null && "input" in run.plan ? run.plan : null;
+/**
+ * §9 Run view header (RunLive): back to Search, the target in mono, what it
+ * was taken as and its alternates, then the run's status, the way to its
+ * results, and the account menu (full-bleed, so no app header holds it).
+ * "Open case" and "Pause" are not shown: runs are not linked to cases, and
+ * pausing is not built.
+ */
+function RunHeader({
+  runId,
+  run,
+  loading,
+  results,
+}: {
+  readonly runId: string;
+  readonly run: RunData | null;
+  readonly loading: boolean;
+  /** Whether "View results" can lead anywhere: not for a run that is gone, nor behind a lock. */
+  readonly results: boolean;
+}) {
+  const plan = planOf(run);
+  let title: ReactNode;
+  if (plan !== null) {
+    title = plan.input;
+  } else if (loading) {
+    title = (
+      <>
+        <span className="sr-only">Run</span>
+        <Skeleton className="h-5 w-16" />
+      </>
+    );
+  } else {
+    // The run has not stated a target (not planned yet, or planning failed): none is shown.
+    title = <span className="font-sans text-ui text-ink-muted">Run</span>;
+  }
+  const type =
+    plan === null
+      ? null
+      : plan.requestedType !== null
+        ? `Chosen: ${TYPE_LABEL[plan.requestedType].toLowerCase()}`
+        : plan.detected === null
+          ? null
+          : `Detected: ${TYPE_LABEL[plan.detected.primaryType].toLowerCase()}`;
+  const alternates =
+    plan === null || plan.detected === null || plan.detected.alternateTypes.length === 0
+      ? null
+      : plan.detected.alternateTypes.map((entry) => TYPE_LABEL[entry].toLowerCase()).join(", ");
+
   return (
-    <div className="flex flex-wrap items-center gap-3 border-b border-border-default pb-4">
-      <Button variant="quiet" asChild>
-        <Link to="/">Search</Link>
-      </Button>
-      {plan === null ? null : (
+    <ContextHeader
+      kind="run"
+      back={
+        <BackLink asChild chevron={false}>
+          <Link to="/">Search</Link>
+        </BackLink>
+      }
+      title={title}
+      meta={
+        type === null && alternates === null ? undefined : (
+          <>
+            {type === null ? null : <Tag>{type}</Tag>}
+            {alternates === null ? null : (
+              <span className="text-caption text-ink-muted">alternates: {alternates}</span>
+            )}
+          </>
+        )
+      }
+      actions={
         <>
-          <p className="font-mono text-mono-body text-ink-primary">{plan.input}</p>
-          {plan.requestedType !== null ? (
-            <span className="inline-flex rounded-pill bg-accent-soft px-3 py-1 text-caption text-accent-ink">
-              Chosen: {TYPE_LABEL[plan.requestedType].toLowerCase()}
-            </span>
-          ) : plan.detected === null ? null : (
-            <span className="inline-flex rounded-pill bg-accent-soft px-3 py-1 text-caption text-accent-ink">
-              Detected: {TYPE_LABEL[plan.detected.primaryType].toLowerCase()}
-            </span>
-          )}
-          {plan.detected === null || plan.detected.alternateTypes.length === 0 ? null : (
-            <p className="text-small text-ink-muted">
-              alternates:{" "}
-              {plan.detected.alternateTypes
-                .map((type) => TYPE_LABEL[type].toLowerCase())
-                .join(", ")}
-            </p>
-          )}
+          {run === null ? null : <RunStatusChip status={run.status} />}
+          {results ? (
+            <TextLink asChild>
+              <Link to="/runs/$runId/$tab" params={{ runId, tab: "overview" }}>
+                View results
+              </Link>
+            </TextLink>
+          ) : null}
         </>
-      )}
-      {run === null ? null : <StatusChip className="ml-auto" status={RUN_CHIP[run.status]} />}
-    </div>
+      }
+      account={<AccountButton />}
+    />
   );
 }
 
-function ConnectionNotice({
+/** What the skeleton waits for, by where the connection stands (a dropped one shows no skeleton). */
+const WAITING_TEXT: Readonly<Record<Connection["kind"], string>> = {
+  connecting: "Connecting to the run.",
+  live: "Connected. Waiting for the run's details.",
+  closed: "The stream closed before it sent the run's details.",
+  dropped: "The stream stopped before it sent the run's details.",
+};
+
+function RunSkeleton({ connection }: { readonly connection: Connection }) {
+  return (
+    <LoadingState what={WAITING_TEXT[connection.kind]}>
+      <div className="grid grid-cols-1 gap-5.5 lg:grid-cols-12">
+        <div className="flex flex-col gap-4 lg:col-span-8">
+          <Card label="Run summary" padding="run" className="gap-2">
+            <Skeleton className="h-5 w-1/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </Card>
+          <Card label="Collectors" padding="run" className="gap-2">
+            {[0, 1, 2, 3].map((row) => (
+              <Skeleton key={row} className="h-row-comfortable" />
+            ))}
+          </Card>
+        </div>
+        <div className="flex flex-col gap-4 lg:col-span-4">
+          {["Arriving now", "Cost", "Run settings"].map((name) => (
+            <Card key={name} label={name} padding="run" className="gap-2">
+              <Skeleton className="h-5 w-1/3" />
+              <Skeleton className="h-5" />
+            </Card>
+          ))}
+        </div>
+      </div>
+    </LoadingState>
+  );
+}
+
+/**
+ * The page's notice slot: a run that no longer exists, a lock that came
+ * before any run, a refused connection, or a dropped stream (§8 Failed and
+ * Stale: what is shown stays, as of the last update, never marked finished).
+ */
+function PageNotice({
   connection,
   locked,
-  runGone,
+  gone,
+  holding,
   lastUpdate,
   onReconnect,
 }: {
   readonly connection: Connection;
+  /** The lock the stream closed with: it takes the place of everything the stream sent. */
   readonly locked: LockedEventData | null;
-  readonly runGone: boolean;
+  /** The run no longer exists, or the API found none at connect: no reconnect can change that. */
+  readonly gone: boolean;
+  /** Whether a run received earlier is on screen. */
+  readonly holding: boolean;
   readonly lastUpdate: Date | null;
   readonly onReconnect: () => void;
 }) {
-  if (locked !== null) {
-    // A policy decision, not a dropped connection: no reconnect is offered.
-    if (locked.locked !== null) return <LockedNotice locked={locked.locked} />;
-    if (isAccessReason(locked.reason)) {
-      return (
-        <AccessLockedNotice
-          reason={locked.reason}
-          code={locked.code}
-          detail={locked.detail}
-          asOf={locked.checkedAt}
-        />
-      );
-    }
-    // A person-data reason always carries its Locked block; if one ever arrives
-    // without it, show the API's own words rather than writing a next step.
+  if (gone) {
     return (
-      <Notice className="flex flex-col gap-1">
-        <p className="text-eyebrow uppercase">Locked</p>
-        <p>{locked.detail}</p>
-        <p className="font-mono text-mono-caption">
-          Reason: {locked.reason} · Code: {locked.code}
-        </p>
-      </Notice>
+      <EmptyState
+        title="Run not found"
+        action={
+          <TextLink asChild>
+            <Link to="/">Start a search</Link>
+          </TextLink>
+        }
+      >
+        {connection.kind === "dropped"
+          ? "There is no run with this ID in your organisation, so there is nothing to show."
+          : "This run no longer exists, so there is nothing more to show."}
+      </EmptyState>
     );
   }
-  if (runGone) {
+  if (locked !== null) return <RunLockCard locked={locked} />;
+  if (connection.kind === "connecting" && holding && lastUpdate !== null) {
+    // What is on screen came before this connection: it never reads as current.
     return (
-      <Notice tone="failure">This run no longer exists, so there is nothing more to show.</Notice>
+      <p role="status" className="text-meta text-ink-secondary">
+        Reconnecting… shown as of <Instant iso={lastUpdate.toISOString()} />
+      </p>
     );
   }
   if (connection.kind !== "dropped") return null;
   const { error } = connection;
-  if (error instanceof ApiProblem && error.locked !== null) return <ProblemNotice error={error} />;
+  // A refusal by the person-data gate at connect is the Locked state, not a failure.
+  if (error instanceof ApiProblem && error.locked !== null) {
+    return <LockedNotice locked={error.locked} />;
+  }
+  const failure =
+    error instanceof StreamDropped
+      ? { title: "Live updates stopped.", reason: error.message, code: error.code }
+      : (() => {
+          const message = messageFor(error);
+          return { title: "Could not follow this run.", reason: message.text, code: message.code };
+        })();
   return (
-    <div className="flex flex-col gap-2">
-      {error instanceof StreamDropped ? (
-        <Notice tone="failure" className="flex flex-col gap-1">
-          <p>Live updates stopped. {error.message}</p>
-          <p className="font-mono text-mono-caption">Code: {error.code}</p>
-        </Notice>
-      ) : (
-        <ProblemNotice error={error} />
-      )}
-      <p className="text-small text-ink-secondary">
+    <FailedAlert
+      title={failure.title}
+      reason={failure.reason}
+      code={failure.code}
+      action={
+        <Button variant="secondary" size="md" onClick={onReconnect}>
+          Reconnect
+        </Button>
+      }
+    >
+      <p className="text-meta text-ink-secondary">
         The run goes on without this page.{" "}
         {lastUpdate === null ? (
           "Nothing had been received yet."
         ) : (
           <>
-            What is shown below is as of{" "}
-            <time dateTime={lastUpdate.toISOString()} className="font-mono text-mono-caption">
-              {lastUpdate.toLocaleTimeString()}
-            </time>
-            .
+            What is shown below is as of <Instant iso={lastUpdate.toISOString()} />.
           </>
         )}
       </p>
-      <p>
-        <Button variant="secondary" onClick={onReconnect}>
-          Reconnect
-        </Button>
-      </p>
+    </FailedAlert>
+  );
+}
+
+/**
+ * The Locked state for a stream closed by a lock (§3 Locked, §8 Locked:
+ * neutral, never a failure, no reconnect). Everything the stream had sent is
+ * withheld, whatever the reason: the access that read it is gone. The lock
+ * says why (LockDetail: the reason in words, the API's Locked block where the
+ * event carries one, and the code, once), and the next step.
+ */
+function RunLockCard({ locked }: { readonly locked: LockedEventData }) {
+  const lock: RunLock = {
+    reason: locked.reason,
+    code: locked.code,
+    detail: locked.detail,
+    locked: locked.locked,
+    recheckIntervalMs: locked.recheckIntervalMs,
+    checkedAt: <Instant iso={locked.checkedAt} />,
+  };
+  const step = isAccessReason(locked.reason) ? ACCESS_NEXT_STEP[locked.reason] : null;
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-3 rounded-lg border border-border-default bg-surface-raised px-5 py-4.5"
+    >
+      <StatusChip status="LOCKED" />
+      <div className="flex min-w-0 flex-col gap-2">
+        <p className="text-ui text-ink-primary">
+          Live updates for this run are withheld. Nothing it had sent is shown.
+        </p>
+        <LockDetail lock={lock} />
+        {step === null ? null : step.link === null ? (
+          <p className="text-ui-strong text-ink-primary">{step.text}</p>
+        ) : (
+          <p>
+            <TextLink asChild>
+              <Link to={step.link}>{step.text}</Link>
+            </TextLink>
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -300,321 +427,189 @@ function ConnectionNotice({
 const excludedOf = (run: RunData) =>
   run.plan !== null && "excluded" in run.plan ? run.plan.excluded : [];
 
-function SummaryPanel({
-  run,
-  jobs,
-  live,
-}: {
-  readonly run: RunData;
-  readonly jobs: readonly JobData[];
-  readonly live: boolean;
-}) {
-  const now = useNow(run.finishedAt === null && run.startedAt !== null);
-  const settled = jobs.filter((job) => !["QUEUED", "RUNNING"].includes(job.status)).length;
-  const elapsed =
-    run.startedAt === null
-      ? null
-      : (run.finishedAt === null ? now : Date.parse(run.finishedAt)) - Date.parse(run.startedAt);
-  // Each status a job can have, in a fixed order; a status no job has is not shown.
-  const counts = JOB_CHIP_ORDER.map(
-    (status) => [status, jobs.filter((job) => jobStatus(job) === status).length] as const,
-  ).filter(([, count]) => count > 0);
-  const notRun = excludedOf(run).length;
+/** The types the plan read the target as, valid ones only (as the planner matches them), once each. */
+const targetTypesOf = (run: RunData): TargetType[] =>
+  run.plan !== null && "targets" in run.plan
+    ? [
+        ...new Set(
+          run.plan.targets.filter((target) => "value" in target).map((target) => target.type),
+        ),
+      ]
+    : [];
 
-  return (
-    <Panel className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <p className="text-body-strong text-ink-primary">{RUN_STATUS_TEXT[run.status]}</p>
-          <p className="text-small text-ink-secondary">
-            {settled} of {jobs.length} sources settled ·{" "}
-            {elapsed === null ? "not started yet" : `elapsed ${formatDuration(elapsed)}`}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {counts.map(([status, count]) => (
-            <StatusChip key={status} status={status}>
-              {`${String(count)} ${COUNT_WORD[status]}`}
-            </StatusChip>
-          ))}
-          {notRun === 0 ? null : (
-            <StatusChip status="SKIPPED">{`${String(notRun)} not run`}</StatusChip>
-          )}
-        </div>
-      </div>
-      {run.finishedAt !== null && !run.settled ? (
-        <p className="text-body text-ink-secondary">
-          Every source has finished; their results are still being merged.
-        </p>
-      ) : null}
-      {run.plan !== null && "error" in run.plan ? (
-        <p className="text-body text-status-failed-ink">
-          The run could not be planned: {run.plan.error.message}
-        </p>
-      ) : null}
-      <p className="flex flex-wrap gap-x-4 gap-y-1 text-small text-ink-secondary">
-        <span>
-          Queued <Instant iso={run.createdAt} />
-        </span>
-        <span>
-          {run.startedAt === null ? (
-            "Not started yet"
-          ) : (
-            <>
-              Started <Instant iso={run.startedAt} />
-            </>
-          )}
-        </span>
-        <span>
-          {run.finishedAt === null ? (
-            "Not finished yet"
-          ) : (
-            <>
-              Finished <Instant iso={run.finishedAt} />
-            </>
-          )}
-        </span>
-      </p>
-      <p className="font-mono text-mono-caption text-ink-muted">Run {run.id}</p>
-      {live ? (
-        <p className="text-small text-ink-secondary">
-          Live: this page updates as each source finishes.
-        </p>
-      ) : null}
-    </Panel>
-  );
-}
-
-/** Joins a caption's parts with the designs' middle dot. */
-function joined(parts: readonly ReactNode[]): ReactNode {
-  return parts.map((part, index) => (
-    <span key={index}>
-      {index === 0 ? null : " · "}
-      {part}
-    </span>
-  ));
-}
-
-/** What a job's status means for this job, in words: what it found, or why it did not. */
-function jobCaption(job: JobData, collector: Collector | undefined): ReactNode {
-  const parts: ReactNode[] = [];
-  if (collector !== undefined) parts.push(DISCIPLINE_TEXT[collector.discipline]);
-  const attempts = plural(job.attempts, "attempt");
-  const reason = job.error === null ? null : `${job.error.code}: ${job.error.message}`;
-  const took = durationBetween(job.startedAt, job.finishedAt);
-  switch (jobStatus(job)) {
-    case "RAN":
-      if (job.outcome === "NOT_FOUND") {
-        parts.push(
-          job.outcomeDetail === null ? "found nothing" : `found nothing: ${job.outcomeDetail}`,
-        );
-      } else {
-        parts.push(plural(job.evidenceIds.length, "evidence record"));
-        if (job.fusedAt === null) parts.push("merging into the results");
-      }
-      if (took !== null) parts.push(formatDuration(took));
-      if (job.attempts > 1) parts.push(`recovered on attempt ${String(job.attempts)}`);
-      break;
-    case "NEEDS_KEY":
-      parts.push(reason === null ? "needs a key that is not set for your organisation" : reason);
-      break;
-    case "SKIPPED":
-      parts.push(reason === null ? "refused before it ran" : reason);
-      break;
-    case "FAILED":
-      parts.push(reason === null ? "failed, and no reason was recorded" : reason);
-      if (job.deadLetteredAt === null) {
-        parts.push(`stopped after ${attempts}`);
-      } else {
-        parts.push(`gave up after ${attempts}`);
-        parts.push(
-          <>
-            dead-lettered <Instant iso={job.deadLetteredAt} />, kept for review
-          </>,
-        );
-      }
-      break;
-    case "QUEUED":
-      if (job.nextAttemptAt === null) {
-        parts.push("waiting for a worker");
-      } else {
-        if (reason !== null) parts.push(reason);
-        parts.push(
-          <>
-            next attempt <Instant iso={job.nextAttemptAt} /> (after {attempts})
-          </>,
-        );
-      }
-      break;
-    case "RUNNING":
-      parts.push(job.attempts > 1 ? `collecting: attempt ${String(job.attempts)}` : "collecting");
-      break;
-    case "CANCELLED":
-      parts.push("cancelled before it finished");
-      break;
-    case "PARTIAL":
-    case "HELD":
-    case "READY":
-      // Not a job status: jobStatus never returns these.
-      break;
-  }
-  return joined(parts);
-}
-
-function SourceRow({
-  status,
-  label,
-  caption,
-}: {
-  readonly status: CollectorStatus;
-  readonly label: ReactNode;
-  readonly caption: ReactNode;
-}) {
-  return (
-    <li
-      className={cn(
-        "flex items-start gap-3 rounded-md px-3 py-3",
-        status === "FAILED" && "border border-status-failed-mark bg-status-failed-fill",
-        status === "RUNNING" && "bg-surface-hover",
-      )}
-    >
-      <span aria-hidden="true" className={cn("mt-2 size-2 shrink-0 rounded-pill", DOT[status])} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-body-strong text-ink-primary">{label}</p>
-        <p
-          className={cn(
-            "text-small",
-            status === "FAILED" ? "text-status-failed-ink" : "text-ink-secondary",
-          )}
-        >
-          {caption}
-        </p>
-      </div>
-      <StatusChip status={status} />
-    </li>
-  );
-}
-
-/** Every source: those that ran, then those the plan left out, each with why. */
-function SourcesPanel({
+function RunBody({
   run,
   jobs,
   byId,
+  collectors,
+  live,
+  lastUpdate,
 }: {
   readonly run: RunData;
   readonly jobs: readonly JobData[];
   readonly byId: ReadonlyMap<string, Collector>;
+  readonly collectors: { readonly isPending: boolean; readonly isError: boolean };
+  readonly live: boolean;
+  readonly lastUpdate: Date | null;
 }) {
+  const jobRows: CollectorRowItem[] = jobs.map((job) => {
+    const collector = byId.get(job.collectorId);
+    return jobRowItem(job, collector === undefined ? null : DISCIPLINE_TEXT[collector.discipline]);
+  });
   const excluded = excludedOf(run);
-  return (
-    <Panel className="flex flex-col gap-3">
-      <Heading>Sources</Heading>
-      {jobs.length === 0 && excluded.length === 0 ? (
-        <p className="text-body text-ink-secondary">No source was planned for this run.</p>
-      ) : (
-        <ul className="flex flex-col gap-1">
-          {jobs.map((job) => (
-            <SourceRow
-              key={job.id}
-              status={jobStatus(job)}
-              label={job.sourceLabel}
-              caption={jobCaption(job, byId.get(job.collectorId))}
-            />
-          ))}
-          {excluded.map((row) => {
-            const collector = byId.get(row.collectorId);
-            return (
-              <SourceRow
-                key={row.collectorId}
-                status={
-                  row.reason === NOT_APPLICABLE_REASON ? "SKIPPED" : exclusionStatus(row.reason)
-                }
-                // The plan records ids; the label comes from the collector list when it has one.
-                label={
-                  collector === undefined ? (
-                    <span className="font-mono text-mono-body">{row.collectorId}</span>
-                  ) : (
-                    collector.label
-                  )
-                }
-                caption={joined([
-                  ...(collector === undefined ? [] : [DISCIPLINE_TEXT[collector.discipline]]),
-                  row.message,
-                ])}
-              />
-            );
-          })}
-        </ul>
-      )}
-    </Panel>
-  );
-}
+  const targetTypes = targetTypesOf(run);
+  const excludedRows = excluded.map((row, index) => {
+    const collector = byId.get(row.collectorId);
+    // A source that does not take this kind of target says so in type words, never type codes.
+    const stated =
+      row.reason === NOT_APPLICABLE_REASON
+        ? { ...row, message: notApplicableMessage(targetTypes, collector?.targetTypes ?? null) }
+        : row;
+    return excludedRowItem(
+      stated,
+      index,
+      row.reason === NOT_APPLICABLE_REASON ? "SKIPPED" : exclusionStatus(row.reason),
+      collector === undefined
+        ? undefined
+        : { label: collector.label, discipline: DISCIPLINE_TEXT[collector.discipline] },
+    );
+  });
 
-/** What has arrived, counted from the run itself; what a source that did not complete would have found stays unmeasured. */
-function ArrivingPanel({ jobs }: { readonly jobs: readonly JobData[] }) {
-  const evidence = jobs.reduce((sum, job) => sum + job.evidenceIds.length, 0);
-  const found = jobs.filter((job) => job.status === "SUCCEEDED" && job.outcome === "FOUND").length;
-  const nothing = jobs.filter(
-    (job) => job.status === "SUCCEEDED" && job.outcome === "NOT_FOUND",
-  ).length;
-  const missing = jobs.filter((job) =>
-    ["FAILED", "NEEDS_KEY", "SKIPPED", "CANCELLED"].includes(jobStatus(job)),
-  );
   return (
-    <Panel className="flex flex-col gap-3">
-      <Heading>Arriving now</Heading>
-      <ul className="flex flex-col divide-y divide-border-subtle">
-        <CountRow label="Evidence records" value={evidence} />
-        <CountRow label="Sources that found something" value={found} />
-        <CountRow label="Sources that found nothing" value={nothing} />
-        {missing.map((job) => (
-          <li key={job.id} className="flex flex-col gap-1 py-2">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-body text-ink-primary">From {job.sourceLabel}</span>
-              <Unmeasured
-                reason={`${job.sourceLabel} did not complete, so what it would have found is not measured.`}
-              />
-            </div>
-            <p className="text-small text-status-failed-ink">
-              Not measured: {job.sourceLabel} did not complete.
-            </p>
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
-}
-
-function CountRow({ label, value }: { readonly label: string; readonly value: number }) {
-  return (
-    <li className="flex items-center justify-between gap-3 py-2">
-      <span className="text-body text-ink-primary">{label}</span>
-      <span className="font-mono text-mono-body text-ink-primary">{value}</span>
-    </li>
-  );
-}
-
-function CostLine({ label, reason }: { readonly label: string; readonly reason: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-body text-ink-primary">{label}</p>
-        <Unmeasured reason={reason} />
+    <div className="grid grid-cols-1 gap-5.5 lg:grid-cols-12">
+      <div className="flex flex-col gap-4 lg:col-span-8">
+        <SummaryCard
+          run={run}
+          jobs={jobs}
+          rowStatuses={jobRows.map((row) => row.status)}
+          excludedCount={excluded.length}
+          live={live}
+          lastUpdate={lastUpdate}
+        />
+        <Card title="Collectors" padding="none">
+          <div className="flex flex-col gap-2 border-t border-border-subtle px-2 py-1">
+            {jobRows.length === 0 && excludedRows.length === 0 ? (
+              <EmptyState title="No collectors planned" className="my-2 border-none">
+                No source was planned for this run.
+              </EmptyState>
+            ) : (
+              <CollectorList items={[...jobRows, ...excludedRows]} className="py-1" />
+            )}
+          </div>
+        </Card>
       </div>
-      <p className="text-small text-ink-secondary">{reason}</p>
+      <div className="flex flex-col gap-4 lg:col-span-4">
+        <ArrivingNow rows={arrivingRows(jobs)} titleLevel={2} />
+        <MetricCard
+          title="Cost"
+          titleLevel={2}
+          rows={[
+            {
+              label: "Estimated before run",
+              value: { kind: "unavailable", reason: NO_ESTIMATE_RECORDED, cause: "not-recorded" },
+            },
+            {
+              label: "Spent so far",
+              value: { kind: "unavailable", reason: NO_COST_RECORDED, cause: "not-recorded" },
+            },
+          ]}
+        />
+        <SettingsCard jobs={jobs} byId={byId} collectors={collectors} />
+        <DashedNote>
+          Nothing is inferred to fill a gap. A collector that failed is shown as failed, and the
+          counts it would have produced stay unmeasured.
+        </DashedNote>
+      </div>
     </div>
   );
 }
 
-/** How the run collects, and what the organisation's plan allows; each from what the API states. */
-function SettingsPanel({
+function SummaryCard({
+  run,
+  jobs,
+  rowStatuses,
+  excludedCount,
+  live,
+  lastUpdate,
+}: {
+  readonly run: RunData;
+  readonly jobs: readonly JobData[];
+  readonly rowStatuses: readonly CollectorRowItem["status"][];
+  readonly excludedCount: number;
+  readonly live: boolean;
+  readonly lastUpdate: Date | null;
+}) {
+  const growing = run.finishedAt === null && run.startedAt !== null;
+  // Ticks only while the stream is live: a stream that stopped says nothing about now.
+  const now = useNow(growing && live);
+  const settled = jobs.filter((job) => !["QUEUED", "RUNNING"].includes(jobRowStatus(job))).length;
+  // Elapsed only where it was measured: from the run's recorded start to its
+  // recorded finish; else to now while live; else to the last update received.
+  const until =
+    run.finishedAt !== null
+      ? Date.parse(run.finishedAt)
+      : live
+        ? now
+        : (lastUpdate?.getTime() ?? null);
+  const elapsed =
+    run.startedAt === null || until === null ? null : until - Date.parse(run.startedAt);
+  const frozen = growing && !live;
+  const chips = countChips(rowStatuses, excludedCount);
+
+  return (
+    <Card label="Run summary" padding="run" className="gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1.25">
+          <p className="text-subtitle text-ink-primary">{RUN_STATUS_TEXT[run.status]}</p>
+          <p className="text-meta text-ink-muted">
+            {settled} of {jobs.length} collectors settled ·{" "}
+            {run.startedAt === null
+              ? "not started yet"
+              : elapsed === null
+                ? "elapsed not measured"
+                : `elapsed ${formatDuration(elapsed)}${frozen ? " as of the last update" : ""}`}
+          </p>
+        </div>
+        {chips.length === 0 ? null : (
+          <div className="flex flex-wrap gap-2">
+            {chips.map((chip) => (
+              <StatusChip key={chip.text} status={chip.status}>
+                {chip.text}
+              </StatusChip>
+            ))}
+          </div>
+        )}
+      </div>
+      {run.finishedAt !== null && !run.settled ? (
+        <p className="text-meta text-ink-secondary">
+          Every source has finished; their results are still being merged.
+        </p>
+      ) : null}
+      {run.plan !== null && "error" in run.plan ? (
+        <FailedAlert
+          title="The run could not be planned"
+          reason={run.plan.error.message}
+          code={run.plan.error.code}
+        />
+      ) : null}
+      {live ? (
+        <p className="text-meta text-ink-secondary">
+          Live: this page updates as each source finishes.
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
+/** How the run collects, what the organisation's plan allows, and the model: each as the API states it. */
+function SettingsCard({
   jobs,
   byId,
-  collectorsFailed,
+  collectors,
 }: {
   readonly jobs: readonly JobData[];
   readonly byId: ReadonlyMap<string, Collector>;
-  readonly collectorsFailed: boolean;
+  readonly collectors: { readonly isPending: boolean; readonly isError: boolean };
 }) {
   const { data: session } = useSuspenseQuery(sessionQuery);
   const tenantId = session.state === "SIGNED_IN" ? session.activeTenantId : null;
@@ -622,15 +617,21 @@ function SettingsPanel({
 
   const modes = jobs.map((job) => byId.get(job.collectorId)?.collectionMode);
   let collection: ReactNode;
-  if (collectorsFailed || modes.some((mode) => mode === undefined)) {
+  if (collectors.isPending) {
+    collection = <Skeleton className="h-5 w-16" />;
+  } else if (collectors.isError || modes.some((mode) => mode === undefined)) {
     collection = (
       <Unmeasured reason="The collector list could not be read, or does not list every source in this run." />
     );
   } else if (modes.length === 0) {
-    collection = "No source ran";
+    collection = <Tag mono={false}>No source ran</Tag>;
   } else {
     // Every mode but ACTIVE reads a third party's record and never contacts the target.
-    collection = modes.includes("ACTIVE") ? "Includes active collection" : "Passive only";
+    collection = (
+      <Tag mono={false}>
+        {modes.includes("ACTIVE") ? "Includes active collection" : "Passive only"}
+      </Tag>
+    );
   }
 
   let person: ReactNode;
@@ -638,29 +639,51 @@ function SettingsPanel({
     person = me.isError ? (
       <Unmeasured reason="Your organisation's plan could not be read." />
     ) : (
-      <Skeleton className="h-5 w-1/4" />
+      <Skeleton className="h-5 w-16" />
     );
-  } else if (!me.data.tenant.planModules.includes("PERSON_INVESTIGATION")) {
-    person = "Not in this plan";
   } else {
-    person = me.data.tenant.vettingStatus === "APPROVED" ? "Available" : "Vetting required";
+    // The facts /me states, never a verdict: whether person modules are open
+    // is an access decision, made in packages/access (CLAUDE.md §6, §9).
+    const { planModules, vettingStatus } = me.data.tenant;
+    person = (
+      <span className="ml-auto text-right text-meta text-ink-secondary">
+        Plan: {planModules.length === 0 ? "no modules" : planModules.join(", ")} · Vetting:{" "}
+        {VETTING_TEXT[vettingStatus]}
+      </span>
+    );
   }
 
   return (
-    <Panel className="flex flex-col gap-3">
-      <Heading>Run settings</Heading>
-      <SettingRow label="Collection mode" value={collection} />
-      <SettingRow label="Person modules" value={person} />
-      <SettingRow label="Model" value="Named on the report, when one is generated" />
-    </Panel>
+    <Card title="Run settings" padding="run" className="gap-3">
+      <dl className="flex flex-col gap-3">
+        <SettingRow label="Collection mode" value={collection} />
+        <SettingRow label="Person modules" value={person} />
+        {/* As the Cost rows: the em dash, and why in words beneath it. */}
+        <SettingRow
+          label="Model"
+          value={
+            <>
+              <span aria-hidden="true" className="ml-auto font-sans text-body text-ink-muted">
+                —
+              </span>
+              <span className="sr-only">Not measured — {NO_MODEL_RECORDED}</span>
+              <span aria-hidden="true" className="basis-full text-caption text-ink-muted">
+                Not measured — {NO_MODEL_RECORDED}
+              </span>
+            </>
+          }
+        />
+      </dl>
+    </Card>
   );
 }
 
+/** One setting: label and value on a shared baseline, the value at the end of the line. */
 function SettingRow({ label, value }: { readonly label: string; readonly value: ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-body text-ink-primary">{label}</span>
-      <span className="text-right text-small text-ink-secondary">{value}</span>
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+      <dt className="text-ui text-ink-primary">{label}</dt>
+      <dd className="contents">{value}</dd>
     </div>
   );
 }

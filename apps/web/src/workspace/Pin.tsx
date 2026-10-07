@@ -1,13 +1,27 @@
-import { Button, Field, Notice, Popover, PopoverContent, PopoverTrigger } from "@repo/ui";
+import {
+  Button,
+  Field,
+  Notice,
+  PinButton as PinToggle,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@repo/ui";
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { Pin } from "lucide-react";
-import { useState, type SyntheticEvent } from "react";
+import { useCallback, useMemo, useState, type SyntheticEvent } from "react";
 import { timed, unwrap } from "../api.ts";
 import { api } from "../client/index.ts";
 import { ProblemNotice } from "../components/ProblemNotice.tsx";
 import { meQuery } from "../me.ts";
 import { sessionQuery } from "../session.ts";
-import { casesQuery, type CaseRow, type PinRow, type PinTarget } from "./queries.ts";
+import {
+  casePinsQuery,
+  casesQuery,
+  type CaseRow,
+  type PinRow,
+  type PinTarget,
+  type Scope,
+} from "./queries.ts";
 
 const KIND_WORD: Readonly<Record<PinTarget["type"], string>> = {
   evidence: "evidence",
@@ -26,37 +40,74 @@ function useCanPin(): boolean | null {
 }
 
 /**
+ * What a read says about an item's pin state in this scope. In a case, an
+ * item found among the case's own pins is pinned (true). Anything else is
+ * unknown (null): no read says whether an item is pinned to some case, and
+ * the case's pins are read only to their first 500. "Not pinned" is never
+ * claimed, because nothing here could know it.
+ */
+export function usePinState(scope: Scope): (target: PinTarget) => true | null {
+  const pins = useQuery({ ...casePinsQuery(scope.id), enabled: scope.kind === "case" });
+  const known = useMemo(() => {
+    const keys = new Set<string>();
+    if (scope.kind !== "case") return keys;
+    for (const pin of pins.data?.items ?? []) keys.add(`${pin.target.type}:${pin.target.id}`);
+    return keys;
+  }, [scope.kind, pins.data]);
+  return useCallback(
+    (target: PinTarget) => (known.has(`${target.type}:${target.id}`) ? true : null),
+    [known],
+  );
+}
+
+/**
  * Pin-to-case (§9): on every result surface. Pins what is shown, by its type
- * and id, to an open case the reader chooses or creates here.
+ * and id, to an open case the reader chooses or creates here. The trigger is
+ * the library's pin button: "✓" only when a read (or this session's own pin)
+ * says the item is pinned, otherwise "+" with no pressed state at all.
  */
 export function PinButton({
   target,
   what,
+  pinned = null,
 }: {
   readonly target: PinTarget;
   /** What is being pinned, in words, for the button's accessible name. */
   readonly what: string;
+  /** True when a read says it is pinned; null when nothing says (never a guessed false). */
+  readonly pinned?: true | null | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  const [pinnedHere, setPinnedHere] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Pin ${KIND_WORD[target.type]} to a case: ${what}`}
-          className="inline-flex min-h-target min-w-target shrink-0 items-center justify-center rounded-sm border border-border-strong bg-surface-raised text-ink-secondary hover:bg-surface-hover"
-        >
-          <Pin className="size-4" strokeWidth={1.9} aria-hidden="true" />
-        </button>
+        <PinToggle
+          pinned={pinned === true || pinnedHere ? true : null}
+          label={`Pin ${KIND_WORD[target.type]} to a case: ${what}`}
+        />
       </PopoverTrigger>
       <PopoverContent className="w-form">
-        {open ? <PinPanel target={target} /> : null}
+        {open ? (
+          <PinPanel
+            target={target}
+            onPinned={() => {
+              setPinnedHere(true);
+            }}
+          />
+        ) : null}
       </PopoverContent>
     </Popover>
   );
 }
 
-function PinPanel({ target }: { readonly target: PinTarget }) {
+function PinPanel({
+  target,
+  onPinned,
+}: {
+  readonly target: PinTarget;
+  readonly onPinned: () => void;
+}) {
   const canPin = useCanPin();
   const cases = useQuery(casesQuery);
   const queryClient = useQueryClient();
@@ -75,6 +126,7 @@ function PinPanel({ target }: { readonly target: PinTarget }) {
     },
     onSuccess: async ({ row, already, title: caseTitle }) => {
       setPinned({ title: caseTitle, already });
+      onPinned();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["cases"] }),
         queryClient.invalidateQueries({ queryKey: ["case", row.caseId] }),
@@ -112,7 +164,7 @@ function PinPanel({ target }: { readonly target: PinTarget }) {
     return (
       <Notice>
         {pinned.already ? "Already pinned to " : "Pinned to "}
-        <span className="text-body-strong">{pinned.title}</span>.
+        <span className="text-small-strong">{pinned.title}</span>.
       </Notice>
     );
   }
@@ -126,7 +178,7 @@ function PinPanel({ target }: { readonly target: PinTarget }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-eyebrow uppercase text-ink-muted">Pin to a case</p>
+      <p className="text-eyebrow text-ink-muted uppercase">Pin to a case</p>
       {cases.isPending ? (
         <p className="text-small text-ink-muted">Reading your cases…</p>
       ) : cases.isError ? (
@@ -136,11 +188,12 @@ function PinPanel({ target }: { readonly target: PinTarget }) {
           No open case yet. Name one below to create it.
         </p>
       ) : (
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-2">
           {open.map((row) => (
             <li key={row.id}>
               <Button
                 variant="secondary"
+                size="md"
                 className="w-full justify-start"
                 disabled={pin.isPending || canPin === null}
                 onClick={() => {
@@ -170,6 +223,7 @@ function PinPanel({ target }: { readonly target: PinTarget }) {
         <Button
           type="submit"
           variant="secondary"
+          size="md"
           disabled={title.trim() === "" || create.isPending || pin.isPending || canPin === null}
         >
           Create and pin

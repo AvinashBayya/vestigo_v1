@@ -3,6 +3,9 @@ import {
   AddFilterChip,
   AppHeader,
   ArrivingNow,
+  BackLink,
+  Button,
+  Card,
   CitationMarker,
   Citations,
   CLAIM_STRENGTH_LABELS,
@@ -12,40 +15,62 @@ import {
   CommandPalette,
   CommandPaletteButton,
   CommandPalettePanel,
+  ContextHeader,
   CoverageLimitation,
+  CreditsMeter,
+  DashedNote,
   DataTable,
+  DensityToggle,
   ENTITY_CLASS_LABEL,
   EvidenceCard,
+  FailedAlert,
+  Field,
   FilterChip,
   FilterChipRow,
   FilterToggle,
   GraphShell,
   GraphToolbarButton,
+  HeroSearch,
   InferredPassage,
   InspectorDrawer,
   MapShell,
   MetricCard,
+  NavItem,
+  NestedCard,
   NO_OBSERVED_AT,
+  PinButton,
+  ProductMark,
   ReportProse,
+  ReportSectionHeading,
   ReportSurface,
   RUN_STATUSES,
   RunsRail,
   RunStatusChip,
   SelectedPointCard,
+  SideNav,
+  Skeleton,
   StatusChip,
   StatusDot,
   StrengthBadge,
   StrengthKey,
+  TabBar,
   TableSearch,
+  TabLink,
+  Tag,
+  TagList,
+  TextLink,
+  ToolbarInput,
   Unmeasured,
   useCommandPaletteShortcut,
   VETTING_STATUSES,
   VettingPill,
   type DataTableColumn,
   type DataTableRow,
+  type Density,
   type MapPoint,
   type ThemeChoice,
 } from "@repo/ui";
+import { FolderOpen, Info, Search } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { applyTheme, initialTheme } from "../theme.ts";
 import { CytoscapeGraph } from "../workspace/graph/CytoscapeGraph.tsx";
@@ -148,6 +173,17 @@ const SECTIONS: readonly (readonly [string, string])[] = [
   ["evidence", "Evidence card"],
   ["map", "Map shell"],
   ["report", "Report surface"],
+  ["buttons", "Buttons (sizes)"],
+  ["links", "Text and back links"],
+  ["tags", "Tag"],
+  ["navigation", "Side navigation"],
+  ["context-header", "Case and run header"],
+  ["tabbar", "Tab bar"],
+  ["card", "Card"],
+  ["density", "Density toggle"],
+  ["inputs", "Inputs"],
+  ["hero", "Hero search"],
+  ["extensions", "Failed, pins, active row"],
 ];
 
 function HeaderRowSection() {
@@ -996,7 +1032,8 @@ function ReportSection() {
   return (
     <Section id="report" index="12" name="Report surface (the only serif)" mockup="Report">
       <Specimen label="Section with citations, an inference and a coverage limitation" wide>
-        <ReportSurface title="[SECTION TITLE]">
+        <ReportSurface title="[REPORT TITLE]">
+          <ReportSectionHeading>[SECTION TITLE]</ReportSectionHeading>
           <ReportProse>
             [SUMMARY SENTENCE ONE.]
             <CitationMarker n={1} /> [SUMMARY SENTENCE TWO, DESCRIBING WHAT WAS OBSERVED DIRECTLY.]
@@ -1014,6 +1051,17 @@ function ReportSection() {
             <CitationMarker n={5} />
           </ReportProse>
           <Citations numbers={[5]} onOpen={setOpened} />
+          <ReportProse>
+            [SENTENCE CITING A NAMED SOURCE AND A NUMBER NO SOURCE MATCHES.]
+            <CitationMarker n={6} />
+            <CitationMarker n={7} />
+          </ReportProse>
+          <Citations
+            numbers={[6, 7]}
+            onOpen={setOpened}
+            labels={new Map([[6, "[SOURCE LABEL]"]])}
+            missing={(n) => `${String(n)}. [NO SOURCE MATCHES THIS NUMBER.]`}
+          />
           <CoverageLimitation title="Coverage limitation carried into the report">
             [WHAT WAS NEVER COLLECTED, AND WHY.] This section says so rather than describing the
             target as having none.
@@ -1024,6 +1072,456 @@ function ReportSection() {
             ? "No citation opened."
             : `Citation ${String(opened)} would open its evidence.`}
         </p>
+      </Specimen>
+    </Section>
+  );
+}
+
+/*
+ * U1-c: the components the rebuilt screens are made of. Each is drawn in every
+ * state it has, labelled with the mockup it matches. Values are bracketed
+ * placeholders; a measured figure is never drawn with a made-up number.
+ */
+
+const NO_CREDITS = "Not measured: credit metering is not built.";
+
+function ButtonSection() {
+  return (
+    <Section
+      id="buttons"
+      index="13"
+      name="Buttons at three sizes"
+      mockup="SignIn, MfaEnrol (lg); Overview, Entities (md); Workspace header, Entities (sm)"
+    >
+      {(["lg", "md", "sm"] as const).map((size) => (
+        <Specimen key={size} label={`${size}: primary, secondary, quiet, disabled, pending`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size={size}>[PRIMARY]</Button>
+            <Button size={size} variant="secondary">
+              [SECONDARY]
+            </Button>
+            <Button size={size} variant="quiet">
+              [QUIET]
+            </Button>
+            <Button size={size} disabled>
+              [DISABLED]
+            </Button>
+            <Button size={size} variant="secondary" disabled aria-busy>
+              [WORKING]…
+            </Button>
+          </div>
+        </Specimen>
+      ))}
+      <Specimen label="No size: the U1-b look, kept for screens not yet rebuilt">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button>[PRIMARY]</Button>
+          <Button variant="secondary">[SECONDARY]</Button>
+        </div>
+      </Specimen>
+    </Section>
+  );
+}
+
+function LinkSection() {
+  return (
+    <Section
+      id="links"
+      index="14"
+      name="Standalone link and back link (D2)"
+      mockup="Main (card header links); Workspace, Timeline (Cases); RunLive (Search)"
+    >
+      <Specimen label="TextLink at ui and at meta; BackLink with and without its chevron">
+        <div className="flex flex-wrap items-center gap-5">
+          <TextLink href="#links">[LINK AT UI]</TextLink>
+          <TextLink href="#links" size="meta">
+            [LINK AT META]
+          </TextLink>
+          <BackLink href="#links">Cases</BackLink>
+          <BackLink href="#links" chevron={false}>
+            Cases
+          </BackLink>
+        </div>
+      </Specimen>
+    </Section>
+  );
+}
+
+function TagSection() {
+  return (
+    <Section id="tags" index="15" name="Tag (never a pill)" mockup="Main (detect tags), RunLive">
+      <Specimen label="Literal data in mono; words in sans">
+        <div className="flex flex-wrap items-center gap-2">
+          <Tag>Detected: [TYPE]</Tag>
+          <Tag mono={false}>[SETTING IN WORDS]</Tag>
+        </div>
+      </Specimen>
+      <Specimen label="A caption and its tags">
+        <TagList label="Detects automatically:" tags={["[TYPE A]", "[TYPE B]", "[TYPE C]"]} />
+      </Specimen>
+    </Section>
+  );
+}
+
+function NavigationSection() {
+  const [current, setCurrent] = useState<"search" | "cases">("search");
+  return (
+    <Section
+      id="navigation"
+      index="16"
+      name="Product mark, side navigation and credits meter"
+      mockup="Main, Dashboard-dark"
+    >
+      <Specimen label="Side navigation: current item, other item, the credits meter outside the landmark">
+        <div className="flex h-auto">
+          <SideNav
+            label="Gallery navigation"
+            mark={<ProductMark name="[PRODUCT NAME]" />}
+            foot={
+              <CreditsMeter
+                used={{ value: null, reason: NO_CREDITS }}
+                limit={{ value: null, reason: NO_CREDITS }}
+              />
+            }
+          >
+            <NavItem
+              href="#navigation"
+              current={current === "search"}
+              icon={<Search className="size-icon" strokeWidth={1.9} />}
+              onClick={() => {
+                setCurrent("search");
+              }}
+            >
+              Search
+            </NavItem>
+            <NavItem
+              href="#navigation"
+              current={current === "cases"}
+              icon={<FolderOpen className="size-icon" strokeWidth={1.9} />}
+              onClick={() => {
+                setCurrent("cases");
+              }}
+            >
+              Cases
+            </NavItem>
+          </SideNav>
+        </div>
+      </Specimen>
+      <Specimen label="Section rail rows (size rail; Report)">
+        <ul className="flex max-w-report-nav flex-col gap-0.5">
+          <NavItem href="#navigation" current size="rail">
+            [CURRENT SECTION]
+          </NavItem>
+          <NavItem href="#navigation" current={false} size="rail">
+            [OTHER SECTION]
+          </NavItem>
+        </ul>
+      </Specimen>
+      <Specimen label="Credits meter, unmeasured (no credit metering exists: em dash and reason, no bar, no meter role). The measured state is not drawn here, because any figure would be invented">
+        <div className="max-w-nav">
+          <CreditsMeter
+            used={{ value: null, reason: NO_CREDITS }}
+            limit={{ value: null, reason: NO_CREDITS }}
+          />
+        </div>
+      </Specimen>
+    </Section>
+  );
+}
+
+function ContextHeaderSection() {
+  return (
+    <Section
+      id="context-header"
+      index="17"
+      name="Case header and run header"
+      mockup="Workspace, Timeline (case); RunLive (run)"
+    >
+      <Specimen label="Case header: Cases link, divider, name, sm actions, the account button" wide>
+        <ContextHeader
+          kind="case"
+          back={<BackLink href="#context-header">Cases</BackLink>}
+          title="[CASE NAME]"
+          actions={
+            <>
+              <Button size="sm" variant="secondary">
+                [SECONDARY ACTION]
+              </Button>
+              <Button size="sm">[PRIMARY ACTION]</Button>
+            </>
+          }
+          account={
+            <AccountMenu
+              initials="[AB]"
+              name="[NAME]"
+              email="[EMAIL]"
+              organisation="[ORGANISATION]"
+              theme="light"
+              onThemeChange={ignore}
+              onSwitchOrganisation={ignore}
+              onSignOut={ignore}
+            />
+          }
+        />
+      </Specimen>
+      <Specimen label="Case header while the name is read" wide>
+        <ContextHeader
+          kind="case"
+          back={<BackLink href="#context-header">Cases</BackLink>}
+          title={<Skeleton className="h-4.5 w-mini-progress" />}
+        />
+      </Specimen>
+      <Specimen
+        label="Run header: Search link, mono target, detected tag, alternates, run status"
+        wide
+      >
+        <ContextHeader
+          kind="run"
+          back={<BackLink href="#context-header">Search</BackLink>}
+          title="[TARGET]"
+          meta={
+            <>
+              <Tag>Detected: [TYPE]</Tag>
+              <span className="text-caption text-ink-muted">[ALTERNATES]</span>
+            </>
+          }
+          actions={<RunStatusChip status="RUNNING" />}
+        />
+      </Specimen>
+    </Section>
+  );
+}
+
+const D6_TABS = ["Overview", "Entities", "Graph", "Timeline", "Evidence", "Media", "Map", "Report"];
+
+function TabBarSection() {
+  const [current, setCurrent] = useState("Overview");
+  return (
+    <Section id="tabbar" index="18" name="Workspace tab bar" mockup="Workspace and the tab mockups">
+      <Specimen
+        label="Tabs in the D6 order; the current one is aria-current, strong and underlined"
+        wide
+      >
+        <TabBar label="Gallery tabs">
+          {D6_TABS.map((tab) => (
+            <TabLink
+              key={tab}
+              href="#tabbar"
+              current={current === tab}
+              onClick={(event) => {
+                event.preventDefault();
+                setCurrent(tab);
+              }}
+            >
+              {tab}
+            </TabLink>
+          ))}
+        </TabBar>
+      </Specimen>
+    </Section>
+  );
+}
+
+function CardSection() {
+  return (
+    <Section
+      id="card"
+      index="19"
+      name="Card, nested card and dashed note"
+      mockup="Main, Overview, Entities, RunLive"
+    >
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Specimen label="Card with a section-label header and a standalone link">
+          <Card
+            title="[CARD TITLE]"
+            end={
+              <TextLink href="#card" size="meta">
+                [ALL]
+              </TextLink>
+            }
+          >
+            <p className="text-prose-small text-ink-secondary">[CARD BODY]</p>
+          </Card>
+        </Specimen>
+        <Specimen label="Run card padding, a count chip at the end, nested cards (neutral, INFERRED)">
+          <Card
+            title="[RUN CARD]"
+            padding="run"
+            end={<StatusChip status="RAN">[N] ran</StatusChip>}
+          >
+            <div className="flex flex-col gap-3">
+              <NestedCard>[NESTED ITEM]</NestedCard>
+              <NestedCard tone="inferred">[INFERRED ITEM]</NestedCard>
+            </div>
+          </Card>
+        </Specimen>
+        <Specimen label="Not built inside a card">
+          <Card title="[WHAT IT WILL SHOW]">
+            <p className="text-prose-small text-ink-secondary">Not built yet. [WHAT IT NEEDS]</p>
+          </Card>
+        </Specimen>
+        <Specimen label="Dashed note, with and without an icon">
+          <div className="flex flex-col gap-3">
+            <DashedNote icon={<Info className="size-icon-lg" strokeWidth={1.9} />}>
+              [A NOTE THAT IS TRUE TODAY.]
+            </DashedNote>
+            <DashedNote>[A NOTE WITHOUT AN ICON.]</DashedNote>
+          </div>
+        </Specimen>
+      </div>
+    </Section>
+  );
+}
+
+function DensitySection() {
+  const [density, setDensity] = useState<Density>("comfortable");
+  return (
+    <Section id="density" index="20" name="Density toggle" mockup="Entities">
+      <Specimen label="Segmented pair, aria-pressed (click to switch)">
+        <DensityToggle value={density} onChange={setDensity} />
+      </Specimen>
+    </Section>
+  );
+}
+
+function InputSection() {
+  const [filter, setFilter] = useState("");
+  return (
+    <Section
+      id="inputs"
+      index="21"
+      name="Inputs (every edge border-input)"
+      mockup="SignIn, MfaEnrol (auth and one-time code); Entities, Evidence (toolbar)"
+    >
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Specimen label="Auth: empty, filled, refused, disabled">
+          <div className="flex max-w-form flex-col gap-4">
+            <Field variant="auth" label="Work email" placeholder="[PLACEHOLDER]" />
+            <Field variant="auth" label="[FILLED]" defaultValue="[VALUE]" />
+            <Field
+              variant="auth"
+              label="[REFUSED]"
+              defaultValue="[VALUE]"
+              error="[WHY IT IS REFUSED]"
+            />
+            <Field variant="auth" label="[DISABLED]" disabled />
+          </div>
+        </Specimen>
+        <Specimen label="One-time code, with its hint">
+          <div className="flex max-w-form flex-col gap-4">
+            <Field variant="otp" label="[CODE LABEL]" hint="[HINT]" />
+          </div>
+        </Specimen>
+        <Specimen label="Workspace toolbar input (control-sm, inside a target-tall label)">
+          <ToolbarInput
+            label="Filter entities"
+            placeholder="[FILTER PLACEHOLDER]"
+            value={filter}
+            onChange={setFilter}
+          />
+        </Specimen>
+      </div>
+    </Section>
+  );
+}
+
+function HeroSearchSection() {
+  const [value, setValue] = useState("");
+  const [submitted, setSubmitted] = useState<string | null>(null);
+  return (
+    <Section id="hero" index="22" name="Hero search shell (edge border-input, R2)" mockup="Main">
+      <Specimen label="Ready (submit waits for a value)" wide>
+        <HeroSearch
+          label="Target to investigate"
+          placeholder="[PLACEHOLDER]"
+          value={value}
+          onValueChange={setValue}
+          onSubmit={() => {
+            setSubmitted(value);
+          }}
+          submitLabel="Investigate"
+          submitDisabled={value.trim() === ""}
+        />
+        <p role="status" className="text-caption text-ink-muted">
+          {submitted === null ? "Nothing submitted." : `Submitted: ${submitted}`}
+        </p>
+      </Specimen>
+      <Specimen label="Submitting" wide>
+        <HeroSearch
+          label="[LABEL WHILE SUBMITTING]"
+          placeholder=""
+          value="[TARGET]"
+          onValueChange={ignore}
+          onSubmit={ignore}
+          submitLabel="[STARTING]…"
+          submitting
+        />
+      </Specimen>
+    </Section>
+  );
+}
+
+function ExtensionSection() {
+  const [pinned, setPinned] = useState(false);
+  return (
+    <Section
+      id="extensions"
+      index="23"
+      name="Failed alert, pin states, active row and pin column"
+      mockup="Evidence, Workspace (§8 Failed has no mockup)"
+    >
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Specimen label="Failed: title, reason, code, retry">
+          <FailedAlert
+            title="[WHAT FAILED]"
+            reason="[WHY, IN PLAIN WORDS]"
+            code="[CODE]"
+            action={
+              <Button size="sm" variant="secondary">
+                Try again
+              </Button>
+            }
+          />
+        </Specimen>
+        <Specimen label="Failed with no code (an unexpected failure: none is invented)">
+          <FailedAlert title="[WHAT FAILED, IN PLAIN WORDS]" />
+        </Specimen>
+        <Specimen label="Pin: state unknown (no aria-pressed), not pinned, pinned">
+          <div className="flex items-center gap-3">
+            <PinButton pinned={null} label="Pin [ITEM] to a case" />
+            <PinButton
+              pinned={pinned}
+              label="Pin [OTHER ITEM] to case"
+              onToggle={() => {
+                setPinned(!pinned);
+              }}
+            />
+            <PinButton pinned label="Pin [PINNED ITEM] to case" />
+          </div>
+        </Specimen>
+      </div>
+      <Specimen
+        label="Data table: the row whose provenance is open (aria-current and weight), a named pin column with the caller's pin per row"
+        wide
+      >
+        <DataTable
+          caption="[TABLE]"
+          columns={[
+            { id: "source", header: "Source", kind: "text" },
+            { id: "collected", header: "Collected", kind: "mono-muted" },
+          ]}
+          rows={[
+            { id: "a", cells: { source: "[SOURCE A]", collected: "[COLLECTED AT]" } },
+            { id: "b", cells: { source: "[SOURCE B, OPEN]", collected: "[COLLECTED AT]" } },
+          ]}
+          activeRowId="b"
+          empty={{ kind: "empty", title: "[EMPTY]", body: "[EMPTY]" }}
+          pins={{
+            header: "Pin to a case",
+            render: (row) => (
+              <PinButton pinned={null} label={`Pin evidence to a case: ${row.id}`} />
+            ),
+          }}
+        />
       </Specimen>
     </Section>
   );
@@ -1106,6 +1604,17 @@ export function Gallery() {
             <EvidenceSection />
             <MapSection />
             <ReportSection />
+            <ButtonSection />
+            <LinkSection />
+            <TagSection />
+            <NavigationSection />
+            <ContextHeaderSection />
+            <TabBarSection />
+            <CardSection />
+            <DensitySection />
+            <InputSection />
+            <HeroSearchSection />
+            <ExtensionSection />
           </main>
         </div>
       </div>

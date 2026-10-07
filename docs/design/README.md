@@ -52,22 +52,22 @@ Audited against `apps/api/openapi.json` on 2026-10-05.
 
 | Screen | Status | Notes |
 |---|---|---|
-| SignIn (sign-in and MFA challenge) | Built to the design (2026-10-05) | Lost-device line corrected (below) |
-| MfaEnrol | Built to the design (2026-10-05) | Backup codes come before the final step, because confirming leaves the page. "Invited to [ORG] as [ROLE]" needs the invitation in the enrolment state (API), so it is not shown |
-| Main, Dashboard-dark | Built to the design (2026-10-05); dark theme from the account menu | Side navigation shows Search and Cases (2026-10-06). Recent cases open their workspace. Recent cases show pins and the created date (cases record no updated time). Collector health comes from `GET /api/v1/collectors`. Monitors, credits, attach and command palette are Backend, so hidden |
-| RunLive (the run view against the collectors that exist) | Built to the design (2026-10-05) | Duration estimate, claims per source, per-run cost, pause and "Open case" are Backend: not shown, or an em dash with its reason |
+| SignIn (sign-in and MFA challenge) | Rebuilt from the component library (U1-c, 2026-10-07) | Lost-device line corrected (below). The challenge is its own route on the raised ground. Primary buttons stay enabled; an empty field is refused with its error |
+| MfaEnrol | Rebuilt from the component library (U1-c, 2026-10-07) | Backup codes come before the final step, because confirming leaves the page. "Invited to [ORG] as [ROLE]" needs the invitation in the enrolment state (API), so it is not shown. The link state is a tag, not a pill |
+| Main, Dashboard-dark | Rebuilt from the component library (U1-c, 2026-10-07); dark theme from the account menu's Light/Dark pair | Side navigation: Search, Cases, Members, Settings (only built destinations). The organisation's name is in the header (not drawn: tenant isolation). Credits: an em dash with "credit metering is not built", no bar. Monitor alerts: a Not built card. Command palette: pages and cases (no tenant-wide runs endpoint). Collector health lists the sources that run here, the held ones behind a disclosure with their count. Attach and Manage are not shown |
+| RunLive (the run view against the collectors that exist) | Rebuilt from the component library (U1-c, 2026-10-07), full-bleed with the account menu at the header's end | Duration estimate, claims per source, per-run cost, model, pause and "Open case" are Backend: not shown, or an em dash with its reason. A lock withholds everything the stream had sent |
 | Run (an earlier run view) | Superseded by RunLive | Shows collectors that do not exist (SpiderFoot, theHarvester, Shodan, HIBP, Brave) |
-| Evidence | Built (step 4, 2026-10-06), for a run and for a case | From the timeline read, the only evidence list: at most 500 records, said to be partial beyond that. No claim text or hash column (the list carries neither; both are in the provenance drawer). Selection, saved views, Re-verify and Cite in report are Backend, so hidden |
-| Workspace, Overview, Entities, Timeline | Built (step 4, 2026-10-06) | A run's results and a case's pins share the tabs; a case is labelled "Pinned items only" (cases and runs are not linked). Overview is composed from existing reads. The runs rail, discipline filters, case summary paragraph, contradictions, merge actions, bulk actions and saved views are Backend or not built, so hidden. The timeline's range brush is not built |
-| Report, ReportPDF | Built (step 5, 2026-10-06) as a run's Report tab | The report as stored, in its own wording, beside the stored PDF. Editing, regenerating a section, review state and case reports are Backend, so hidden |
-| Media, Map | Later | Not built: no upload, media forensics, geo layers or external feeds |
+| Evidence | Rebuilt from the component library (U1-c, 2026-10-07), for a run and for a case | From the timeline read: at most 500 records, said to be partial beyond that. No claim text or hash column (the list carries neither; both are in the provenance drawer). Selection, saved views, Re-verify and Cite in report are Backend, so hidden |
+| Workspace, Overview, Entities, Timeline, Graph | Rebuilt from the component library (U1-c, 2026-10-07), full-bleed, tabs in the drawn order (D6) | A run's results and a case's pins share the tabs; a case is labelled "Pinned items only" (cases and runs are not linked). The runs rail is on the Graph tab, as drawn. The written summary, contradictions and merge candidates are Not built cards; merge and replay actions are not built in U1-c. The timeline's range brush is not built (said on the tab) |
+| Report, ReportPDF | Rebuilt from the component library (U1-c, 2026-10-07) as a run's Report tab | The report as stored, in its own wording, as one continuous document card with a sections rail and a citation rail, beside the stored PDF. The citation check is a Not built card. Editing, regenerating a section and review state are Backend, so hidden. A case's Report tab is a Not built card (case reports do not exist) |
+| Media, Map | Not built cards (U1-c, 2026-10-07) | No upload, media forensics, coordinates, geo layers or external feeds |
 
 ## Copy corrections: mockup, then what ships
 
 | Screen | Mockup says | Ships as | Why |
 |---|---|---|---|
 | SignIn | "An administrator in your organisation can reset your second factor" | "Lost your device? Use one of your backup codes." | No reset exists, and turning MFA off is forbidden |
-| MfaEnrol | "Enrolment link verified" | "Enrolment link received" until step 1 succeeds | No separate check of the token exists |
+| MfaEnrol | Rebuilt from the component library (U1-c, 2026-10-07) | Backup codes come before the final step, because confirming leaves the page. "Invited to [ORG] as [ROLE]" needs the invitation in the enrolment state (API), so it is not shown. The link state is a tag, not a pill |
 | Run, RunLive | "Recording to case [CASE ID]", "Results stream into the case" | Not shown | Runs are not linked to cases; the audit log is tenant-wide |
 | Run, RunLive, Report | Residency "In-region" | Not shown | Region headers are recorded, never interpreted |
 | RunLive | "A failed collector is charged for the attempts it made" | Not shown until metering exists | Upstream requests are counted against quota; nothing is charged |
@@ -75,7 +75,7 @@ Audited against `apps/api/openapi.json` on 2026-10-05.
 | Workspace, Evidence, Timeline | crt.sh, DNS and Wayback evidence as OBSERVED | The strength the API gives (REPORTED) | Strength comes from the registry entry |
 | Overview, Entities | "Merging requires a second independent identifier" | "A merge is recorded with its reason and can be undone" | A person may merge on name alone; only automatic name-only merges are refused |
 | Entities | "Shared: display name, city" | The match signals the API gives | Candidates are matched on name only |
-| Evidence | "Open stored copy" | "Download raw payload" | Payloads are only ever served as a download (CLAUDE.md §9) |
+| Evidence | Rebuilt from the component library (U1-c, 2026-10-07), for a run and for a case | From the timeline read: at most 500 records, said to be partial beyond that. No claim text or hash column (the list carries neither; both are in the provenance drawer). Selection, saved views, Re-verify and Cite in report are Backend, so hidden |
 | Workspace | Graph nodes in the claim-strength colours | The entity-class tokens (DESIGN-SYSTEM §2, added 2026-10-06) | In the graph a colour says what a node is; strength is said by the edge and in words |
 | Entities | "First seen" | "Recorded" | The date is when the platform recorded the entity, not when it was first seen anywhere |
 | Overview | "Coverage" by discipline with counts | Each source's status, and the gaps with their reasons | Evidence is not counted by discipline anywhere in the API |
@@ -83,3 +83,13 @@ Audited against `apps/api/openapi.json` on 2026-10-05.
 | ReportPDF | "Case [CASE ID]", "Independent sources" | The run and investigation; "Sources" | Reports are per run; independence of sources is not established |
 | Map | "Conflict events: Needs key" | Licence-blocked | The source is blocked by its licence |
 | Media | "Faces" analysis | Not shown | The face model is licence-blocked |
+| Main | "Detects automatically: domain ip email phone username org image" | "Sources here run for:" with the target types the sources here accept | It lists what can run, from the registry; no upload exists, so no "image" |
+| Main | Search placeholder "… or drop an image or document" | "Domain, IP, email, phone, username, company or URL" | No upload exists |
+| Main | Collector health "Manage" | Not shown | No collector settings page exists |
+| Main | (no caption) | "As the registry declares them. Live health is not measured." | The chips are the registry's availability, not a live check |
+| MfaEnrol | "Invitation accepted"; "This link can enrol one device, once"; codes "expire after 30 seconds" | "Account setup"; "It stops working once enrolment is finished."; codes "change every 30 seconds" | What the token and TOTP actually do |
+| Evidence | "Collector" column and facet | "Source" | The value is the registry's label; the collector id is in the drawer |
+| Evidence | "Search evidence text, source or hash" | "Search source, URL or id" | The list carries no claim text or hash |
+| Evidence | "Rows are never deleted; evidence is append-only." | "Evidence is append-only." | Retention and tenant deletion do remove evidence |
+| Report | "Preview PDF" | "View PDF" | The panel shows the stored file, not a preview |
+| RunLive | "Does not apply to a domain target" | The same sentence, built from the type's word | Unchanged in meaning; never the raw enum |
