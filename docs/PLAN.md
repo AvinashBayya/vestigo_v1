@@ -3151,3 +3151,47 @@ fixed or raised.
 fabrication check clean on 447 files, with Postgres and Redis up): core 20, access 56, config
 194, db 264, integrations 122, collectors 482, llm 130, osint-engine 104, api 189, ui 95, web
 177, worker 4 (1,837 tests; 11 more than R1-0: config 6, api 5).
+
+## D-10b: probe merge partners, gate job replay (2026-10-08)
+
+**The rulings** (the owner, on the items D-10 raised): D-29 and D-30 accepted, built here as one
+commit. D-31 accepted with changes and not built yet (a cheaper option raised first, as the
+ruling asked). D-32 folded into R1-b as its prerequisite. Recorded at the top of
+`docs/reclamation/R1-PLAN.md`.
+
+**D-29.** The shared probe (`touchesPersonData`) follows active merges.
+- **What it covers:** an entity the probe names brings every entity an active merge joins it
+  to, in either direction and through chains. An undone merge joins nothing.
+- **Effect:**
+  - the entity list's merge count no longer passes a locked tenant when a merged-in entity
+    rests on person evidence;
+  - a merge request naming an entity already merged into one is refused (403) before the merge
+    rules can answer 409.
+- **Accepted cost:** reads that show no merge field (relationship detail, merge candidates) are
+  refused too when a merge partner rests on person evidence.
+
+**D-30.** `POST /api/v1/jobs/:id/replay` is gated with the job's run (`runJobs`), before the
+replayer starts its own transaction.
+- **Why:** a replay re-queues person collection and rewrites the job's and the run's recorded
+  state, so the gate has to come first.
+- **Recorded:** the reversal of the Phase 6a ruling, and its reason, is in
+  `docs/ARCHITECTURE-DECISIONS.md` §6. The route is now "shared-gate" in the guard.
+
+**Tests** (release-blocking):
+- **Probe (database level):** the probe follows active merges either way and through chains,
+  never undone ones, and only in its own tenant.
+- **Gate suite, through the lifecycle:**
+  - the entity list of a run whose entity has a person-evidence entity merged in;
+  - a merge naming an entity beside one already merged into a person-evidence entity (403 when
+    locked, still 409 when allowed);
+  - a locked tenant's replay of a person job is refused, and the job and its run are unchanged,
+    its recorded failure included;
+  - an allowed replay still re-queues.
+- **Old-code proof:** each test failed on the code before its fix, shown by removing the probe
+  change and the gate in turn.
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 50 of 50 tasks, nothing cached,
+fabrication check clean on 447 files, with Postgres and Redis up): core 20, access 56, config
+194, db 265, integrations 122, collectors 482, llm 130, osint-engine 104, api 189, ui 95, web
+177, worker 4 (1,838 tests; one more than D-10, the probe's merge test; the API's new checks
+sit inside its existing lifecycle tests).

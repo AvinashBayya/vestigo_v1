@@ -22,6 +22,18 @@ further down, they win.
   D-7, D-8, D-9, D-11, D-12, D-13, D-15, D-16, D-17, D-18, D-21, D-22, D-23, D-24, D-25,
   D-26, D-27.
 
+On the items D-10 raised (2026-10-08, after D-10 was approved):
+
+- **D-29 accepted:** the probe follows merge partners, for the entity list's merge count and
+  the merge route's 409. Done in D-10b.
+- **D-30 accepted:** job replay is gated, reversing the Phase 6a ruling, because a replay
+  re-queues person collection. Done in D-10b; the reversal is recorded in
+  `docs/ARCHITECTURE-DECISIONS.md` §6.
+- **D-31 accepted with changes:** probe a fixed max-page window regardless of `limit`, and
+  accept the residual leak. Not built yet: the ruling asked for a cheaper option to be raised
+  first, and one was.
+- **D-32 accepted, folded into R1-b as its prerequisite:** not built now.
+
 ## What R1 is, after reading the code
 
 `docs/MASTER-BUILD-SEQUENCE.md` (lines 77-83) scopes R1 as cross-intelligence correlation,
@@ -148,6 +160,9 @@ replaces and from the closest existing module here; confidence in each estimate 
 
 ### R1-b: persistence, job and API
 
+- **Prerequisite (D-32, ruled).** Before anything else in R1-b: each gated read and its probe
+  run on one snapshot (a repeatable-read transaction for gated reads), so a case scope that
+  shrinks (an unpin) or grows (a fusion) between the read and the probe cannot leak.
 - **Scope.** A write-once case analysis record and the job that produces it, following the
   `reports` pattern (D-3):
   - migration: `case_analyses` (tenant_id, id, case_id, status, the **input hash**, engine
@@ -194,8 +209,8 @@ replaces and from the closest existing module here; confidence in each estimate 
   document cannot be rewritten, yet a delete under tenant context succeeds; the OpenAPI contract
   test and the generated client.
 - **Turns on.** Nothing visible yet (R1-e shows it).
-- **Depends on.** R1-a; D-3, D-19, D-28; D-10 fixed first (a person-gate defect in the merge routes,
-  so the stage does not build on it).
+- **Depends on.** R1-a; D-3, D-19, D-28, D-32 (its prerequisite, built first); D-10 fixed
+  first (a person-gate defect in the merge routes, so the stage does not build on it).
 - **Size.** About 1,300 + 1,300 lines (migration, repository, queue, processor, routes).
   Confidence: medium-low; the queue wiring touches eight places (see the worker's pattern for
   reports).
@@ -345,7 +360,7 @@ replaces and from the closest existing module here; confidence in each estimate 
 | Stage | Scope | Size (source + tests) | Confidence | Depends on |
 |---|---|---|---|---|
 | R1-a | `packages/case-engine`: pure types, case coverage, discipline breakdown | 800 + 1,100 | medium | D-1, D-4, D-17 |
-| R1-b | `case_analyses` table, analysis job, three endpoints, person gate over the case and its runs | 1,300 + 1,300 | medium-low | R1-a, D-3, D-10, D-19, D-28 |
+| R1-b | `case_analyses` table, analysis job, three endpoints, person gate over the case and its runs | 1,300 + 1,300 | medium-low | R1-a, D-3, D-10, D-19, D-28, D-32 |
 | R1-c | Cross-intelligence across sources, never by value | 400 + 650 | medium | R1-a, R1-b, D-2, D-20, D-21, D-22 |
 | R1-d | Contradictions about the same entity, from a reviewed comparability map | 500 + 750 | medium | R1-a, R1-b, D-5, D-6, D-21, D-22 |
 | R1-e | Workspace UI: analysis, coverage, breakdown, correlations, contradictions | 1,200 + 900 | low-medium | R1-b, R1-c, R1-d, D-11, D-12 |
@@ -415,7 +430,7 @@ Copied verbatim from the R1-0 brief. They bind every later prompt.
 
 Each has a recommendation and the cost of each option. None is decided here.
 
-**D-1. Where the engine lives.**
+**D-1. Where the engine lives.** **[RULED 2026-10-08: accepted as recommended, on condition that the run report's coverage helpers move as a pure move, with a test proving identical output before and after.]**
 - *Recommended:* a new `packages/case-engine` (pure analysis plus its job processor). Cost:
   CLAUDE.md §6's package list, `check-exports` and `boundaries.test.ts` are updated in R1-a; the
   coverage functions, `headline`, `COVERAGE_CAVEATS` and `displayValue` move out of
@@ -426,7 +441,7 @@ Each has a recommendation and the cost of each option. None is decided here.
 - *Alternative:* `packages/osint-engine/src/analysis/`. Cost: no list change, but the analysis
   can import the collector runtime, so "reads stored evidence only" becomes a convention.
 
-**D-2. The strength of a correlation computed by the platform.**
+**D-2. The strength of a correlation computed by the platform.** **[RULED 2026-10-08: accepted as recommended. The related merge-candidate relabel is not ruled.]**
 - *Recommended:* keep the reviewed definitions. A correlation the engine computes is DERIVED
   (HYPOTHESIS when it rests on a hypothesis); CORRELATED stays for the model. Cost: the word
   "correlation" appears in the UI next to a DERIVED badge, which the copy must explain.
@@ -438,7 +453,7 @@ Each has a recommendation and the cost of each option. None is decided here.
   possibility the name match permits); the alternative is to leave them as they are. Cost of
   relabelling: the candidates' API, its tests and the merge copy change.
 
-**D-3. How analysis results are produced and stored.**
+**D-3. How analysis results are produced and stored.** **[RULED 2026-10-08: accepted as recommended.]**
 - *Recommended:* a job writing a write-once `case_analyses` document keyed by the case and a
   hash of everything the analysis read (evidence ids, claim ids, active merges, the contributing
   jobs with their status and outcome, the held collectors, the registry disciplines and labels,
@@ -464,7 +479,7 @@ Each has a recommendation and the cost of each option. None is decided here.
   API to attach runs, and a second meaning of case scope (pinned versus attached) that every read
   must state.
 
-**D-5. Which attributes and relationship kinds count as the same statement.**
+**D-5. Which attributes and relationship kinds count as the same statement.** **[RULED 2026-10-08: accepted as recommended.]**
 - *Recommended:* a reviewed, versioned map in `case-engine` of attributes and relationship kinds
   that state the same thing, compared only **about the same entity id** (or entities joined by
   an active analyst merge, D-21), with a stated normalisation per attribute; signed off by the
@@ -503,7 +518,7 @@ question). Asking a question needs a policy for where the analyst's question tra
 supported by the evidence" sentence may be uncited. *Alternative:* build both in R1-f. Cost: a
 second prompt, its eval set and those two policy decisions.
 
-**D-10. A person-gate gap found by this audit.** `GET /api/v1/entity-merges`,
+**D-10. A person-gate gap found by this audit.** **[RULED 2026-10-08: fixed before R1-a, as its own change (commit 284f4b7).]** `GET /api/v1/entity-merges`,
 `POST /api/v1/entity-merges` and `POST /api/v1/entity-merges/:id/undo`
 (`apps/api/src/routes/entities.ts:377-475`) call no person gate; a merge of PERSON entities
 returns their ids, kind and the analyst's reason. *Recommended:* fix it before R1-a, as its own
@@ -527,7 +542,7 @@ automatically. *Recommended:* never; ours keys social accounts as `platform:hand
 username entity links them by relationship. *Alternative:* auto-merge. Cost: two different
 people with the same handle become one.
 
-**D-14. A gap in the fabrication gate.** Neither rule flags `?? ""` used for an unknown value
+**D-14. A gap in the fabrication gate.** **[RULED 2026-10-08: accepted as recommended, as a separate commit; every file it flags is fixed by rewriting, with no allowlist. Not done yet.]** Neither rule flags `?? ""` used for an unknown value
 (`case-attach.ts:216`, `case-geoint.ts:267`), which CLAUDE.md §1 forbids. *Recommended:* add the
 pattern as a separate, strengthening change, with the false-positive review the gate's other
 patterns had. *Alternative:* rely on review. Cost: the gap stays.
@@ -561,7 +576,7 @@ collector. *Alternative:* port the media claim extractor in R1 against archived 
 it would run on wayback captures it was not designed for, and its corroboration score must be
 removed first (`mediaint/claims.ts:552`).
 
-**D-19. The person probe for a case's runs.** Case coverage shows each contributing run's jobs,
+**D-19. The person probe for a case's runs.** **[RULED 2026-10-08: accepted as recommended.]** Case coverage shows each contributing run's jobs,
 so a case read rests on those runs too (CLAUDE.md §9: a run that used a person collector is
 person data whatever its jobs found). `PersonProbe.runJobs` takes one run
 (`packages/db/src/repositories/exploration.ts:110`). *Recommended:* the shared probe takes a
@@ -569,7 +584,7 @@ list of runs, in the gate's home file, and R1-b passes every contributing run. *
 leave job outcomes out of case coverage. Cost of the alternative: coverage could not say which
 collectors found nothing, which is half of what "gaps" means.
 
-**D-20. What a correlation is.** Legacy: two or more disciplines (which one multi-discipline
+**D-20. What a correlation is.** **[RULED 2026-10-08: accepted as recommended.]** Legacy: two or more disciplines (which one multi-discipline
 collector satisfied alone). *Recommended:* two or more distinct collectors, whatever their
 disciplines, excluding links every collector makes by construction (the run's target entity,
 `account_with_handle` from each platform). Cost: same-discipline pairs (dns with crtsh) count,
@@ -614,7 +629,7 @@ HYPOTHESIS claims. Today no collector emits a HYPOTHESIS claim, so the check is 
 and its test uses a fixture. *Alternative:* rely on the citation validator. Cost: once
 hypotheses exist, a hypothesis can be restated as an inference.
 
-**D-28. Re-checking access in the job.** The API checks plan and vetting when an analysis is
+**D-28. Re-checking access in the job.** **[RULED 2026-10-08: accepted as recommended.]** The API checks plan and vetting when an analysis is
 requested; the job then reads the case later and, in R1-f, sends it to the model. CLAUDE.md §6
 says the API and the workers apply the same rules; `ReportGenerator` does not re-check today
 either. *Recommended:* the job re-checks the person gate before reading and before any model
@@ -628,7 +643,7 @@ API and the worker may need no change to that list. Either way, CLAUDE.md §9's 
 then depends on `access`. *Alternative:* trust the request-time check. Cost: a tenant
 whose vetting is withdrawn between request and job still has its person data sent to the model.
 
-**D-29. Merge partners in the probe** (raised by the D-10 audit). The entity list shows each
+**D-29. Merge partners in the probe** **[RULED 2026-10-08: accepted (recommended option): the shared probe follows active merges. Done in D-10b.]** (raised by the D-10 audit). The entity list shows each
 entity's `mergedEntityCount`, and a count of entities merged into it is part of what it says, but
 the partners are not probed: the list does not carry their ids. Likewise a merge request naming
 two technical entities answers 409 when one of them is already merged into a person-evidence
@@ -639,7 +654,7 @@ probes them. Cost: either changes the probe or a repository (not small, so not d
 the first also refuses reads that show no merge field (relationship detail, merge candidates)
 when a partner is person data.
 
-**D-30. Replaying a job of a person run** (raised by the D-10 audit). `POST
+**D-30. Replaying a job of a person run** **[RULED 2026-10-08: accepted: replay is gated. Done in D-10b; the reversal of the Phase 6a ruling is recorded in ARCHITECTURE-DECISIONS.md §6.]** (raised by the D-10 audit). `POST
 /api/v1/jobs/:id/replay` is ungated: for a locked tenant, a replay of a failed person job
 re-queues it and its run, and the worker then overwrites the job's recorded failure with a
 refusal. The Phase 6a ruling left replay ungated ("returns the run id only; the worker
@@ -647,7 +662,7 @@ re-checks admission"); that did not consider the state the request changes. *Rec
 gate it before the replay with the job's run (`runJobs`), as for a run read. *Alternative:*
 keep the ruling. Cost: a locked tenant can still change a person run's recorded state.
 
-**D-31. Where a refusal falls in a paged list** (raised by the D-10 review). The merge list and
+**D-31. Where a refusal falls in a paged list** **[RULED 2026-10-08: accepted with changes: probe a fixed max-page window regardless of `limit`, and accept the residual leak. Not built yet: a cheaper option was raised first, as the ruling asked.]** (raised by the D-10 review). The merge list and
 the entity list probe every row they fetch, the next page's first row included, so `hasMore`
 is covered. A refusal still moves with `limit`: stepping it shows where in the list a row
 resting on person data sits. The case pins list avoids this by probing every pin of the case.
@@ -655,7 +670,7 @@ resting on person data sits. The case pins list avoids this by probing every pin
 or one probe query over the same filter). *Alternative:* accept it. Cost: a locked tenant can
 place a person-data row in its own lists.
 
-**D-32. A scope that changes between read and probe** (raised by the D-10 review). Entity
+**D-32. A scope that changes between read and probe** **[RULED 2026-10-08: accepted, folded into R1-b as its prerequisite. Not built now.]** (raised by the D-10 review). Entity
 detail, relationship detail and the run stream now read first and probe after, so the probe sees
 at least what was read: what they show cannot shrink.
 A case scope can also shrink (an unpin is not gated) as well as grow (a fusion commits claims on

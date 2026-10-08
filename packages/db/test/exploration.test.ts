@@ -557,6 +557,84 @@ describe("the person-data probe", () => {
   });
 });
 
+describe("the person-data probe across merges", () => {
+  it("follows active merges either way and through chains, never undone ones, only in its own tenant", async () => {
+    // REGRESSION (D-29): a read naming an entity rests on the entities merged with it, but
+    // the probe looked only at the entity's own claims.
+    const found = await read(tenant, async ({ repos, reads }) => {
+      await repos.collectorsRegistry.register({
+        collectorId: "probe-person-merge",
+        sourceLabel: "[Person merge probe fixture]",
+        discipline: "PERSON",
+        collectionMode: "LOCAL_ANALYSIS",
+        dataLicence: "[not applicable: test fixture]",
+        commercialUse: "UNVERIFIED",
+        enabled: true,
+        disabledReason: null,
+      });
+      const person = await repos.evidence.record({
+        collectorId: "probe-person-merge",
+        collectorVersion: "0.0.0-test",
+        jobId: null,
+        sourceUrl: null,
+        contentHash: `sha256:${"f".repeat(64)}`,
+        payloadRef: "[person payload]",
+        observedAt: null,
+        collectedAt: null,
+        claimStrength: "REPORTED",
+      });
+      const entity = async (name: string, evidenceId: string) => {
+        const created = await repos.entities.create({ kind: "DOMAIN", displayName: name });
+        await repos.claims.create({
+          evidenceId,
+          subject: { entityId: created.id },
+          attribute: "note",
+          value: "[claim]",
+          strength: "REPORTED",
+        });
+        return created.id;
+      };
+      const merge = (survivingEntityId: string, mergedEntityId: string) =>
+        repos.entityMerges.merge({
+          survivingEntityId,
+          mergedEntityId,
+          reason: "[analyst reason]",
+          confidence: 0.5,
+          matchSignals: ["ANALYST_REVIEW"],
+          decidedBy: { kind: "USER", userId: tenant.userId },
+        });
+      // A person-evidence entity merged into a technical one.
+      const survivor = await entity("survivor.example.com", tenant.evidenceId);
+      await merge(survivor, await entity("merged-in.example.com", person.id));
+      // A technical entity merged into one merged into a person-evidence one: a chain.
+      const chained = await entity("chained.example.com", tenant.evidenceId);
+      const middle = await entity("middle.example.com", tenant.evidenceId);
+      await merge(middle, chained);
+      await merge(await entity("top.example.com", person.id), middle);
+      // A merge with a person-evidence entity, undone.
+      const undone = await entity("undone.example.com", tenant.evidenceId);
+      const decision = await merge(undone, await entity("was-merged.example.com", person.id));
+      await repos.entityMerges.undo(decision.id, {
+        decidedBy: { kind: "USER", userId: tenant.userId },
+        reason: "[analyst reason for undoing]",
+      });
+      const probe = (id: string) => reads.exploration.touchesPersonData({ entityIds: [id] });
+      return {
+        ids: { survivor, chained },
+        survivor: await probe(survivor),
+        chained: await probe(chained),
+        undone: await probe(undone),
+        unmerged: await probe(tenant.otherEntityId),
+      };
+    });
+    expect(found).toMatchObject({ survivor: true, chained: true, undone: false, unmerged: false });
+    const foreign = await read(other, ({ reads }) =>
+      reads.exploration.touchesPersonData({ entityIds: [found.ids.survivor, found.ids.chained] }),
+    );
+    expect(foreign).toBe(false);
+  });
+});
+
 describe("the person-data probe on a run's jobs", () => {
   it("finds a person job whatever its outcome, through runJobs or a run scope, only in its own tenant", async () => {
     const result = await read(tenant, async ({ repos, reads }) => {

@@ -74,8 +74,35 @@ interface Ids {
   raceEntity: string;
   raceRelationshipSource: string;
   raceRelationship: string;
+  mergeCleanRun: string;
+  mergeRequestTarget: string;
+  replayJob: string;
+  freshReplayJob: string;
 }
 let ids: Ids;
+
+/** How the seeded person jobs failed, and their runs: a refused replay must leave both so. */
+const FAILED_JOB = {
+  status: "FAILED",
+  attempts: 3,
+  lastError: { code: "UPSTREAM_UNAVAILABLE", message: "[the source answered 502]" },
+  startedAt: new Date("2026-05-01T00:00:00Z"),
+  finishedAt: new Date("2026-05-01T00:00:01Z"),
+} as const;
+const FAILED_RUN = {
+  status: "FAILED",
+  startedAt: new Date("2026-05-01T00:00:00Z"),
+  finishedAt: new Date("2026-05-01T00:00:01Z"),
+} as const;
+const FAILED_STATE = {
+  status: "FAILED",
+  attempts: 3,
+  lastErrorCode: "UPSTREAM_UNAVAILABLE",
+  lastErrorMessage: "[the source answered 502]",
+  finishedAt: "2026-05-01T00:00:01.000Z",
+  runStatus: "FAILED",
+  runFinishedAt: "2026-05-01T00:00:01.000Z",
+};
 
 async function seed(tenant: TenantId, userId: string): Promise<Ids> {
   return api.db.withTenant(tenant, async ({ repos }) => {
@@ -508,6 +535,46 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       kind: "linked_to",
     });
 
+    // D-29: a technical entity to name in a merge beside one already merged into a
+    // person-evidence entity.
+    const mergeRequestTarget = await pairClean("merge-request.example.com");
+
+    // D-30: failed jobs of a person collector the platform's registry knows, so a replay
+    // allowed in the approved stage is a real one. The second is for the suspended stage.
+    await repos.collectorsRegistry.register({
+      collectorId: "contact.phone",
+      sourceLabel: "[contact.phone]",
+      discipline: "PERSON",
+      collectionMode: "LOCAL_ANALYSIS",
+      dataLicence: "[not applicable: test fixture]",
+      commercialUse: "UNVERIFIED",
+      enabled: true,
+      disabledReason: null,
+    });
+    const failedPersonJob = async (tag: string) => {
+      const investigation = await repos.investigations.create({
+        title: `[${tag}]`,
+        target: "example.com",
+        createdByUserId: userId,
+      });
+      const failedRun = await repos.runs.create({
+        investigationId: investigation.id,
+        status: "QUEUED",
+        requestedByUserId: userId,
+      });
+      const job = await repos.jobs.create({
+        runId: failedRun.id,
+        collectorId: "contact.phone",
+        idempotencyKey: `gate:${tag}:${failedRun.id}`,
+        status: "QUEUED",
+      });
+      await repos.jobs.transition(job.id, FAILED_JOB);
+      await repos.runs.transition(failedRun.id, FAILED_RUN);
+      return job.id;
+    };
+    const replayJob = await failedPersonJob("replay");
+    const freshReplayJob = await failedPersonJob("replay-fresh");
+
     // An unplanned run with no jobs yet: unsettled, so its stream stays open and polls.
     const raceInvestigation = await repos.investigations.create({
       title: "[race]",
@@ -576,6 +643,10 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       raceEntity,
       raceRelationshipSource,
       raceRelationship: raceRelationship.id,
+      mergeCleanRun: mergeCleanRun.runId,
+      mergeRequestTarget,
+      replayJob,
+      freshReplayJob,
     };
   });
 }
@@ -830,6 +901,17 @@ const LOCKED_CALLS: Record<string, Call> = {
     () => `/api/v1/entity-merges/${ids.personMerge}/undo`,
     () => ({ reason: "[analyst reason for undoing]" }),
   ],
+  // REGRESSION (D-29): a read naming an entity rests on the entities merged with it.
+  "entities of a run whose entity has a person-evidence entity merged into it": [
+    "GET",
+    () => `/api/v1/entities?runId=${ids.mergeCleanRun}`,
+  ],
+  // REGRESSION (D-30): a replay re-queues collection on a person run and rewrites its record.
+  "replaying a failed job of a person run": [
+    "POST",
+    () => `/api/v1/jobs/${ids.replayJob}/replay`,
+    () => ({}),
+  ],
 };
 
 /** Reads that rest on nothing but non-person evidence: never refused, never thinner. */
@@ -887,6 +969,33 @@ async function personMergeState(): Promise<{ merged: number; undone: boolean }> 
     undone: (await repos.entityMerges.findById(ids.personMerge))?.revertedAt !== null,
   }));
 }
+
+/** A job's recorded state and its run's, as FAILED_STATE describes them. */
+async function jobState(jobId: string) {
+  return api.db.withTenant(tenantId, async ({ repos }) => {
+    const job = await repos.jobs.findById(jobId);
+    const owner = job === null ? null : await repos.runs.findById(job.runId);
+    return {
+      status: job?.status,
+      attempts: job?.attempts,
+      lastErrorCode: job?.lastErrorCode,
+      lastErrorMessage: job?.lastErrorMessage,
+      finishedAt: job?.finishedAt?.toISOString(),
+      runStatus: owner?.status,
+      runFinishedAt: owner?.finishedAt?.toISOString(),
+    };
+  });
+}
+
+/** A merge naming a technical entity beside one already merged into a person-evidence entity. */
+const mergeBesidePersonMerge = () =>
+  browser.request("POST", "/api/v1/entity-merges", {
+    survivingEntityId: ids.mergeRequestTarget,
+    mergedEntityId: ids.cleanMergedAway,
+    reason: "[analyst reason about merge-request and w2]",
+    confidence: 0.7,
+    matchSignals: ["ANALYST_REVIEW"],
+  });
 
 /** How many pins the pin-attempt case holds: refused attempts must add none. */
 async function pinAttempts(): Promise<number> {
@@ -957,6 +1066,8 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     }
     expect(await pinAttempts()).toBe(0);
     expect(await personMergeState()).toEqual({ merged: 0, undone: false });
+    // The refused replay changed nothing, its recorded failure included.
+    expect(await jobState(ids.replayJob)).toEqual(FAILED_STATE);
     approved = await cleanSnapshot();
   });
 
@@ -971,6 +1082,7 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     }
     expect(await pinAttempts()).toBe(0);
     expect(await personMergeState()).toEqual({ merged: 0, undone: false });
+    expect(await jobState(ids.replayJob)).toEqual(FAILED_STATE);
     expect(await cleanSnapshot()).toEqual(approved);
   });
 
@@ -978,7 +1090,7 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     await setEntitlement(tenantId, { vettingStatus: "APPROVED" });
     for (const [name, call] of Object.entries(LOCKED_CALLS)) {
       const response = await run(call);
-      expect([200, 201], `${name}: ${response.body.slice(0, 200)}`).toContain(response.status);
+      expect([200, 201, 202], `${name}: ${response.body.slice(0, 200)}`).toContain(response.status);
     }
     const detail = await browser.request("GET", `/api/v1/entities/${ids.mixedEntity}`);
     expect(detail.json<{ entity: { claimCount: number } }>().entity.claimCount).toBe(2);
@@ -998,6 +1110,12 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     const merges = await browser.request("GET", "/api/v1/entity-merges");
     expect(merges.body).toContain("[analyst reason about Person M1 and Person M2]");
     expect(merges.body).toContain("[analyst reason about two hosts]");
+    // Allowed, a replay works as before: the job is queued again and its run runs.
+    expect(await jobState(ids.replayJob)).toMatchObject({ status: "QUEUED", runStatus: "RUNNING" });
+    // Allowed, a merge beside one already merged is refused by the merge rules, as before.
+    const conflict = await mergeBesidePersonMerge();
+    expect(conflict.status).toBe(409);
+    expect(conflict.json<{ code: string }>().code).toBe("MERGE_RULE_VIOLATION");
   });
 
   it("suspended: the same reads are refused, never a thinner result", async () => {
@@ -1042,6 +1160,25 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
       revertedAt: (await repos.entityMerges.findById(ids.freshPersonMerge))?.revertedAt,
     }));
     expect(fresh).toEqual({ merged: 0, revertedAt: null });
+    // REGRESSION (D-30): a fresh failed person job: the replay is refused and changes
+    // nothing, its recorded failure included. (The approved stage re-queued the other.)
+    expectLocked(
+      "replaying a fresh failed job of a person run",
+      await browser.request("POST", `/api/v1/jobs/${ids.freshReplayJob}/replay`, {}),
+      locked,
+    );
+    expect(await jobState(ids.freshReplayJob)).toEqual(FAILED_STATE);
+    // REGRESSION (D-29): the merge rules' 409 said the named entity had an active merge;
+    // its partner rests on person evidence, so the request is refused first.
+    expectLocked(
+      "a merge beside a merge with person evidence",
+      await mergeBesidePersonMerge(),
+      locked,
+    );
+    const beside = await api.db.withTenant(tenantId, ({ repos }) =>
+      repos.entityMerges.listInvolving(ids.mergeRequestTarget, { limit: 10 }),
+    );
+    expect(beside).toEqual([]);
     // An unsettled person run's stream is refused at connect: an ordinary 403, no stream.
     const stream = await browser.request("GET", `/api/v1/runs/${ids.personRun}/events`);
     expectLocked("progress stream of an unsettled person run", stream, {

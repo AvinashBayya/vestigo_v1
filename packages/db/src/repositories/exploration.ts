@@ -94,7 +94,9 @@ function scopeEntities(tenantId: string, scope: ReadScope): SQL {
  * person data. Everything a read shows is covered: the scope's own evidence,
  * the evidence behind given claims, and the evidence behind every claim about
  * the given entities or about relationships touching them (counts span all of
- * an entity's claims, not just the scope's share).
+ * an entity's claims, not just the scope's share). A given entity brings its
+ * active merge partners with it, either way and through chains: once an
+ * analyst records that two entities are one, a read of either rests on both.
  */
 export interface PersonProbe {
   /** A run scope also covers the run's jobs, as `runJobs` does. */
@@ -277,7 +279,19 @@ export class ExplorationRepository extends TenantRepository {
     }
     const entityIds = probe.entityIds ?? [];
     if (entityIds.length > 0) {
-      const list = uuidList(entityIds);
+      // The given entities and every entity an active merge joins them to (D-29); an
+      // undone merge joins nothing. `union` ends the walk, as merges cannot cycle.
+      const list = sql`with recursive linked(id) as (
+          select e.id from ${entities} e
+          where e.tenant_id = ${tenantId} and e.id in (${uuidList(entityIds)})
+          union
+          select case when m.surviving_entity_id = l.id
+                      then m.merged_entity_id else m.surviving_entity_id end
+          from linked l
+          join ${entityMerges} m on m.tenant_id = ${tenantId} and m.reverted_at is null
+            and (m.surviving_entity_id = l.id or m.merged_entity_id = l.id)
+        )
+        select id from linked`;
       parts.push(
         sql`select c.evidence_id as id from ${claims} c
           where c.tenant_id = ${tenantId} and c.entity_id in (${list})`,

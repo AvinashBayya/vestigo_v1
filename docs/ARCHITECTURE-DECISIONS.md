@@ -109,6 +109,7 @@ Because jobs are now durable and background, the old 60-second global cap become
 - Bulkheads: fixed concurrency per collector, so one slow source cannot consume every worker slot.
 - Circuit breakers: after repeated failures, stop calling a source for a cooling period and mark it unavailable in the UI.
 - Dead-letter queue: failed jobs are inspectable and replayable, never silently dropped.
+- **Replay meets the person gate** (amended 2026-10-08, D-30). A replay re-queues collection on the job's run and rewrites the job's and the run's recorded state, so it is refused whole, before anything changes, when the run is person data and the tenant may not access it: the same gate as reading the run. This reverses the Phase 6a ruling that left replay ungated ("returns the run id only; the worker re-checks admission"). The worker's re-check stops the collection, but by then the request has already re-queued person collection and changed the person run's record; its recorded failure would be overwritten by the refusal.
 - Idempotent jobs keyed by tenant, target, collector and parameters, so retries never double-charge credits or duplicate evidence.
 - Retries distinguish causes: rate limits, timeouts and 5xx back off and retry; auth failures and invalid targets fail immediately.
 - Degradation is a product behaviour: a failed collector renders as failed beside the ones that succeeded.

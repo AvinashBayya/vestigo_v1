@@ -180,9 +180,7 @@ export const ROUTE_GATING: Readonly<Record<string, Readonly<Record<string, Route
     },
     "GET /api/v1/runs/:id": "shared-gate",
     "GET /api/v1/runs/:id/events": "shared-gate",
-    "POST /api/v1/jobs/:id/replay": {
-      why: "OPEN, raised for the owner by the D-10 audit: a replay changes a person run's job and run state before any person check. Gating it reverses the Phase 6a ruling that left replay ungated.",
-    },
+    "POST /api/v1/jobs/:id/replay": "shared-gate",
     "GET /api/v1/usage": {
       why: "The tenant's metering totals: aggregates across every collector (docs/PLAN.md, Phase 6a ruling).",
     },

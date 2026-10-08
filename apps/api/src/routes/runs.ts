@@ -2,6 +2,7 @@ import type { ServerResponse } from "node:http";
 import { JOB_OUTCOMES, JOB_STATUSES, RUN_STATUSES, TARGET_TYPES } from "@repo/core";
 import {
   readRunProgress,
+  ReplayTargetNotFoundError,
   usageSummary,
   type JobProgress,
   type RunProgress,
@@ -465,8 +466,19 @@ export const runRoutes =
         },
       },
       async (request, reply) => {
-        const { principal } = tenantOf(request);
+        const context = tenantOf(request);
+        const { principal, repos } = context;
         request.auditTarget = { type: "job", id: request.params.id };
+        const job = await repos.jobs.findById(request.params.id);
+        if (job === null) throw new ReplayTargetNotFoundError();
+        // A replay re-queues collection on the job's run and rewrites the job's and the run's
+        // recorded state, in a transaction of its own: refused whole before it starts when the
+        // run is person data (D-30, reversing the Phase 6a ruling that left replay ungated).
+        await requirePersonAccess(
+          context,
+          { runJobs: job.runId },
+          "This job's replay: its run's collection and its recorded outcome.",
+        );
         const replayed = await services().runs.replayer.replay(
           principal.tenantId,
           request.params.id,
