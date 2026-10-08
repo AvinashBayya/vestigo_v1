@@ -126,6 +126,13 @@ function pinTarget(input: z.infer<typeof PinTargetInput>): PinTarget {
   }
 }
 
+/** Ids in runs of at most 1000, the most one read-model call takes. */
+function chunked(ids: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let start = 0; start < ids.length; start += 1000) out.push(ids.slice(start, start + 1000));
+  return out;
+}
+
 export const caseRoutes =
   (services: () => Services): FastifyPluginAsyncZod =>
   (app) => {
@@ -346,16 +353,33 @@ export const caseRoutes =
       },
       async (request) => {
         const context = tenantOf(request);
-        const { repos } = context;
+        const { repos, reads } = context;
         request.auditTarget = { type: "case", id: request.params.id };
         if ((await repos.cases.findById(request.params.id)) === null) throw notFound("The case");
-        // The whole case: its pins point at evidence, claims and entities that may be person data.
+        const pins = await repos.casePins.listForCase(request.params.id);
+        // The whole case: its pins point at evidence, claims and entities that may be person
+        // data. A pin shows entities by name (a pinned entity, both ends of a pinned
+        // relationship), so those are probed too, with the relationships touching them. Every
+        // pin, not only this page, so a refusal never moves with `limit`.
+        const relationshipIds = pins.flatMap((pin) =>
+          pin.relationshipId === null ? [] : [pin.relationshipId],
+        );
+        const ends = (
+          await Promise.all(
+            chunked(relationshipIds).map((ids) => reads.exploration.relationshipDetails(ids)),
+          )
+        ).flatMap((rows) => rows.flatMap((row) => [row.source.id, row.target.id]));
+        const entityIds = [
+          ...new Set([
+            ...pins.flatMap((pin) => (pin.entityId === null ? [] : [pin.entityId])),
+            ...ends,
+          ]),
+        ];
         await requirePersonAccess(
           context,
-          { scope: { caseId: request.params.id } },
+          { scope: { caseId: request.params.id }, entityIds },
           "The pins of this case, with a summary of each pinned item.",
         );
-        const pins = await repos.casePins.listForCase(request.params.id);
         const result = page(pins, request.query.limit);
         return { items: await pinViews(request, result.items), hasMore: result.hasMore };
       },

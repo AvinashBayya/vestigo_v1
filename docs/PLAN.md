@@ -3088,3 +3088,66 @@ fabrication check clean on 447 files, with Postgres and Redis up): core 20, acce
     allowlist.
 - **D-10** is fixed next, before R1-a.
 - **Every other decision is held** for the owner's review.
+
+## D-10: the person gate on entity merges, and the route audit (2026-10-08)
+
+**The brief.** Close the person-gate hole on `/api/v1/entity-merges` with the shared gate only;
+refuse whole, never thin; keep SESSION_REQUIRED on the mutations; audit every other route that
+returns or accepts entities, relationships, claims, pins or case data, fixing further small gaps
+the same way and reporting the rest; release-blocking tests that fail on the old code.
+
+**What leaked** (verified by tests against the old code):
+- `GET /api/v1/entity-merges` listed merge decisions on entities resting on person evidence: both
+  entity ids, the kind and the analyst's free-text reason. With `?entityId` it also said whether a
+  person entity had any merge.
+- `POST /api/v1/entity-merges` let a locked tenant merge person-data entities, changing how they
+  are presented, and returned the merge record.
+- `POST /api/v1/entity-merges/:id/undo` let a locked tenant undo such a merge and returned it.
+
+**Fixed.**
+- **The merge routes:**
+  - **List:** probes both sides of every merge it fetches, and the entity asked about even when
+    it has none.
+  - **Create and undo:** probe both entities after the session check and before anything changes.
+- **Four further gaps from the audit:**
+  - **Case pins list:** now probes every pinned entity and both ends of every pinned relationship,
+    across the whole case, not only the page.
+  - **Entity detail:** probes its merge partners and its survivor.
+  - **Graph:** probes the survivor each merged node names.
+  - **Run progress stream:** each poll reads first, then probes, so a person job committed between
+    the two never reaches a locked tenant.
+- **From the review:**
+  - **Entity list:** probes the survivor its rows name.
+  - **Lists:** the entity, candidate and merge lists probe the row past the page that decides
+    `hasMore`.
+  - **Detail reads:** entity and relationship detail read their claims before the probe.
+  - **Large probes:** the shared gate splits a probe of more than 1000 ids into parts, so a large
+    read is decided, never answered 500.
+
+**Supersedes** the Phase 6a line that listed entity merges as not gated (above, "Not gated (no
+claim or evidence content)").
+
+**Raised, not fixed** (R1-PLAN.md, D-29 to D-32):
+- merge partners in the probe;
+- replay of a person run's job, which reverses a Phase 6a ruling;
+- where a refusal falls in a paged list;
+- a case scope that changes between read and probe.
+
+**Guard.** `person-gate-guard` now classifies every API route, file by file. A gated route's own
+registration call must await the shared gate; any other states why it need not. Every route
+file is scanned or says why not.
+
+**Tests** (release-blocking), in `apps/api/test/person-gate.test.ts`:
+- **Coverage:** every merge route, both sides of a merge, and each further gap.
+- **Behaviour asserted:** a locked tenant is refused whole with no thinned body; an allowed one
+  is unchanged; refused mutations change nothing; an API key still meets SESSION_REQUIRED first.
+- **Old-code proof:** each test failed on the code before its fix, shown by removing each fix in
+  turn.
+
+**Review:** three lenses, each finding verified adversarially. Nineteen findings stood; all
+fixed or raised.
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 50 of 50 tasks, nothing cached,
+fabrication check clean on 447 files, with Postgres and Redis up): core 20, access 56, config
+194, db 264, integrations 122, collectors 482, llm 130, osint-engine 104, api 189, ui 95, web
+177, worker 4 (1,837 tests; 11 more than R1-0: config 6, api 5).

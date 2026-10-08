@@ -93,9 +93,19 @@ export const exploreRoutes =
           maxHops: request.query.hops,
           maxNodes: request.query.maxNodes,
         });
+        // Every node, and the survivor a merged node names, which may not be a node itself.
         await requirePersonAccess(
           context,
-          { scope, entityIds: slice.nodes.map((node) => node.id) },
+          {
+            scope,
+            entityIds: [
+              ...new Set(
+                slice.nodes.flatMap((node) =>
+                  node.mergedIntoEntityId === null ? [node.id] : [node.id, node.mergedIntoEntityId],
+                ),
+              ),
+            ],
+          },
           "The graph of this case or run: its entities, their relationships and claim counts.",
         );
         return {

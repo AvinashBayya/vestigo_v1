@@ -509,7 +509,8 @@ second prompt, its eval set and those two policy decisions.
 returns their ids, kind and the analyst's reason. *Recommended:* fix it before R1-a, as its own
 change with a regression test (probe the merge's entities; refuse whole). *Alternative:* fix it
 inside R1-b. Cost of waiting: the gap stays open meanwhile. Not fixed in R1-0, which allows no
-code change beyond the pre-flight.
+code change beyond the pre-flight. **Fixed 2026-10-08** (its own commit; docs/PLAN.md, D-10 record),
+with four further gaps the route audit found. It raised D-29 to D-32.
 
 **D-11. Components the R1 UI needs that U1-c raised and did not build:** a count chip, a strength
 badge with a count, a gaps list. *Recommended:* approve them for R1-e, specified in §9 first and
@@ -626,6 +627,42 @@ API and the worker may need no change to that list. Either way, CLAUDE.md §9's 
 `requirePersonAccess`, are amended in the same change, with the owner's approval; `case-engine`
 then depends on `access`. *Alternative:* trust the request-time check. Cost: a tenant
 whose vetting is withdrawn between request and job still has its person data sent to the model.
+
+**D-29. Merge partners in the probe** (raised by the D-10 audit). The entity list shows each
+entity's `mergedEntityCount`, and a count of entities merged into it is part of what it says, but
+the partners are not probed: the list does not carry their ids. Likewise a merge request naming
+two technical entities answers 409 when one of them is already merged into a person-evidence
+entity, which says it has some active merge. *Recommended:* the probe's `entityIds` also cover
+each entity's active merge partners, in the shared probe (`touchesPersonData`), so every read
+that names an entity follows its merges. *Alternative:* the list returns its partners' ids and
+probes them. Cost: either changes the probe or a repository (not small, so not done in D-10);
+the first also refuses reads that show no merge field (relationship detail, merge candidates)
+when a partner is person data.
+
+**D-30. Replaying a job of a person run** (raised by the D-10 audit). `POST
+/api/v1/jobs/:id/replay` is ungated: for a locked tenant, a replay of a failed person job
+re-queues it and its run, and the worker then overwrites the job's recorded failure with a
+refusal. The Phase 6a ruling left replay ungated ("returns the run id only; the worker
+re-checks admission"); that did not consider the state the request changes. *Recommended:*
+gate it before the replay with the job's run (`runJobs`), as for a run read. *Alternative:*
+keep the ruling. Cost: a locked tenant can still change a person run's recorded state.
+
+**D-31. Where a refusal falls in a paged list** (raised by the D-10 review). The merge list and
+the entity list probe every row they fetch, the next page's first row included, so `hasMore`
+is covered. A refusal still moves with `limit`: stepping it shows where in the list a row
+resting on person data sits. The case pins list avoids this by probing every pin of the case.
+*Recommended:* probe every row the query matches (needs a repository read without a page limit,
+or one probe query over the same filter). *Alternative:* accept it. Cost: a locked tenant can
+place a person-data row in its own lists.
+
+**D-32. A scope that changes between read and probe** (raised by the D-10 review). Entity
+detail, relationship detail and the run stream now read first and probe after, so the probe sees
+at least what was read: what they show cannot shrink.
+A case scope can also shrink (an unpin is not gated) as well as grow (a fusion commits claims on
+a pinned entity), so for case-scope reads neither order is safe alone. *Recommended:* run each
+gated read and its probe on one snapshot (a repeatable-read transaction for gated reads).
+*Alternative:* probe before and after each case-scope read. Cost: the windows are milliseconds
+and need a concurrent unpin or fusion; the first is a change to the transaction layer.
 
 **Noted, not a decision.** The brief refers to "the 11 non-negotiable rules" in CLAUDE.md. No
 document numbers eleven rules: CLAUDE.md has sections 1 to 10 plus three unnumbered ones (product

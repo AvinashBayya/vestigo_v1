@@ -168,6 +168,16 @@ function mergeView(row: EntityMerge): z.infer<typeof MergeView> {
 
 const MERGE_ERRORS = { 409: ProblemSchema } as const;
 
+/** Every entity the merges fetched name, and the one asked about; each once. */
+function mergeEntityIds(rows: readonly EntityMerge[], asked: string | undefined): string[] {
+  const ids = new Set<string>(asked === undefined ? [] : [asked]);
+  for (const row of rows) {
+    ids.add(row.survivingEntityId);
+    ids.add(row.mergedEntityId);
+  }
+  return [...ids];
+}
+
 export const entityRoutes: FastifyPluginAsyncZod = (app) => {
   app.get(
     "/api/v1/entities",
@@ -195,9 +205,20 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
         limit: request.query.limit + 1,
       });
       const result = page(rows, request.query.limit);
+      // Every row fetched (the one past the page decides hasMore), and the survivor a
+      // merged entity names, which may not be listed itself.
       await requirePersonAccess(
         context,
-        { scope, entityIds: result.items.map((row) => row.id) },
+        {
+          scope,
+          entityIds: [
+            ...new Set(
+              rows.flatMap((row) =>
+                row.mergedIntoEntityId === null ? [row.id] : [row.id, row.mergedIntoEntityId],
+              ),
+            ),
+          ],
+        },
         "The entities of this case or run, with their claims, relationships and counts.",
       );
       return { items: result.items.map(entityView), hasMore: result.hasMore };
@@ -242,11 +263,12 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
         limit: request.query.limit + 1,
       });
       const result = page(rows, request.query.limit);
+      // Every pair fetched: the one past the page decides hasMore.
       await requirePersonAccess(
         context,
         {
           scope,
-          entityIds: result.items.flatMap((row) => [row.first.id, row.second.id]),
+          entityIds: [...new Set(rows.flatMap((row) => [row.first.id, row.second.id]))],
         },
         "The merge candidates of this case or run, with the entity names.",
       );
@@ -292,20 +314,29 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
       request.auditTarget = { type: "entity", id: request.params.id };
       const detail = await reads.exploration.entityDetail(request.params.id);
       if (detail === null) throw notFound("The entity");
-      // The entity, and the entities its relationships show by name.
+      // Read everything first, then probe: a claim committed between a probe and a later
+      // read would reach a locked tenant. The probe sees at least what the reads saw.
+      const rows = await repos.claims.listForEntity(request.params.id, {
+        limit: request.query.claimLimit + 1,
+      });
+      // The entity, the entities its relationships show by name, and the merge partners it
+      // shows by id: a merge with a person entity is part of what this read says.
       await requirePersonAccess(
         context,
         {
           entityIds: [
-            detail.entity.id,
-            ...detail.relationships.map((relationship) => relationship.otherEntity.id),
+            ...new Set([
+              detail.entity.id,
+              ...detail.relationships.map((relationship) => relationship.otherEntity.id),
+              ...detail.mergedEntityIds,
+              ...(detail.entity.mergedIntoEntityId === null
+                ? []
+                : [detail.entity.mergedIntoEntityId]),
+            ]),
           ],
         },
-        "This entity, with its claims, relationships and counts.",
+        "This entity, with its claims, relationships, counts and merged entities.",
       );
-      const rows = await repos.claims.listForEntity(request.params.id, {
-        limit: request.query.claimLimit + 1,
-      });
       return {
         entity: entityView(detail.entity),
         claims: rows.slice(0, request.query.claimLimit).map(claimView),
@@ -349,15 +380,16 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
       request.auditTarget = { type: "relationship", id: request.params.id };
       const detail = await reads.exploration.relationshipDetail(request.params.id);
       if (detail === null) throw notFound("The relationship");
+      // Read first, then probe, as for an entity.
+      const rows = await repos.claims.listForRelationship(request.params.id, {
+        limit: request.query.claimLimit + 1,
+      });
       // Both ends are shown by name; probing them covers the relationship's own claims too.
       await requirePersonAccess(
         context,
         { entityIds: [detail.source.id, detail.target.id] },
         "This relationship, with both of its entities and the claims behind it.",
       );
-      const rows = await repos.claims.listForRelationship(request.params.id, {
-        limit: request.query.claimLimit + 1,
-      });
       return {
         relationship: {
           id: detail.id,
@@ -391,13 +423,22 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
       },
     },
     async (request) => {
-      const { repos } = tenantOf(request);
+      const context = tenantOf(request);
+      const { repos } = context;
       const limit = { limit: request.query.limit + 1 };
       const rows =
         request.query.entityId === undefined
           ? await repos.entityMerges.list(limit)
           : await repos.entityMerges.listInvolving(request.query.entityId, limit);
       const result = page(rows, request.query.limit);
+      // Both sides of every merge fetched (the one past the page decides hasMore), and the
+      // entity asked about even when it has none: "no merges" for a person entity is still
+      // an answer about it.
+      await requirePersonAccess(
+        context,
+        { entityIds: mergeEntityIds(rows, request.query.entityId) },
+        "This page of merge decisions: which entities were merged, by whom, and the reasons given.",
+      );
       return { items: result.items.map(mergeView), hasMore: result.hasMore };
     },
   );
@@ -424,9 +465,16 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
       },
     },
     async (request, reply) => {
-      const { repos } = tenantOf(request);
+      const context = tenantOf(request);
+      const { repos } = context;
       // A merge is an analytic judgement: attributable to the person who made it.
       const { userId } = sessionPrincipalOf(request, "A merge is an analytic judgement");
+      // Before anything changes: a refused merge merges nothing.
+      await requirePersonAccess(
+        context,
+        { entityIds: [request.body.survivingEntityId, request.body.mergedEntityId] },
+        "The merge decision for these two entities.",
+      );
       try {
         const created = await repos.entityMerges.merge({
           ...request.body,
@@ -461,9 +509,18 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
       },
     },
     async (request) => {
-      const { repos } = tenantOf(request);
+      const context = tenantOf(request);
+      const { repos } = context;
       request.auditTarget = { type: "entity_merge", id: request.params.id };
       const { userId } = sessionPrincipalOf(request, "Undoing a merge is an analytic judgement");
+      const merge = await repos.entityMerges.findById(request.params.id);
+      if (merge === null) throw notFound("The merge");
+      // Before anything changes: a refused undo leaves the merge in force.
+      await requirePersonAccess(
+        context,
+        { entityIds: [merge.survivingEntityId, merge.mergedEntityId] },
+        "This merge decision, with its undo.",
+      );
       const undone = await repos.entityMerges.undo(request.params.id, {
         decidedBy: { kind: "USER", userId },
         reason: request.body.reason,

@@ -435,9 +435,12 @@ export const runRoutes =
                 permission: STREAM_PERMISSION,
               });
               if (refused !== null) return { kind: "refused", refusal: refused };
+              // Read first, then probe: a job committed between a probe and a later read would
+              // reach a tenant that is now locked. The probe sees at least what the read saw.
+              const progress = await readRunProgress(ctx.repos, runId);
               const lock = await personLockFor(tenant, ctx.reads, { runJobs: runId }, RUN_WITHHELD);
               if (lock !== null) return { kind: "refused", refusal: refusalFromLock(lock) };
-              return { kind: "progress", progress: await readRunProgress(ctx.repos, runId) };
+              return { kind: "progress", progress };
             });
           },
           log: request.log,

@@ -43,6 +43,41 @@ export function lockedError(
   });
 }
 
+/** The most ids of one kind the probe reads in one statement. */
+const PROBE_LIMIT = 1000;
+
+const slices = (ids: readonly string[]): string[][] => {
+  const out: string[][] = [];
+  for (let start = 0; start < ids.length; start += PROBE_LIMIT) {
+    out.push(ids.slice(start, start + PROBE_LIMIT));
+  }
+  return out;
+};
+
+/**
+ * A probe in parts of at most PROBE_LIMIT ids of each kind, the scope and the
+ * run in the first part. Together the parts cover exactly what the probe does,
+ * so a read that names many entities is decided, never failed.
+ */
+export function probeParts(probe: PersonProbe): PersonProbe[] {
+  const evidenceIds = slices(probe.evidenceIds ?? []);
+  const claimIds = slices(probe.claimIds ?? []);
+  const entityIds = slices(probe.entityIds ?? []);
+  const count = Math.max(1, evidenceIds.length, claimIds.length, entityIds.length);
+  return Array.from({ length: count }, (_, index) => {
+    const evidence = evidenceIds[index];
+    const claims = claimIds[index];
+    const entities = entityIds[index];
+    return {
+      ...(index === 0 && probe.scope !== undefined ? { scope: probe.scope } : {}),
+      ...(index === 0 && probe.runJobs !== undefined ? { runJobs: probe.runJobs } : {}),
+      ...(evidence === undefined ? {} : { evidenceIds: evidence }),
+      ...(claims === undefined ? {} : { claimIds: claims }),
+      ...(entities === undefined ? {} : { entityIds: entities }),
+    };
+  });
+}
+
 /**
  * The gate's one decision, for code that holds a tenant transaction but no
  * request (the run progress stream re-checks with it on every read): the
@@ -58,8 +93,12 @@ export async function personLockFor(
 ): Promise<LockedError | null> {
   const decision = decideDisciplineAccess(tenant, "PERSON");
   if (decision.allowed) return null;
-  if (!(await reads.exploration.touchesPersonData(probe))) return null;
-  return lockedError(tenant, decision.reason, withheld);
+  for (const part of probeParts(probe)) {
+    if (await reads.exploration.touchesPersonData(part)) {
+      return lockedError(tenant, decision.reason, withheld);
+    }
+  }
+  return null;
 }
 
 /**

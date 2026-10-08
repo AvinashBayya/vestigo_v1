@@ -5,9 +5,9 @@
  * count lowered. Walked through the whole lifecycle: no plan, vetting
  * pending, approved, suspended.
  */
-import { contentRef, hashContent } from "@repo/db";
+import { contentRef, ExplorationRepository, hashContent } from "@repo/db";
 import type { TenantId } from "@repo/core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   createTestApi,
   openRunStream,
@@ -42,6 +42,38 @@ interface Ids {
   personRelationship: string;
   relationshipCase: string;
   cleanRelationship: string;
+  personMerge: string;
+  personMerged: string;
+  personToMergeInto: string;
+  personToMerge: string;
+  cleanMerged: string;
+  cleanToMergeInto: string;
+  cleanToMerge: string;
+  endCase: string;
+  touchedCase: string;
+  cleanWithPersonMerged: string;
+  mergedIntoPersonRun: string;
+  raceRun: string;
+  cleanMergedAway: string;
+  pairCleanSurvivor: string;
+  pairPersonMerged: string;
+  pairPersonSurvivor: string;
+  pairCleanMerged: string;
+  undoCleanSurvivorMerge: string;
+  undoPersonSurvivorMerge: string;
+  freshPersonSurvivor: string;
+  freshPersonMerged: string;
+  freshPersonMerge: string;
+  lookaheadEntity: string;
+  lookaheadPartner: string;
+  pagedCase: string;
+  endRelationship: string;
+  bigCase: string;
+  hubClean: string;
+  hubPerson: string;
+  raceEntity: string;
+  raceRelationshipSource: string;
+  raceRelationship: string;
 }
 let ids: Ids;
 
@@ -265,6 +297,229 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       note: null,
     });
 
+    // Merge decisions, each from a run of its own so no earlier scope changes. Person:
+    // a pair already merged (listed, then undone) and a pair to merge. Clean: the same.
+    const entityFrom = async (evidenceId: string, kind: "PERSON" | "DOMAIN", name: string) => {
+      const entity = await repos.entities.create({ kind, displayName: name });
+      await repos.claims.create({
+        evidenceId,
+        subject: { entityId: entity.id },
+        attribute: "note",
+        value: kind === "PERSON" ? "[person claim]" : "[technical claim]",
+        strength: "REPORTED",
+      });
+      return entity.id;
+    };
+    const personMergeRun = await makeRun("fixture-person", "person-merge");
+    const personSurvivor = await entityFrom(personMergeRun.evidenceId, "PERSON", "[Person M1]");
+    const personMerged = await entityFrom(personMergeRun.evidenceId, "PERSON", "[Person M2]");
+    const personToMergeInto = await entityFrom(personMergeRun.evidenceId, "PERSON", "[Person M3]");
+    const personToMerge = await entityFrom(personMergeRun.evidenceId, "PERSON", "[Person M4]");
+    const personMerge = await repos.entityMerges.merge({
+      survivingEntityId: personSurvivor,
+      mergedEntityId: personMerged,
+      reason: "[analyst reason about Person M1 and Person M2]",
+      confidence: 0.8,
+      matchSignals: ["ANALYST_REVIEW"],
+      decidedBy: { kind: "USER", userId },
+    });
+    const cleanMergeRun = await makeRun("fixture", "clean-merge");
+    const cleanSurvivor = await entityFrom(cleanMergeRun.evidenceId, "DOMAIN", "m1.example.com");
+    const cleanMerged = await entityFrom(cleanMergeRun.evidenceId, "DOMAIN", "m2.example.com");
+    const cleanToMergeInto = await entityFrom(cleanMergeRun.evidenceId, "DOMAIN", "m3.example.com");
+    const cleanToMerge = await entityFrom(cleanMergeRun.evidenceId, "DOMAIN", "m4.example.com");
+    await repos.entityMerges.merge({
+      survivingEntityId: cleanSurvivor,
+      mergedEntityId: cleanMerged,
+      reason: "[analyst reason about two hosts]",
+      confidence: 0.8,
+      matchSignals: ["ANALYST_REVIEW"],
+      decidedBy: { kind: "USER", userId },
+    });
+
+    // A relationship whose own claims are technical, from a technical entity to a person
+    // entity that rests only on person evidence; and a case pinning only that relationship.
+    const endRun = await makeRun("fixture", "clean-end");
+    const personEndRun = await makeRun("fixture-person", "person-end");
+    const cleanEnd = await entityFrom(endRun.evidenceId, "DOMAIN", "end.example.com");
+    const personEnd = await entityFrom(personEndRun.evidenceId, "PERSON", "[Person End]");
+    const endRelationship = await repos.entityRelationships.create({
+      sourceEntityId: cleanEnd,
+      targetEntityId: personEnd,
+      kind: "linked_to",
+    });
+    await repos.claims.create({
+      evidenceId: endRun.evidenceId,
+      subject: { relationshipId: endRelationship.id },
+      attribute: "observed_in",
+      value: "[technical claim]",
+      strength: "REPORTED",
+    });
+    const pinOnly = async (
+      title: string,
+      target: { entityId: string } | { relationshipId: string },
+    ) => {
+      const created = await repos.cases.create({
+        title,
+        description: null,
+        createdByUserId: userId,
+      });
+      await repos.casePins.pin({ caseId: created.id, target, pinnedByUserId: userId, note: null });
+      return created.id;
+    };
+    const endCase = await pinOnly("[end case]", { relationshipId: endRelationship.id });
+    // A case pinning an entity whose only provenance is a relationship claim from person evidence.
+    const touchedCase = await pinOnly("[touched case]", { entityId: relSource.id });
+
+    // Merges across the person line: a person-evidence entity merged into a technical one,
+    // and a technical entity (from a run of its own) merged into a person-evidence one.
+    const mergeCleanRun = await makeRun("fixture", "merge-clean");
+    const mergePersonRun = await makeRun("fixture-person", "merge-person");
+    const cleanWithPersonMerged = await entityFrom(
+      mergeCleanRun.evidenceId,
+      "DOMAIN",
+      "w.example.com",
+    );
+    const personMergedIn = await entityFrom(mergePersonRun.evidenceId, "DOMAIN", "p.example.com");
+    await repos.entityMerges.merge({
+      survivingEntityId: cleanWithPersonMerged,
+      mergedEntityId: personMergedIn,
+      reason: "[analyst reason about w and p]",
+      confidence: 0.6,
+      matchSignals: ["ANALYST_REVIEW"],
+      decidedBy: { kind: "USER", userId },
+    });
+    const mergedIntoPerson = await makeRun("fixture", "merged-into-person");
+    const cleanMergedAway = await entityFrom(
+      mergedIntoPerson.evidenceId,
+      "DOMAIN",
+      "w2.example.com",
+    );
+    const personSurvivor2 = await entityFrom(mergePersonRun.evidenceId, "DOMAIN", "p2.example.com");
+    await repos.entityMerges.merge({
+      survivingEntityId: personSurvivor2,
+      mergedEntityId: cleanMergedAway,
+      reason: "[analyst reason about w2 and p2]",
+      confidence: 0.6,
+      matchSignals: ["ANALYST_REVIEW"],
+      decidedBy: { kind: "USER", userId },
+    });
+
+    // Merges with person evidence on one side only, in both directions: pairs to merge,
+    // and merges to undo. A gate that probed one side of a merge would pass the others.
+    const pairCleanRun = await makeRun("fixture", "pair-clean");
+    const pairPersonRun = await makeRun("fixture-person", "pair-person");
+    const pairClean = (name: string) => entityFrom(pairCleanRun.evidenceId, "DOMAIN", name);
+    const pairPerson = (name: string) => entityFrom(pairPersonRun.evidenceId, "DOMAIN", name);
+    const pairCleanSurvivor = await pairClean("pair-a.example.com");
+    const pairPersonMerged = await pairPerson("pair-b.example.com");
+    const pairPersonSurvivor = await pairPerson("pair-c.example.com");
+    const pairCleanMerged = await pairClean("pair-d.example.com");
+    const analystMerge = (survivingEntityId: string, mergedEntityId: string, reason: string) =>
+      repos.entityMerges.merge({
+        survivingEntityId,
+        mergedEntityId,
+        reason,
+        confidence: 0.6,
+        matchSignals: ["ANALYST_REVIEW"],
+        decidedBy: { kind: "USER", userId },
+      });
+    const undoCleanSurvivorMerge = await analystMerge(
+      await pairClean("undo-a.example.com"),
+      await pairPerson("undo-b.example.com"),
+      "[analyst reason about undo-a and undo-b]",
+    );
+    const undoPersonSurvivorMerge = await analystMerge(
+      await pairPerson("undo-c.example.com"),
+      await pairClean("undo-d.example.com"),
+      "[analyst reason about undo-c and undo-d]",
+    );
+    // Fresh targets for the suspended stage only: a pair to merge and a merge to undo.
+    const freshPersonSurvivor = await entityFrom(
+      personMergeRun.evidenceId,
+      "PERSON",
+      "[Person M5]",
+    );
+    const freshPersonMerged = await entityFrom(personMergeRun.evidenceId, "PERSON", "[Person M6]");
+    const freshPersonMerge = await analystMerge(
+      await entityFrom(personMergeRun.evidenceId, "PERSON", "[Person M7]"),
+      await entityFrom(personMergeRun.evidenceId, "PERSON", "[Person M8]"),
+      "[analyst reason about Person M7 and Person M8]",
+    );
+    // A technical entity with a technical merge now, and (after the seed, so it sorts
+    // later) one with a person-evidence entity: page one of its merges holds the first.
+    const lookaheadEntity = await pairClean("ahead.example.com");
+    await analystMerge(
+      lookaheadEntity,
+      await pairClean("ahead-1.example.com"),
+      "[analyst reason about ahead and ahead-1]",
+    );
+    const lookaheadPartner = await pairPerson("ahead-2.example.com");
+    // A case pinning a technical entity now; its relationship pin ending on person evidence
+    // is added after the seed, so it sorts second.
+    const pagedCase = await pinOnly("[paged case]", { entityId: cleanEntity.id });
+
+    // A thousand claim-less entities: neighbours of two hubs, and pins of one case, so a
+    // probe names more ids than one statement takes.
+    const crowd: string[] = [];
+    for (let index = 0; index < 1000; index += 1) {
+      const entity = await repos.entities.create({
+        kind: "DOMAIN",
+        displayName: `crowd-${String(index)}.example.com`,
+      });
+      crowd.push(entity.id);
+    }
+    const hubClean = await pairClean("hub-clean.example.com");
+    const hubPerson = await pairClean("hub-person.example.com");
+    for (const neighbour of crowd) {
+      for (const hub of [hubClean, hubPerson]) {
+        await repos.entityRelationships.create({
+          sourceEntityId: hub,
+          targetEntityId: neighbour,
+          kind: "linked_to",
+        });
+      }
+    }
+    // Merge ids follow the neighbours in the probe, so this one falls past the first thousand.
+    await analystMerge(
+      hubPerson,
+      await pairPerson("hub-merged.example.com"),
+      "[analyst reason about the hub]",
+    );
+    // The relationship pin first: the pinned entities' ids come first in the probe, so its
+    // person-evidence end falls past the first thousand.
+    const bigCase = await pinOnly("[big case]", { relationshipId: endRelationship.id });
+    for (const entityId of crowd) {
+      await repos.casePins.pin({
+        caseId: bigCase,
+        target: { entityId },
+        pinnedByUserId: userId,
+        note: null,
+      });
+    }
+
+    // Technical, for the read-then-probe tests: a claim is added between probe and read.
+    const raceEntity = await pairClean("race.example.com");
+    // Its own two ends: the entity test leaves raceEntity holding person data.
+    const raceRelationshipSource = await pairClean("race-source.example.com");
+    const raceRelationship = await repos.entityRelationships.create({
+      sourceEntityId: raceRelationshipSource,
+      targetEntityId: await pairClean("race-target.example.com"),
+      kind: "linked_to",
+    });
+
+    // An unplanned run with no jobs yet: unsettled, so its stream stays open and polls.
+    const raceInvestigation = await repos.investigations.create({
+      title: "[race]",
+      target: "example.com",
+      createdByUserId: userId,
+    });
+    const raceRun = await repos.runs.create({
+      investigationId: raceInvestigation.id,
+      status: "QUEUED",
+      requestedByUserId: userId,
+    });
+
     // Where pin attempts are aimed, so a pin that succeeds never pollutes the clean case.
     const pinCase = await repos.cases.create({
       title: "[pin attempts]",
@@ -289,6 +544,38 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       personRelationship: personRelationship.id,
       relationshipCase: relationshipCase.id,
       cleanRelationship: relationship.id,
+      personMerge: personMerge.id,
+      personMerged,
+      personToMergeInto,
+      personToMerge,
+      cleanMerged,
+      cleanToMergeInto,
+      cleanToMerge,
+      endCase,
+      touchedCase,
+      cleanWithPersonMerged,
+      mergedIntoPersonRun: mergedIntoPerson.runId,
+      raceRun: raceRun.id,
+      cleanMergedAway,
+      pairCleanSurvivor,
+      pairPersonMerged,
+      pairPersonSurvivor,
+      pairCleanMerged,
+      undoCleanSurvivorMerge: undoCleanSurvivorMerge.id,
+      undoPersonSurvivorMerge: undoPersonSurvivorMerge.id,
+      freshPersonSurvivor,
+      freshPersonMerged,
+      freshPersonMerge: freshPersonMerge.id,
+      lookaheadEntity,
+      lookaheadPartner,
+      pagedCase,
+      endRelationship: endRelationship.id,
+      bigCase,
+      hubClean,
+      hubPerson,
+      raceEntity,
+      raceRelationshipSource,
+      raceRelationship: raceRelationship.id,
     };
   });
 }
@@ -299,6 +586,25 @@ beforeAll(async () => {
   tenantId = tenant.tenantId;
   browser = await readyBrowser(api, tenant.owner, tenantId);
   ids = await seed(tenantId, tenant.ownerUserId);
+  // Each in a transaction of its own, after the seed, so it sorts after what the seed made.
+  await api.db.withTenant(tenantId, ({ repos }) =>
+    repos.entityMerges.merge({
+      survivingEntityId: ids.lookaheadEntity,
+      mergedEntityId: ids.lookaheadPartner,
+      reason: "[analyst reason about ahead and ahead-2]",
+      confidence: 0.6,
+      matchSignals: ["ANALYST_REVIEW"],
+      decidedBy: { kind: "USER", userId: tenant.ownerUserId },
+    }),
+  );
+  await api.db.withTenant(tenantId, ({ repos }) =>
+    repos.casePins.pin({
+      caseId: ids.pagedCase,
+      target: { relationshipId: ids.endRelationship },
+      pinnedByUserId: tenant.ownerUserId,
+      note: null,
+    }),
+  );
 });
 
 afterAll(async () => {
@@ -370,6 +676,10 @@ const LOCKED_CALLS: Record<string, Call> = {
     "GET",
     () => `/api/v1/timeline?caseId=${ids.relationshipCase}`,
   ],
+  "pins of a case whose pinned relationship rests on person evidence": [
+    "GET",
+    () => `/api/v1/cases/${ids.relationshipCase}/pins`,
+  ],
   "graph of a case whose pinned relationship rests on person evidence": [
     "GET",
     () => `/api/v1/graph?caseId=${ids.relationshipCase}`,
@@ -408,6 +718,118 @@ const LOCKED_CALLS: Record<string, Call> = {
     "GET",
     () => `/api/v1/entities/merge-candidates?runId=${ids.notFoundRun}`,
   ],
+  // REGRESSION (D-10): the three merge routes had no person gate.
+  "merge decisions, when one involves person entities": ["GET", () => "/api/v1/entity-merges"],
+  "merge decisions involving a person entity": [
+    "GET",
+    () => `/api/v1/entity-merges?entityId=${ids.personMerged}`,
+  ],
+  // It has no merges: "none" would still be an answer about a person entity.
+  "merge decisions of a person entity that has none": [
+    "GET",
+    () => `/api/v1/entity-merges?entityId=${ids.personEntity}`,
+  ],
+  "merging two person entities": [
+    "POST",
+    () => "/api/v1/entity-merges",
+    () => ({
+      survivingEntityId: ids.personToMergeInto,
+      mergedEntityId: ids.personToMerge,
+      reason: "[analyst reason about Person M3 and Person M4]",
+      confidence: 0.7,
+      matchSignals: ["ANALYST_REVIEW"],
+    }),
+  ],
+  // REGRESSION (D-10 audit): the case scope probe missed the entities a pin names.
+  "pins of a case pinning a relationship whose end rests on person evidence": [
+    "GET",
+    () => `/api/v1/cases/${ids.endCase}/pins`,
+  ],
+  "pins of a case pinning an entity reached only by a person relationship": [
+    "GET",
+    () => `/api/v1/cases/${ids.touchedCase}/pins`,
+  ],
+  // REGRESSION (D-10 audit): merge partners were shown by id but never probed.
+  "entity detail of a technical entity with a person-evidence entity merged into it": [
+    "GET",
+    () => `/api/v1/entities/${ids.cleanWithPersonMerged}`,
+  ],
+  "graph of a run whose entity is merged into a person-evidence entity": [
+    "GET",
+    () => `/api/v1/graph?runId=${ids.mergedIntoPersonRun}&hops=0`,
+  ],
+  "entities of a run whose entity is merged into a person-evidence entity": [
+    "GET",
+    () => `/api/v1/entities?runId=${ids.mergedIntoPersonRun}`,
+  ],
+  "entity detail of a technical entity merged into a person-evidence entity": [
+    "GET",
+    () => `/api/v1/entities/${ids.cleanMergedAway}`,
+  ],
+  // REGRESSION (D-10 review): a row past the page decides hasMore, and was never probed.
+  "first page of a technical entity's merges, the next involving person evidence": [
+    "GET",
+    () => `/api/v1/entity-merges?entityId=${ids.lookaheadEntity}&limit=1`,
+  ],
+  // REGRESSION (D-10 review): every pin of the case is probed, not only this page's.
+  "first page of a case's pins, the next ending on person evidence": [
+    "GET",
+    () => `/api/v1/cases/${ids.pagedCase}/pins?limit=1`,
+  ],
+  // REGRESSION (D-10 review): a probe naming over a thousand ids failed with a 500, and a
+  // probe of the first thousand alone would miss what comes after.
+  "pins of a case with over a thousand pins, one ending on person evidence": [
+    "GET",
+    () => `/api/v1/cases/${ids.bigCase}/pins`,
+  ],
+  "entity detail of an entity with over a thousand neighbours and a person-evidence entity merged into it":
+    ["GET", () => `/api/v1/entities/${ids.hubPerson}`],
+  // REGRESSION (D-10 review): each side of a merge is probed, whichever holds the person data.
+  "merge decisions of a technical entity with a person-evidence entity merged into it": [
+    "GET",
+    () => `/api/v1/entity-merges?entityId=${ids.cleanWithPersonMerged}`,
+  ],
+  "merge decisions of a technical entity merged into a person-evidence entity": [
+    "GET",
+    () => `/api/v1/entity-merges?entityId=${ids.cleanMergedAway}`,
+  ],
+  "merging a person-evidence entity into a technical one": [
+    "POST",
+    () => "/api/v1/entity-merges",
+    () => ({
+      survivingEntityId: ids.pairCleanSurvivor,
+      mergedEntityId: ids.pairPersonMerged,
+      reason: "[analyst reason about pair-a and pair-b]",
+      confidence: 0.7,
+      matchSignals: ["ANALYST_REVIEW"],
+    }),
+  ],
+  "merging a technical entity into a person-evidence one": [
+    "POST",
+    () => "/api/v1/entity-merges",
+    () => ({
+      survivingEntityId: ids.pairPersonSurvivor,
+      mergedEntityId: ids.pairCleanMerged,
+      reason: "[analyst reason about pair-c and pair-d]",
+      confidence: 0.7,
+      matchSignals: ["ANALYST_REVIEW"],
+    }),
+  ],
+  "undoing a merge of a person-evidence entity into a technical one": [
+    "POST",
+    () => `/api/v1/entity-merges/${ids.undoCleanSurvivorMerge}/undo`,
+    () => ({ reason: "[analyst reason for undoing]" }),
+  ],
+  "undoing a merge of a technical entity into a person-evidence one": [
+    "POST",
+    () => `/api/v1/entity-merges/${ids.undoPersonSurvivorMerge}/undo`,
+    () => ({ reason: "[analyst reason for undoing]" }),
+  ],
+  "undoing a merge of person entities": [
+    "POST",
+    () => `/api/v1/entity-merges/${ids.personMerge}/undo`,
+    () => ({ reason: "[analyst reason for undoing]" }),
+  ],
 };
 
 /** Reads that rest on nothing but non-person evidence: never refused, never thinner. */
@@ -434,6 +856,15 @@ const CLEAN_CALLS: Record<string, Call> = {
     "GET",
     () => `/api/v1/runs/${ids.cleanRun}/reports`,
   ],
+  "merge decisions involving a technical entity": [
+    "GET",
+    () => `/api/v1/entity-merges?entityId=${ids.cleanMerged}`,
+  ],
+  // REGRESSION (D-10 review): over a thousand ids in one probe answered 500 to a locked tenant.
+  "entity detail of an entity with over a thousand technical neighbours": [
+    "GET",
+    () => `/api/v1/entities/${ids.hubClean}`,
+  ],
 };
 
 const run = (call: Call) => browser.request(call[0], call[1](), call[2]?.());
@@ -447,6 +878,14 @@ async function cleanSnapshot(): Promise<Record<string, string>> {
     out[name] = response.body;
   }
   return out;
+}
+
+/** The person merges' state: refused attempts must merge nothing and undo nothing. */
+async function personMergeState(): Promise<{ merged: number; undone: boolean }> {
+  return api.db.withTenant(tenantId, async ({ repos }) => ({
+    merged: (await repos.entityMerges.listInvolving(ids.personToMerge, { limit: 10 })).length,
+    undone: (await repos.entityMerges.findById(ids.personMerge))?.revertedAt !== null,
+  }));
 }
 
 /** How many pins the pin-attempt case holds: refused attempts must add none. */
@@ -498,6 +937,8 @@ function expectLocked(
   // And none of the person data leaks into the refusal.
   expect(response.body, name).not.toContain("[Person A]");
   expect(response.body, name).not.toContain("[person claim]");
+  expect(response.body, name).not.toContain("[analyst reason");
+  expect(response.body, name).not.toContain(ids.personMerge);
 }
 
 describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
@@ -515,6 +956,7 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
       });
     }
     expect(await pinAttempts()).toBe(0);
+    expect(await personMergeState()).toEqual({ merged: 0, undone: false });
     approved = await cleanSnapshot();
   });
 
@@ -528,6 +970,7 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
       });
     }
     expect(await pinAttempts()).toBe(0);
+    expect(await personMergeState()).toEqual({ merged: 0, undone: false });
     expect(await cleanSnapshot()).toEqual(approved);
   });
 
@@ -550,6 +993,11 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     pinsWhenApproved = await pinAttempts();
     // Evidence, a claim, an entity and a relationship.
     expect(pinsWhenApproved).toBe(4);
+    // The merge routes, allowed, work as before: one merge made, the other undone.
+    expect(await personMergeState()).toEqual({ merged: 1, undone: true });
+    const merges = await browser.request("GET", "/api/v1/entity-merges");
+    expect(merges.body).toContain("[analyst reason about Person M1 and Person M2]");
+    expect(merges.body).toContain("[analyst reason about two hosts]");
   });
 
   it("suspended: the same reads are refused, never a thinner result", async () => {
@@ -561,8 +1009,39 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
         plan: "TECHINT_AND_PERSON",
       });
     }
-    // The refused pin attempts changed nothing.
+    // The repeated attempts were refused before the merge rules (403, not 409); the pins
+    // they aimed at are unchanged.
     expect(await pinAttempts()).toBe(pinsWhenApproved);
+    expect(await personMergeState()).toEqual({ merged: 1, undone: true });
+    // Fresh targets show a refused merge and a refused undo change nothing.
+    const locked = {
+      code: "VETTING_NOT_APPROVED",
+      vettingStatus: "SUSPENDED",
+      plan: "TECHINT_AND_PERSON",
+    } as const;
+    expectLocked(
+      "merging two fresh person entities",
+      await browser.request("POST", "/api/v1/entity-merges", {
+        survivingEntityId: ids.freshPersonSurvivor,
+        mergedEntityId: ids.freshPersonMerged,
+        reason: "[analyst reason about Person M5 and Person M6]",
+        confidence: 0.7,
+        matchSignals: ["ANALYST_REVIEW"],
+      }),
+      locked,
+    );
+    expectLocked(
+      "undoing a fresh person merge",
+      await browser.request("POST", `/api/v1/entity-merges/${ids.freshPersonMerge}/undo`, {
+        reason: "[analyst reason for undoing]",
+      }),
+      locked,
+    );
+    const fresh = await api.db.withTenant(tenantId, async ({ repos }) => ({
+      merged: (await repos.entityMerges.listInvolving(ids.freshPersonMerged, { limit: 10 })).length,
+      revertedAt: (await repos.entityMerges.findById(ids.freshPersonMerge))?.revertedAt,
+    }));
+    expect(fresh).toEqual({ merged: 0, revertedAt: null });
     // An unsettled person run's stream is refused at connect: an ordinary 403, no stream.
     const stream = await browser.request("GET", `/api/v1/runs/${ids.personRun}/events`);
     expectLocked("progress stream of an unsettled person run", stream, {
@@ -585,6 +1064,63 @@ describe("the person-data gate across the lifecycle (RELEASE-BLOCKING)", () => {
     expect(response.body).not.toContain("mixed.example.com");
     expect(response.body).not.toContain('"claimCount"');
     expect(approvedFull["list"]).toContain('"claimCount":2');
+  });
+
+  it("suspended: merging and undoing entities that rest on no person data still works", async () => {
+    const made = await browser.request("POST", "/api/v1/entity-merges", {
+      survivingEntityId: ids.cleanToMergeInto,
+      mergedEntityId: ids.cleanToMerge,
+      reason: "[analyst reason about two more hosts]",
+      confidence: 0.7,
+      matchSignals: ["ANALYST_REVIEW"],
+    });
+    expect(made.status, made.body).toBe(201);
+    const undone = await browser.request(
+      "POST",
+      `/api/v1/entity-merges/${made.json<{ id: string }>().id}/undo`,
+      { reason: "[checked again]" },
+    );
+    expect(undone.status, undone.body).toBe(200);
+  });
+
+  it("suspended: an API key still meets SESSION_REQUIRED on a merge, before the person gate", async () => {
+    const issued = await browser.request("POST", "/api/v1/api-keys", {
+      name: "[merge key]",
+      permissions: ["case:write", "evidence:read"],
+      expiresAt: null,
+    });
+    expect(issued.status).toBe(201);
+    const { plaintext } = issued.json<{ plaintext: string }>();
+    const call = (method: "GET" | "POST", url: string, body?: unknown) =>
+      api.app.inject({
+        method,
+        url,
+        headers: {
+          authorization: `Bearer ${plaintext}`,
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+        },
+        ...(body === undefined ? {} : { payload: JSON.stringify(body) }),
+      });
+    const made = await call("POST", "/api/v1/entity-merges", {
+      survivingEntityId: ids.personToMergeInto,
+      mergedEntityId: ids.personMerged,
+      reason: "[a program's guess]",
+      confidence: 0.9,
+      matchSignals: ["ANALYST_REVIEW"],
+    });
+    expect(made.statusCode).toBe(403);
+    expect(made.json<{ code: string }>().code).toBe("SESSION_REQUIRED");
+    const undone = await call("POST", `/api/v1/entity-merges/${ids.personMerge}/undo`, {
+      reason: "[a program's change of mind]",
+    });
+    expect(undone.statusCode).toBe(403);
+    expect(undone.json<{ code: string }>().code).toBe("SESSION_REQUIRED");
+    // Reading is not session-only: the key meets the person gate instead.
+    const listed = await call("GET", "/api/v1/entity-merges");
+    expect(listed.statusCode).toBe(403);
+    expect(listed.json<{ code: string }>().code).toBe("VETTING_NOT_APPROVED");
+    expect(listed.body).not.toContain("[analyst reason");
+    expect(await personMergeState()).toEqual({ merged: 1, undone: true });
   });
 
   it("the refusals are audited as ALLOWED handler runs that failed, and name no data", async () => {
@@ -647,5 +1183,122 @@ describe("the run progress stream re-checks person-data access while open (RELEA
       locked: { reason: "MODULE_NOT_IN_PLAN", plan: "TECHINT", vettingStatus: "APPROVED" },
     });
     expect(String(last?.data["detail"])).toMatch(/policy decision, not a dropped connection/);
+  });
+});
+
+describe("the run progress stream reads before it decides (RELEASE-BLOCKING)", () => {
+  it("a person job committed between a poll's probe and its read never reaches a locked tenant", async () => {
+    // REGRESSION (D-10 audit): each poll probed, then read. A person job the planner committed
+    // between the two was streamed to a tenant whose access had just been withdrawn.
+    await setEntitlement(tenantId, { plan: "TECHINT_AND_PERSON", vettingStatus: "APPROVED" });
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- called below with each instance as `this`
+    const original = ExplorationRepository.prototype.touchesPersonData;
+    let committed = false;
+    const spy = vi
+      .spyOn(ExplorationRepository.prototype, "touchesPersonData")
+      .mockImplementation(async function (this: ExplorationRepository, probe) {
+        const held = await original.call(this, probe);
+        // Once, right after a locked poll's probe of the race run: the planner commits a job.
+        if (!committed && probe.runJobs === ids.raceRun) {
+          committed = true;
+          await api.db.withTenant(tenantId, ({ repos }) =>
+            repos.jobs.create({
+              runId: ids.raceRun,
+              collectorId: "fixture-person",
+              idempotencyKey: `gate:race:${ids.raceRun}`,
+              status: "QUEUED",
+            }),
+          );
+        }
+        return held;
+      });
+    try {
+      const stream = await openRunStream(api, tenantId, ids.raceRun, () =>
+        browser.request("GET", `/api/v1/runs/${ids.raceRun}/events`),
+      );
+      await setEntitlement(tenantId, { vettingStatus: "SUSPENDED" });
+      const response = await within(stream.response, 10_000, "the stream closing after the change");
+      expect(response.status).toBe(200);
+      const events = sseEvents(response.body);
+      expect(committed).toBe(true);
+      // The person job was never streamed: the stream closed Locked instead.
+      expect(events.filter((event) => event.event === "job")).toEqual([]);
+      expect(response.body).not.toContain("fixture-person");
+      expect(events.at(-1)?.event).toBe("locked");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  /** Spies on the probe: right after a locked probe naming `id`, `commit` runs, once. */
+  function commitAfterProbe(id: string, commit: () => Promise<unknown>) {
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- called below with each instance as `this`
+    const original = ExplorationRepository.prototype.touchesPersonData;
+    const state = { committed: false };
+    const spy = vi
+      .spyOn(ExplorationRepository.prototype, "touchesPersonData")
+      .mockImplementation(async function (this: ExplorationRepository, probe) {
+        const held = await original.call(this, probe);
+        if (!state.committed && (probe.entityIds ?? []).includes(id)) {
+          state.committed = true;
+          await commit();
+        }
+        return held;
+      });
+    return { state, spy };
+  }
+
+  it("an entity read never returns a person claim committed between its read and its probe", async () => {
+    // REGRESSION (D-10 review): the entity read probed, then read its claims.
+    await setEntitlement(tenantId, { plan: "TECHINT_AND_PERSON", vettingStatus: "SUSPENDED" });
+    const { state, spy } = commitAfterProbe(ids.raceEntity, () =>
+      api.db.withTenant(tenantId, ({ repos }) =>
+        repos.claims.create({
+          evidenceId: ids.personEvidence,
+          subject: { entityId: ids.raceEntity },
+          attribute: "note",
+          value: "[late person claim]",
+          strength: "REPORTED",
+        }),
+      ),
+    );
+    try {
+      const response = await browser.request("GET", `/api/v1/entities/${ids.raceEntity}`);
+      expect(state.committed).toBe(true);
+      expect(response.body).not.toContain("[late person claim]");
+    } finally {
+      spy.mockRestore();
+    }
+    // Once committed, the claim is person data on the entity, and the next read is refused.
+    const next = await browser.request("GET", `/api/v1/entities/${ids.raceEntity}`);
+    expect(next.status).toBe(403);
+  });
+
+  it("a relationship read never returns a person claim committed between its read and its probe", async () => {
+    // REGRESSION (D-10 review): the relationship read probed, then read its claims.
+    await setEntitlement(tenantId, { plan: "TECHINT_AND_PERSON", vettingStatus: "SUSPENDED" });
+    const { state, spy } = commitAfterProbe(ids.raceRelationshipSource, () =>
+      api.db.withTenant(tenantId, ({ repos }) =>
+        repos.claims.create({
+          evidenceId: ids.personEvidence,
+          subject: { relationshipId: ids.raceRelationship },
+          attribute: "note",
+          value: "[late person claim]",
+          strength: "REPORTED",
+        }),
+      ),
+    );
+    try {
+      const response = await browser.request(
+        "GET",
+        `/api/v1/relationships/${ids.raceRelationship}`,
+      );
+      expect(state.committed).toBe(true);
+      expect(response.body).not.toContain("[late person claim]");
+    } finally {
+      spy.mockRestore();
+    }
+    const next = await browser.request("GET", `/api/v1/relationships/${ids.raceRelationship}`);
+    expect(next.status).toBe(403);
   });
 });

@@ -3,14 +3,27 @@
  * local copy", enforced: the repository holds no copy of the gate's pieces
  * outside their homes, and the scan is shown to catch the plain forms of one.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { findRepoRoot } from "./repo-root.ts";
 import {
+  bracketedCode,
   GATE_COPY_CHECKS,
   GATE_HOMES,
+  ROUTE_FILES_UNSCANNED,
+  ROUTE_GATING,
+  routeBlocks,
+  routeGatingProblems,
   scanForGateCopies,
   scanRepositoryForGateCopies,
 } from "./person-gate-guard.ts";
@@ -155,5 +168,99 @@ describe("the repository holds no copy of the person-data gate (RELEASE-BLOCKING
   it("the person-data probe is where the guard says it is", () => {
     const probe = readFileSync(join(root, "packages/db/src/repositories/exploration.ts"), "utf8");
     expect(probe).toContain("async touchesPersonData(");
+  });
+});
+
+describe("every route meets the shared gate or says why not (RELEASE-BLOCKING)", () => {
+  it("each route is classified, and each gated route's handler calls the shared gate", () => {
+    // REGRESSION (D-10): the three entity-merge routes read and changed person data with no gate.
+    const problems = Object.entries(ROUTE_GATING).flatMap(([file, classified]) =>
+      routeGatingProblems(file, readFileSync(join(root, file), "utf8"), classified),
+    );
+    expect(problems).toEqual([]);
+  });
+
+  it("every route file is scanned or says why not, so a new route file cannot skip the scan", () => {
+    const files = readdirSync(join(root, "apps/api/src/routes"))
+      .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
+      .map((name) => `apps/api/src/routes/${name}`)
+      .sort();
+    const known = [...Object.keys(ROUTE_GATING), ...Object.keys(ROUTE_FILES_UNSCANNED)].sort();
+    expect(known).toEqual(files);
+  });
+
+  it("the merge routes are among the gated routes", () => {
+    const entities = ROUTE_GATING["apps/api/src/routes/entities.ts"] ?? {};
+    for (const route of [
+      "GET /api/v1/entity-merges",
+      "POST /api/v1/entity-merges",
+      "POST /api/v1/entity-merges/:id/undo",
+    ]) {
+      expect(entities[route], route).toBe("shared-gate");
+    }
+  });
+
+  it("catches an unclassified route, a missing route and a gated route without the gate", () => {
+    const source = [
+      'app.get("/api/v1/a", {}, async () => { await requirePersonAccess(c, {}, "x"); });',
+      'app.post("/api/v1/b", {}, async () => ({ leaked: true }));',
+      'app.delete("/api/v1/c", {}, async () => null);',
+    ].join("\n");
+    expect([...routeBlocks(source).keys()]).toEqual([
+      "GET /api/v1/a",
+      "POST /api/v1/b",
+      "DELETE /api/v1/c",
+    ]);
+    expect(
+      routeGatingProblems("f.ts", source, {
+        "GET /api/v1/a": "shared-gate",
+        "POST /api/v1/b": "shared-gate",
+        "PUT /api/v1/d": { why: "[gone]" },
+      }),
+    ).toEqual([
+      "f.ts: DELETE /api/v1/c is not classified",
+      "f.ts: POST /api/v1/b does not call the shared gate",
+      "f.ts: PUT /api/v1/d is classified but not registered",
+    ]);
+  });
+
+  it("is not satisfied by the gate's name in a comment, in a helper, or by an unused result", () => {
+    // REGRESSION (D-10 review): the check matched the gate's name anywhere up to the next route.
+    const gated = { "GET /api/v1/a": "shared-gate" } as const;
+    const comment =
+      'app.get("/api/v1/a", {}, async () => {\n  // await requirePersonAccess(c, {}, "x");\n  return 1;\n});';
+    const helperAfter = [
+      'app.get("/api/v1/a", {}, async () => 1);',
+      'async function later() { await requirePersonAccess(c, {}, "x"); }',
+    ].join("\n");
+    const unused = 'app.get("/api/v1/a", {}, async () => { void personLockFor(t, r, {}, "x"); });';
+    for (const source of [comment, helperAfter, unused]) {
+      expect(routeGatingProblems("f.ts", source, gated)).toEqual([
+        "f.ts: GET /api/v1/a does not call the shared gate",
+      ]);
+    }
+    const lock =
+      'app.get("/api/v1/a", {}, async () => { const l = await personLockFor(t, r, {}, "x"); });';
+    expect(routeGatingProblems("f.ts", lock, gated)).toEqual([]);
+  });
+
+  it("reads past brackets in strings, templates and regular expressions, and flags a path it cannot read", () => {
+    const tricky = [
+      'app.get("/api/v1/a", { schema: z.string().regex(/^[a-z(]{1,2}$/) }, async () => {',
+      '  const s = ")"; const t = `}${"("}`;',
+      '  await requirePersonAccess(c, {}, "x");',
+      "});",
+      'app.get("/api/v1/b", {}, async () => 1);',
+    ].join("\n");
+    expect(
+      routeGatingProblems("f.ts", tricky, {
+        "GET /api/v1/a": "shared-gate",
+        "GET /api/v1/b": { why: "[none]" },
+      }),
+    ).toEqual([]);
+    expect(routeGatingProblems("f.ts", "app.get(PATH, {}, async () => 1);", {})).toEqual([
+      "f.ts: a route is registered without a literal path, so it cannot be classified",
+    ]);
+    expect(bracketedCode("a(b", 0, ")")).toBeNull();
   });
 });
