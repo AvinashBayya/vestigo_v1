@@ -13,9 +13,12 @@ export const PermissionSchema = z.enum(PERMISSIONS);
 
 export const IdParams = z.object({ id: z.uuid() });
 
+/** The most rows any page holds. */
+export const LIMIT_MAX = 500;
+
 /** Every list is bounded; `hasMore` says whether more rows exist beyond the limit. */
 export const LimitQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(500).default(50),
+  limit: z.coerce.number().int().min(1).max(LIMIT_MAX).default(50),
 });
 
 /** Error responses every protected route can return. */

@@ -10,6 +10,7 @@ import {
   iso,
   IdParams,
   JsonValue,
+  LIMIT_MAX,
   LimitQuery,
   page,
   PROTECTED_ERRORS,
@@ -205,20 +206,11 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
         limit: request.query.limit + 1,
       });
       const result = page(rows, request.query.limit);
-      // Every row fetched (the one past the page decides hasMore), and the survivor a
-      // merged entity names, which may not be listed itself.
+      // Every entity in the scope, not only this page, with their merge partners: a refusal
+      // never depends on the page (D-31).
       await requirePersonAccess(
         context,
-        {
-          scope,
-          entityIds: [
-            ...new Set(
-              rows.flatMap((row) =>
-                row.mergedIntoEntityId === null ? [row.id] : [row.id, row.mergedIntoEntityId],
-              ),
-            ),
-          ],
-        },
+        { scope, scopeEntities: { scope, hops: 0 } },
         "The entities of this case or run, with their claims, relationships and counts.",
       );
       return { items: result.items.map(entityView), hasMore: result.hasMore };
@@ -263,13 +255,10 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
         limit: request.query.limit + 1,
       });
       const result = page(rows, request.query.limit);
-      // Every pair fetched: the one past the page decides hasMore.
+      // Every entity in the scope, as for the entity list: a candidate pair is two of them.
       await requirePersonAccess(
         context,
-        {
-          scope,
-          entityIds: [...new Set(rows.flatMap((row) => [row.first.id, row.second.id]))],
-        },
+        { scope, scopeEntities: { scope, hops: 0 } },
         "The merge candidates of this case or run, with the entity names.",
       );
       return {
@@ -425,15 +414,17 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
     async (request) => {
       const context = tenantOf(request);
       const { repos } = context;
-      const limit = { limit: request.query.limit + 1 };
+      // A fixed window, whatever the page: the most a page holds and the row past it, so a
+      // refusal never moves with `limit` (D-31). A merge past the window is neither shown nor
+      // probed; that a refusal can rest on a row the page does not hold is accepted.
+      const window = { limit: LIMIT_MAX + 1 };
       const rows =
         request.query.entityId === undefined
-          ? await repos.entityMerges.list(limit)
-          : await repos.entityMerges.listInvolving(request.query.entityId, limit);
+          ? await repos.entityMerges.list(window)
+          : await repos.entityMerges.listInvolving(request.query.entityId, window);
       const result = page(rows, request.query.limit);
-      // Both sides of every merge fetched (the one past the page decides hasMore), and the
-      // entity asked about even when it has none: "no merges" for a person entity is still
-      // an answer about it.
+      // Both sides of every merge in the window, and the entity asked about even when it has
+      // none: "no merges" for a person entity is still an answer about it.
       await requirePersonAccess(
         context,
         { entityIds: mergeEntityIds(rows, request.query.entityId) },

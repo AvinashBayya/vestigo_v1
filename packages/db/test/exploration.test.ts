@@ -635,6 +635,126 @@ describe("the person-data probe across merges", () => {
   });
 });
 
+describe("the person-data probe over a scope's whole entity set and neighbourhood", () => {
+  it("covers every entity in the scope, and with hops every entity that far away, never further", async () => {
+    // REGRESSION (D-31): a list probed only the rows it fetched, and the graph only the
+    // nodes it kept, so a refusal moved with the page and the node cap.
+    const found = await read(tenant, async ({ repos, reads }) => {
+      await repos.collectorsRegistry.register({
+        collectorId: "probe-person-hood",
+        sourceLabel: "[Person neighbourhood probe fixture]",
+        discipline: "PERSON",
+        collectionMode: "LOCAL_ANALYSIS",
+        dataLicence: "[not applicable: test fixture]",
+        commercialUse: "UNVERIFIED",
+        enabled: true,
+        disabledReason: null,
+      });
+      const person = await repos.evidence.record({
+        collectorId: "probe-person-hood",
+        collectorVersion: "0.0.0-test",
+        jobId: null,
+        sourceUrl: null,
+        contentHash: `sha256:${"a1".repeat(32)}`,
+        payloadRef: "[person payload]",
+        observedAt: null,
+        collectedAt: null,
+        claimStrength: "REPORTED",
+      });
+      // A technical run: its evidence is the scope's.
+      const technicalRun = async (tag: string, hash: string) => {
+        const investigation = await repos.investigations.create({
+          title: `[${tag}]`,
+          target: "example.com",
+          createdByUserId: tenant.userId,
+        });
+        const run = await repos.runs.create({
+          investigationId: investigation.id,
+          status: "QUEUED",
+          requestedByUserId: tenant.userId,
+        });
+        const job = await repos.jobs.create({
+          runId: run.id,
+          collectorId: tenant.collectorId,
+          idempotencyKey: `probe-hood:${tag}:${run.id}`,
+          status: "QUEUED",
+        });
+        const evidence = await repos.evidence.record({
+          collectorId: tenant.collectorId,
+          collectorVersion: "0.0.0-test",
+          jobId: job.id,
+          sourceUrl: null,
+          contentHash: `sha256:${hash.repeat(32)}`,
+          payloadRef: "[technical payload]",
+          observedAt: null,
+          collectedAt: null,
+          claimStrength: "REPORTED",
+        });
+        return { runId: run.id, evidenceId: evidence.id };
+      };
+      const entity = async (name: string, evidenceIds: readonly string[]) => {
+        const created = await repos.entities.create({ kind: "DOMAIN", displayName: name });
+        for (const evidenceId of evidenceIds) {
+          await repos.claims.create({
+            evidenceId,
+            subject: { entityId: created.id },
+            attribute: "note",
+            value: "[claim]",
+            strength: "REPORTED",
+          });
+        }
+        return created.id;
+      };
+      const link = (sourceEntityId: string, targetEntityId: string) =>
+        repos.entityRelationships.create({ sourceEntityId, targetEntityId, kind: "linked_to" });
+
+      // In scope through the run's evidence, and also claimed from person evidence elsewhere.
+      const mixed = await technicalRun("hood-mixed", "b2");
+      await entity("mixed.hood.example.com", [mixed.evidenceId, person.id]);
+      // A path: in scope, then one away, then two away; only the last rests on person evidence.
+      const path = await technicalRun("hood-path", "c3");
+      const near = await entity("near.hood.example.com", [path.evidenceId]);
+      const one = await entity("one.hood.example.com", []);
+      const two = await entity("two.hood.example.com", [person.id]);
+      await link(near, one);
+      await link(one, two);
+
+      const mixedScope = { runId: mixed.runId };
+      const pathScope = { runId: path.runId };
+      const probe = reads.exploration.touchesPersonData.bind(reads.exploration);
+      return {
+        pathScope,
+        mixedScopeEvidence: await probe({ scope: mixedScope }),
+        mixedScopeEntities: await probe({ scopeEntities: { scope: mixedScope, hops: 0 } }),
+        pathHops0: await probe({ scopeEntities: { scope: pathScope, hops: 0 } }),
+        pathHops1: await probe({ scopeEntities: { scope: pathScope, hops: 1 } }),
+        pathHops2: await probe({ scopeEntities: { scope: pathScope, hops: 2 } }),
+        pathHops3: await probe({ scopeEntities: { scope: pathScope, hops: 3 } }),
+        beyond: await probe({ scopeEntities: { scope: pathScope, hops: 4 } }).catch(
+          (error: unknown) => (error instanceof RangeError ? "refused" : "other"),
+        ),
+      };
+    });
+    expect(found).toMatchObject({
+      // The scope's evidence is technical; one of its entities is not.
+      mixedScopeEvidence: false,
+      mixedScopeEntities: true,
+      // Person evidence two relationships away: seen at two hops, not before.
+      pathHops0: false,
+      pathHops1: false,
+      pathHops2: true,
+      pathHops3: true,
+      beyond: "refused",
+    });
+    const foreign = await read(other, ({ reads }) =>
+      reads.exploration.touchesPersonData({
+        scopeEntities: { scope: found.pathScope, hops: 3 },
+      }),
+    );
+    expect(foreign).toBe(false);
+  });
+});
+
 describe("the person-data probe on a run's jobs", () => {
   it("finds a person job whatever its outcome, through runJobs or a run scope, only in its own tenant", async () => {
     const result = await read(tenant, async ({ repos, reads }) => {

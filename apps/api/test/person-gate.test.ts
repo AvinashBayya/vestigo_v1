@@ -6,6 +6,7 @@
  * pending, approved, suspended.
  */
 import { contentRef, ExplorationRepository, hashContent } from "@repo/db";
+import { probeParts } from "../src/http/person-gate.ts";
 import type { TenantId } from "@repo/core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -78,6 +79,15 @@ interface Ids {
   mergeRequestTarget: string;
   replayJob: string;
   freshReplayJob: string;
+  pageRun: string;
+  pageRunEvidence: string;
+  candidateRun: string;
+  candidateRunEvidence: string;
+  windowEntity: string;
+  windowSecond: string;
+  windowThird: string;
+  hoodRun: string;
+  latePersonEvidence: string;
 }
 let ids: Ids;
 
@@ -575,6 +585,34 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
     const replayJob = await failedPersonJob("replay");
     const freshReplayJob = await failedPersonJob("replay-fresh");
 
+    // D-31: lists whose person data sits past the page, and a graph whose person neighbour
+    // lies past the node cap. Each later row is made after the seed (beforeAll), so it sorts
+    // last: a probe of the fetched rows alone would never reach it.
+    const pageRun = await makeRun("fixture", "page");
+    await entityFrom(pageRun.evidenceId, "DOMAIN", "page-1.example.com");
+    await entityFrom(pageRun.evidenceId, "DOMAIN", "page-2.example.com");
+    const candidateRun = await makeRun("fixture", "candidates");
+    for (const name of ["cand-1.example.com", "cand-2.example.com"]) {
+      await entityFrom(candidateRun.evidenceId, "DOMAIN", name);
+      await entityFrom(candidateRun.evidenceId, "DOMAIN", name);
+    }
+    const windowEntity = await pairClean("window.example.com");
+    await analystMerge(
+      windowEntity,
+      await pairClean("window-1.example.com"),
+      "[analyst reason about window and window-1]",
+    );
+    const windowSecond = await pairClean("window-2.example.com");
+    const windowThird = await pairPerson("window-3.example.com");
+    const hoodRun = await makeRun("fixture", "hood");
+    // Person evidence of a run of its own, for the claims made after the seed.
+    const latePerson = await makeRun("fixture-person", "late-person");
+    await repos.entityRelationships.create({
+      sourceEntityId: await entityFrom(hoodRun.evidenceId, "DOMAIN", "hood.example.com"),
+      targetEntityId: await pairPerson("hood-neighbour.example.com"),
+      kind: "linked_to",
+    });
+
     // An unplanned run with no jobs yet: unsettled, so its stream stays open and polls.
     const raceInvestigation = await repos.investigations.create({
       title: "[race]",
@@ -647,6 +685,15 @@ async function seed(tenant: TenantId, userId: string): Promise<Ids> {
       mergeRequestTarget,
       replayJob,
       freshReplayJob,
+      pageRun: pageRun.runId,
+      pageRunEvidence: pageRun.evidenceId,
+      candidateRun: candidateRun.runId,
+      candidateRunEvidence: candidateRun.evidenceId,
+      windowEntity,
+      windowSecond,
+      windowThird,
+      hoodRun: hoodRun.runId,
+      latePersonEvidence: latePerson.evidenceId,
     };
   });
 }
@@ -674,6 +721,44 @@ beforeAll(async () => {
       target: { relationshipId: ids.endRelationship },
       pinnedByUserId: tenant.ownerUserId,
       note: null,
+    }),
+  );
+  // D-31: the third entity of the page run, also claimed from person evidence.
+  const claimed = async (name: string, evidenceIds: readonly string[]) =>
+    api.db.withTenant(tenantId, async ({ repos }) => {
+      const entity = await repos.entities.create({ kind: "DOMAIN", displayName: name });
+      for (const evidenceId of evidenceIds) {
+        await repos.claims.create({
+          evidenceId,
+          subject: { entityId: entity.id },
+          attribute: "note",
+          value: "[late claim]",
+          strength: "REPORTED",
+        });
+      }
+    });
+  await claimed("page-3.example.com", [ids.pageRunEvidence, ids.latePersonEvidence]);
+  // The third candidate pair, one of them also claimed from person evidence.
+  await claimed("cand-3.example.com", [ids.candidateRunEvidence]);
+  await claimed("cand-3.example.com", [ids.candidateRunEvidence, ids.latePersonEvidence]);
+  // The window entity's second merge, then a third with a person-evidence entity, undone.
+  const decide = (mergedEntityId: string) =>
+    api.db.withTenant(tenantId, ({ repos }) =>
+      repos.entityMerges.merge({
+        survivingEntityId: ids.windowEntity,
+        mergedEntityId,
+        reason: "[analyst reason about the window]",
+        confidence: 0.6,
+        matchSignals: ["ANALYST_REVIEW"],
+        decidedBy: { kind: "USER", userId: tenant.ownerUserId },
+      }),
+    );
+  await decide(ids.windowSecond);
+  const third = await decide(ids.windowThird);
+  await api.db.withTenant(tenantId, ({ repos }) =>
+    repos.entityMerges.undo(third.id, {
+      decidedBy: { kind: "USER", userId: tenant.ownerUserId },
+      reason: "[analyst reason for undoing]",
     }),
   );
 });
@@ -905,6 +990,24 @@ const LOCKED_CALLS: Record<string, Call> = {
   "entities of a run whose entity has a person-evidence entity merged into it": [
     "GET",
     () => `/api/v1/entities?runId=${ids.mergeCleanRun}`,
+  ],
+  // REGRESSION (D-31): a list probes its whole scope or a fixed window, never only its page,
+  // and the graph probes its whole neighbourhood, never only the nodes it keeps.
+  "entities of a run, the page holding none of its person data": [
+    "GET",
+    () => `/api/v1/entities?runId=${ids.pageRun}&limit=1`,
+  ],
+  "merge candidates of a run, the page holding none of its person data": [
+    "GET",
+    () => `/api/v1/entities/merge-candidates?runId=${ids.candidateRun}&limit=1`,
+  ],
+  "merge decisions of an entity, an undone person merge past the page": [
+    "GET",
+    () => `/api/v1/entity-merges?entityId=${ids.windowEntity}&limit=1`,
+  ],
+  "graph of a run whose person neighbour lies past the node cap": [
+    "GET",
+    () => `/api/v1/graph?runId=${ids.hoodRun}&hops=1&maxNodes=1`,
   ],
   // REGRESSION (D-30): a replay re-queues collection on a person run and rewrites its record.
   "replaying a failed job of a person run": [
@@ -1437,5 +1540,42 @@ describe("the run progress stream reads before it decides (RELEASE-BLOCKING)", (
     }
     const next = await browser.request("GET", `/api/v1/relationships/${ids.raceRelationship}`);
     expect(next.status).toBe(403);
+  });
+});
+
+describe("a probe split in parts (RELEASE-BLOCKING)", () => {
+  it("keeps every field but the id lists on its first part, and covers each id once", () => {
+    // REGRESSION (D-10c): the split rebuilt each part field by field and dropped any field
+    // it did not name, so a whole-scope probe lost its scope's entities.
+    const many = (prefix: string, count: number) =>
+      Array.from({ length: count }, (_, index) => `${prefix}-${String(index)}`);
+    const probe = {
+      scope: { runId: "[run]" },
+      runJobs: "[run]",
+      scopeEntities: { scope: { runId: "[run]" }, hops: 2 },
+      evidenceIds: many("e", 1500),
+      claimIds: many("c", 10),
+      entityIds: many("n", 2500),
+    };
+    const parts = probeParts(probe);
+    expect(parts).toHaveLength(3);
+    const [first, ...rest] = parts;
+    expect(first).toMatchObject({
+      scope: probe.scope,
+      runJobs: probe.runJobs,
+      scopeEntities: probe.scopeEntities,
+    });
+    for (const part of rest) {
+      expect(Object.keys(part).sort()).toEqual(["claimIds", "entityIds", "evidenceIds"]);
+    }
+    for (const key of ["evidenceIds", "claimIds", "entityIds"] as const) {
+      const joined = parts.flatMap((part) => part[key] ?? []);
+      expect(joined, key).toEqual(probe[key]);
+      for (const part of parts) expect((part[key] ?? []).length, key).toBeLessThanOrEqual(1000);
+    }
+    // Nothing to split: one part, the probe as given.
+    expect(probeParts({ scope: probe.scope })).toEqual([
+      { scope: probe.scope, evidenceIds: [], claimIds: [], entityIds: [] },
+    ]);
   });
 });

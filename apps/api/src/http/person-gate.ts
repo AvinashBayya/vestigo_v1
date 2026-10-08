@@ -55,9 +55,10 @@ const slices = (ids: readonly string[]): string[][] => {
 };
 
 /**
- * A probe in parts of at most PROBE_LIMIT ids of each kind, the scope and the
- * run in the first part. Together the parts cover exactly what the probe does,
- * so a read that names many entities is decided, never failed.
+ * A probe in parts of at most PROBE_LIMIT ids of each kind. The first part keeps
+ * everything else the probe names (its scope, its run, a scope's entities), so
+ * no field is lost; together the parts cover exactly what the probe does, and a
+ * read that names many entities is decided, never failed.
  */
 export function probeParts(probe: PersonProbe): PersonProbe[] {
   const evidenceIds = slices(probe.evidenceIds ?? []);
@@ -65,16 +66,12 @@ export function probeParts(probe: PersonProbe): PersonProbe[] {
   const entityIds = slices(probe.entityIds ?? []);
   const count = Math.max(1, evidenceIds.length, claimIds.length, entityIds.length);
   return Array.from({ length: count }, (_, index) => {
-    const evidence = evidenceIds[index];
-    const claims = claimIds[index];
-    const entities = entityIds[index];
-    return {
-      ...(index === 0 && probe.scope !== undefined ? { scope: probe.scope } : {}),
-      ...(index === 0 && probe.runJobs !== undefined ? { runJobs: probe.runJobs } : {}),
-      ...(evidence === undefined ? {} : { evidenceIds: evidence }),
-      ...(claims === undefined ? {} : { claimIds: claims }),
-      ...(entities === undefined ? {} : { entityIds: entities }),
+    const ids = {
+      evidenceIds: evidenceIds[index] ?? [],
+      claimIds: claimIds[index] ?? [],
+      entityIds: entityIds[index] ?? [],
     };
+    return index === 0 ? { ...probe, ...ids } : ids;
   });
 }
 

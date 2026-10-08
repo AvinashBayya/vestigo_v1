@@ -93,19 +93,11 @@ export const exploreRoutes =
           maxHops: request.query.hops,
           maxNodes: request.query.maxNodes,
         });
-        // Every node, and the survivor a merged node names, which may not be a node itself.
+        // The whole neighbourhood to the hop limit, whatever node cap this read applies, with
+        // the merge partners of every entity in it: a refusal never moves with maxNodes (D-31).
         await requirePersonAccess(
           context,
-          {
-            scope,
-            entityIds: [
-              ...new Set(
-                slice.nodes.flatMap((node) =>
-                  node.mergedIntoEntityId === null ? [node.id] : [node.id, node.mergedIntoEntityId],
-                ),
-              ),
-            ],
-          },
+          { scope, scopeEntities: { scope, hops: request.query.hops } },
           "The graph of this case or run: its entities, their relationships and claim counts.",
         );
         return {

@@ -1,4 +1,4 @@
-import { CLAIM_STRENGTHS, type ClaimStrength, type EntityKind } from "@repo/core";
+import { CLAIM_STRENGTHS, MAX_GRAPH_HOPS, type ClaimStrength, type EntityKind } from "@repo/core";
 import { sql, type SQL } from "drizzle-orm";
 import { entities, entityMerges, entityRelationships } from "../schema/index.ts";
 import { casePins, claims, collectorsRegistry, evidence, jobs } from "../schema/index.ts";
@@ -104,6 +104,13 @@ export interface PersonProbe {
   readonly evidenceIds?: readonly string[];
   readonly claimIds?: readonly string[];
   readonly entityIds?: readonly string[];
+  /**
+   * Every entity in a scope, and with `hops` above 0 every entity that many
+   * relationships away, as the graph walks them: the whole set, whatever page
+   * or node cap the read applies, so a refusal never depends on either (D-31).
+   * Each brings its merge partners, as `entityIds` do.
+   */
+  readonly scopeEntities?: { readonly scope: ReadScope; readonly hops: number };
   /**
    * A run whose jobs a read shows or rests on. The run is person data when any
    * of its jobs is a person-discipline collector's, whatever the job's outcome:
@@ -277,28 +284,64 @@ export class ExplorationRepository extends TenantRepository {
       parts.push(sql`select c.evidence_id as id from ${claims} c
         where c.tenant_id = ${tenantId} and c.id in (${uuidList(claimIds)})`);
     }
+    // The entities the read names: given ones, a scope's whole set or its neighbourhood.
+    const ctes: SQL[] = [];
+    const seeds: SQL[] = [];
     const entityIds = probe.entityIds ?? [];
     if (entityIds.length > 0) {
-      // The given entities and every entity an active merge joins them to (D-29); an
+      seeds.push(sql`select e.id from ${entities} e
+        where e.tenant_id = ${tenantId} and e.id in (${uuidList(entityIds)})`);
+    }
+    const around = probe.scopeEntities;
+    if (around !== undefined) {
+      if (!Number.isInteger(around.hops) || around.hops < 0 || around.hops > MAX_GRAPH_HOPS) {
+        throw new RangeError(`hops must be a whole number from 0 to ${String(MAX_GRAPH_HOPS)}`);
+      }
+      if (around.hops === 0) {
+        seeds.push(scopeEntities(tenantId, around.scope));
+      } else {
+        // The walk the graph store makes: undirected, to the hop limit, and no node cap. Each
+        // relationship is listed both ways, so every step is one equality join Postgres can
+        // hash; testing source or target row by row timed out at three hops on a large
+        // tenant (docs/PLAN.md, D-10c).
+        ctes.push(
+          sql`edges(a, b) as (
+            select r.source_entity_id, r.target_entity_id from ${entityRelationships} r
+            where r.tenant_id = ${tenantId}
+            union all
+            select r.target_entity_id, r.source_entity_id from ${entityRelationships} r
+            where r.tenant_id = ${tenantId}
+          )`,
+          sql`reach(entity_id, hop) as (
+            select s.id, 0 from (${scopeEntities(tenantId, around.scope)}) s
+            union
+            select e.b, reach.hop + 1 from reach join edges e on e.a = reach.entity_id
+            where reach.hop < ${around.hops}
+          )`,
+        );
+        seeds.push(sql`select entity_id from reach`);
+      }
+    }
+    if (seeds.length > 0) {
+      // Those entities and every entity an active merge joins them to (D-29); an
       // undone merge joins nothing. `union` ends the walk, as merges cannot cycle.
-      const list = sql`with recursive linked(id) as (
-          select e.id from ${entities} e
-          where e.tenant_id = ${tenantId} and e.id in (${uuidList(entityIds)})
+      ctes.push(sql`linked(id) as (
+          select id from (${sql.join(seeds, sql` union `)}) as seed(id)
           union
           select case when m.surviving_entity_id = l.id
                       then m.merged_entity_id else m.surviving_entity_id end
           from linked l
           join ${entityMerges} m on m.tenant_id = ${tenantId} and m.reverted_at is null
             and (m.surviving_entity_id = l.id or m.merged_entity_id = l.id)
-        )
-        select id from linked`;
+        )`);
       parts.push(
         sql`select c.evidence_id as id from ${claims} c
-          where c.tenant_id = ${tenantId} and c.entity_id in (${list})`,
+          where c.tenant_id = ${tenantId} and c.entity_id in (select id from linked)`,
         sql`select c.evidence_id as id from ${claims} c
           join ${entityRelationships} r on r.tenant_id = c.tenant_id and r.id = c.relationship_id
           where c.tenant_id = ${tenantId}
-            and (r.source_entity_id in (${list}) or r.target_entity_id in (${list}))`,
+            and (r.source_entity_id in (select id from linked)
+              or r.target_entity_id in (select id from linked))`,
       );
     }
     const checks: SQL[] = [];
@@ -324,9 +367,10 @@ export class ExplorationRepository extends TenantRepository {
             and (cr.collector_id is null or cr.discipline = 'PERSON'))`);
     }
     if (checks.length === 0) return false;
+    const preamble = ctes.length === 0 ? sql`` : sql`with recursive ${sql.join(ctes, sql`, `)} `;
     return this.run(async (tx) => {
       const result = await tx.execute<{ held: boolean }>(
-        sql`select (${sql.join(checks, sql` or `)}) as held`,
+        sql`${preamble}select (${sql.join(checks, sql` or `)}) as held`,
       );
       const row = firstRow(result.rows);
       return row !== null && row.held;

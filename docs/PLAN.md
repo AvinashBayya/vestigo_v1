@@ -3195,3 +3195,61 @@ fabrication check clean on 447 files, with Postgres and Redis up): core 20, acce
 194, db 265, integrations 122, collectors 482, llm 130, osint-engine 104, api 189, ui 95, web
 177, worker 4 (1,838 tests; one more than D-10, the probe's merge test; the API's new checks
 sit inside its existing lifecycle tests).
+
+## D-10c: probe the whole scope in SQL (2026-10-08)
+
+**The ruling** (D-31, the cheaper option): the entity list and merge candidates probe the whole
+scope in one SQL query; the merge list keeps a fixed window; the graph probes its whole
+hops-bounded neighbourhood in SQL, whatever `maxNodes` asks; if that is costly at three hops,
+raise it, never fall back to a window.
+
+**Built.**
+- **The shared probe** (`touchesPersonData`) takes `scopeEntities: { scope, hops }`.
+  - What it covers: every entity in the scope, and with hops, every entity that many
+    relationships away, walked as the graph store walks.
+  - Each entity brings its merge partners (D-29).
+  - The entity set is computed once, in one recursive query.
+- **Callers.**
+  - The entity list and merge candidates pass the scope at 0 hops.
+  - The graph passes its own hop limit.
+  - The merge list reads and probes a fixed window: the largest page (`LIMIT_MAX`, 500) and the
+    row past it, whatever `limit` asks. A merge past the window is neither shown nor probed.
+    The residual is accepted: a refusal can rest on a row the page does not hold.
+- **A defect found and fixed on the way.** D-10's `probeParts` rebuilt each part field by field
+  and dropped the new field, so the whole-scope probe vanished on the API path. The first part
+  now keeps every field, and a unit test holds it.
+
+**Cost at three hops (raised, D-33).** Measured on one machine, on a synthetic tenant shaped
+like TECHINT data: domains, subdomains, shared nameservers and addresses, with a claim on every
+entity and relationship. It is the worst case: person evidence exists in the tenant but none is
+reachable, so the whole walk runs. The probe runs only for a tenant without person access.
+
+| Tenant | Hops | Entities reached | Probe as first written | Probe as built (two-way edges) | Existing graph read |
+|---|---|---|---|---|---|
+| 125k entities, 260k relationships, 385k claims | 0 / 1 / 2 / 3 | 6 / 14 / 3,144 / 18,901 | 198 / 614 / 1,086 ms / over 15 s (statement timeout) | 94 / 336 / 621 / 802 ms | 0.7 to 0.9 s / 2.0 to 2.4 s / over 15 s / over 15 s |
+| 12.5k entities, 26k relationships, 38.5k claims | 0 / 1 / 2 / 3 | 6 / 14 / 444 / 2,026 | not measured in the worst case | not measured in the worst case | 0.1 / 0.2 / 2.9 / 4.7 s |
+
+The first version tested `source = x or target = x` row by row. The probe as built lists each
+relationship both ways, so every step is a join Postgres can hash. The existing graph read walks
+the old way and times out at two hops on the larger tenant; that predates this change and is
+raised with it.
+
+**Tests** (release-blocking):
+- **Probe (database level):** whole scope versus scope evidence, a neighbour at each hop limit,
+  the hop bound, and another tenant learning nothing.
+- **Gate lifecycle:**
+  - an entity list and a candidate list whose person data sits past the page;
+  - a merge list whose undone person merge sits past the page;
+  - a graph whose person neighbour lies past the node cap.
+- **Unit:** the probe split keeps every field.
+- **Old-code proof:** each test failed on the code before its fix, shown by restoring each
+  route's earlier probe and the earlier split in turn.
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 50 of 50 tasks, nothing cached,
+fabrication check clean on 448 files, with Postgres and Redis up): core 20, access 56, config
+201, db 266, integrations 122, collectors 482, llm 130, osint-engine 104, api 190, ui 95, web
+177, worker 4 (1,847 tests).
+- **This change:** db 1 and api 1.
+- **Not this change:** config 7 and the 448th scanned file are an uncommitted `.gitignore` test
+  in the working tree, made outside this change; it is not part of this commit.
+
