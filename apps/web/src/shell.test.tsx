@@ -136,9 +136,10 @@ describe("the signed-in frame", () => {
     expect(await screen.findByText("Vetting not submitted")).toBeTruthy();
     expect(screen.queryByText("Verified tenant")).toBeNull();
     // Only what is built: search, the cases results are pinned to, members and settings.
-    expect(screen.getByRole("navigation", { name: "Main" }).textContent).toBe(
-      `${PRODUCT_NAME}SearchCasesMembersSettings`,
-    );
+    // The side navigation (from md) and the phone row (below md) list the same destinations.
+    const [side, phone] = screen.getAllByRole("navigation", { name: "Main" });
+    expect(side?.textContent).toBe(`${PRODUCT_NAME}SearchCasesMembersSettings`);
+    expect(phone?.textContent).toBe("SearchCasesMembersSettings");
 
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     fireEvent.click(await screen.findByRole("radio", { name: "Dark" }));
@@ -177,22 +178,60 @@ describe("the signed-in frame", () => {
       "GET /api/v1/me": meOf("NOT_SUBMITTED"),
     });
     const router = renderAt("/");
-    const nav = await screen.findByRole("navigation", { name: "Main" });
+    // Both the side navigation and the phone row mark the same destination (the side
+    // navigation's destinations are list items; its product mark is not one).
     const current = () =>
-      [...nav.querySelectorAll('li > [aria-current="page"]')].map((item) => item.textContent);
-    expect(current()).toEqual(["Search"]);
+      screen
+        .getAllByRole("navigation", { name: "Main" })
+        .map((nav) =>
+          [
+            ...nav.querySelectorAll(':scope > [aria-current="page"], li > [aria-current="page"]'),
+          ].map((item) => item.textContent),
+        );
+    await screen.findAllByRole("navigation", { name: "Main" });
+    expect(current()).toEqual([["Search"], ["Search"]]);
 
     await router.navigate({ to: "/cases" });
     await waitFor(() => {
-      expect(current()).toEqual(["Cases"]);
+      expect(current()).toEqual([["Cases"], ["Cases"]]);
     });
     cleanup();
 
     renderAt("/members");
-    const members = await screen.findByRole("navigation", { name: "Main" });
+    await screen.findAllByRole("navigation", { name: "Main" });
+    expect(current()).toEqual([["Members"], ["Members"]]);
+  });
+
+  it("below md the destinations stay reachable as a plain row of links, not only the side navigation", async () => {
+    // REGRESSION (R1-0 pre-flight 0.4): below md the side navigation is not drawn, and the
+    // palette button was covered, so nothing at phone width led to Members or Settings.
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(signedIn(acme.id)),
+      "GET /api/v1/me": meOf("NOT_SUBMITTED"),
+    });
+    renderAt("/settings");
+    const [side, phone] = await screen.findAllByRole("navigation", { name: "Main" });
+    // Each is drawn at one width only: jsdom applies no media queries, so the classes say it.
+    expect(side?.closest("aside")?.className).toMatch(/(^|\s)hidden(\s|$)/);
+    expect(side?.closest("aside")?.className).toMatch(/(^|\s)md:flex(\s|$)/);
+    expect(phone?.className).toMatch(/(^|\s)md:hidden(\s|$)/);
     expect(
-      [...members.querySelectorAll('li > [aria-current="page"]')].map((item) => item.textContent),
-    ).toEqual(["Members"]);
+      within(phone as HTMLElement)
+        .getAllByRole("link")
+        .map((link) => [link.textContent, link.getAttribute("href")]),
+    ).toEqual([
+      ["Search", "/"],
+      ["Cases", "/cases"],
+      ["Members", "/members"],
+      ["Settings", "/settings"],
+    ]);
+    // A target each, and the current one said by aria-current and weight, not colour alone.
+    for (const link of within(phone as HTMLElement).getAllByRole("link")) {
+      expect(link.className).toContain("min-h-target");
+    }
+    const here = (phone as HTMLElement).querySelector('[aria-current="page"]');
+    expect(here?.textContent).toBe("Settings");
+    expect(here?.className).toContain("text-ui-strong");
   });
 
   it("shows credits as an em dash with its reason: no figure, no bar, no meter", async () => {
@@ -369,7 +408,7 @@ describe("the signed-in frame", () => {
       await screen.findByRole("heading", { level: 1, name: "Choose an organisation" }),
     ).toBeTruthy();
     // The app frame: its navigation, its header's account menu and the command palette.
-    expect(screen.getByRole("navigation")).toBeTruthy();
+    expect(screen.getAllByRole("navigation", { name: "Main" })).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Account" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Command palette/ })).toBeTruthy();
     cleanup();

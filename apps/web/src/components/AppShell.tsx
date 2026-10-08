@@ -1,4 +1,13 @@
-import { AppHeader, CreditsMeter, NavItem, SideNav, Unmeasured, VettingPill } from "@repo/ui";
+import {
+  AppHeader,
+  CreditsMeter,
+  NavItem,
+  SideNav,
+  TabBar,
+  TabLink,
+  Unmeasured,
+  VettingPill,
+} from "@repo/ui";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { PanelTop, Search, Settings, Users } from "lucide-react";
@@ -20,8 +29,9 @@ const NOT_METERED = { value: null, reason: NO_CREDIT_METERING } as const;
  * foot, outside the navigation landmark; the app header with the command
  * palette, the organisation, its vetting status and the account menu. The
  * organisation's name is not drawn in the mockup: it stays, so the analyst
- * always sees which tenant they are working in (§12). `<main>` carries no
- * padding; each screen sets its own gutters.
+ * always sees which tenant they are working in (§12). Below `md` the side
+ * navigation is not drawn and its destinations are a plain row of links under
+ * the header. `<main>` carries no padding; each screen sets its own gutters.
  */
 export function AppShell({ children }: { readonly children: ReactNode }) {
   const { data: session } = useSuspenseQuery(sessionQuery);
@@ -63,17 +73,32 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
             </>
           }
         />
+        <PhoneNav />
         <main className="flex flex-1 flex-col">{children}</main>
       </div>
     </div>
   );
 }
 
-function MainNav() {
+/** The built destinations, in order. The side navigation and the phone row list exactly these. */
+const DESTINATIONS = [
+  { to: "/", label: "Search", Icon: Search },
+  { to: "/cases", label: "Cases", Icon: PanelTop },
+  { to: "/members", label: "Members", Icon: Users },
+  { to: "/settings", label: "Settings", Icon: Settings },
+] as const;
+
+function useIsCurrent(): (to: (typeof DESTINATIONS)[number]["to"]) => boolean {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const under = (base: string) => pathname === base || pathname.startsWith(`${base}/`);
-  // A run, and its results, are part of the search flow that started it.
-  const searchActive = pathname === "/" || pathname.startsWith("/runs/");
+  return (to) =>
+    to === "/"
+      ? // A run, and its results, are part of the search flow that started it.
+        pathname === "/" || pathname.startsWith("/runs/")
+      : pathname === to || pathname.startsWith(`${to}/`);
+}
+
+function MainNav() {
+  const isCurrent = useIsCurrent();
   return (
     <SideNav
       className="sticky top-0 hidden h-screen md:flex"
@@ -88,38 +113,40 @@ function MainNav() {
       }
       foot={<CreditsMeter used={NOT_METERED} limit={NOT_METERED} />}
     >
-      {/* Exact: the router would otherwise mark "/" current on every page. */}
-      <NavItem
-        asChild
-        current={searchActive}
-        icon={<Search className="size-icon" strokeWidth={1.9} />}
-      >
-        <Link to="/" activeOptions={{ exact: true }}>
-          Search
-        </Link>
-      </NavItem>
-      <NavItem
-        asChild
-        current={under("/cases")}
-        icon={<PanelTop className="size-icon" strokeWidth={1.9} />}
-      >
-        <Link to="/cases">Cases</Link>
-      </NavItem>
-      <NavItem
-        asChild
-        current={under("/members")}
-        icon={<Users className="size-icon" strokeWidth={1.9} />}
-      >
-        <Link to="/members">Members</Link>
-      </NavItem>
-      <NavItem
-        asChild
-        current={under("/settings")}
-        icon={<Settings className="size-icon" strokeWidth={1.9} />}
-      >
-        <Link to="/settings">Settings</Link>
-      </NavItem>
+      {DESTINATIONS.map(({ to, label, Icon }) => (
+        <NavItem
+          key={to}
+          asChild
+          current={isCurrent(to)}
+          icon={<Icon className="size-icon" strokeWidth={1.9} />}
+        >
+          {/* Exact for "/": the router would otherwise mark it current on every page. */}
+          <Link to={to} activeOptions={{ exact: to === "/" }}>
+            {label}
+          </Link>
+        </NavItem>
+      ))}
     </SideNav>
+  );
+}
+
+/**
+ * Below `md`, where the side navigation is not drawn, the same destinations as
+ * a plain row of links under the header. It scrolls inside itself, as the
+ * workspace tabs do; there is no navigation sheet (raised, §12).
+ */
+function PhoneNav() {
+  const isCurrent = useIsCurrent();
+  return (
+    <TabBar label="Main" className="md:hidden">
+      {DESTINATIONS.map(({ to, label }) => (
+        <TabLink key={to} asChild current={isCurrent(to)}>
+          <Link to={to} activeOptions={{ exact: to === "/" }}>
+            {label}
+          </Link>
+        </TabLink>
+      ))}
+    </TabBar>
   );
 }
 

@@ -5,7 +5,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "./popover.tsx";
 /**
  * The app header row (§9, Main and Dashboard-dark): `layout-header-height`,
  * the command-palette button left; the vetting pill and the account button
- * right, gap `space-3.5`.
+ * right, gap `space-3.5`. Narrower than both groups need (phone width), it
+ * wraps as the context header does, and the organisation's name truncates:
+ * a fixed row let the right group slide over the palette button and the
+ * product mark, which could then not be tapped.
  */
 export function AppHeader({
   start,
@@ -19,12 +22,12 @@ export function AppHeader({
   return (
     <header
       className={cn(
-        "flex h-header shrink-0 items-center justify-between gap-4 border-b border-border-default bg-surface-raised px-5.5",
+        "flex min-h-header shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border-default bg-surface-raised px-5.5 py-1.25",
         className,
       )}
     >
       <div className="flex min-w-0 items-center gap-3.5">{start}</div>
-      <div className="flex items-center gap-3.5">{end}</div>
+      <div className="flex min-w-0 items-center gap-3.5">{end}</div>
     </header>
   );
 }

@@ -176,6 +176,26 @@ describe("CommandPalette", () => {
 });
 
 describe("App header row", () => {
+  it("wraps rather than overlaps when it is narrower than both groups (phone width)", () => {
+    // REGRESSION (R1-0 pre-flight 0.4): a fixed-height row whose right group could not
+    // shrink. At phone width the organisation, the vetting pill and the account button slid over
+    // the product mark and the palette button, so neither could be tapped.
+    const { container } = render(
+      <AppHeader
+        start={<CommandPaletteButton onOpen={vi.fn()} />}
+        end={<VettingPill status="NOT_SUBMITTED" />}
+      />,
+    );
+    const header = container.querySelector("header");
+    expect(header?.className).toMatch(/(^|\s)flex-wrap(\s|$)/);
+    expect(header?.className).toMatch(/(^|\s)min-h-header(\s|$)/);
+    expect(header?.className).not.toMatch(/(^|\s)h-header(\s|$)/);
+    // Both groups may shrink, so the organisation's name truncates instead of overflowing.
+    const groups = [...(header?.children ?? [])];
+    expect(groups).toHaveLength(2);
+    for (const group of groups) expect(group.className).toMatch(/(^|\s)min-w-0(\s|$)/);
+  });
+
   it("shows every vetting status in words, neutral (D1)", () => {
     render(
       <>
@@ -398,6 +418,25 @@ describe("DataTable", () => {
       />,
     );
     expect(screen.getByRole("status").textContent).toBe("Reading the evidence.");
+  });
+
+  it("keeps a header's visually hidden label inside the table's own scrolling", () => {
+    // REGRESSION (R1-0 pre-flight 0.4): the selection and pin headers' labels are sr-only,
+    // absolutely placed. With no positioned ancestor they escaped the scroll container and
+    // widened the Evidence and Entities pages well past a phone's width.
+    render(
+      <DataTable
+        caption="Evidence"
+        columns={columns}
+        rows={[{ id: "a", cells: { claim: "[CLAIM A]", hash: "[HASH A]" } }]}
+        empty={{ kind: "empty", title: "[T]", body: "[B]" }}
+        selection={{ selected: new Set(), onToggle: vi.fn(), onToggleAll: vi.fn() }}
+        pins={{ pinned: new Set(), onToggle: vi.fn() }}
+      />,
+    );
+    const scroller = screen.getByRole("table").parentElement;
+    expect(scroller?.className).toMatch(/(^|\s)overflow-x-auto(\s|$)/);
+    expect(scroller?.className).toMatch(/(^|\s)relative(\s|$)/);
   });
 
   it("rows are at least target-min, the header at the th size, the selected row says so, pins say which row", () => {

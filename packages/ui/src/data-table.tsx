@@ -173,7 +173,9 @@ export function DataTable({
     );
   } else {
     body = (
-      <div className="overflow-x-auto">
+      // Positioned, so a header's visually hidden label (absolutely placed) stays inside
+      // the table's own scrolling instead of widening the page at phone width.
+      <div className="relative overflow-x-auto">
         <table className="w-full border-collapse">
           <caption className="sr-only">{caption}</caption>
           <thead>
