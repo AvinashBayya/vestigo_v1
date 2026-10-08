@@ -2997,3 +2997,94 @@ files, with Postgres and Redis up): core 20, access 56, config 188, db 264, inte
 collectors 482, llm 130, osint-engine 104, api 184, ui 93, web 176, worker 4 (1,823 tests). A
 load-sensitive timing test in integrations failed once with the whole stack running, then passed
 three times alone; the package has no changes.
+
+## Reclamation R1-0: planning the case analysis engine (2026-10-08)
+
+**The brief.** Plan R1 without porting anything. Read-only on `legacy/`, and only docs written,
+except that the pre-flight may fix a missing U1-b follow-up, or a route unreachable at phone
+width, with the simplest change and a regression test.
+
+**Pre-flight.**
+- U1-c was already committed (`fcad376`); the tree was clean.
+- **U1-b follow-ups confirmed, no change needed.**
+  - R2: `border-input` is 3:1 or more on every ground in both themes. The lowest is
+    `surface-muted` (3.00 light, 3.16 dark); the search input's own ground, `surface-field`, is
+    3.59 light and 3.65 dark. It is recorded in DESIGN-SYSTEM §12 and held by `contrast.test.ts`.
+  - R3: the vetting pill is an outline with no fill and no dot, held by the R3 test in
+    `library.test.tsx`.
+  - Note: `contrast.test.ts` checks `border-input` against seven grounds but not `surface-field`
+    or `surface-control` (both pass when measured). Not widened here, since it was not missing.
+- **The classification file.** On `main` it was never at `docs/legacy-classification.md`: R0's
+  commit (`ad31de8`) adds it at `docs/reclamation/`, because the move was folded into the
+  four-commit split. The rename itself is in the pre-split history (`backup/final-tree-2026-10-07`,
+  `4531a63`, R100). Every reference points at the new path.
+- **Phone width (375px).** Three defects were found, live, and fixed:
+  1. **Header overlap.** The app header's right group could not shrink, so the organisation, the
+     vetting pill and the account button covered the product mark and the palette button. The
+     header now wraps, as the case header does, and the organisation's name truncates.
+  2. **Members and Settings unreachable.** The side navigation is not drawn below `md`. The same
+     destinations are now a plain row of tab links under the header: the existing TabBar and
+     TabLink, one shared list with the side navigation, and no navigation sheet.
+  3. **Sideways scroll on Evidence and Entities** (613-728 wide at 375). A header's visually
+     hidden label is absolutely placed and escaped the table's own scrolling. The scroll
+     container is now positioned.
+  - Each fix has a regression test that fails without it (three tests).
+  - Re-checked live:
+    - every route at 375 in both themes, plus sign-in, the challenge and enrolment: no sideways
+      scroll;
+    - every control on every route tappable at 375, 768, 1024 and 1440;
+    - the phone reaches the same destinations as the desktop.
+  - A run is reached by starting a search, and the organisation chooser only when there are two
+    organisations, at every width.
+
+**Written** (`docs/reclamation/`):
+- `R1-INVENTORY.md`: all 224 exports of `legacy/src/utils/cases/` (15 files, 5,262 lines, each
+  read in full).
+  - Verdicts: PORT-AS-IS 7, PORT-ADAPTED 76, REWRITE 27, DROP 109, NEEDS-DECISION 5. Ten rows
+    not marked DROP are not ported (nine already built here, one with no consumer).
+  - Reconciled with R0: all 86 R0 rows match, with the same bins; the other 138 are types,
+    interfaces and constants, which R0 does not bin.
+  - Every REWRITE quote is verbatim, with its line checked by script.
+- `R1-HONESTY.md`: 26 capabilities, seven questions each. None ships as legacy computed it.
+- `R1-PLAN.md`:
+  - six sub-stages, R1-a to R1-f (the engine, persistence and the job, cross-intelligence,
+    contradictions, the UI, the written summary);
+  - the 17 standing rules;
+  - decisions D-1 to D-28 for the owner;
+  - an appendix routing all 115 rows not dropped to a stage, a later phase or a decision.
+  - Credibility is moved to R2, as the build sequence says.
+
+**Review.** An independent critic checked about 90 quotes, all 224 rows and about 40 claims about
+our code. It found 24 problems, two of them high, all fixed:
+- **The person gate:** a case analysis must also gate on every run that contributed to the case
+  (a run that used a person collector is person data whatever it found).
+- **Freshness:** the analysis is keyed on everything it read, not on the pin set, because new runs
+  add claims to entities already pinned.
+
+The others were verdict and routing inconsistencies, missing decisions, and wording errors.
+
+**Re-check.** A second, independent pass confirmed 20 of the 24 fixed and 3 partly. It found 19
+smaller problems, all fixed, chief among them:
+- **A stored analysis is gated on what it read,** not only on the case as it is now.
+- **A job-time person re-check (D-28) would amend CLAUDE.md §9's wording,** so it is raised for
+  the owner.
+
+**Found, not fixed** (raised in R1-PLAN):
+- the entity-merge routes call no person gate (D-10);
+- the fabrication gate does not flag `?? ""` (D-14).
+
+**Checkpoint** (`pnpm turbo lint typecheck test --force`, 50 of 50 tasks, nothing cached,
+fabrication check clean on 447 files, with Postgres and Redis up): core 20, access 56, config
+188, db 264, integrations 122, collectors 482, llm 130, osint-engine 104, api 184, ui 95, web
+177, worker 4 (1,826 tests; 3 more than U1-c, the phone-width regression tests).
+
+**Closed 2026-10-08 on the owner's review.** The rulings are recorded at the top of
+`docs/reclamation/R1-PLAN.md`.
+- **Accepted:** D-1, D-2, D-3, D-5, D-14, D-19, D-20 and D-28; credibility moves to R2; the
+  model summary is its own stage (R1-f).
+- **Conditions:**
+  - D-1's move of the coverage helpers is a pure move, proven by an identical-output test.
+  - D-14's gate change is its own commit, and every flagged file is rewritten, with no
+    allowlist.
+- **D-10** is fixed next, before R1-a.
+- **Every other decision is held** for the owner's review.
