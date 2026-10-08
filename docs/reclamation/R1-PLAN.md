@@ -18,9 +18,15 @@ further down, they win.
 - **D-14, condition:** adding `?? ""` to the fabrication gate is a separate commit. Every file
   it flags is fixed by rewriting; no allowlist.
 - **D-10:** fixed now, before R1-a (its own prompt).
-- **Held, pending the owner's review** (recommendations not applied): D-4, D-6 as a decision,
-  D-7, D-8, D-9, D-11, D-12, D-13, D-15, D-16, D-17, D-18, D-21, D-22, D-23, D-24, D-25,
-  D-26, D-27.
+- **The rest, ruled on 2026-10-08** after D-10c, each marked RULED beside its heading below:
+  D-4, D-6 (credibility to R2), D-7 (drop the bands), D-8 (deferred with retention), D-9
+  (summary only), D-11 (approved for R1-e: specified in DESIGN-SYSTEM §9 first, in the
+  gallery in every state), D-12 (in R1-e: SESSION_REQUIRED, the shared person gate, a visible
+  undo), D-13, D-15 (after R1), D-16, D-17 (with conditions, met in the inventory and in
+  `docs/audit/INVENTORY.md`), D-18, D-21, D-22 (its final wording goes to the owner before it
+  is committed), D-23 (recorded in ARCHITECTURE-DECISIONS.md now, enforced when R3 lands),
+  D-24, D-25, D-26, D-27 (as defined); and D-2's related option, merge candidates relabelled
+  HYPOTHESIS in R1-e. No decision is held.
 
 On the items D-10 raised (2026-10-08, after D-10 was approved):
 
@@ -29,9 +35,10 @@ On the items D-10 raised (2026-10-08, after D-10 was approved):
 - **D-30 accepted:** job replay is gated, reversing the Phase 6a ruling, because a replay
   re-queues person collection. Done in D-10b; the reversal is recorded in
   `docs/ARCHITECTURE-DECISIONS.md` §6.
-- **D-31 accepted with changes:** probe a fixed max-page window regardless of `limit`, and
-  accept the residual leak. Not built yet: the ruling asked for a cheaper option to be raised
-  first, and one was.
+- **D-31 accepted with changes, then the cheaper option chosen:** the entity list and merge
+  candidates probe the whole scope in one SQL query, the merge list keeps a fixed window (its
+  residual accepted), and the graph probes its whole hops-bounded neighbourhood in SQL whatever
+  `maxNodes` asks. Done in D-10c, which raised D-33 (the cost at three hops).
 - **D-32 accepted, folded into R1-b as its prerequisite:** not built now.
 
 ## What R1 is, after reading the code
@@ -297,7 +304,8 @@ replaces and from the closest existing module here; confidence in each estimate 
   contradictions (a neutral callout titled "Contradiction", amber only on an INFERRED item, per
   DESIGN-SYSTEM §12). On a run's Overview, the same analysis for that run's records is a decision
   inside D-3. On a case's Entities tab, distinct-source counts from the analysis document, and
-  the merge review (D-12).
+  the merge review (D-12, ruled: SESSION_REQUIRED, the shared person gate, a visible undo),
+  with merge candidates relabelled from INFERRED to HYPOTHESIS (D-2, ruled).
 - **Components.** Uses existing components. Needs three that U1-c raised and did not build (a
   count chip, a strength badge with a count, a gaps list): D-11.
 - **Release-blocking tests.** The contradictions card never shows a number or an empty list when
@@ -428,7 +436,9 @@ Copied verbatim from the R1-0 brief. They bind every later prompt.
 
 ## Decisions for the owner
 
-Each has a recommendation and the cost of each option. None is decided here.
+Each has a recommendation and the cost of each option. Every decision is now ruled (2026-10-08):
+the ruling is marked RULED beside its heading, and where a ruling differs from the text beneath
+it, the ruling wins.
 
 **D-1. Where the engine lives.** **[RULED 2026-10-08: accepted as recommended, on condition that the run report's coverage helpers move as a pure move, with a test proving identical output before and after.]**
 - *Recommended:* a new `packages/case-engine` (pure analysis plus its job processor). Cost:
@@ -441,7 +451,7 @@ Each has a recommendation and the cost of each option. None is decided here.
 - *Alternative:* `packages/osint-engine/src/analysis/`. Cost: no list change, but the analysis
   can import the collector runtime, so "reads stored evidence only" becomes a convention.
 
-**D-2. The strength of a correlation computed by the platform.** **[RULED 2026-10-08: accepted as recommended. The related merge-candidate relabel is not ruled.]**
+**D-2. The strength of a correlation computed by the platform.** **[RULED 2026-10-08: accepted as recommended. The related option is ruled too: merge candidates are relabelled from INFERRED to HYPOTHESIS, in R1-e.]**
 - *Recommended:* keep the reviewed definitions. A correlation the engine computes is DERIVED
   (HYPOTHESIS when it rests on a hypothesis); CORRELATED stays for the model. Cost: the word
   "correlation" appears in the UI next to a DERIVED badge, which the copy must explain.
@@ -468,7 +478,7 @@ Each has a recommendation and the cost of each option. None is decided here.
 - *Sub-question:* analysis for a run as well as a case? Recommended: case only in R1 (a run's
   report already covers its records).
 
-**D-4. Which runs a case covers.**
+**D-4. Which runs a case covers.** **[RULED 2026-10-08: accepted as recommended: derived from pins.]**
 - *Recommended:* derive them from pins (pinned record, its evidence, the evidence's job, the
   job's run). No schema change; matches "a case is its pins". Costs to state in the UI:
   `evidence.job_id` is nullable (`packages/db/src/schema/evidence.ts:43`), so some pinned
@@ -494,25 +504,25 @@ Each has a recommendation and the cost of each option. None is decided here.
 - *Alternative:* compare same-named attributes only. Cost: finds nothing, because no attribute
   name is shared by two collectors.
 
-**D-6. Credibility in R1.** *Recommended:* confirm it moves to R2, as the build sequence and the
+**D-6. Credibility in R1.** **[RULED 2026-10-08: accepted: credibility moves to R2; R1-d is contradictions only.]** *Recommended:* confirm it moves to R2, as the build sequence and the
 audit say; R1-d is contradictions only. *Alternative:* keep it in R1-d. Cost: R1 grows by the
 982-line `credibility.ts` rewrite, and its inputs (per-source reliability, per-record
 confidence) are not collected.
 
-**D-7. Per-evidence confidence** (three NEEDS-DECISION rows: `EvidenceConfidenceSummary`,
+**D-7. Per-evidence confidence** **[RULED 2026-10-08: accepted: the HIGH / MEDIUM / LOW bands are dropped.]** (three NEEDS-DECISION rows: `EvidenceConfidenceSummary`,
 `GroundedFindingWithEvidence`, `evidenceConfidenceFor`). *Recommended:* no; drop the HIGH /
 MEDIUM / LOW bands. No collector measures a per-record confidence, the bands are a policy mapping
 (0.8 / 0.5), and their HYPOTHESIS band collides with our strength. *Alternative:* add a nullable
 confidence to evidence and adopt the bands. Cost: a migration, every collector declaring how it
 measures confidence, and a band that is null everywhere today.
 
-**D-8. Tombstones for purged records** (two NEEDS-DECISION rows: `caseSnapshotState`,
+**D-8. Tombstones for purged records** **[RULED 2026-10-08: deferred, to be decided with retention enforcement.]** (two NEEDS-DECISION rows: `caseSnapshotState`,
 `CaseSnapshotState`). *Recommended:* decide with retention enforcement, not in R1; nothing is
 purged yet (`enforced: false`). *Alternative:* a tombstone (record id, purge time, reason) so a
 read can say why a pinned record is gone. Cost: CLAUDE.md §9 requires deletion to genuinely
 remove data, so a tombstone must hold no content; that rule's reading is the owner's.
 
-**D-9. Question answering over a case.** *Recommended:* R1-f builds the written summary only (no
+**D-9. Question answering over a case.** **[RULED 2026-10-08: accepted: R1-f builds the written summary only.]** *Recommended:* R1-f builds the written summary only (no
 question). Asking a question needs a policy for where the analyst's question travels (the
 `trusted` template refuses interpolation; it would go in as a framed record) and whether a "not
 supported by the evidence" sentence may be uncited. *Alternative:* build both in R1-f. Cost: a
@@ -527,17 +537,17 @@ inside R1-b. Cost of waiting: the gap stays open meanwhile. Not fixed in R1-0, w
 code change beyond the pre-flight. **Fixed 2026-10-08** (its own commit; docs/PLAN.md, D-10 record),
 with four further gaps the route audit found. It raised D-29 to D-32.
 
-**D-11. Components the R1 UI needs that U1-c raised and did not build:** a count chip, a strength
+**D-11. Components the R1 UI needs that U1-c raised and did not build:** **[RULED 2026-10-08: approved for R1-e, each specified in DESIGN-SYSTEM §9 first and shown in the gallery in every state.]** a count chip, a strength
 badge with a count, a gaps list. *Recommended:* approve them for R1-e, specified in §9 first and
 added to the gallery with all states. *Alternative:* the nearest existing components (StatusChip
 with words, plain lists). Cost: less legible counts and gaps.
 
-**D-12. The merge review screen in R1-e.** The API lists merge candidates and records merges
+**D-12. The merge review screen in R1-e.** **[RULED 2026-10-08: accepted, in R1-e: SESSION_REQUIRED for every merge and undo, the shared person gate on every read, and the undo always visible.]** The API lists merge candidates and records merges
 with undo; the web shows a Not built card. *Recommended:* yes: it is the only place name matches
 are allowed (by an analyst, reversibly), and it completes the entity-resolution capability.
 *Alternative:* later. Cost: candidates stay invisible.
 
-**D-13. Usernames across platforms.** Legacy merged one handle on two platforms into one entity
+**D-13. Usernames across platforms.** **[RULED 2026-10-08: accepted: never merged automatically.]** Legacy merged one handle on two platforms into one entity
 automatically. *Recommended:* never; ours keys social accounts as `platform:handle` and the
 username entity links them by relationship. *Alternative:* auto-merge. Cost: two different
 people with the same handle become one.
@@ -547,11 +557,11 @@ people with the same handle become one.
 pattern as a separate, strengthening change, with the false-positive review the gate's other
 patterns had. *Alternative:* rely on review. Cost: the gap stays.
 
-**D-15. A case report.** *Recommended:* after R1, by extending `assembleReport` from one run to a
+**D-15. A case report.** **[RULED 2026-10-08: accepted: after R1.]** *Recommended:* after R1, by extending `assembleReport` from one run to a
 case's pins (`buildCaseReport` is not ported). *Alternative:* as an R1-g. Cost: about 1,500 more
 lines and the report's own review.
 
-**D-16. Metering model calls that are not reports.** `usage_events` can tie LLM tokens only to a
+**D-16. Metering model calls that are not reports.** **[RULED 2026-10-08: accepted as recommended.]** `usage_events` can tie LLM tokens only to a
 report. *Recommended:* a nullable `case_analysis_id` in R1-f's migration. Cost: the checks
 `usage_events_attempt_with_work`, `usage_events_one_work_item` and
 `usage_events_model_calls_with_report`, the unique index `usage_events_one_per_report_attempt`
@@ -559,7 +569,7 @@ report. *Recommended:* a nullable `case_analysis_id` in R1-f's migration. Cost: 
 their tests. *Alternative:* a generic work reference (kind plus id). Cost: a wider change to the
 same table, and the foreign keys become checks.
 
-**D-17. Which verdicts govern.** `docs/audit/INVENTORY.md` rates most of `cases/` KEEP or ADAPT
+**D-17. Which verdicts govern.** **[RULED 2026-10-08: accepted, on two conditions, both met: each DROP that server-side storage or code already here replaced names the file that replaced it, and docs/audit/INVENTORY.md points to R1-INVENTORY.md.]** `docs/audit/INVENTORY.md` rates most of `cases/` KEEP or ADAPT
 and CLAUDE.md says to follow it; the reclamation audit says REWRITE; this inventory is finer and
 finds most of it DROP or already built. It also widens the brief's DROP (UI-only, dead,
 defence or PS-18) to code that only manages browser storage or that server-side storage
@@ -570,7 +580,7 @@ it. *Alternative:* follow INVENTORY.md, or keep DROP to the brief's four reasons
 SUPERSEDED verdict. Cost: porting browser-storage code that server-side storage replaced, or a
 re-sort of about 70 rows.
 
-**D-18. Media claims and GEOINT.** *Recommended:* confirm they wait for R3 (the news collector is
+**D-18. Media claims and GEOINT.** **[RULED 2026-10-08: accepted: they wait for R3.]** *Recommended:* confirm they wait for R3 (the news collector is
 held, no GEOINT collector exists), with their sections shown as Not built naming the missing
 collector. *Alternative:* port the media claim extractor in R1 against archived captures. Cost:
 it would run on wayback captures it was not designed for, and its corroboration score must be
@@ -592,35 +602,35 @@ so the PORT-ADAPTED texts drop "across disciplines". *Alternative:* two or more 
 collectors in two or more disciplines. Cost: almost nothing correlates today (TECHINT and
 SOCMINT rarely share an entity), and the UI says so.
 
-**D-21. Merged entities in analysis.** *Recommended:* fold active analyst merges before
+**D-21. Merged entities in analysis.** **[RULED 2026-10-08: accepted as recommended.]** *Recommended:* fold active analyst merges before
 correlating and comparing (an undo unfolds them on the next analysis, through the input hash),
 never name matches or candidates. *Alternative:* analyse entities unmerged. Cost: a merge an
 analyst made has no effect on the analysis.
 
-**D-22. Fixed wording.** *Recommended:* `NO_ADJUDICATION_CAVEAT` (reworded) and the
+**D-22. Fixed wording.** **[RULED 2026-10-08: accepted; the final reworded NO_ADJUDICATION_CAVEAT and limitation lists go to the owner before they are committed.]** *Recommended:* `NO_ADJUDICATION_CAVEAT` (reworded) and the
 contradiction and correlation limitation lists join `REPORT_WORDING` in `packages/core`, so each
 stored document carries the wording it was produced under. *Alternative:* keep them in
 `case-engine`. Cost: a stored analysis cannot show the wording it was read with.
 
-**D-23. Locations by name.** Legacy merged LOCATION entities by name automatically. No
+**D-23. Locations by name.** **[RULED 2026-10-08: accepted: recorded in ARCHITECTURE-DECISIONS.md now; enforced when R3 creates LOCATION entities.]** Legacy merged LOCATION entities by name automatically. No
 collector here creates LOCATION entities yet. *Recommended:* extend the rule that forbids
 automatic merges on a name alone to LOCATION before R3 creates any. *Alternative:* decide in
 R3. Cost: none now; the risk arrives with R3.
 
-**D-24. Pinning a whole run.** Legacy attached a run's results to a case in one step.
+**D-24. Pinning a whole run.** **[RULED 2026-10-08: accepted: not in R1.]** Legacy attached a run's results to a case in one step.
 *Recommended:* not in R1; pins stay one record at a time. *Alternative:* a bulk pin endpoint
 (refusing an empty batch). Cost: a new state-changing endpoint, its person gate and its limits.
 
-**D-25. Media claims, when they come.** *Recommended (for R3):* stored as claims (so they can be
+**D-25. Media claims, when they come.** **[RULED 2026-10-08: accepted, for R3.]** *Recommended (for R3):* stored as claims (so they can be
 pinned and cited), with the official-statement marker kept as an attribute and the strength
 REPORTED. *Alternative:* derived on read, as legacy did. Cost: they cannot be pinned or cited.
 
-**D-26. EXIF and image GEOINT, when they come.** *Recommended (for R3):* EXIF fields are
+**D-26. EXIF and image GEOINT, when they come.** **[RULED 2026-10-08: accepted, for R3.]** *Recommended (for R3):* EXIF fields are
 REPORTED (the file states them, and they are forgeable), and image GEOINT collectors sit behind
 the person gate when they read device identifiers or a photo's position. *Alternative:*
 OBSERVED, as legacy labelled them. Cost: a forgeable statement shown as seen by the platform.
 
-**D-27. A strength ceiling for model sentences.** Neither codebase checks that a sentence is no
+**D-27. A strength ceiling for model sentences.** **[RULED 2026-10-08: accepted as defined.]** Neither codebase checks that a sentence is no
 stronger than what it cites. A citation is an evidence id, and evidence is only OBSERVED,
 REPORTED or DERIVED, so the ceiling needs a defined input: the strength of a cited evidence id
 taken as the strongest claim in the model's context that rests on it. *Recommended:* define it
@@ -662,7 +672,7 @@ re-checks admission"); that did not consider the state the request changes. *Rec
 gate it before the replay with the job's run (`runJobs`), as for a run read. *Alternative:*
 keep the ruling. Cost: a locked tenant can still change a person run's recorded state.
 
-**D-31. Where a refusal falls in a paged list** **[RULED 2026-10-08: accepted with changes: probe a fixed max-page window regardless of `limit`, and accept the residual leak. Not built yet: a cheaper option was raised first, as the ruling asked.]** (raised by the D-10 review). The merge list and
+**D-31. Where a refusal falls in a paged list** **[RULED 2026-10-08: accepted with changes, then the cheaper option chosen: the entity list and merge candidates probe the whole scope in SQL, the merge list keeps a fixed window (its residual accepted), and the graph probes its whole hops-bounded neighbourhood. Done in D-10c (commit 9e4369c).]** (raised by the D-10 review). The merge list and
 the entity list probe every row they fetch, the next page's first row included, so `hasMore`
 is covered. A refusal still moves with `limit`: stepping it shows where in the list a row
 resting on person data sits. The case pins list avoids this by probing every pin of the case.
@@ -678,6 +688,21 @@ a pinned entity), so for case-scope reads neither order is safe alone. *Recommen
 gated read and its probe on one snapshot (a repeatable-read transaction for gated reads).
 *Alternative:* probe before and after each case-scope read. Cost: the windows are milliseconds
 and need a concurrent unpin or fusion; the first is a change to the transaction layer.
+
+**D-33. The cost of a three-hop neighbourhood** (raised by D-10c). Measured on one machine, on
+a synthetic TECHINT-shaped tenant of 125k entities, 260k relationships and 385k claims, where
+person evidence exists but none is reachable (the worst case, as the whole walk runs). The
+person probe as built takes 0.1 s at 0 hops, 0.3 s at 1, 0.6 s at 2 and 0.8 s at 3; it runs only
+for a tenant without person access. As first written it exceeded the 15 s statement timeout at
+3 hops; listing each relationship both ways made every step a join Postgres can hash. The
+existing graph read is the larger problem: it still walks the old way, takes 0.7 to 2.4 s at
+0 to 1 hops and exceeds the timeout at 2 and 3 hops at that size (4.7 s at 3 hops on a tenant
+of 12.5k entities). Measurements in docs/PLAN.md, D-10c. *Recommended:* walk the graph store
+the same way (each relationship listed both ways), add indexes on
+`entity_relationships (tenant_id, target_entity_id)` and `claims (tenant_id, relationship_id)`
+(a forward-only migration), and measure again before R1-e shows the graph more widely.
+*Alternative:* cap the hop limit by tenant size. Cost of the alternative: a deep graph is
+refused to large tenants, and the probe's cost remains.
 
 **Noted, not a decision.** The brief refers to "the 11 non-negotiable rules" in CLAUDE.md. No
 document numbers eleven rules: CLAUDE.md has sections 1 to 10 plus three unnumbered ones (product

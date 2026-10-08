@@ -11,6 +11,8 @@ Verdicts:
 
 Importer counts exclude tests. "0 src importers" means no route, component or utility imports the module.
 
+**`src/utils/cases/`: see `docs/reclamation/R1-INVENTORY.md`.** Its 15 rows below are superseded by that inventory, which classifies every export of every `cases/` file (owner ruling D-17, 2026-10-08). Where the two differ, R1-INVENTORY.md governs.
+
 ## 1. `src/utils/` (153 files, 52,117 lines)
 
 | Path | Lines | What it does (from the code) | Tests | Verdict | Reason |

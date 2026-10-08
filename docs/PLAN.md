@@ -3253,3 +3253,22 @@ fabrication check clean on 448 files, with Postgres and Redis up): core 20, acce
 - **Not this change:** config 7 and the 448th scanned file are an uncommitted `.gitignore` test
   in the working tree, made outside this change; it is not part of this commit.
 
+## R1-0: rulings recorded (2026-10-08)
+
+**Every R1 decision is now ruled.** D-1 to D-33 are marked in `docs/reclamation/R1-PLAN.md`,
+beside each heading, except D-33, which D-10c raised and which is open.
+- **Ruled in the last round:** D-4, D-6, D-7, D-8 (deferred with retention), D-9, D-11 to
+  D-13, D-15 to D-18, D-21 to D-27, and D-2's related option (merge candidates relabelled
+  HYPOTHESIS, in R1-e).
+- **D-17's conditions, met:**
+  - each DROP that server-side storage or code already here replaced names the file that
+    replaced it (100 of the 109 DROP rows; the other nine are dead code, UI copy for legacy
+    pages, demo data, or a transport R1-f builds anew);
+  - `docs/audit/INVENTORY.md` points to R1-INVENTORY.md for `cases/`.
+- **D-23:** recorded in `docs/ARCHITECTURE-DECISIONS.md` §5. Locations join the
+  no-merge-by-name rule; it is enforced when R3 creates them.
+- **D-22's final wording** (the reworded caveat and the two limitation lists) went to the owner
+  before any commit, as ruled.
+
+R1-a waits for its prompt.
+

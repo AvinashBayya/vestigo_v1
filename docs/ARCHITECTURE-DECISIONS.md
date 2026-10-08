@@ -87,6 +87,7 @@ Three parts of the schema carry the product's integrity:
 
 - **Evidence is append-only.** Collector and version, `observedAt` separate from `collectedAt`, source URL, content hash, and a pointer to the raw payload in object storage. Content-addressed storage deduplicates and makes every claim re-verifiable.
 - **Merges are reversible.** People and organisations are never auto-merged by name. Merge decisions are records carrying reason and confidence, and can be undone without losing evidence.
+- **Locations are never auto-merged by name either** (amended 2026-10-08, D-23). The earlier codebase merged location entities whose names matched; two places can share a name. No collector creates LOCATION entities yet, so the database's rule that refuses an automatic merge on a name alone is extended to LOCATION when R3 first creates them, with a test.
 - **Claim labels are first-class.** OBSERVED / REPORTED / DERIVED / CORRELATED / INFERRED / HYPOTHESIS is a column, not a string in a report.
 
 Supporting choices: evidence partitioned by month from day one; pgvector enabled for semantic deduplication; Postgres full-text plus trigram search; a `region` field on tenants even with one region today; point-in-time recovery; cross-tenant isolation tests in CI that block the build.
