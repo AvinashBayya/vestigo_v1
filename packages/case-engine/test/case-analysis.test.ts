@@ -295,8 +295,13 @@ describe("the discipline breakdown", () => {
 
   it("lists a collector the plan or vetting locked, with the recorded reason", () => {
     const person = sectionOf(breakdown(), "PERSON");
-    expect(person.status).toBe("ZERO");
-    expect(person.evidence).toEqual({ count: 0, ids: [] });
+    // Its one collector was locked in both runs: nothing could have been
+    // collected, so the counts are null with the reason, not a measured zero.
+    expect(person.status).toBe("LOCKED");
+    for (const count of [person.evidence, person.claims, person.entities, person.relationships]) {
+      expect(count).toEqual({ count: null, ids: null, reason: "LOCKED" });
+    }
+    expect(person.evidenceByStrength).toBeNull();
     expect(person.collectors.locked).toEqual([
       {
         collectorId: "phone",
@@ -320,6 +325,36 @@ describe("the discipline breakdown", () => {
       },
     ]);
     expect(person.collectors.excluded).toEqual([]);
+  });
+
+  it("counts a measured zero when any of a discipline's collectors was not locked", () => {
+    // phone is locked in run A only; in run B it does not apply.
+    const partlyLocked: CaseInput = {
+      ...CASE,
+      runs: RUNS.map((run) =>
+        run.id === id("run B") && run.plan.kind === "PLANNED"
+          ? {
+              ...run,
+              plan: {
+                ...run.plan,
+                excluded: run.plan.excluded.map((excluded) =>
+                  excluded.collectorId === "phone"
+                    ? {
+                        ...excluded,
+                        targetType: null,
+                        reason: "TARGET_TYPE_NOT_ACCEPTED",
+                        message: "[test] does not accept a username",
+                      }
+                    : excluded,
+                ),
+              },
+            }
+          : run,
+      ),
+    };
+    const person = sectionOf(breakdown(partlyLocked), "PERSON");
+    expect(person.status).toBe("ZERO");
+    expect(person.evidence).toEqual({ count: 0, ids: [] });
   });
 
   it("lists held collectors with their reason, and what was collected but not pinned", () => {

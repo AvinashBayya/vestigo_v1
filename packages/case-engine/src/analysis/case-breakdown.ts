@@ -6,10 +6,11 @@
  * finish, was locked or excluded by the plan, was held, or did not apply.
  *
  * Each collector has the one discipline its registry entry states (a held
- * collector, the one it declares). A discipline no collector is built for is
- * NOT_BUILT, and one whose only collectors are held and ran in none of the
- * case's runs is HELD: in both nothing could have been collected, so their
- * counts are null with that reason, never 0. The previous codebase's further
+ * collector, the one it declares). In three cases nothing could have been
+ * collected, so the counts are null with the reason, never 0: no collector is
+ * built for the discipline (NOT_BUILT); its only collectors are held and none
+ * completed a job in the case's runs (HELD); or every collector of it that the
+ * case's runs name was locked by the plan or vetting in each of them (LOCKED). The previous codebase's further
  * per-discipline figures (contradictions, media claims and conflicts, location
  * hypotheses) are listed as not built, null with the input each needs.
  *
@@ -52,13 +53,19 @@ export const DISCIPLINE_STATUSES = [
   "ZERO",
   /** Its only collectors are held off the platform, and the case holds nothing of theirs. */
   "HELD",
+  /**
+   * The case holds nothing of its collectors, and every one of them that the
+   * case's runs name was locked there: the tenant's plan or vetting did not
+   * allow its module (excluded at planning, or refused at dispatch).
+   */
+  "LOCKED",
   /** No collector is built for it. */
   "NOT_BUILT",
 ] as const;
 export type DisciplineStatus = (typeof DISCIPLINE_STATUSES)[number];
 
 /** Why a discipline's counts are null. */
-export type DisciplineNotMeasured = "NO_COLLECTOR_BUILT" | "ONLY_HELD_COLLECTORS";
+export type DisciplineNotMeasured = "NO_COLLECTOR_BUILT" | "ONLY_HELD_COLLECTORS" | "LOCKED";
 
 /** A count, or null with the reason it could not be measured. */
 export type DisciplineCount = Counted | NotMeasured<DisciplineNotMeasured>;
@@ -246,26 +253,33 @@ function section(
           run.state === "NOTHING_FOUND"),
     ),
   );
+  const isLock = (run: CaseCollectorRun): boolean =>
+    (run.state === "EXCLUDED" || run.state === "REFUSED") &&
+    run.reasonCode !== null &&
+    isLockReason(run.reasonCode);
+  // Every place the case's runs name one of its collectors, that collector was locked.
+  const named = collectors.flatMap((collector) => collector.runs);
+  const allLocked = named.length > 0 && named.every(isLock);
   const status: DisciplineStatus =
     registered.length === 0 && held.length === 0
       ? "NOT_BUILT"
       : evidence.count > 0
         ? "PRESENT"
-        : registered.length > 0 || completedInCase
-          ? "ZERO"
-          : "HELD";
+        : allLocked
+          ? "LOCKED"
+          : registered.length > 0 || completedInCase
+            ? "ZERO"
+            : "HELD";
   const reason: DisciplineNotMeasured | null =
     status === "NOT_BUILT"
       ? "NO_COLLECTOR_BUILT"
       : status === "HELD"
         ? "ONLY_HELD_COLLECTORS"
-        : null;
+        : status === "LOCKED"
+          ? "LOCKED"
+          : null;
   const count = (measured: Counted): DisciplineCount =>
     reason === null ? measured : { count: null, ids: null, reason };
-  const isLock = (run: CaseCollectorRun): boolean =>
-    (run.state === "EXCLUDED" || run.state === "REFUSED") &&
-    run.reasonCode !== null &&
-    isLockReason(run.reasonCode);
 
   return {
     discipline,
