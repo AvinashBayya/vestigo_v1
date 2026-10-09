@@ -4,7 +4,7 @@
     "output": {
       "runStatus": "SUCCEEDED",
       "partial": false,
-      "headline": "COMPLETE RUN: all 0 planned collectors finished (0 found something, 0 found nothing).",
+      "headline": "COMPLETE RUN: no collector was planned to run.",
       "entries": [],
       "notApplicable": [],
       "caveats": [

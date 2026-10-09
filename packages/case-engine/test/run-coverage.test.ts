@@ -79,9 +79,22 @@ describe("coverageFromJob", () => {
 });
 
 describe("coverageHeadline", () => {
-  it("no entries: counts of zero, each measured", () => {
+  it("no collector planned: says so, never 'all 0 planned collectors finished'", () => {
     expect(coverageHeadline("SUCCEEDED", [], null)).toBe(
-      "COMPLETE RUN: all 0 planned collectors finished (0 found something, 0 found nothing).",
+      "COMPLETE RUN: no collector was planned to run.",
+    );
+    const excluded = {
+      collectorId: "dns",
+      sourceLabel: "[fake dns]",
+      state: "EXCLUDED" as const,
+      targetType: "DOMAIN" as const,
+      reasonCode: "LICENCE_BLOCKED",
+      detail: "[test] blocked",
+      evidenceCount: 0,
+      attempts: null,
+    };
+    expect(coverageHeadline("SUCCEEDED", [excluded], null)).toBe(
+      "COMPLETE RUN: no collector was planned to run. 1 further collector(s) were excluded or held and did not run.",
     );
   });
 });
@@ -97,5 +110,44 @@ describe("displayValue", () => {
     expect(displayValue(null, 600)).toEqual({ text: "null", truncated: false });
     expect(displayValue("", 600)).toEqual({ text: "", truncated: false });
     expect(displayValue({ a: null }, 600)).toEqual({ text: "", truncated: false });
+  });
+
+  it("shows undefined as JSON carries it: null alone or in a list, left out of an object", () => {
+    // Before the behaviour change: a TypeError, ", 1" and "a: undefined; b: 1".
+    expect(displayValue(undefined, 600)).toEqual({ text: "null", truncated: false });
+    expect(displayValue([undefined, 1], 600)).toEqual({ text: "null, 1", truncated: false });
+    expect(displayValue({ a: undefined, b: 1 }, 600)).toEqual({ text: "b: 1", truncated: false });
+  });
+
+  // Each sample as the characters a reader sees. Before the behaviour change a
+  // cut could fall inside any of them.
+  const SAMPLES: readonly (readonly string[])[] = [
+    ["a", "\u{1D11E}", "b"], // an astral character: a surrogate pair
+    ["a", "b", "c", "d", "\u{1F6F0}️", "e", "f", "g"], // an emoji and its variation selector
+    ["\u{1F469}‍\u{1F469}‍\u{1F467}", " ", "x"], // a zero-width-joined family
+    ["\u{1F1E9}\u{1F1EA}", "\u{1F1EB}\u{1F1F7}", "\u{1F1EE}\u{1F1F9}"], // three flags
+    ["\u{1F44D}\u{1F3FD}", "!"], // a skin tone
+    ["1️⃣", "2"], // a keycap
+    ["é", "x"], // a letter and its combining accent
+    ["\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}", "!"], // a tag sequence
+  ];
+
+  it("cuts only between whole characters, keeping the longest part that fits", () => {
+    for (const characters of SAMPLES) {
+      const text = characters.join("");
+      for (let max = 0; max <= text.length + 1; max += 1) {
+        const shown = displayValue(text, max);
+        if (text.length <= max) {
+          expect(shown).toEqual({ text, truncated: false });
+          continue;
+        }
+        let fits = "";
+        for (const character of characters) {
+          if (fits.length + character.length > max) break;
+          fits += character;
+        }
+        expect(shown).toEqual({ text: fits, truncated: true });
+      }
+    }
   });
 });

@@ -9,7 +9,7 @@
   },
   {
     "fixture": "SUCCEEDED, no entries",
-    "output": "COMPLETE RUN: all 0 planned collectors finished (0 found something, 0 found nothing)."
+    "output": "COMPLETE RUN: no collector was planned to run."
   },
   {
     "fixture": "PARTIAL, no entries",
@@ -57,6 +57,6 @@
   },
   {
     "fixture": "one excluded collector only",
-    "output": "COMPLETE RUN: all 0 planned collectors finished (0 found something, 0 found nothing). 1 further collector(s) were excluded or held and did not run."
+    "output": "COMPLETE RUN: no collector was planned to run. 1 further collector(s) were excluded or held and did not run."
   }
 ]

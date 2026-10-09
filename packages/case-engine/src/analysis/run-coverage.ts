@@ -6,7 +6,10 @@
  * Moved unchanged from packages/osint-engine/src/reports/assemble.ts (owner
  * ruling D-1), over plain data instead of the collector registry and database
  * rows, so this package depends only on @repo/core. The golden files in
- * packages/osint-engine/test/golden prove the output identical, byte for byte.
+ * packages/osint-engine/test/golden proved the output identical, byte for
+ * byte. Changed once since, as a behaviour change (R1-a rulings, 2026-10-09):
+ * a run in which no collector was planned no longer reads "all 0 planned
+ * collectors finished".
  *
  * Nothing here is estimated. Coverage is named facts, never a percentage
  * (there is no honest denominator for "every source that exists"). This is
@@ -173,7 +176,10 @@ export function coverageHeadline(
   const counts = `${String(found)} found something, ${String(completed.length - found)} found nothing`;
   switch (status) {
     case "SUCCEEDED":
-      return `COMPLETE RUN: all ${String(ran.length)} planned collectors finished (${counts}).${notRunNote}`;
+      // No collector ran: "all 0 planned collectors finished" said nothing true.
+      return ran.length === 0
+        ? `COMPLETE RUN: no collector was planned to run.${notRunNote}`
+        : `COMPLETE RUN: all ${String(ran.length)} planned collectors finished (${counts}).${notRunNote}`;
     case "PARTIAL":
       return `PARTIAL RUN: ${String(ran.length - completed.length)} of ${String(ran.length)} planned collectors did not complete, so this report does not cover what they would have collected (${counts}).${notRunNote}`;
     case "FAILED":

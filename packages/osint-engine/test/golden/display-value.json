@@ -29,19 +29,31 @@
   },
   {
     "fixture": "undefined, at most 0 characters",
-    "throws": "TypeError"
+    "output": {
+      "text": "",
+      "truncated": true
+    }
   },
   {
     "fixture": "undefined, at most 1 characters",
-    "throws": "TypeError"
+    "output": {
+      "text": "n",
+      "truncated": true
+    }
   },
   {
     "fixture": "undefined, at most 5 characters",
-    "throws": "TypeError"
+    "output": {
+      "text": "null",
+      "truncated": false
+    }
   },
   {
     "fixture": "undefined, at most 600 characters",
-    "throws": "TypeError"
+    "output": {
+      "text": "null",
+      "truncated": false
+    }
   },
   {
     "fixture": "true, at most 0 characters",
@@ -368,7 +380,7 @@
   {
     "fixture": "surrogate pair at the cut, at most 5 characters",
     "output": {
-      "text": "abcd\ud83d",
+      "text": "abcd",
       "truncated": true
     }
   },
@@ -473,21 +485,21 @@
   {
     "fixture": "array with undefined, at most 1 characters",
     "output": {
-      "text": ",",
+      "text": "n",
       "truncated": true
     }
   },
   {
     "fixture": "array with undefined, at most 5 characters",
     "output": {
-      "text": ", 1",
-      "truncated": false
+      "text": "null,",
+      "truncated": true
     }
   },
   {
     "fixture": "array with undefined, at most 600 characters",
     "output": {
-      "text": ", 1",
+      "text": "null, 1",
       "truncated": false
     }
   },
@@ -607,27 +619,27 @@
     "fixture": "object with undefined, at most 0 characters",
     "output": {
       "text": "",
-      "truncated": true
+      "truncated": false
     }
   },
   {
     "fixture": "object with undefined, at most 1 characters",
     "output": {
-      "text": "a",
-      "truncated": true
+      "text": "",
+      "truncated": false
     }
   },
   {
     "fixture": "object with undefined, at most 5 characters",
     "output": {
-      "text": "a: un",
-      "truncated": true
+      "text": "",
+      "truncated": false
     }
   },
   {
     "fixture": "object with undefined, at most 600 characters",
     "output": {
-      "text": "a: undefined",
+      "text": "",
       "truncated": false
     }
   },
