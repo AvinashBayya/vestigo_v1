@@ -67,8 +67,11 @@ describe("the worker, deployed as pools selected by queue", () => {
   it("consumes exactly the queues WORKER_QUEUES names", async () => {
     const planning = await startWorker(envFor("investigations,fusion"), silent);
     const collecting = await startWorker(envFor("collect.*"), silent);
+    const analysing = await startWorker(envFor("case-analyses"), silent);
     try {
       expect(planning.pool.queues).toEqual(["investigations", "fusion"]);
+      // Case analyses: their own queue, consumed alone when named alone.
+      expect(analysing.pool.queues).toEqual(["case-analyses"]);
       // One queue per source a registered collector reads: its own bulkhead.
       expect(collecting.pool.queues).toContain(collectQueueName("crtsh"));
       expect(collecting.pool.queues).toContain(collectQueueName("hacker-news"));
@@ -77,6 +80,7 @@ describe("the worker, deployed as pools selected by queue", () => {
     } finally {
       await planning.close();
       await collecting.close();
+      await analysing.close();
     }
   });
 

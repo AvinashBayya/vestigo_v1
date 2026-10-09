@@ -133,6 +133,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "caseInputHash",
     "readCaseAnalysisInput",
     "caseAnalysisCollectors",
+    "CaseAnalysisProcessor",
+    "CaseAnalysisQueue",
   ],
   // Models: provider, routing, cache, metering, untrusted framing, output
   // guards and the citation validator. The only path to a model.

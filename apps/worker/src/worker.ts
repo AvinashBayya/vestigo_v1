@@ -10,7 +10,11 @@ import {
   resolveLlmConfiguration,
   type Env,
 } from "@repo/config";
-import { CollectorRuntime, createPlatformRegistry } from "@repo/collectors";
+import {
+  CollectorRuntime,
+  createPlatformRegistry,
+  HELD_PLATFORM_COLLECTORS,
+} from "@repo/collectors";
 import { createDatabase, FileSystemContentStore, type Database } from "@repo/db";
 import {
   createRedisClient,
@@ -22,6 +26,8 @@ import {
 } from "@repo/integrations";
 import { createLlmClient } from "@repo/llm";
 import {
+  caseAnalysisCollectors,
+  CaseAnalysisProcessor,
   CollectionExecutor,
   CollectorJobProcessor,
   ReportGenerator,
@@ -74,6 +80,9 @@ export const WORKER_ENV = [
   "REPORT_CONCURRENCY",
   "REPORT_RENDER_CONCURRENCY",
   "REPORT_HANDLING_MARKING",
+  // Case analyses (R1-b): their bulkhead and per-attempt timeout.
+  "CASE_ANALYSIS_CONCURRENCY",
+  "CASE_ANALYSIS_TIMEOUT_MS",
 ] as const satisfies readonly (keyof Env)[];
 
 export type WorkerEnv = Pick<Env, (typeof WORKER_ENV)[number]>;
@@ -198,6 +207,16 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
     renders: {
       renderer: new ReportRenderer({ db, contentStore, retry }),
       concurrency: env.REPORT_RENDER_CONCURRENCY,
+    },
+    // Case analyses: stored records in, documents out. Passive; the registry
+    // reaches the analysis as plain data, never the collector runtime.
+    caseAnalyses: {
+      processor: new CaseAnalysisProcessor({
+        db,
+        collectors: caseAnalysisCollectors(runtime.registry, HELD_PLATFORM_COLLECTORS),
+        timeoutMs: env.CASE_ANALYSIS_TIMEOUT_MS,
+      }),
+      concurrency: env.CASE_ANALYSIS_CONCURRENCY,
     },
     observer: {
       // Ids and codes only: a job's target can be personal data (CLAUDE.md §8).

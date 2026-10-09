@@ -37,6 +37,16 @@ export {
   type RetryPolicy,
 } from "./jobs/policy.ts";
 export {
+  CaseAnalysisNotFoundError,
+  CaseAnalysisProcessor,
+  DEFAULT_MAX_CASE_RECORDS,
+  type CaseAnalysisDisposition,
+  type CaseAnalysisDocument,
+  type CaseAnalysisProcessorOptions,
+} from "./jobs/case-analysis.ts";
+export {
+  CASE_ANALYSES_QUEUE,
+  CaseAnalysisQueue,
   collectQueueName,
   DEAD_LETTER_MESSAGE,
   DEAD_LETTER_QUEUE,

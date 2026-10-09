@@ -20,6 +20,13 @@
  *   report-renders    one job per generated report (ReportRenderer): its PDF,
  *                     rendered once from the stored document and stored.
  *                     CPU-heavy, so its own bulkhead.
+ *   case-analyses     one job per requested attempt at a case analysis
+ *                     (CaseAnalysisProcessor, R1-b): stored records in, the
+ *                     case's documents out, recorded once. Passive: it reads
+ *                     and computes, and causes no collection. Its own
+ *                     bulkhead and a per-job timeout, so a hung or failing
+ *                     analysis holds only its own slots, never collection,
+ *                     reports or another queue's.
  *   dead-letter       every job that ran out of attempts, as a record to
  *                     inspect and replay. Nothing consumes it.
  *
@@ -34,6 +41,7 @@ import { z } from "zod";
 import type { RunFusion } from "../fusion/fuse.ts";
 import { RunNotReadyError, type RunCoordinator } from "../runs.ts";
 import type { ReportGenerator } from "../reports/generator.ts";
+import type { CaseAnalysisProcessor } from "./case-analysis.ts";
 import { ReportNotRenderableError, type ReportRenderer } from "../reports/renderer.ts";
 import type { CollectorJobProcessor } from "./collector-job.ts";
 import { retryDelayMs, type RetryPolicy } from "./policy.ts";
@@ -45,6 +53,7 @@ export const FUSION_QUEUE = "fusion";
 export const DEAD_LETTER_QUEUE = "dead-letter";
 export const REPORTS_QUEUE = "reports";
 export const REPORT_RENDERS_QUEUE = "report-renders";
+export const CASE_ANALYSES_QUEUE = "case-analyses";
 
 /** The queue for one upstream source's collector jobs. */
 export function collectQueueName(sourceId: string): string {
@@ -54,16 +63,23 @@ export function collectQueueName(sourceId: string): string {
 const RUN_MESSAGE = z.strictObject({ tenantId: z.uuid(), runId: z.uuid() });
 const COLLECT_MESSAGE = z.strictObject({ tenantId: z.uuid(), runId: z.uuid(), jobId: z.uuid() });
 const REPORT_MESSAGE = z.strictObject({ tenantId: z.uuid(), reportId: z.uuid() });
+const CASE_ANALYSIS_MESSAGE = z.strictObject({
+  tenantId: z.uuid(),
+  caseAnalysisId: z.uuid(),
+  attempt: z.number().int().min(1),
+});
 
 export const DEAD_LETTER_MESSAGE = z.strictObject({
-  kind: z.enum(["INVESTIGATION", "COLLECT", "FUSION", "REPORT", "REPORT_PDF"]),
+  kind: z.enum(["INVESTIGATION", "COLLECT", "FUSION", "REPORT", "REPORT_PDF", "CASE_ANALYSIS"]),
   tenantId: z.uuid(),
-  /** The run, for every kind but REPORT. */
+  /** The run, for kinds INVESTIGATION, COLLECT and FUSION. */
   runId: z.uuid().nullable(),
   /** The collector job, for kind COLLECT. */
   jobId: z.uuid().nullable(),
   /** The report, for kinds REPORT and REPORT_PDF. */
   reportId: z.uuid().nullable(),
+  /** The case analysis, for kind CASE_ANALYSIS. */
+  caseAnalysisId: z.uuid().nullable(),
   queue: z.string(),
   errorCode: z.string(),
 });
@@ -157,6 +173,44 @@ export class ReportQueue {
       ...deliveryOptions(this.#retry),
       jobId: `report-${reportId}`,
     });
+  }
+
+  async close(): Promise<void> {
+    await this.#queue.close();
+  }
+}
+
+/** What the API uses to request an attempt at a case analysis. It never waits on the analysis. */
+export class CaseAnalysisQueue {
+  readonly #queue: Queue;
+  readonly #retry: RetryPolicy;
+
+  constructor(connection: QueueConnection, retry: RetryPolicy) {
+    this.#queue = new Queue(CASE_ANALYSES_QUEUE, {
+      connection: bullConnection(connection),
+      prefix: connection.prefix,
+    });
+    this.#retry = retry;
+  }
+
+  /**
+   * Enqueues one attempt; enqueueing the same attempt twice adds it once. Keyed
+   * by the analysis (one per case and input hash) and the attempt: BullMQ keeps
+   * a failed job, so a retry after a failure is a new attempt, never the old id.
+   */
+  async enqueueAnalysis(
+    tenantId: TenantId,
+    caseAnalysisId: string,
+    attempt: number,
+  ): Promise<void> {
+    await this.#queue.add(
+      "analyse",
+      CASE_ANALYSIS_MESSAGE.parse({ tenantId, caseAnalysisId, attempt }),
+      {
+        ...deliveryOptions(this.#retry),
+        jobId: `case-analysis-${caseAnalysisId}-${String(attempt)}`,
+      },
+    );
   }
 
   async close(): Promise<void> {
@@ -360,6 +414,11 @@ export interface WorkerPoolOptions {
   readonly reports?: { readonly generator: ReportGenerator; readonly concurrency: number };
   /** PDF rendering; the report-renders queue is consumed only when this is given. */
   readonly renders?: { readonly renderer: ReportRenderer; readonly concurrency: number };
+  /** Case analyses; the case-analyses queue is consumed only when this is given. */
+  readonly caseAnalyses?: {
+    readonly processor: CaseAnalysisProcessor;
+    readonly concurrency: number;
+  };
   readonly observer?: WorkerPoolObserver;
 }
 
@@ -382,6 +441,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
     FUSION_QUEUE,
     ...(options.reports === undefined ? [] : [REPORTS_QUEUE]),
     ...(options.renders === undefined ? [] : [REPORT_RENDERS_QUEUE]),
+    ...(options.caseAnalyses === undefined ? [] : [CASE_ANALYSES_QUEUE]),
     ...collectQueues.keys(),
   ]);
   const flows = new FlowProducer({ connection, prefix });
@@ -430,6 +490,35 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
               runId: null,
               jobId: null,
               reportId: report.reportId,
+              caseAnalysisId: null,
+              queue,
+              errorCode: code,
+            },
+            delivery.id ?? `${queue}-${String(Date.now())}`,
+          );
+          return;
+        }
+        if (kind === "CASE_ANALYSIS") {
+          const analysis = CASE_ANALYSIS_MESSAGE.parse(delivery.data);
+          // A crash on the last attempt: the attempt is failed here, never left
+          // PENDING. An attempt that recorded its failure is left as it is.
+          await options.caseAnalyses?.processor.failUnrecorded(
+            parseTenantId(analysis.tenantId),
+            analysis.caseAnalysisId,
+            analysis.attempt,
+            {
+              code,
+              message: "The analysis's last attempt failed without recording an outcome.",
+            },
+          );
+          await recordDeadLetter(
+            {
+              kind,
+              tenantId: analysis.tenantId,
+              runId: null,
+              jobId: null,
+              reportId: null,
+              caseAnalysisId: analysis.caseAnalysisId,
               queue,
               errorCode: code,
             },
@@ -452,6 +541,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
               runId: null,
               jobId: null,
               reportId: report.reportId,
+              caseAnalysisId: null,
               queue,
               errorCode: code,
             },
@@ -482,6 +572,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
             runId: message.runId,
             jobId: message.jobId,
             reportId: null,
+            caseAnalysisId: null,
             queue,
             errorCode: code,
           },
@@ -590,6 +681,26 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
         }
         if (disposition.kind === "RETRY") {
           throw new JobRetryError(disposition.delayMs, disposition.errorCode);
+        }
+        return { disposition: disposition.kind };
+      });
+    } else if (queue === CASE_ANALYSES_QUEUE && options.caseAnalyses !== undefined) {
+      const { processor, concurrency } = options.caseAnalyses;
+      // An analysis can be long: the bulkhead holds across every worker.
+      const handle = new Queue(queue, { connection, prefix });
+      await handle.setGlobalConcurrency(concurrency);
+      await handle.close();
+      start(queue, "CASE_ANALYSIS", concurrency, async (delivery) => {
+        const message = CASE_ANALYSIS_MESSAGE.safeParse(delivery.data);
+        if (!message.success) throw new UnrecoverableError("MESSAGE_INVALID");
+        const disposition = await processor.process(
+          parseTenantId(message.data.tenantId),
+          message.data.caseAnalysisId,
+          message.data.attempt,
+        );
+        // A failed attempt is recorded with its code, and dead-lettered with it.
+        if (disposition.kind === "COMPLETED" && disposition.status === "FAILED") {
+          throw new UnrecoverableError(disposition.errorCode);
         }
         return { disposition: disposition.kind };
       });

@@ -244,6 +244,14 @@ export const envSchema = z.object({
     description:
       "Report PDFs rendered at once, across every worker. Rendering is CPU-bound: one per worker core at most.",
   }),
+  CASE_ANALYSIS_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(2).meta({
+    description:
+      "Case analyses computed at once, across every worker. The analysis is CPU-bound and has its own bulkhead, apart from collection and reports.",
+  }),
+  CASE_ANALYSIS_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(60_000).meta({
+    description:
+      "Longest one attempt at a case analysis may wait before it fails as CASE_ANALYSIS_TIMEOUT. The computation itself is synchronous and bounded by the case's size, not by this.",
+  }),
   REPORT_HANDLING_MARKING: z.string().trim().min(1).max(80).optional().meta({
     description:
       "The handling marking printed on every report page when a tenant has not set its own. Unset: pages say no marking is set. The platform default is undecided.",

@@ -74,36 +74,23 @@ export interface CaseScopeRecords {
 }
 
 export class CaseScopeRepository extends TenantRepository {
+  /**
+   * The runs the case's evidence came from, by id: what a person probe of the
+   * case passes as runIds (D-19), read without the records themselves.
+   */
+  async runIds(caseId: string): Promise<string[]> {
+    const { runIds } = this.#queries(caseId);
+    return this.run(async (tx) => {
+      const result = await tx.execute<{ id: string }>(
+        sql`select run_id as id from (${runIds}) as r(run_id) order by run_id`,
+      );
+      return result.rows.map((row) => row.id);
+    });
+  }
+
   async records(caseId: string): Promise<CaseScopeRecords> {
     const tenantId = this.tenantId;
-    const id = requireUuid(caseId);
-    const pins = sql`select * from ${casePins} where tenant_id = ${tenantId} and case_id = ${id}`;
-    // The case's claims, by id.
-    const claimIds: SQL = sql`
-      select c.id from ${claims} c join (${pins}) p on p.claim_id = c.id where c.tenant_id = ${tenantId}
-      union select c.id from ${claims} c join (${pins}) p on p.evidence_id = c.evidence_id where c.tenant_id = ${tenantId}
-      union select c.id from ${claims} c join (${pins}) p on p.entity_id = c.entity_id where c.tenant_id = ${tenantId}
-      union select c.id from ${claims} c join (${pins}) p on p.relationship_id = c.relationship_id where c.tenant_id = ${tenantId}`;
-    const evidenceIds: SQL = sql`
-      select p.evidence_id from (${pins}) p where p.evidence_id is not null
-      union select c.evidence_id from ${claims} c where c.tenant_id = ${tenantId} and c.id in (${claimIds})`;
-    const relationshipIds: SQL = sql`
-      select p.relationship_id from (${pins}) p where p.relationship_id is not null
-      union select c.relationship_id from ${claims} c
-        where c.tenant_id = ${tenantId} and c.id in (${claimIds}) and c.relationship_id is not null`;
-    const entityIds: SQL = sql`
-      select p.entity_id from (${pins}) p where p.entity_id is not null
-      union select c.entity_id from ${claims} c
-        where c.tenant_id = ${tenantId} and c.id in (${claimIds}) and c.entity_id is not null
-      union select r.source_entity_id from ${entityRelationships} r
-        where r.tenant_id = ${tenantId} and r.id in (${relationshipIds})
-      union select r.target_entity_id from ${entityRelationships} r
-        where r.tenant_id = ${tenantId} and r.id in (${relationshipIds})`;
-    const runIds: SQL = sql`
-      select distinct j.run_id from ${jobs} j
-      join ${evidence} ev on ev.tenant_id = j.tenant_id and ev.job_id = j.id
-      where j.tenant_id = ${tenantId} and ev.id in (${evidenceIds})`;
-
+    const { claimIds, evidenceIds, relationshipIds, entityIds, runIds } = this.#queries(caseId);
     return this.run(async (tx) => {
       const claimRows = await tx
         .select({
@@ -198,5 +185,45 @@ export class CaseScopeRepository extends TenantRepository {
         activeMergeIds: merges.rows.map((row) => row.id),
       };
     });
+  }
+
+  /** The case's lists as SQL, each derived from the case id. */
+  #queries(caseId: string): {
+    readonly claimIds: SQL;
+    readonly evidenceIds: SQL;
+    readonly relationshipIds: SQL;
+    readonly entityIds: SQL;
+    readonly runIds: SQL;
+  } {
+    const tenantId = this.tenantId;
+    const id = requireUuid(caseId);
+    const pins = sql`select * from ${casePins} where tenant_id = ${tenantId} and case_id = ${id}`;
+    // The case's claims, by id.
+    const claimIds: SQL = sql`
+      select c.id from ${claims} c join (${pins}) p on p.claim_id = c.id where c.tenant_id = ${tenantId}
+      union select c.id from ${claims} c join (${pins}) p on p.evidence_id = c.evidence_id where c.tenant_id = ${tenantId}
+      union select c.id from ${claims} c join (${pins}) p on p.entity_id = c.entity_id where c.tenant_id = ${tenantId}
+      union select c.id from ${claims} c join (${pins}) p on p.relationship_id = c.relationship_id where c.tenant_id = ${tenantId}`;
+    const evidenceIds: SQL = sql`
+      select p.evidence_id from (${pins}) p where p.evidence_id is not null
+      union select c.evidence_id from ${claims} c where c.tenant_id = ${tenantId} and c.id in (${claimIds})`;
+    const relationshipIds: SQL = sql`
+      select p.relationship_id from (${pins}) p where p.relationship_id is not null
+      union select c.relationship_id from ${claims} c
+        where c.tenant_id = ${tenantId} and c.id in (${claimIds}) and c.relationship_id is not null`;
+    const entityIds: SQL = sql`
+      select p.entity_id from (${pins}) p where p.entity_id is not null
+      union select c.entity_id from ${claims} c
+        where c.tenant_id = ${tenantId} and c.id in (${claimIds}) and c.entity_id is not null
+      union select r.source_entity_id from ${entityRelationships} r
+        where r.tenant_id = ${tenantId} and r.id in (${relationshipIds})
+      union select r.target_entity_id from ${entityRelationships} r
+        where r.tenant_id = ${tenantId} and r.id in (${relationshipIds})`;
+    const runIds: SQL = sql`
+      select distinct j.run_id from ${jobs} j
+      join ${evidence} ev on ev.tenant_id = j.tenant_id and ev.job_id = j.id
+      where j.tenant_id = ${tenantId} and ev.id in (${evidenceIds})`;
+
+    return { claimIds, evidenceIds, relationshipIds, entityIds, runIds };
   }
 }

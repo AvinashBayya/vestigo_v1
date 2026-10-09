@@ -10,7 +10,8 @@
  * job neither double-charges nor duplicates evidence; a hung collector does
  * not stall other queues; a failing source opens its circuit; a spent quota
  * refuses before dispatch; retries distinguish cause; and a PERSON collector
- * is gated in the worker by @repo/access.
+ * is gated in the worker by @repo/access; and a hung or failing case analysis
+ * holds only its own queue's slots (R1-b).
  */
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -27,6 +28,7 @@ import {
   type SourceDeclaration,
 } from "@repo/collectors";
 import { loadFixture, startHarness, type Fixture, type Harness } from "@repo/collectors/testing";
+import { ENGINE_VERSION } from "@repo/case-engine";
 import { parseTenantId, type TargetType, type TenantId } from "@repo/core";
 import { createDatabase, FileSystemContentStore, type Database, type Job } from "@repo/db";
 import {
@@ -43,6 +45,10 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  CASE_ANALYSES_QUEUE,
+  CaseAnalysisProcessor,
+  CaseAnalysisQueue,
+  caseInputHash,
   CollectionExecutor,
   CollectorJobProcessor,
   collectQueueName,
@@ -51,16 +57,21 @@ import {
   InvestigationQueue,
   JobNotReplayableError,
   JobReplayer,
+  readCaseAnalysisInput,
+  ReportGenerator,
+  ReportQueue,
   RunCoordinator,
   RunFusion,
   selectQueues,
   startWorkerPool,
   VaultCredentialSource,
+  type CaseAnalysisProcessorOptions,
   type Extractor,
   type QueueConnection,
   type RetryPolicy,
   type WorkerPool,
 } from "../src/index.ts";
+import { createCaseFixture, FIXTURE_COLLECTORS, type CaseFixture } from "./case-fixture.ts";
 import { TEST_ENGINE } from "./config.ts";
 
 // ── The world ─────────────────────────────────────────────────────────────
@@ -112,6 +123,8 @@ interface Engine {
   readonly breaker: RedisCircuitBreaker;
   readonly processor: CollectorJobProcessor;
   readonly investigations: InvestigationQueue;
+  readonly reports: ReportQueue;
+  readonly analyses: CaseAnalysisQueue;
   readonly replayer: JobReplayer;
   readonly pools: readonly WorkerPool[];
   close(): Promise<void>;
@@ -129,6 +142,12 @@ async function startEngine(
     readonly circuit?: CircuitPolicy;
     readonly collectConcurrency?: number;
     readonly extractors?: Readonly<Record<string, Extractor>>;
+    /** Reports and case analyses, consumed by the planning pool when given. */
+    readonly reports?: ReportGenerator;
+    readonly caseAnalyses?: {
+      readonly processor: CaseAnalysisProcessor;
+      readonly concurrency: number;
+    };
   } = {},
 ): Promise<Engine> {
   const namespace = `vt-${randomUUID().slice(0, 8)}`;
@@ -163,23 +182,39 @@ async function startEngine(
     collectConcurrency: () => options.collectConcurrency ?? 1,
     investigationConcurrency: 2,
     fusionConcurrency: 2,
+    ...(options.reports === undefined
+      ? {}
+      : { reports: { generator: options.reports, concurrency: 1 } }),
+    ...(options.caseAnalyses === undefined ? {} : { caseAnalyses: options.caseAnalyses }),
   };
+  const planning = [
+    "investigations",
+    "fusion",
+    ...(options.reports === undefined ? [] : ["reports"]),
+    ...(options.caseAnalyses === undefined ? [] : [CASE_ANALYSES_QUEUE]),
+  ];
   const pools = [
-    await startWorkerPool({ ...common, queues: ["investigations", "fusion"] }),
+    await startWorkerPool({ ...common, queues: planning }),
     await startWorkerPool({ ...common, queues: ["collect.*"] }),
   ];
   const investigations = new InvestigationQueue(connection, retry);
+  const reports = new ReportQueue(connection, retry);
+  const analyses = new CaseAnalysisQueue(connection, retry);
   const replayer = new JobReplayer({ db, registry: runtime.registry, connection, retry });
   return {
     connection,
     breaker,
     processor,
     investigations,
+    reports,
+    analyses,
     replayer,
     pools,
     async close() {
       await Promise.all(pools.map((pool) => pool.close()));
       await investigations.close();
+      await reports.close();
+      await analyses.close();
       await replayer.close();
     },
   };
@@ -763,6 +798,183 @@ describe("a hung collector does not stall other queues (RELEASE-BLOCKING)", () =
       await engine.close();
     }
   }, 30_000);
+});
+
+// ── Case analyses ─────────────────────────────────────────────────────────
+
+/** Records a request for a case's analysis as the API does, and enqueues its attempt 1. */
+async function requestAnalysis(engine: Engine, fixture: CaseFixture): Promise<string> {
+  const analysisId = await db.withTenant(
+    fixture.tenantId,
+    async ({ repos, reads }) => {
+      const read = await readCaseAnalysisInput(reads, fixture.caseId, FIXTURE_COLLECTORS);
+      const { analysis } = await repos.caseAnalyses.findOrCreate({
+        caseId: fixture.caseId,
+        inputHash: caseInputHash(read),
+        engineVersion: ENGINE_VERSION,
+        requestedByUserId: fixture.userId,
+        requestedAt: new Date(),
+      });
+      await repos.caseAnalysisEvents.request({
+        analysisId: analysis.id,
+        attempt: 1,
+        requestedByUserId: fixture.userId,
+        at: new Date(),
+      });
+      return analysis.id;
+    },
+    { snapshot: true },
+  );
+  await engine.analyses.enqueueAnalysis(fixture.tenantId, analysisId, 1);
+  return analysisId;
+}
+
+function standingOf(fixture: CaseFixture, analysisId: string) {
+  return db.withTenant(fixture.tenantId, ({ repos }) =>
+    repos.caseAnalysisEvents.standing(analysisId),
+  );
+}
+
+describe("a hung or failing case analysis holds only its own slots (RELEASE-BLOCKING)", () => {
+  it("collection, a report and another case finish while one analysis hangs and one fails; each is failed with its code and dead-lettered", async () => {
+    const entitled = async (tag: string): Promise<CaseFixture> => {
+      const fixture = await createCaseFixture(db, tag);
+      await asOwner(fixture.tenantId, "update public.tenants set plan = $1, vetting_status = $2", [
+        "TECHINT_AND_PERSON",
+        "APPROVED",
+      ]);
+      return fixture;
+    };
+    const hung = await entitled("analysis-hung");
+    const failing = await entitled("analysis-failing");
+    const other = await entitled("analysis-other");
+
+    // The hung case's read waits until released; the failing case's read throws.
+    const hang = { started: false, release: (): void => undefined };
+    const released = new Promise<void>((resolve) => {
+      hang.release = resolve;
+    });
+    const readInput: NonNullable<CaseAnalysisProcessorOptions["readInput"]> = async (
+      reads,
+      caseId,
+      collectors,
+    ) => {
+      if (caseId === hung.caseId) {
+        hang.started = true;
+        await released;
+      }
+      if (caseId === failing.caseId) throw new Error("[injected analysis failure]");
+      return readCaseAnalysisInput(reads, caseId, collectors);
+    };
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({
+        sources: [fakeSource("fast-local", false)],
+        collectors: [fastCollector],
+      }),
+      allowUnverifiedSources: false,
+      network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
+    });
+    const engine = await startEngine(runtime, {
+      extractors: { "fake.fast": () => ({ entities: [], relationships: [], claims: [] }) },
+      reports: new ReportGenerator({
+        db,
+        registry: runtime.registry,
+        llm: { unavailable: "[none]" },
+        defaultHandlingMarking: null,
+        producedBy: "[product]",
+        retry: FAST_RETRY,
+      }),
+      caseAnalyses: {
+        processor: new CaseAnalysisProcessor({
+          db,
+          collectors: FIXTURE_COLLECTORS,
+          timeoutMs: 8_000,
+          readInput,
+        }),
+        concurrency: 2,
+      },
+    });
+    const letters = new Queue(DEAD_LETTER_QUEUE, {
+      connection: { url: engine.connection.url },
+      prefix: engine.connection.prefix,
+    });
+    try {
+      const hungId = await requestAnalysis(engine, hung);
+      await waitFor(
+        "the hung analysis to take its slot",
+        () => Promise.resolve(hang.started),
+        Boolean,
+      );
+      const failingId = await requestAnalysis(engine, failing);
+      const otherId = await requestAnalysis(engine, other);
+
+      // Collection and a report, while the hung analysis holds its slot.
+      const tenant = await newTenant("analysis-beside");
+      const runId = await startRun(engine, tenant, "example.com");
+      expect((await finishedRun(tenant.tenantId, runId))?.status).toBe("SUCCEEDED");
+      const report = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.reports.create({ runId, includeSynthesis: false, requestedByUserId: null }),
+      );
+      await engine.reports.enqueueReport(tenant.tenantId, report.id);
+      const generated = await waitFor(
+        "the report to finish",
+        () => db.withTenant(tenant.tenantId, ({ repos }) => repos.reports.findById(report.id)),
+        (row) => row !== null && (row.status === "SUCCEEDED" || row.status === "FAILED"),
+      );
+      expect(generated?.status).toBe("SUCCEEDED");
+
+      // Another case completes; the failing one is retried, then failed with a code.
+      const completed = await waitFor(
+        "the other case's analysis",
+        () => standingOf(other, otherId),
+        (standing) => standing?.status === "COMPLETE",
+      );
+      expect(completed?.event.document).not.toBeNull();
+      const failed = await waitFor(
+        "the failing case's analysis",
+        () => standingOf(failing, failingId),
+        (standing) => standing?.status === "FAILED",
+      );
+      expect(failed?.event).toMatchObject({ errorCode: "WORKER_ERROR", document: null });
+
+      // All of that while the hung analysis was still running.
+      expect((await standingOf(hung, hungId))?.status).toBe("PENDING");
+
+      // Its timeout fails it with a code, never a document.
+      const timedOut = await waitFor(
+        "the hung analysis to time out",
+        () => standingOf(hung, hungId),
+        (standing) => standing?.status === "FAILED",
+      );
+      expect(timedOut?.event).toMatchObject({
+        errorCode: "CASE_ANALYSIS_TIMEOUT",
+        document: null,
+      });
+
+      const dead = await waitFor(
+        "both analyses dead-lettered",
+        async () =>
+          (await letters.getJobs(["waiting", "wait"]))
+            .map((job) => DEAD_LETTER_MESSAGE.parse(job.data))
+            .filter((row) => row.kind === "CASE_ANALYSIS"),
+        (rows) => rows.length === 2,
+      );
+      expect(
+        dead
+          .map((row) => [row.caseAnalysisId, row.errorCode, row.queue, row.runId, row.reportId])
+          .sort(),
+      ).toEqual(
+        [
+          [hungId, "CASE_ANALYSIS_TIMEOUT", CASE_ANALYSES_QUEUE, null, null],
+          [failingId, "WORKER_ERROR", CASE_ANALYSES_QUEUE, null, null],
+        ].sort(),
+      );
+    } finally {
+      hang.release();
+      await letters.close();
+      await engine.close();
+    }
+  }, 60_000);
 });
 
 // ── Circuits ──────────────────────────────────────────────────────────────
