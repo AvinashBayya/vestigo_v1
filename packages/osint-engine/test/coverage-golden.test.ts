@@ -6,12 +6,15 @@
  * the coverage functions moved to @repo/case-engine, so the move was proven to
  * change nothing.
  *
- * Rewritten once since, by a labelled behaviour change (R1-a rulings,
- * 2026-10-09): displayValue(undefined) shows null instead of throwing, a cut
- * no longer splits a character, and a run with no collector planned no longer
- * reads "all 0 planned collectors finished". Every changed entry is one of
- * those three; nothing else moved. Any other change needs the same: a ruling,
- * its own commit, and the rewritten files in its diff.
+ * Rewritten since only by the owner's rulings, each in a commit of its own
+ * whose golden diff holds that change and nothing else:
+ *   - R1-a rulings (2026-10-09): displayValue(undefined) shows null instead of
+ *     throwing, a cut no longer splits a character, and a run with no
+ *     collector planned no longer reads "all 0 planned collectors finished";
+ *   - R1-b pre-flight: a run that planned no collector, complete or failed,
+ *     reads "NOTHING PLANNED", and one planned collector is singular.
+ * Any other change needs the same: a ruling, its own commit, and the
+ * rewritten files in its diff.
  *
  * A golden file is rewritten only by running this file with WRITE_GOLDEN=1,
  * and that run always fails, so no passing run ever wrote what it compared.

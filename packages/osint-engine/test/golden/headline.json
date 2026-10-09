@@ -9,7 +9,7 @@
   },
   {
     "fixture": "SUCCEEDED, no entries",
-    "output": "COMPLETE RUN: no collector was planned to run."
+    "output": "NOTHING PLANNED: no collector was planned to run, so there is nothing to report on."
   },
   {
     "fixture": "PARTIAL, no entries",
@@ -17,7 +17,7 @@
   },
   {
     "fixture": "FAILED, no entries",
-    "output": "FAILED RUN: none of the 0 planned collectors completed."
+    "output": "NOTHING PLANNED: no collector was planned to run, so there is nothing to report on."
   },
   {
     "fixture": "CANCELLED, no entries",
@@ -57,6 +57,6 @@
   },
   {
     "fixture": "one excluded collector only",
-    "output": "COMPLETE RUN: no collector was planned to run. 1 further collector(s) were excluded or held and did not run."
+    "output": "NOTHING PLANNED: no collector was planned to run, so there is nothing to report on. 1 further collector(s) were excluded or held and did not run."
   }
 ]

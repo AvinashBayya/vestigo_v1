@@ -7,9 +7,9 @@
  * ruling D-1), over plain data instead of the collector registry and database
  * rows, so this package depends only on @repo/core. The golden files in
  * packages/osint-engine/test/golden proved the output identical, byte for
- * byte. Changed once since, as a behaviour change (R1-a rulings, 2026-10-09):
- * a run in which no collector was planned no longer reads "all 0 planned
- * collectors finished".
+ * byte. Changed since only by the owner's rulings, each a commit of its own
+ * with its golden diff: a run in which no collector was planned says so
+ * ("NOTHING PLANNED"), and a count of one planned collector is singular.
  *
  * Nothing here is estimated. Coverage is named facts, never a percentage
  * (there is no honest denominator for "every source that exists"). This is
@@ -174,16 +174,20 @@ export function coverageHeadline(
       ? ""
       : ` ${String(notRun)} further collector(s) were excluded or held and did not run.`;
   const counts = `${String(found)} found something, ${String(completed.length - found)} found nothing`;
+  const planned = `${String(ran.length)} planned ${ran.length === 1 ? "collector" : "collectors"}`;
+  // A run that planned no collector cannot have finished or failed to finish any.
+  const nothingPlanned = `NOTHING PLANNED: no collector was planned to run, so there is nothing to report on.${notRunNote}`;
   switch (status) {
     case "SUCCEEDED":
-      // No collector ran: "all 0 planned collectors finished" said nothing true.
       return ran.length === 0
-        ? `COMPLETE RUN: no collector was planned to run.${notRunNote}`
-        : `COMPLETE RUN: all ${String(ran.length)} planned collectors finished (${counts}).${notRunNote}`;
+        ? nothingPlanned
+        : `COMPLETE RUN: all ${planned} finished (${counts}).${notRunNote}`;
     case "PARTIAL":
-      return `PARTIAL RUN: ${String(ran.length - completed.length)} of ${String(ran.length)} planned collectors did not complete, so this report does not cover what they would have collected (${counts}).${notRunNote}`;
+      return `PARTIAL RUN: ${String(ran.length - completed.length)} of ${planned} did not complete, so this report does not cover what they would have collected (${counts}).${notRunNote}`;
     case "FAILED":
-      return `FAILED RUN: none of the ${String(ran.length)} planned collectors completed.${notRunNote}`;
+      return ran.length === 0
+        ? nothingPlanned
+        : `FAILED RUN: none of the ${planned} completed.${notRunNote}`;
     default:
       return `The run's status is ${status}.`;
   }

@@ -4,7 +4,7 @@
     "output": {
       "runStatus": "SUCCEEDED",
       "partial": false,
-      "headline": "COMPLETE RUN: no collector was planned to run.",
+      "headline": "NOTHING PLANNED: no collector was planned to run, so there is nothing to report on.",
       "entries": [],
       "notApplicable": [],
       "caveats": [
@@ -22,7 +22,7 @@
     "output": {
       "runStatus": "FAILED",
       "partial": true,
-      "headline": "FAILED RUN: none of the 0 planned collectors completed.",
+      "headline": "NOTHING PLANNED: no collector was planned to run, so there is nothing to report on.",
       "entries": [],
       "notApplicable": [],
       "caveats": [
@@ -287,7 +287,7 @@
     "output": {
       "runStatus": "SUCCEEDED",
       "partial": false,
-      "headline": "COMPLETE RUN: all 1 planned collectors finished (1 found something, 0 found nothing). 2 further collector(s) were excluded or held and did not run.",
+      "headline": "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing). 2 further collector(s) were excluded or held and did not run.",
       "entries": [
         {
           "collectorId": "golden.user",
@@ -524,7 +524,7 @@
     "output": {
       "runStatus": "SUCCEEDED",
       "partial": false,
-      "headline": "COMPLETE RUN: all 1 planned collectors finished (1 found something, 0 found nothing).",
+      "headline": "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing).",
       "entries": [
         {
           "collectorId": "golden.active",

@@ -79,22 +79,51 @@ describe("coverageFromJob", () => {
 });
 
 describe("coverageHeadline", () => {
-  it("no collector planned: says so, never 'all 0 planned collectors finished'", () => {
-    expect(coverageHeadline("SUCCEEDED", [], null)).toBe(
-      "COMPLETE RUN: no collector was planned to run.",
+  const entry = (
+    state: "COLLECTED" | "NOTHING_FOUND" | "FAILED" | "EXCLUDED",
+  ): Parameters<typeof coverageHeadline>[1][number] => ({
+    collectorId: `[${state}]`,
+    sourceLabel: `[${state}]`,
+    state,
+    targetType: "DOMAIN",
+    reasonCode: state === "EXCLUDED" ? "LICENCE_BLOCKED" : null,
+    detail: null,
+    evidenceCount: 0,
+    attempts: state === "EXCLUDED" ? null : 1,
+  });
+  const NOTHING =
+    "NOTHING PLANNED: no collector was planned to run, so there is nothing to report on.";
+
+  it("no collector planned, complete or failed: nothing to report on, never 'all 0' or 'none of the 0'", () => {
+    expect(coverageHeadline("SUCCEEDED", [], null)).toBe(NOTHING);
+    expect(coverageHeadline("FAILED", [], null)).toBe(NOTHING);
+    expect(coverageHeadline("SUCCEEDED", [entry("EXCLUDED")], null)).toBe(
+      `${NOTHING} 1 further collector(s) were excluded or held and did not run.`,
     );
-    const excluded = {
-      collectorId: "dns",
-      sourceLabel: "[fake dns]",
-      state: "EXCLUDED" as const,
-      targetType: "DOMAIN" as const,
-      reasonCode: "LICENCE_BLOCKED",
-      detail: "[test] blocked",
-      evidenceCount: 0,
-      attempts: null,
-    };
-    expect(coverageHeadline("SUCCEEDED", [excluded], null)).toBe(
-      "COMPLETE RUN: no collector was planned to run. 1 further collector(s) were excluded or held and did not run.",
+    expect(coverageHeadline("FAILED", [entry("EXCLUDED")], null)).toBe(
+      `${NOTHING} 1 further collector(s) were excluded or held and did not run.`,
+    );
+  });
+
+  it("one planned collector is singular wherever the count is rendered", () => {
+    expect(coverageHeadline("SUCCEEDED", [entry("COLLECTED")], null)).toBe(
+      "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing).",
+    );
+    expect(coverageHeadline("PARTIAL", [entry("FAILED")], null)).toBe(
+      "PARTIAL RUN: 1 of 1 planned collector did not complete, so this report does not cover what they would have collected (0 found something, 0 found nothing).",
+    );
+    expect(coverageHeadline("FAILED", [entry("FAILED")], null)).toBe(
+      "FAILED RUN: none of the 1 planned collector completed.",
+    );
+  });
+
+  it("two or more planned collectors stay plural", () => {
+    const two = [entry("COLLECTED"), entry("NOTHING_FOUND")];
+    expect(coverageHeadline("SUCCEEDED", two, null)).toBe(
+      "COMPLETE RUN: all 2 planned collectors finished (1 found something, 1 found nothing).",
+    );
+    expect(coverageHeadline("FAILED", [entry("FAILED"), entry("FAILED")], null)).toBe(
+      "FAILED RUN: none of the 2 planned collectors completed.",
     );
   });
 });
