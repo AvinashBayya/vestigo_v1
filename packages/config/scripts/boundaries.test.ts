@@ -39,9 +39,10 @@ describe("package boundaries (RELEASE-BLOCKING)", () => {
     }
   });
 
-  it("packages/case-engine depends only on packages/core while it is pure analysis (R1-a)", () => {
-    // Not only no other workspace package: no third-party package either. The
-    // plan's job processor (R1-b) would widen this, with the owner's approval.
+  it("packages/case-engine depends only on packages/core, and on no other package at all (CLAUDE.md §6)", () => {
+    // Not only no other workspace package: no third-party package either.
+    // Case analysis is pure; its job processor lives outside it (owner ruling,
+    // 2026-10-09), so the database and models never reach it.
     expect(runtimeDependencies("packages/case-engine")).toEqual(["@repo/core"]);
   });
 

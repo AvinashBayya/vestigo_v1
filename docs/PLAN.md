@@ -3421,3 +3421,22 @@ part of R1-a.
     - headlines read "all 0 planned collectors" and "1 planned collectors".
 12. **A missing field inside a record** (for example a run's `plan`) still fails with an uncoded
     `TypeError`. The types forbid it; only top-level presence is checked.
+
+## R1-a: rulings recorded (2026-10-09)
+
+R1-a was approved, and every item it raised is ruled. The rulings are recorded in
+`docs/reclamation/R1-PLAN.md` (Owner's rulings) and beside D-1, D-3 and D-21 there.
+
+- **D-1's processor clause is superseded:** `case-engine` stays pure, on `core` only, and its
+  job processor goes in `apps/worker` or a thin package depending on `case-engine`, `db`, `llm`
+  and `access`. CLAUDE.md §6 and `boundaries.test.ts` now state "core only" as permanent.
+- **D-3's input hash** is computed in R1-b's job. **Merges** (D-21) go into R1-c's input.
+  **R1-b's input contract**, the seven refusals R1-a added, is accepted.
+- **Follow-ups, each in its own commit:**
+  - the lock reasons move to `core`;
+  - a discipline whose collectors were all locked is null with the reason `LOCKED`;
+  - the approved caveat wording and the breakdown headline;
+  - `CollectionExecutor.collect` refuses a request inside a job;
+  - the display fixes, as a behaviour change with updated golden files;
+  - a clear failure when the test database is unreachable.
+

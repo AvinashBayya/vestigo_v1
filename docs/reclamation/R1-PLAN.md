@@ -41,6 +41,31 @@ On the items D-10 raised (2026-10-08, after D-10 was approved):
   `maxNodes` asks. Done in D-10c, which raised D-33 (the cost at three hops).
 - **D-32 accepted, folded into R1-b as its prerequisite:** not built now.
 
+On the items R1-a raised (2026-10-09, after R1-a was approved):
+
+- **Wording.** The drafts for `NO_NEW_COLLECTION`, `COUNTS_ARE_NOT_COVERAGE` and
+  `DISCIPLINE_FROM_REGISTRY` are approved as written. `ENTITY_AND_RELATIONSHIP_COUNTS_OVERLAP` is
+  split into shorter sentences, and `UNMEASURED_IS_NOT_ZERO` names "locked" as a cause. The
+  breakdown headline is the previous codebase's, except that when all of a case's records come
+  from collectors no longer registered it says "{n} evidence records are held, all from
+  collectors no longer registered." A case-level headline stays deferred.
+- **D-3's input hash** is computed in R1-b's job, not in `case-engine`.
+- **The job processor is not in `case-engine`** (supersedes D-1's processor clause).
+  `case-engine` stays pure, on `core` only. The processor goes in `apps/worker`, or in a thin
+  package depending on `case-engine`, `db`, `llm` and `access`.
+- **HELD stays.** A discipline whose collectors were all locked shows null with the reason
+  `LOCKED`, not a measured zero.
+- **The lock reasons move to `core`**, in a commit of their own.
+- **Merges** (D-21) go into R1-c's input.
+- **R1-b's input contract is accepted**: the seven refusals R1-a added stand.
+  `CollectionExecutor.collect` is fixed so it cannot break them.
+- **Accepted as built:** a case with records but no evidence is partial; a recomputed run's
+  coverage may differ from a stored report; the renames made in the move; a missing field inside
+  a record fails with an uncoded error, as the types forbid it.
+- **Fixed as a behaviour change**, in a separate commit with updated golden files:
+  `displayValue(undefined)`, truncation that splits an emoji, and the "all 0 planned collectors"
+  headline.
+
 ## What R1 is, after reading the code
 
 `docs/MASTER-BUILD-SEQUENCE.md` (lines 77-83) scopes R1 as cross-intelligence correlation,
@@ -88,9 +113,12 @@ reclamation audit name it, shaped like `packages/osint-engine`:
   are plain data mapped from our rows; the time an analysis is stamped with is passed in.
 - `src/jobs/` the analysis job processor, following `ReportGenerator`: claim with a lock, work
   outside the transaction, record; deterministic job ids; dead-letter on final failure.
+  **[Superseded 2026-10-09: the processor lives outside `case-engine`, in `apps/worker` or a thin
+  package depending on `case-engine`, `db`, `llm` and `access`.]**
 - Depends on `core`, `db`, `llm` and `zod`, and on `access` only if D-28 lets the job re-check
   plan and vetting. Never on `collectors` or `osint-engine`: the registry's labels and the held
-  collectors reach it as data.
+  collectors reach it as data. **[Superseded 2026-10-09: `case-engine` depends on `core` only;
+  the other dependencies belong to the processor's package.]**
 - **What has to move for that boundary to hold** (part of D-1's cost):
   - the coverage functions `coverageFromJob`, `coverageOf` and `headline`, `COVERAGE_CAVEATS` and
     `displayValue` are private to `packages/osint-engine/src/reports/assemble.ts` (lines 141, 172,
@@ -188,7 +216,9 @@ replaces and from the closest existing module here; confidence in each estimate 
   - repository in `packages/db` under tenant context, listed in `REPOSITORY_TABLES` so the
     isolation tests cover it;
   - queue `case-analyses` with a zod message, a dead-letter kind, a deterministic job id, its own
-    concurrency setting and a job timeout; the processor in `packages/case-engine/src/jobs`;
+    concurrency setting and a job timeout; the processor in `apps/worker` or a thin package
+    depending on `case-engine`, `db`, `llm` and `access` (not in `case-engine`, ruled
+    2026-10-09), which also computes the input hash (D-3);
   - API: `POST /api/v1/cases/:id/analyses` (request; the same input hash returns the existing
     analysis unless it failed, or its summary failed, in which case a new attempt is made, keyed
     by input hash and attempt), `GET /api/v1/cases/:id/analyses` and `GET /api/v1/case-analyses/:id`, with zod
@@ -440,7 +470,7 @@ Each has a recommendation and the cost of each option. Every decision is now rul
 the ruling is marked RULED beside its heading, and where a ruling differs from the text beneath
 it, the ruling wins.
 
-**D-1. Where the engine lives.** **[RULED 2026-10-08: accepted as recommended, on condition that the run report's coverage helpers move as a pure move, with a test proving identical output before and after.]**
+**D-1. Where the engine lives.** **[RULED 2026-10-08: accepted as recommended, on condition that the run report's coverage helpers move as a pure move, with a test proving identical output before and after.]** **[SUPERSEDED IN PART 2026-10-09: the job processor is not in `case-engine`, which stays pure, on `core` only; the processor goes in `apps/worker` or a thin package depending on `case-engine`, `db`, `llm` and `access`.]**
 - *Recommended:* a new `packages/case-engine` (pure analysis plus its job processor). Cost:
   CLAUDE.md §6's package list, `check-exports` and `boundaries.test.ts` are updated in R1-a; the
   coverage functions, `headline`, `COVERAGE_CAVEATS` and `displayValue` move out of
@@ -463,7 +493,7 @@ it, the ruling wins.
   possibility the name match permits); the alternative is to leave them as they are. Cost of
   relabelling: the candidates' API, its tests and the merge copy change.
 
-**D-3. How analysis results are produced and stored.** **[RULED 2026-10-08: accepted as recommended.]**
+**D-3. How analysis results are produced and stored.** **[RULED 2026-10-08: accepted as recommended. 2026-10-09: the input hash is computed in R1-b's job, not in `case-engine`.]**
 - *Recommended:* a job writing a write-once `case_analyses` document keyed by the case and a
   hash of everything the analysis read (evidence ids, claim ids, active merges, the contributing
   jobs with their status and outcome, the held collectors, the registry disciplines and labels,
@@ -602,7 +632,7 @@ so the PORT-ADAPTED texts drop "across disciplines". *Alternative:* two or more 
 collectors in two or more disciplines. Cost: almost nothing correlates today (TECHINT and
 SOCMINT rarely share an entity), and the UI says so.
 
-**D-21. Merged entities in analysis.** **[RULED 2026-10-08: accepted as recommended.]** *Recommended:* fold active analyst merges before
+**D-21. Merged entities in analysis.** **[RULED 2026-10-08: accepted as recommended. 2026-10-09: the active merges go into R1-c's input.]** *Recommended:* fold active analyst merges before
 correlating and comparing (an undo unfolds them on the next analysis, through the input hash),
 never name matches or candidates. *Alternative:* analyse entities unmerged. Cost: a merge an
 analyst made has no effect on the analysis.

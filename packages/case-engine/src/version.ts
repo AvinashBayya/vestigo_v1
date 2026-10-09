@@ -4,7 +4,7 @@
  * analysis says which rules produced it.
  *
  * It is one part of the input hash a stored analysis is keyed by (owner ruling
- * D-3). Where that hash is computed is not decided here: it is raised for the
- * owner with R1-a.
+ * D-3). That hash is computed in R1-b's job, which holds the input it read, and
+ * never here (owner ruling, 2026-10-09).
  */
 export const ENGINE_VERSION = 1;
