@@ -96,6 +96,11 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "runCoverage",
     "sourceLabelOf",
     "displayValue",
+    "ENGINE_VERSION",
+    "CaseInputError",
+    "caseCoverage",
+    "caseCollectors",
+    "caseBreakdown",
   ],
   // The one path from a collector's result to evidence rows, and the job
   // system around it: planning, per-source queues, fault isolation, fusion.

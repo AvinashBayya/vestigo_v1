@@ -3272,3 +3272,152 @@ beside each heading, except D-33, which D-10c raised and which is open.
 
 R1-a waits for its prompt.
 
+## R1-a: the case engine, pure (2026-10-09)
+
+**`packages/case-engine` exists, and is pure.** It has no database, API, queue or UI, and adds
+no dependency. It builds a case's coverage, the shared per-collector view and the discipline
+breakdown, over plain data. The run report's coverage moved into it unchanged.
+
+- **Baseline (47d3cb2).** Golden files under `packages/osint-engine/test/golden/` capture the
+  output of the run report's coverage functions, written from the code before anything moved:
+  - functions: `coverageOf`, `coverageFromJob`, `headline`, `COVERAGE_CAVEATS`, `displayValue`;
+  - fixtures: empty runs, a partial run, failed collectors, held collectors, nulls, unicode,
+    and a run of 420 jobs.
+  - **Comparison:** the test compares byte for byte.
+  - **Rewrites:** a golden file is rewritten only by `WRITE_GOLDEN=1`, and that run always
+    fails.
+  - **Formatting:** the directory is excluded from formatting.
+- **Move (47c7db0).** A pure move, over plain data types (owner ruling D-1):
+  - **What moved:** the coverage functions (`coverageFromJob`, `coverageHeadline`,
+    `runCoverage`, `sourceLabelOf`), `COVERAGE_CAVEATS` and `displayValue`.
+  - **What stayed in `assemble.ts`:** the zod parse of the stored plan, a `coverageOf` with its
+    old signature, and re-exports.
+  - **Proof:** the golden test passes unchanged, and fails on each of five mutations of the
+    moved code.
+  - **Registration:** CLAUDE.md §6, `check-exports.ts` and `boundaries.test.ts` gained the
+    package.
+- **Build.**
+  - **Functions:**
+    - `caseCoverage`: the runs derived from pins (D-4), each named with its investigation and
+      its coverage recomputed by the run report's own function. It adds what of each job's
+      evidence is in the case ("collected but not pinned"), evidence with no recorded
+      collection job (counted, by collector), and collection and observation spans kept
+      apart.
+    - `caseCollectors`: the shared per-collector view for R1-c and R1-d.
+    - `caseBreakdown`: per discipline:
+      - counts of evidence, claims, entities and relationships, each with its ids, and by
+        recorded strength;
+      - collectors grouped as ran, found something, found nothing, failed, not finished,
+        locked, excluded, not applicable, held (with the reason) and in no run;
+      - the previous codebase's further figures, each null with the input it needs.
+  - **Empty case:** a case with no records gets an explicit `EMPTY_CASE` document.
+  - **Absences:** anything unmeasurable is null with a reason, never 0.
+  - **Input that contradicts itself is refused whole** (`CaseInputError`,
+    `CASE_INPUT_INVALID`, every problem named in a fixed order). It is never thinned.
+  - **Version:** `ENGINE_VERSION` (1) is stamped on every document.
+- **Purity, two layers:**
+  - **Lint on `src/`:** imports only `@repo/core` and its own files. No clock, randomness,
+    process, environment, network, timers, `import.meta`, `console`, locale formatting, or
+    `Math` passed on.
+  - **`test/purity.test.ts`:** reads the source with the TypeScript parser and checks the
+    same, with a self-test that it finds each impurity.
+- **Review.** Three independent critics (honesty and the rules; correctness, determinism and
+  purity; plan and inventory conformance), two passes each.
+  - **The first pass found:**
+    - today's held list was applied to old runs, so a collector showed COLLECTED and HELD in
+      one run;
+    - a lock refused at dispatch was filed as ran and failed;
+    - contradictory input was accepted;
+    - nested lists leaked their order;
+    - holes in both purity layers;
+    - an unapproved headline in legacy wording;
+    - a CLAUDE.md line wider than the plan.
+  - **The second pass found:**
+    - one job labelled two ways;
+    - a sort tie;
+    - a status rule counting unfinished jobs;
+    - `Math` reachable through an alias;
+    - a FOUND job with no evidence list.
+
+  All fixed. Every guarantee has a mutation that breaks it and a test that then fails: 34 of
+  34 caught.
+
+**Pipeline:** 54 of 54 tasks; the fabrication check is clean on 463 files, with no allowlist;
+check-exports covers 151 symbols across 10 entry points.
+
+| Package | Tests |
+|---|---|
+| collectors | 482 |
+| db | 266 |
+| config | 203 |
+| api | 190 |
+| web | 177 |
+| llm | 130 |
+| integrations | 122 |
+| osint-engine | 109 (the golden test's 5 among them) |
+| ui | 95 |
+| access | 56 |
+| case-engine | 55 |
+| core | 20 |
+| worker | 4 |
+| **Total** | **1,909** |
+
+Config's 203 includes 7 from an uncommitted `.gitignore` test in the working tree that is not
+part of R1-a.
+
+**Raised for the owner (not decided):**
+1. **Wording.** The case documents' caveats and reasons are codes. The inventory asks for the
+   legacy texts reworded (`TOTALS_OVERLAP`, `SILENT_MEANING`, `BREAKDOWN_CAVEATS`,
+   `COMPLETENESS_CAVEATS[0]`), and the brief says no wording change, so none is written:
+   - the drafts went to the owner;
+   - as did the legacy `breakdownHeadline` text, whose first branch misleads when only
+     unregistered collectors contributed. It is not shipped;
+   - as did a case-level headline (R1-HONESTY's "aggregate statement"), also not built.
+2. **D-3, where the canonical input hash is computed.** In `case-engine`, it needs a pure
+   SHA-256 (no `node:crypto` under the purity rule). In R1-b's job, beside the database read
+   that gathers the input. Or in `core`.
+3. **The package's dependencies.** The brief says core only (enforced now). The plan puts
+   R1-b's job processor in `case-engine/src/jobs` on core, db, llm and zod (and access under
+   D-28). That widening needs a CLAUDE.md §6 change.
+4. **Discipline statuses.**
+   - **HELD is added:** a discipline whose only collectors are held, and none of whose jobs
+     completed in the case's runs. Its counts are null, as for NOT_BUILT.
+   - **NOT_CASE_SCOPED is not built:** nothing produces it in R1-a.
+   - **An asymmetry, open:** a discipline whose registered collectors were all locked or
+     excluded in every run is ZERO, a measured zero.
+5. **`LOCK_REASONS`** (`MODULE_NOT_IN_PLAN`, `VETTING_NOT_APPROVED`) is a copy of
+   `@repo/access`'s vocabulary, because core does not hold it. Moving it to core would let
+   both share one list.
+6. **Merges.** Active analyst merges (D-21) are not in `CaseInput`. R1-c and R1-d fold them;
+   R1-b's input hash lists them.
+7. **R1-b's input contract.** These refusals are new and refuse the whole analysis:
+   - `INPUT_MISSING`
+   - `HELD_AND_REGISTERED`
+   - `FOUND_RESULT_NOT_RECORDED`
+   - `EVIDENCE_NOT_IN_JOB_RESULT`
+   - `JOB_EVIDENCE_ELSEWHERE`
+   - `CLAIM_SUBJECT_MISSING`
+   - `JOB_AND_EXCLUSION`
+
+   So R1-b must bring every pinned claim's subject into the case, and pass each job's recorded
+   evidence list.
+   - **A path that breaks this:** `CollectionExecutor.collect` writes evidence carrying a job
+     id without setting that job's evidence list. It has no production caller today.
+8. **No evidence makes a case partial.** A case that holds records but no evidence is partial
+   (`NO_EVIDENCE_IN_CASE`), because no collection can be named for it.
+9. **A recomputed run's coverage can differ from a report stored earlier:**
+   - a held collector the plan named is not listed as held;
+   - a held collector is labelled with its declared name throughout;
+   - a held entry's target type follows core's order;
+   - entries are in a fixed order.
+
+   The run report computes held entries against the held list at report time, so it shares the
+   first effect if a collector is held after its run.
+10. **Renames in the move.** `coverageOf` is `runCoverage`, `headline` is `coverageHeadline`,
+    and `sourceLabelOf` is public. `assemble.ts` keeps the old names.
+11. **Behaviour the pure move preserved:**
+    - `displayValue(undefined)` throws;
+    - truncation can split a surrogate pair;
+    - headlines read "all 0 planned collectors" and "1 planned collectors".
+12. **A missing field inside a record** (for example a run's `plan`) still fails with an uncoded
+    `TypeError`. The types forbid it; only top-level presence is checked.

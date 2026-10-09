@@ -30,10 +30,18 @@ describe("package boundaries (RELEASE-BLOCKING)", () => {
     ).toEqual(["@repo/core"]);
   });
 
-  it("packages/case-engine depends only on packages/core, and on no other package at all (CLAUDE.md §6)", () => {
-    // Not only no other workspace package: no third-party package either.
-    // Case analysis is pure, so it never needs the collector runtime, the
-    // database or a model to compute anything.
+  it("packages/case-engine never depends on packages/collectors or packages/osint-engine (CLAUDE.md §6)", () => {
+    // Case analysis reads stored evidence only; a package that cannot import
+    // the collector runtime cannot cause collection.
+    const dependencies = runtimeDependencies("packages/case-engine");
+    for (const forbidden of ["@repo/collectors", "@repo/osint-engine"]) {
+      expect(dependencies).not.toContain(forbidden);
+    }
+  });
+
+  it("packages/case-engine depends only on packages/core while it is pure analysis (R1-a)", () => {
+    // Not only no other workspace package: no third-party package either. The
+    // plan's job processor (R1-b) would widen this, with the owner's approval.
     expect(runtimeDependencies("packages/case-engine")).toEqual(["@repo/core"]);
   });
 

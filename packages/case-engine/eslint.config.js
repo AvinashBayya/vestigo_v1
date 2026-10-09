@@ -28,6 +28,14 @@ const IMPURE_GLOBALS = [
   "Intl",
   "eval",
   "Function",
+  "global",
+  "navigator",
+  "console",
+  "Buffer",
+  "WeakRef",
+  "FinalizationRegistry",
+  "AbortSignal",
+  "Reflect",
 ];
 const LOCALE_METHODS = [
   "localeCompare",
@@ -59,6 +67,7 @@ export default [
       "no-restricted-properties": [
         "error",
         { object: "Math", property: "random", message: `${PURE} (Math.random)` },
+        { property: "random", message: `${PURE} (random, on any object)` },
         ...LOCALE_METHODS.map((property) => ({
           property,
           message: `${PURE} Locale formatting differs between machines; compare and format by code unit.`,
@@ -67,6 +76,16 @@ export default [
       "no-restricted-syntax": [
         "error",
         { selector: "ImportExpression", message: `${PURE} (a dynamic import)` },
+        { selector: "MetaProperty", message: `${PURE} (import.meta)` },
+        {
+          selector: "MemberExpression[computed=true][object.name='Math']",
+          message: `${PURE} (a computed Math member)`,
+        },
+        {
+          selector:
+            "Identifier[name='Math']:not(MemberExpression[computed=false] > Identifier.object)",
+          message: `${PURE} (Math passed on, where its random can be reached)`,
+        },
       ],
     },
   },

@@ -85,7 +85,7 @@ Rules:
 - Cross-package imports go through package entry points, never deep paths.
 - `packages/core` depends on nothing else in the repo.
 - `packages/access` depends only on `packages/core` and does no I/O.
-- `packages/case-engine` depends only on `packages/core` and is pure: no I/O, no clock, no randomness. It never depends on `packages/collectors` or `packages/osint-engine`, so case analysis cannot cause collection.
+- `packages/case-engine` never depends on `packages/collectors` or `packages/osint-engine`, so case analysis cannot cause collection. Its analysis is pure: no I/O, no clock, no randomness, and it imports only `packages/core`.
 - Every access decision is made in `packages/access`: permissions, plan, vetting and API key scope. The API and the workers therefore apply the same rules. `apps/api` keeps only the HTTP guards, the Fastify plugins, the identity provider's wiring and the sign-in routes.
 
 ## 7. Contracts and types

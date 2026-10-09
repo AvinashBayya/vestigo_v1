@@ -37,6 +37,14 @@ const IMPURE_GLOBALS = new Set([
   "Intl",
   "eval",
   "Function",
+  "global",
+  "navigator",
+  "console",
+  "Buffer",
+  "WeakRef",
+  "FinalizationRegistry",
+  "AbortSignal",
+  "Reflect",
 ]);
 /** Methods whose result depends on the machine's locale. */
 const LOCALE_METHODS = new Set([
@@ -103,6 +111,8 @@ function impuritiesIn(file: string, content: string): Impurity[] {
       report(node, "uses import = require()");
     } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
       report(node, "uses a dynamic import");
+    } else if (ts.isMetaProperty(node)) {
+      report(node, "uses import.meta");
     } else if (ts.isImportTypeNode(node)) {
       const argument = node.argument;
       if (ts.isLiteralTypeNode(argument) && ts.isStringLiteral(argument.literal)) {
@@ -110,23 +120,33 @@ function impuritiesIn(file: string, content: string): Impurity[] {
       }
     } else if (ts.isIdentifier(node) && IMPURE_GLOBALS.has(node.text) && isReference(node)) {
       report(node, `uses ${node.text}`);
+    } else if (
+      ts.isIdentifier(node) &&
+      node.text === "Math" &&
+      isReference(node) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node) &&
+      !(ts.isElementAccessExpression(node.parent) && node.parent.expression === node)
+    ) {
+      // Math only as the object of a member access: passed on, its random is reachable.
+      report(node, "passes Math on");
     } else if (ts.isPropertyAccessExpression(node)) {
       const name = node.name.text;
       if (LOCALE_METHODS.has(name)) report(node, `uses ${name}`);
-      if (
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "Math" &&
-        name === "random"
-      ) {
-        report(node, "uses Math.random");
+      if (name === "random") {
+        report(
+          node,
+          ts.isIdentifier(node.expression) && node.expression.text === "Math"
+            ? "uses Math.random"
+            : "uses random",
+        );
       }
-    } else if (
-      ts.isElementAccessExpression(node) &&
-      ts.isStringLiteral(node.argumentExpression) &&
-      (LOCALE_METHODS.has(node.argumentExpression.text) ||
-        node.argumentExpression.text === "random")
-    ) {
-      report(node, `uses ${node.argumentExpression.text}`);
+    } else if (ts.isElementAccessExpression(node)) {
+      const key = node.argumentExpression;
+      if (ts.isIdentifier(node.expression) && node.expression.text === "Math") {
+        report(node, "uses a computed Math member");
+      } else if (ts.isStringLiteral(key) && LOCALE_METHODS.has(key.text)) {
+        report(node, `uses ${key.text}`);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -173,6 +193,7 @@ describe("case-engine purity (RELEASE-BLOCKING)", () => {
       `const when: Date | null = null;`,
       `const r = Math.random();`,
       `const r2 = Math["random"]();`,
+      `const k = "random" as const; const r3 = Math[k]();`,
       `const env = process.env;`,
       `void fetch("https://example.com");`,
       `setTimeout(() => undefined, 1);`,
@@ -182,6 +203,17 @@ describe("case-engine purity (RELEASE-BLOCKING)", () => {
       `const m = await import("./other.ts");`,
       `type T = import("@repo/collectors").Collector;`,
       `const f = new Intl.Collator();`,
+      `const home = global.process.env.HOME;`,
+      `const where = import.meta.url;`,
+      `console.log("[test]");`,
+      `const lang = navigator.language;`,
+      `const ref = new WeakRef({});`,
+      `const signal = AbortSignal.timeout(1);`,
+      `const raw = Buffer.allocUnsafe(1);`,
+      `const got = Reflect.get(Math, "random");`,
+      `const upper = "x"["toLocaleUpperCase"]();`,
+      `const M = Math; const r4 = M.random();`,
+      `const r5 = (0, Math).max(1);`,
     ].join("\n");
     expect(impuritiesIn(file, impure).map((found) => found.what)).toEqual([
       "imports node:fs",
@@ -191,7 +223,8 @@ describe("case-engine purity (RELEASE-BLOCKING)", () => {
       "uses Date",
       "uses Date",
       "uses Math.random",
-      "uses random",
+      "uses a computed Math member",
+      "uses a computed Math member",
       "uses process",
       "uses fetch",
       "uses setTimeout",
@@ -201,6 +234,19 @@ describe("case-engine purity (RELEASE-BLOCKING)", () => {
       "uses a dynamic import",
       "imports @repo/collectors",
       "uses Intl",
+      "uses global",
+      "uses import.meta",
+      "uses console",
+      "uses navigator",
+      "uses WeakRef",
+      "uses AbortSignal",
+      "uses Buffer",
+      "uses Reflect",
+      "passes Math on",
+      "uses toLocaleUpperCase",
+      "passes Math on",
+      "uses random",
+      "passes Math on",
     ]);
 
     const pure = [
@@ -210,7 +256,7 @@ describe("case-engine purity (RELEASE-BLOCKING)", () => {
       `interface Row { readonly Date: string }`,
       `const text = "Date.now() and Math.random() in a string";`,
       `// Date.now() in a comment`,
-      `const max = Math.max(record.Date, record.random);`,
+      `const max = Math.max(record.Date, record.process.length);`,
       `const sorted = ["b", "a"].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));`,
     ].join("\n");
     expect(impuritiesIn(file, pure)).toEqual([]);
