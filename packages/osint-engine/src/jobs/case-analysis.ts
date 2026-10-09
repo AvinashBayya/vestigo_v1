@@ -19,7 +19,8 @@
  *      CASE_INPUT_CHANGED, so a stored document always matches its hash;
  *   3. outside any transaction: case-engine computes the documents. Input
  *      that contradicts itself is refused whole (CASE_INPUT_INVALID, every
- *      problem named); a case past the size bound is refused (CASE_TOO_LARGE);
+ *      problem named). A case past the size bound is refused before it is
+ *      read (CASE_TOO_LARGE, counted in the database in step 2);
  *      a document that does not match its schema is never recorded
  *      (CASE_DOCUMENT_INVALID). The document records the evidence and runs
  *      it read (its basis), so a later read can probe them (CLAUDE.md §9);
@@ -50,7 +51,7 @@ import {
   readCaseAnalysisInput,
   type CaseAnalysisInput,
 } from "../case-analysis/input.ts";
-import { DEFAULT_MAX_CASE_RECORDS, recordCount } from "../case-analysis/requests.ts";
+import { DEFAULT_MAX_CASE_RECORDS } from "../case-analysis/requests.ts";
 
 export type CaseAnalysisDisposition =
   | {
@@ -214,6 +215,16 @@ export class CaseAnalysisProcessor {
             ),
           };
         }
+        // Counted before anything is read: a case past the bound is never loaded.
+        const records = await reads.caseScope.count(analysis.caseId);
+        if (records > maxRecords) {
+          return {
+            refused: failed(
+              "CASE_TOO_LARGE",
+              `The case holds ${String(records)} records; one analysis reads at most ${String(maxRecords)}.`,
+            ),
+          };
+        }
         return { read: await readInput(reads, analysis.caseId, collectors) };
       },
       { snapshot: true },
@@ -224,14 +235,7 @@ export class CaseAnalysisProcessor {
     if (caseInputHash(read) !== analysis.inputHash) {
       return failed(
         "CASE_INPUT_CHANGED",
-        "The records behind the case changed after the analysis was requested; request it again for the case as it is now.",
-      );
-    }
-    const records = recordCount(read);
-    if (records > maxRecords) {
-      return failed(
-        "CASE_TOO_LARGE",
-        `The case holds ${String(records)} records; one analysis reads at most ${String(maxRecords)}.`,
+        "The input read when the analysis ran is not the input it was requested for: the case's records, the analysis code, its wording or the collector registry differ between the request and the run. Request it again for the case as it is now.",
       );
     }
     let document: CaseAnalysisDocument;

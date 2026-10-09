@@ -234,7 +234,15 @@ export class CaseAnalysisQueue {
       if (existing !== undefined) {
         const state = await existing.getState();
         if (state !== "failed" && state !== "completed") return;
-        await existing.remove();
+        try {
+          await existing.remove();
+        } catch (error) {
+          // Another request delivered it again first, and a worker holds it:
+          // it is already on its way.
+          const now = await existing.getState();
+          if (now !== "failed" && now !== "completed") return;
+          throw error;
+        }
       }
       await this.#queue.add("analyse", message, { ...deliveryOptions(this.#retry), jobId });
     })();
@@ -513,7 +521,13 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
       const final = (await delivery.getState()) === "failed";
       observer.deliveryFailed?.(queue, final, error);
       if (!final) return;
-      const deliveryId = delivery.id ?? `${queue}-${String(Date.now())}`;
+      // One record per final failure of one job: a job added again under its
+      // id (a resumed case analysis attempt) is a new job, with a new
+      // timestamp, so its own final failure is dead-lettered too.
+      const deliveryId =
+        delivery.id === undefined
+          ? `${queue}-${String(Date.now())}`
+          : `${delivery.id}-${String(delivery.timestamp)}`;
       // The kind's cleanup (failing what the last attempt left unrecorded), then
       // the dead-letter record. The record is written whatever the cleanup does:
       // a cleanup that fails (the database still down after the last attempt)

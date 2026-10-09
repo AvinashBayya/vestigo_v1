@@ -226,7 +226,7 @@ export const caseAnalysisRoutes =
           operationId: "getLatestCaseAnalysis",
           summary: "Read where a case's analysis stands, and whether it is still current",
           description:
-            "The analysis of the case as it is now when there is one, else the most recently requested one as STALE: NONE_YET, PENDING, COMPLETE, FAILED (with its code) or STALE, each with a reason. Refused whole (403 with a `locked` block) when the case as it is now, or the records the shown analysis read, rest on person-investigation data the organisation cannot access.",
+            "The analysis of the case as it is now when there is one, else the most recently requested one as STALE: NONE_YET, PENDING, COMPLETE, FAILED (with its code) or STALE, each with a reason. Refused whole (403 with a `locked` block) when the case as it is now, or the records the shown analysis read, rest on person-investigation data the organisation cannot access. 409 CASE_TOO_LARGE when the case holds more records than one analysis reads: it is not read, so whether an analysis is current cannot be said.",
           tags: ["cases"],
           security: SECURITY,
           params: IdParams,
@@ -242,17 +242,15 @@ export const caseAnalysisRoutes =
         // The id as stored, never as the caller spelled it: the input hash depends on it.
         const caseId = caseRow.id;
         // The case as it is now first, before any analysis is looked at.
-        await requirePersonAccess(
-          context,
-          caseProbe(caseId, await reads.caseScope.runIds(caseId)),
-          WITHHELD.latest,
-        );
+        const runIds = await reads.caseScope.runIds(caseId);
+        await requirePersonAccess(context, caseProbe(caseId, runIds), WITHHELD.latest);
+        // Counted before it is read: a case past the bound is refused (409).
         const current = await currentInput(context, caseId, services().runs.caseAnalysisCollectors);
         const analysis = await latestAnalysis(context, caseId, current.inputHash);
         // Then what the shown analysis read, whatever its status, before its record is read.
         await requirePersonAccess(
           context,
-          analysisProbe(caseId, current.runIds, analysis),
+          analysisProbe(caseId, runIds, analysis),
           WITHHELD.latest,
         );
         const record = analysis === null ? null : await analysisRecord(context, analysis);
@@ -270,7 +268,7 @@ export const caseAnalysisRoutes =
           operationId: "getCaseAnalysis",
           summary: "Read one case analysis, and whether it is still current",
           description:
-            "PENDING, COMPLETE, FAILED (with its code), or STALE when the case's input has changed since it was requested. Refused whole (403 with a `locked` block) when its case as it is now, or the records it read, rest on person-investigation data the organisation cannot access.",
+            "PENDING, COMPLETE, FAILED (with its code), or STALE when the case's input has changed since it was requested. Refused whole (403 with a `locked` block) when its case as it is now, or the records it read, rest on person-investigation data the organisation cannot access. 409 CASE_TOO_LARGE when its case now holds more records than one analysis reads: the case is not read, so whether the analysis is current cannot be said.",
           tags: ["cases"],
           security: SECURITY,
           params: IdParams,
@@ -284,18 +282,13 @@ export const caseAnalysisRoutes =
         const analysis = await repos.caseAnalyses.findById(request.params.id);
         if (analysis === null) throw notFound("The case analysis");
         const { caseId } = analysis;
-        await requirePersonAccess(
-          context,
-          caseProbe(caseId, await reads.caseScope.runIds(caseId)),
-          WITHHELD.one,
-        );
+        // The case as it is now, then what the analysis read, whatever its
+        // status: both before anything else is read.
+        const runIds = await reads.caseScope.runIds(caseId);
+        await requirePersonAccess(context, caseProbe(caseId, runIds), WITHHELD.one);
+        await requirePersonAccess(context, analysisProbe(caseId, runIds, analysis), WITHHELD.one);
+        // Counted before it is read: a case past the bound is refused (409).
         const current = await currentInput(context, caseId, services().runs.caseAnalysisCollectors);
-        // Then what the analysis read, whatever its status, before its record is read.
-        await requirePersonAccess(
-          context,
-          analysisProbe(caseId, current.runIds, analysis),
-          WITHHELD.one,
-        );
         const record = await analysisRecord(context, analysis);
         return view(readView(caseId, current.inputHash, record));
       },

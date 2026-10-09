@@ -463,15 +463,26 @@ describe("what fails an attempt besides its input (RELEASE-BLOCKING)", () => {
       }),
     );
     await processor().process(fixture.tenantId, analysisId, 1);
-    await expectFailedWhole(fixture.tenantId, analysisId, "CASE_INPUT_CHANGED");
+    const message = await expectFailedWhole(fixture.tenantId, analysisId, "CASE_INPUT_CHANGED");
+    // It says what was compared, never a cause it did not measure.
+    expect(message).toContain(
+      "the case's records, the analysis code, its wording or the collector registry",
+    );
   });
 
-  it("a case past the size bound: CASE_TOO_LARGE, no document", async () => {
+  it("a case past the size bound: CASE_TOO_LARGE, no document, and nothing read", async () => {
     const fixture = await entitledCase("job-too-large");
     const { analysisId } = await request(fixture.tenantId, fixture.caseId);
-    await processor({ maxRecords: 1 }).process(fixture.tenantId, analysisId, 1);
+    let reads = 0;
+    const counted: ReadInput = (r, caseId, collectors) => {
+      reads += 1;
+      return readCaseAnalysisInput(r, caseId, collectors);
+    };
+    await processor({ maxRecords: 1, readInput: counted }).process(fixture.tenantId, analysisId, 1);
     const message = await expectFailedWhole(fixture.tenantId, analysisId, "CASE_TOO_LARGE");
     expect(message).toContain("at most 1.");
+    // Counted in the database: the case was never loaded.
+    expect(reads).toBe(0);
   });
 
   it("a read that hangs: CASE_ANALYSIS_TIMEOUT, and nothing written when it ends later", async () => {

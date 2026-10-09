@@ -10,10 +10,12 @@
  *   - a workspace package that holds a client (db, collectors, integrations,
  *     llm);
  *   - a network global (fetch, XMLHttpRequest, WebSocket, EventSource);
- *   - an import it cannot follow (a dynamic import, require or import =).
+ *   - a module load it cannot follow: a dynamic import, require, import =,
+ *     process.getBuiltinModule, process.binding, dlopen, eval or new Function.
  * The database reaches the job as an argument, and the registry as plain data;
  * the queue that delivers the job (jobs/queues.ts) is not the job. A self-test
- * proves the walk refuses a client, and a module off the allowlist.
+ * proves the walk refuses a client, a module off the allowlist, and each load
+ * it cannot follow.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
@@ -38,6 +40,16 @@ const CLIENT_PACKAGES = new Set([
   "@repo/llm",
 ]);
 const NETWORK_GLOBALS = new Set(["fetch", "XMLHttpRequest", "WebSocket", "EventSource"]);
+/** Names that load a module, or run code, without an import the walk can follow. */
+const LOADERS = new Set([
+  "require",
+  "getBuiltinModule",
+  "binding",
+  "_linkedBinding",
+  "dlopen",
+  "eval",
+  "Function",
+]);
 
 interface Reach {
   /** Each module reached, by repo-relative path or package name. */
@@ -55,13 +67,12 @@ function workspaceEntry(specifier: string): string | null {
 }
 
 /** The value imports of one file: an `import type` or `export type` loads nothing. */
-function importsOf(file: string, findings: string[]): string[] {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(file, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+function importsOf(
+  file: string,
+  findings: string[],
+  content: string = readFileSync(file, "utf8"),
+): string[] {
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
   const specifiers: string[] = [];
   const visit = (node: ts.Node): void => {
     if (
@@ -84,8 +95,9 @@ function importsOf(file: string, findings: string[]): string[] {
       findings.push(`${show(file)}: import = require(), which cannot be followed`);
     } else if (ts.isIdentifier(node) && NETWORK_GLOBALS.has(node.text)) {
       findings.push(`${show(file)}: names ${node.text}`);
-    } else if (ts.isIdentifier(node) && node.text === "require") {
-      findings.push(`${show(file)}: names require`);
+    } else if (ts.isIdentifier(node) && LOADERS.has(node.text)) {
+      // A loader named anywhere, as a call, a property or a value passed on.
+      findings.push(`${show(file)}: names ${node.text}, a load it cannot follow`);
     }
     ts.forEachChild(node, visit);
   };
@@ -155,6 +167,22 @@ describe("the case analysis job's module graph (RELEASE-BLOCKING)", () => {
     const graph = reach(join(ENGINE_SRC, "jobs", "case-analysis.ts"));
     const outside = graph.modules.filter((name) => !name.startsWith("packages/"));
     expect(outside.every((name) => ALLOWED_OUTSIDE_REPO.has(name))).toBe(true);
+  });
+
+  it("refuses every module load it cannot follow (self-test)", () => {
+    const loads = [
+      `const https = process.getBuiltinModule("node:https");`,
+      `const net = process.binding("tcp_wrap");`,
+      `const native = process.dlopen(module, "[addon]");`,
+      `const run = eval("[code]");`,
+      `const make = new Function("[code]");`,
+      `const fs = require("node:fs");`,
+    ];
+    for (const line of loads) {
+      const findings: string[] = [];
+      importsOf(join(ENGINE_SRC, "[synthetic].ts"), findings, line);
+      expect(findings, line).toEqual([expect.stringContaining("a load it cannot follow")]);
+    }
   });
 
   it("refuses a client, and any module off the allowlist (self-test)", () => {

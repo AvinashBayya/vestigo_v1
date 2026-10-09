@@ -88,6 +88,30 @@ export class CaseScopeRepository extends TenantRepository {
     });
   }
 
+  /**
+   * How many records the case's analysis reads: its evidence, claims, entities
+   * and relationships, and every job of its runs, exactly as `records` returns
+   * them, counted in one statement without reading any of them. The size bound
+   * is checked with this before anything is loaded (R1-b review).
+   */
+  async count(caseId: string): Promise<number> {
+    const tenantId = this.tenantId;
+    const { claimIds, evidenceIds, relationshipIds, entityIds, runIds } = this.#queries(caseId);
+    return this.run(async (tx) => {
+      const result = await tx.execute<{ total: string }>(sql`
+        select (
+          (select count(*) from (${evidenceIds}) as e(id))
+          + (select count(*) from (${claimIds}) as c(id))
+          + (select count(*) from (${entityIds}) as n(id))
+          + (select count(*) from (${relationshipIds}) as r(id))
+          + (select count(*) from ${jobs} j where j.tenant_id = ${tenantId} and j.run_id in (${runIds}))
+        )::text as total`);
+      const [row] = result.rows;
+      if (row === undefined) throw new RangeError("a count returned no row");
+      return Number(row.total);
+    });
+  }
+
   async records(caseId: string): Promise<CaseScopeRecords> {
     const tenantId = this.tenantId;
     const { claimIds, evidenceIds, relationshipIds, entityIds, runIds } = this.#queries(caseId);

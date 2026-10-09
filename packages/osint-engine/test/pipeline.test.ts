@@ -1032,6 +1032,19 @@ describe("a case analysis whose last attempt cannot be failed is still dead-lett
       // The cleanup could not record the failure: the attempt is still pending.
       expect((await standingOf(fixture, analysisId))?.status).toBe("PENDING");
 
+      // Requested again while the outage lasts: delivered again, it fails again,
+      // and that failure has its own dead-letter record.
+      await engine.analyses.enqueueAnalysis(fixture.tenantId, analysisId, 1);
+      await waitFor(
+        "a second dead-letter record",
+        async () =>
+          (await letters.getJobs(["waiting", "wait"]))
+            .map((job) => DEAD_LETTER_MESSAGE.parse(job.data))
+            .filter((row) => row.caseAnalysisId === analysisId),
+        (rows) => rows.length === 2,
+      );
+      expect((await standingOf(fixture, analysisId))?.status).toBe("PENDING");
+
       // The database is back. Requesting the analysis again enqueues the same
       // attempt: its failed job is delivered again, and it completes.
       outage.on = false;

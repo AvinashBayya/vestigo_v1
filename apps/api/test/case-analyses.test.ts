@@ -30,7 +30,6 @@ import {
   ExplorationRepository,
   hashContent,
   UniqueConflictError,
-  type CaseScopeRecords,
   type PersonProbe,
 } from "@repo/db";
 import {
@@ -42,6 +41,7 @@ import {
 } from "@repo/osint-engine";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
+  asOwner,
   createTestApi,
   provisionTestTenant,
   readyBrowser,
@@ -571,38 +571,37 @@ describe("a case id is the case's, however it is spelled (RELEASE-BLOCKING)", ()
 });
 
 describe("requests refused, or not taken by the queue (RELEASE-BLOCKING)", () => {
-  it("refuses a case past the size bound with 409 CASE_TOO_LARGE, recording nothing", async () => {
+  it("refuses a case past the size bound with 409 CASE_TOO_LARGE on every route, before reading it", async () => {
     const tenant = await newTenant("analyses-too-large");
     const seeded = await seedRun(tenant, "NONE");
     const { caseId } = await caseOf(tenant, [seeded.techEntityId]);
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- called below with each instance as `this`
-    const original = CaseScopeRepository.prototype.records;
-    const spy = vi
-      .spyOn(CaseScopeRepository.prototype, "records")
-      .mockImplementation(async function (
-        this: CaseScopeRepository,
-        id,
-      ): Promise<CaseScopeRecords> {
-        const records = await original.call(this, id);
-        const [job] = records.jobs;
-        if (job === undefined) return records;
-        // One record past the bound, without writing tens of thousands of rows.
-        return {
-          ...records,
-          jobs: [...records.jobs, ...Array.from({ length: DEFAULT_MAX_CASE_RECORDS }, () => job)],
-        };
-      });
+    // An analysis from when the case was within the bound.
+    const analysisId = (await post(tenant, caseId)).json<Read>().analysis?.id ?? "";
+    // The case now counts one record past the bound, without writing tens of
+    // thousands of rows; anything that loads it is watched.
+    const counts = vi
+      .spyOn(CaseScopeRepository.prototype, "count")
+      .mockResolvedValue(DEFAULT_MAX_CASE_RECORDS + 1);
+    const loads = vi.spyOn(CaseScopeRepository.prototype, "records");
     try {
-      const response = await post(tenant, caseId);
-      expect(response.status).toBe(409);
-      expect(response.json()).toMatchObject({ code: "CASE_TOO_LARGE" });
+      for (const response of [
+        await post(tenant, caseId),
+        await latest(tenant, caseId),
+        await one(tenant, analysisId),
+      ]) {
+        expect(response.status).toBe(409);
+        expect(response.json()).toMatchObject({ code: "CASE_TOO_LARGE" });
+      }
+      // Counted in the database: the case was never loaded.
+      expect(loads).not.toHaveBeenCalled();
     } finally {
-      spy.mockRestore();
+      counts.mockRestore();
+      loads.mockRestore();
     }
     const analyses = await api.db.withTenant(tenant.tenantId, ({ repos }) =>
       repos.caseAnalyses.listForCase(caseId, { limit: 10 }),
     );
-    expect(analyses).toEqual([]);
+    expect(analyses.map((a) => a.id)).toEqual([analysisId]);
   });
 
   it("answers 409 CASE_ANALYSIS_REQUEST_CONFLICT when another request recorded the retry first", async () => {
@@ -804,6 +803,86 @@ describe("the person gate over a case and its runs, on every route (RELEASE-BLOC
     ] as const) {
       expectRefusedWhole(await one(tenant, id), [id]);
       expectRefusedWhole(await latest(tenant, ofCase), [id]);
+    }
+  });
+
+  it("refuses an analysis by a run it read whose person collector found nothing, after the run left the case (D-19)", async () => {
+    const tenant = await newTenant("analyses-gate-basis-run");
+    // The only person record is the run's PERSON job, which found nothing.
+    const seeded = await seedRun(tenant, "NOT_FOUND");
+    const { caseId, pins } = await caseOf(tenant, [seeded.techEntityId]);
+    await setEntitlement(tenant.tenantId, ENTITLED);
+    const analysisId = (await post(tenant, caseId)).json<Read>().analysis?.id ?? "";
+    await processor().process(tenant.tenantId, analysisId, 1);
+    const pin = pins[0];
+    if (pin === undefined) return expect.fail("[test] the pin");
+    // The case is now empty: as it is now, it rests on nothing.
+    await api.db.withTenant(tenant.tenantId, ({ repos }) => repos.casePins.unpin(pin));
+    await setEntitlement(tenant.tenantId, LOCKED);
+    expectRefusedWhole(await one(tenant, analysisId), [analysisId]);
+    expectRefusedWhole(await latest(tenant, caseId), [analysisId]);
+  });
+
+  it("refuses an analysis by person evidence it read that has no collection job, after it left the case", async () => {
+    const tenant = await newTenant("analyses-gate-basis-evidence");
+    // Person evidence with no recorded job: no run carries it, only the evidence.
+    const entityId = await api.db.withTenant(tenant.tenantId, async ({ repos }) => {
+      const hash = hashContent(new TextEncoder().encode("[payload jobless person]"));
+      const evidence = await repos.evidence.record({
+        collectorId: PERSON,
+        collectorVersion: "1.0.0",
+        jobId: null,
+        sourceUrl: null,
+        contentHash: hash,
+        payloadRef: contentRef(tenant.tenantId, hash),
+        observedAt: null,
+        collectedAt: AT,
+        claimStrength: "REPORTED",
+      });
+      const entity = await repos.entities.create({ kind: "PERSON", displayName: "[Person J]" });
+      await repos.claims.create({
+        evidenceId: evidence.id,
+        subject: { entityId: entity.id },
+        attribute: "note",
+        value: "[person note]",
+        strength: "REPORTED",
+      });
+      return entity.id;
+    });
+    const { caseId, pins } = await caseOf(tenant, [entityId]);
+    await setEntitlement(tenant.tenantId, ENTITLED);
+    const analysisId = (await post(tenant, caseId)).json<Read>().analysis?.id ?? "";
+    await processor().process(tenant.tenantId, analysisId, 1);
+    expect((await one(tenant, analysisId)).json<Read>()).toMatchObject({ state: "COMPLETE" });
+    const pin = pins[0];
+    if (pin === undefined) return expect.fail("[test] the pin");
+    await api.db.withTenant(tenant.tenantId, ({ repos }) => repos.casePins.unpin(pin));
+    await setEntitlement(tenant.tenantId, LOCKED);
+    expectRefusedWhole(await one(tenant, analysisId), [analysisId]);
+    expectRefusedWhole(await latest(tenant, caseId), [analysisId]);
+  });
+
+  it("never answers an analysis with no record of what it rests on", async () => {
+    const tenant = await newTenant("analyses-gate-no-basis");
+    const { caseId } = await caseOf(tenant, []);
+    // A row as written before migration 0023: no basis.
+    const analysisId = randomUUID();
+    await asOwner(
+      tenant.tenantId,
+      `insert into public.case_analyses (tenant_id, id, case_id, input_hash, engine_version, requested_at)
+       values ($1, $2, $3, $4, 3, now())`,
+      [tenant.tenantId, analysisId, caseId, `sha256:${"a".repeat(64)}`],
+    );
+    await asOwner(
+      tenant.tenantId,
+      `insert into public.case_analysis_events (tenant_id, analysis_id, attempt, status, occurred_at)
+       values ($1, $2, 1, 'PENDING', now())`,
+      [tenant.tenantId, analysisId],
+    );
+    for (const response of [await one(tenant, analysisId), await latest(tenant, caseId)]) {
+      expect(response.status).toBe(500);
+      expect(response.body).not.toContain(analysisId);
+      expect(response.body).not.toContain("PENDING");
     }
   });
 

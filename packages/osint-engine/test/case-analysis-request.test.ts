@@ -6,7 +6,13 @@
  * enqueueing an attempt never waits past its bound on a queue it cannot reach.
  */
 import { ENGINE_VERSION } from "@repo/case-engine";
-import { CaseAnalysisEventsRepository, createDatabase, type Database } from "@repo/db";
+import {
+  CaseAnalysisEventsRepository,
+  CaseScopeRepository,
+  createDatabase,
+  type Database,
+} from "@repo/db";
+import { Queue, type Job } from "bullmq";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { parseTenantId } from "@repo/core";
 import { randomUUID } from "node:crypto";
@@ -58,6 +64,33 @@ describe("enqueueing an attempt (RELEASE-BLOCKING)", () => {
   });
 });
 
+describe("resuming an attempt whose job is kept as failed (RELEASE-BLOCKING)", () => {
+  it("answers as enqueued when another request delivered it first and a worker holds it", async () => {
+    const queue = new CaseAnalysisQueue(
+      { url: TEST_ENGINE.redisUrl, prefix: `resume-${randomUUID().slice(0, 8)}` },
+      { maxAttempts: 1, baseDelayMs: 10, maxDelayMs: 10 },
+    );
+    // The kept job reads as failed, then, once another request has removed it,
+    // added it again and a worker has locked it, refuses to be removed.
+    const kept = {
+      getState: vi.fn().mockResolvedValueOnce("failed").mockResolvedValueOnce("active"),
+      remove: vi.fn().mockRejectedValue(new Error("[locked by another worker]")),
+    };
+    const found = vi.spyOn(Queue.prototype, "getJob").mockResolvedValue(kept as unknown as Job);
+    const added = vi.spyOn(Queue.prototype, "add");
+    try {
+      await queue.enqueueAnalysis(parseTenantId(randomUUID()), randomUUID(), 1);
+      expect(kept.remove).toHaveBeenCalledTimes(1);
+      // Already on its way: nothing is added twice, and no error is raised.
+      expect(added).not.toHaveBeenCalled();
+    } finally {
+      found.mockRestore();
+      added.mockRestore();
+      await queue.close();
+    }
+  });
+});
+
 describe("requesting a case analysis (RELEASE-BLOCKING)", () => {
   it("is one analysis per input: CREATED once, then EXISTING", async () => {
     const fixture = await createCaseFixture(db, "request-once");
@@ -78,8 +111,9 @@ describe("requesting a case analysis (RELEASE-BLOCKING)", () => {
     expect(second.record.analysis.id).toBe(first.record.analysis.id);
   });
 
-  it("refuses a case past the size bound, recording nothing", async () => {
+  it("refuses a case past the size bound before reading it, recording nothing", async () => {
     const fixture = await createCaseFixture(db, "request-too-large");
+    const loads = vi.spyOn(CaseScopeRepository.prototype, "records");
     const refused = await db
       .withTenant(fixture.tenantId, (context) =>
         requestCaseAnalysis(context, {
@@ -90,8 +124,13 @@ describe("requesting a case analysis (RELEASE-BLOCKING)", () => {
           maxRecords: 1,
         }),
       )
-      .catch((error: unknown) => error);
+      .catch((error: unknown) => error)
+      .finally(() => {
+        loads.mockRestore();
+      });
     expect(refused).toBeInstanceOf(CaseTooLargeError);
+    // Counted in the database: the case was never loaded.
+    expect(loads).not.toHaveBeenCalled();
     const analyses = await db.withTenant(fixture.tenantId, ({ repos }) =>
       repos.caseAnalyses.listForCase(fixture.caseId, { limit: 10 }),
     );

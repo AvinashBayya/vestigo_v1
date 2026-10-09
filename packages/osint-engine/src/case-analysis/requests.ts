@@ -122,16 +122,19 @@ export class CaseAnalysisUnrecordedError extends AppError {
   }
 }
 
-/** The evidence, claims, entities, relationships and jobs one analysis reads. */
-export function recordCount(read: CaseAnalysisInput): number {
-  const { input } = read;
-  return (
-    input.evidence.length +
-    input.claims.length +
-    input.entities.length +
-    input.relationships.length +
-    input.jobs.length
-  );
+/**
+ * Refuses a case past the size bound, counted in the database before anything
+ * is read: the evidence, claims, entities, relationships and jobs an analysis
+ * of it would read. Neither a request, a read nor the job loads a case it
+ * would refuse.
+ */
+export async function requireCaseWithinBound(
+  context: Pick<TenantContext, "reads">,
+  caseId: string,
+  maxRecords: number = DEFAULT_MAX_CASE_RECORDS,
+): Promise<void> {
+  const records = await context.reads.caseScope.count(caseId);
+  if (records > maxRecords) throw new CaseTooLargeError(records, maxRecords);
 }
 
 /**
@@ -232,17 +235,23 @@ export function readView(
   return { state: record.status, reason, caseId, currentInputHash, analysis: record };
 }
 
-/** The case's input now, its hash, and what it rests on (its basis). */
+/**
+ * The case's input now, its hash, and what it rests on (its basis). A case past
+ * the size bound is refused (CASE_TOO_LARGE) before anything is read: without
+ * its hash, whether an analysis is still current cannot be said.
+ */
 export async function currentInput(
   context: Context,
   caseId: string,
   collectors: CaseAnalysisCollectors,
+  maxRecords: number = DEFAULT_MAX_CASE_RECORDS,
 ): Promise<{
   readonly read: CaseAnalysisInput;
   readonly inputHash: string;
   readonly runIds: string[];
   readonly basis: { readonly evidenceIds: string[]; readonly runIds: string[] };
 }> {
+  await requireCaseWithinBound(context, caseId, maxRecords);
   const read = await readCaseAnalysisInput(context.reads, caseId, collectors);
   const runIds = read.input.runs.map((run) => run.id).sort(byCodeUnit);
   return {
@@ -322,10 +331,12 @@ export async function requestCaseAnalysis(
     readonly maxRecords?: number;
   },
 ): Promise<CaseAnalysisRequest> {
-  const { read, inputHash, basis } = await currentInput(context, input.caseId, input.collectors);
-  const maxRecords = input.maxRecords ?? DEFAULT_MAX_CASE_RECORDS;
-  const records = recordCount(read);
-  if (records > maxRecords) throw new CaseTooLargeError(records, maxRecords);
+  const { inputHash, basis } = await currentInput(
+    context,
+    input.caseId,
+    input.collectors,
+    input.maxRecords,
+  );
 
   const { repos } = context;
   const { analysis, created } = await repos.caseAnalyses.findOrCreate({
