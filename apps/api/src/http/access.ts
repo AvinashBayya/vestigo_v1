@@ -1,5 +1,5 @@
 import { decidePermissionModuleAccess, isPermission, type Permission } from "@repo/access";
-import { AppError, NotImplementedError, type TenantId } from "@repo/core";
+import { AppError, NotImplementedError, type LockReason, type TenantId } from "@repo/core";
 import type { Tenant, TenantContext } from "@repo/db";
 import type {
   FastifyInstance,
@@ -109,8 +109,7 @@ export function afterCommit(request: FastifyRequest, work: () => Promise<unknown
 
 /** Why a principal may not exercise a permission in its tenant right now. */
 export interface AccessDenial {
-  readonly code:
-    "MEMBER_INACTIVE" | "PERMISSION_DENIED" | "MODULE_NOT_IN_PLAN" | "VETTING_NOT_APPROVED";
+  readonly code: "MEMBER_INACTIVE" | "PERMISSION_DENIED" | LockReason;
   readonly message: string;
 }
 

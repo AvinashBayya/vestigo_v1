@@ -25,7 +25,12 @@
  * Under a person lock the whole breakdown is refused by the read that serves
  * it (CLAUDE.md §9): nothing here hides a section or lowers a total.
  */
-import { CLAIM_STRENGTHS, COLLECTOR_DISCIPLINES, type CollectorDiscipline } from "@repo/core";
+import {
+  CLAIM_STRENGTHS,
+  COLLECTOR_DISCIPLINES,
+  LOCK_REASONS,
+  type CollectorDiscipline,
+} from "@repo/core";
 import { ENGINE_VERSION } from "../version.ts";
 import { type CaseInput } from "./case-input.ts";
 import {
@@ -102,12 +107,11 @@ export const CASE_BREAKDOWN_CAVEATS = [
 export type CaseBreakdownCaveat = (typeof CASE_BREAKDOWN_CAVEATS)[number];
 
 /**
- * The recorded reasons that mean the tenant's plan or vetting does not allow
- * the collector's module: the reasons @repo/access's discipline decision gives,
- * as a run's plan recorded them for an exclusion, or a job for a refusal at
- * dispatch. A copy of that vocabulary: core does not hold it (raised in R1-a).
+ * Whether a recorded reason says the tenant's plan or vetting does not allow
+ * the collector's module: core's LOCK_REASONS, as a run's plan recorded them for
+ * an exclusion, or a job for a refusal at dispatch.
  */
-export const LOCK_REASONS: readonly string[] = ["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"];
+const isLockReason = (code: string): boolean => (LOCK_REASONS as readonly string[]).includes(code);
 
 export interface CollectorRef {
   readonly collectorId: string;
@@ -261,7 +265,7 @@ function section(
   const isLock = (run: CaseCollectorRun): boolean =>
     (run.state === "EXCLUDED" || run.state === "REFUSED") &&
     run.reasonCode !== null &&
-    LOCK_REASONS.includes(run.reasonCode);
+    isLockReason(run.reasonCode);
 
   return {
     discipline,

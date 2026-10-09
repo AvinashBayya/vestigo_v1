@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { InvalidTenantIdError, parseTenantId } from "./tenant.ts";
-import { CLAIM_STRENGTHS } from "./vocabulary.ts";
+import { CLAIM_STRENGTHS, LOCK_REASONS } from "./vocabulary.ts";
 
 describe("parseTenantId", () => {
   it("accepts a UUID and normalises it to lower case", () => {
@@ -15,6 +15,12 @@ describe("parseTenantId", () => {
       expect(() => parseTenantId(value)).toThrow(InvalidTenantIdError);
     },
   );
+});
+
+describe("LOCK_REASONS", () => {
+  it("is exactly the two reasons a module is locked: the plan, and vetting", () => {
+    expect(LOCK_REASONS).toEqual(["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"]);
+  });
 });
 
 describe("CLAIM_STRENGTHS", () => {

@@ -32,6 +32,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "InvalidTenantIdError",
     "CLAIM_STRENGTHS",
     "ClaimStrength",
+    "LOCK_REASONS",
+    "LockReason",
     "ENTITY_KINDS",
     "NAME_ONLY_AUTOMERGE_FORBIDDEN",
     "detectTargetType",

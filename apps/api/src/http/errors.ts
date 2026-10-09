@@ -1,6 +1,6 @@
 import { STATUS_CODES } from "node:http";
 import { PLANS, VETTING_STATUSES } from "@repo/access";
-import { AppError, NotImplementedError } from "@repo/core";
+import { AppError, LOCK_REASONS, NotImplementedError } from "@repo/core";
 import { ReferenceNotFoundError, TenantContextError, UniqueConflictError } from "@repo/db";
 import type { FastifyError, FastifyInstance } from "fastify";
 import { hasZodFastifySchemaValidationErrors } from "fastify-type-provider-zod";
@@ -42,7 +42,7 @@ export const LockedSchema = z
     module: z.literal("PERSON_INVESTIGATION"),
     moduleSummary: z.string().describe("What the module is, for the Locked state."),
     withheld: z.string().describe("What this request would have returned. None of it was."),
-    reason: z.enum(["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"]),
+    reason: z.enum(LOCK_REASONS),
     plan: z.enum(PLANS),
     vettingStatus: z.enum(VETTING_STATUSES),
     nextStep: z.string(),

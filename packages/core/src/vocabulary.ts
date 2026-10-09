@@ -44,6 +44,15 @@ export const MERGE_SIGNALS = [
 ] as const;
 export type MergeSignal = (typeof MERGE_SIGNALS)[number];
 
+/**
+ * Why a module is locked for a tenant: its plan does not include the module,
+ * or its vetting is not approved. The same codes reach a Locked refusal, a run
+ * plan's exclusion and a job's refusal at dispatch, so every layer reads one
+ * list. Additive only.
+ */
+export const LOCK_REASONS = ["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"] as const;
+export type LockReason = (typeof LOCK_REASONS)[number];
+
 /** Who made a decision: a person, or an automated rule. */
 export const DECISION_ACTOR_KINDS = ["USER", "RULE"] as const;
 export type DecisionActorKind = (typeof DECISION_ACTOR_KINDS)[number];

@@ -1,4 +1,4 @@
-import type { CollectorDiscipline } from "@repo/core";
+import type { CollectorDiscipline, LockReason } from "@repo/core";
 import { PERMISSION_MODULE, type Module, type Permission } from "./permissions.ts";
 
 /**
@@ -33,8 +33,7 @@ export interface TenantEntitlement {
 }
 
 export type ModuleDecision =
-  | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason: "MODULE_NOT_IN_PLAN" | "VETTING_NOT_APPROVED" };
+  { readonly allowed: true } | { readonly allowed: false; readonly reason: LockReason };
 
 /**
  * Whether a tenant may use a module. Person investigation needs BOTH a plan

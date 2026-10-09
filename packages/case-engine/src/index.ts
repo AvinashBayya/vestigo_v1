@@ -66,7 +66,6 @@ export {
   caseBreakdown,
   DISCIPLINE_METRICS,
   DISCIPLINE_STATUSES,
-  LOCK_REASONS,
   METRIC_NOT_BUILT,
   type CaseBreakdown,
   type CaseBreakdownCaveat,

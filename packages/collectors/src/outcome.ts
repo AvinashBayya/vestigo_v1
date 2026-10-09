@@ -1,3 +1,4 @@
+import type { LockReason } from "@repo/core";
 import type { EvidenceItem } from "./contract.ts";
 import type { Captured } from "./fetcher/capture.ts";
 
@@ -7,8 +8,7 @@ export type RefusalReason =
   | "UNVERIFIED_SOURCE_NOT_ALLOWED"
   | "NOT_IMPLEMENTED"
   | "TARGET_TYPE_NOT_ACCEPTED"
-  | "MODULE_NOT_IN_PLAN"
-  | "VETTING_NOT_APPROVED"
+  | LockReason
   | "SCOPE_AUTHORISATION_REQUIRED";
 
 /** A machine-readable code and a message with no target value, credential or URL path. */
