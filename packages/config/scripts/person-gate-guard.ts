@@ -162,6 +162,13 @@ export const ROUTE_GATING: Readonly<Record<string, Readonly<Record<string, Route
     "GET /api/v1/evidence/:id": "shared-gate",
     "GET /api/v1/evidence/:id/payload": "shared-gate",
   },
+  // R1-b: a case's analysis rests on the case as it is now and on every run its
+  // evidence came from (D-19); a stored one also on the records it read.
+  "apps/api/src/routes/case-analyses.ts": {
+    "POST /api/v1/cases/:id/analyses": "shared-gate",
+    "GET /api/v1/cases/:id/analyses": "shared-gate",
+    "GET /api/v1/case-analyses/:id": "shared-gate",
+  },
   "apps/api/src/routes/reports.ts": {
     "POST /api/v1/runs/:id/reports": "shared-gate",
     "GET /api/v1/runs/:id/reports": "shared-gate",

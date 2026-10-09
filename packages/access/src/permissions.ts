@@ -42,6 +42,8 @@ export const PERMISSIONS = [
   "member:delete",
   "invitation:create",
   "invitation:cancel",
+  // R1-b: requesting a case's analysis (reading one is case:read).
+  "case:analyse",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -88,6 +90,7 @@ export const PERMISSION_MODULE: Readonly<Record<Permission, Module | null>> = {
   "member:delete": null,
   "invitation:create": null,
   "invitation:cancel": null,
+  "case:analyse": "TECHINT",
 };
 
 /** Role names, as stored on a membership. */
@@ -109,6 +112,7 @@ const ANALYST: readonly Permission[] = [
   ...READ_ONLY,
   "investigation:create",
   "case:write",
+  "case:analyse",
   "person:search",
   "run:start",
   "job:replay",

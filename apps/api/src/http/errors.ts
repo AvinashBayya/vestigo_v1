@@ -188,6 +188,10 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   // R1-b: a snapshot request still conflicted with concurrent commits after its
   // second run (D-32). Nothing was written; the request can be sent again.
   SNAPSHOT_CONFLICT: 409,
+  // R1-b: case analyses. Past the size one analysis reads; a concurrent request
+  // recorded the same attempt first (nothing written, send it again).
+  CASE_TOO_LARGE: 409,
+  CASE_ANALYSIS_REQUEST_CONFLICT: 409,
 };
 
 export function registerErrorHandling(app: FastifyInstance): void {

@@ -39,11 +39,35 @@ export {
 export {
   CaseAnalysisNotFoundError,
   CaseAnalysisProcessor,
-  DEFAULT_MAX_CASE_RECORDS,
   type CaseAnalysisDisposition,
-  type CaseAnalysisDocument,
   type CaseAnalysisProcessorOptions,
 } from "./jobs/case-analysis.ts";
+export {
+  CASE_ANALYSIS_FORMAT_VERSION,
+  CaseAnalysisDocumentSchema,
+  CaseWordingSchema,
+  type CaseAnalysisDocument,
+} from "./case-analysis/document.ts";
+export {
+  analysisProbe,
+  analysisRecord,
+  CASE_ANALYSIS_READ_STATES,
+  CASE_ANALYSIS_STATE_REASONS,
+  CaseAnalysisRequestConflictError,
+  CaseAnalysisUnrecordedError,
+  caseProbe,
+  CaseTooLargeError,
+  currentInput,
+  DEFAULT_MAX_CASE_RECORDS,
+  latestAnalysis,
+  readView,
+  recordCount,
+  requestCaseAnalysis,
+  type CaseAnalysisReadState,
+  type CaseAnalysisReadView,
+  type CaseAnalysisRecord,
+  type CaseAnalysisRequest,
+} from "./case-analysis/requests.ts";
 export {
   CASE_ANALYSES_QUEUE,
   CaseAnalysisQueue,

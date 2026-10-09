@@ -21,6 +21,7 @@ import { contentRef, createDatabase, hashContent, type Database } from "@repo/db
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  CaseAnalysisDocumentSchema,
   CaseAnalysisNotFoundError,
   CaseAnalysisProcessor,
   caseInputHash,
@@ -172,7 +173,10 @@ describe("one attempt at a case analysis (RELEASE-BLOCKING)", () => {
       coverage: { caseId: fixture.caseId },
       collectors: { caseId: fixture.caseId },
       breakdown: { caseId: fixture.caseId },
+      // What it read, so a later read can probe it (CLAUDE.md §9).
+      basis: { evidenceIds: [fixture.evidenceId], runIds: [fixture.runId] },
     });
+    expect(CaseAnalysisDocumentSchema.safeParse(complete?.document).success).toBe(true);
   });
 
   it("writes nothing twice when the same attempt is delivered again, or twice at once", async () => {

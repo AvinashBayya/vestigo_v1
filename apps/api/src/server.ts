@@ -16,8 +16,14 @@ import {
   MasterKey,
   SlidingLogRateLimiter,
 } from "@repo/integrations";
-import { CollectorRuntime, createPlatformRegistry } from "@repo/collectors";
 import {
+  CollectorRuntime,
+  createPlatformRegistry,
+  HELD_PLATFORM_COLLECTORS,
+} from "@repo/collectors";
+import {
+  CaseAnalysisQueue,
+  caseAnalysisCollectors,
   InvestigationQueue,
   JobReplayer,
   redisUpstreamRateLimiter,
@@ -86,6 +92,7 @@ const investigations = new InvestigationQueue(queueConnection, retry);
 const replayer = new JobReplayer({ db, registry, connection: queueConnection, retry });
 const reports = new ReportQueue(queueConnection, retry);
 const renders = new ReportRenderQueue(queueConnection, retry);
+const caseAnalyses = new CaseAnalysisQueue(queueConnection, retry);
 // Report PDFs are served from the store the worker renders them into.
 if (env.CONTENT_STORE_DIR === undefined) {
   throw new ConfigError([
@@ -128,6 +135,8 @@ const app = await buildApp({
       renders,
       contentStore,
       synthesisUnavailable: llm.status === "READY" ? null : llm.reason,
+      caseAnalyses,
+      caseAnalysisCollectors: caseAnalysisCollectors(registry, HELD_PLATFORM_COLLECTORS),
     },
   },
 });
@@ -138,7 +147,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     void app
       .close()
       .then(() =>
-        Promise.all([investigations.close(), replayer.close(), reports.close(), renders.close()]),
+        Promise.all([
+          investigations.close(),
+          replayer.close(),
+          reports.close(),
+          renders.close(),
+          caseAnalyses.close(),
+        ]),
       )
       .then(() => Promise.all([db.close(), authStore.close(), redis.quit()]))
       .then(() => process.exit(0));

@@ -15,6 +15,7 @@ import { registerErrorHandling } from "./http/errors.ts";
 import { apiKeyRoutes } from "./routes/api-keys.ts";
 import { auditLogRoutes } from "./routes/audit-log.ts";
 import { authRoutes } from "./routes/auth.ts";
+import { caseAnalysisRoutes } from "./routes/case-analyses.ts";
 import { caseRoutes } from "./routes/cases.ts";
 import { entityRoutes } from "./routes/entities.ts";
 import { collectorRoutes } from "./routes/collectors.ts";
@@ -36,7 +37,7 @@ import { sessionRoutes } from "./routes/session.ts";
 import { accessServicesFor, authOf, requireServices, type Services } from "./services.ts";
 
 /** Version of the public contract described by the OpenAPI document. */
-export const API_CONTRACT_VERSION = "0.3.0";
+export const API_CONTRACT_VERSION = "0.4.0";
 
 /** Inbound requests never wait longer than this; long work belongs in jobs. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -120,6 +121,7 @@ export async function buildApp(options: AppOptions) {
   await app.register(reportRoutes(services));
   await app.register(scopeAuthorisationRoutes);
   await app.register(caseRoutes(services));
+  await app.register(caseAnalysisRoutes(services));
   await app.register(entityRoutes);
   await app.register(evidenceRoutes(services));
   await app.register(exploreRoutes(services));

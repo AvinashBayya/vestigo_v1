@@ -20,6 +20,9 @@
  *   3. outside any transaction: case-engine computes the documents. Input
  *      that contradicts itself is refused whole (CASE_INPUT_INVALID, every
  *      problem named); a case past the size bound is refused (CASE_TOO_LARGE);
+ *      a document that does not match its schema is never recorded
+ *      (CASE_DOCUMENT_INVALID). The document records the evidence and runs
+ *      it read (its basis), so a later read can probe them (CLAUDE.md §9);
  *   4. record: the finishing event, written once; a delivery that loses the
  *      race to another records nothing.
  * Steps 1 to 3 run under the per-job timeout (CASE_ANALYSIS_TIMEOUT). The
@@ -27,35 +30,27 @@
  */
 import { personGate } from "@repo/access";
 import {
+  byCodeUnit,
   caseBreakdown,
   caseCollectors,
   caseCoverage,
   CaseInputError,
   ENGINE_VERSION,
-  type CaseBreakdown,
-  type CaseCollectors,
-  type CaseCoverage,
-  type EmptyCase,
 } from "@repo/case-engine";
 import { AppError, CASE_WORDING, type CaseAnalysisStatus, type TenantId } from "@repo/core";
 import type { CaseAnalysis, Database, TenantContext } from "@repo/db";
 import type { CaseAnalysisCollectors } from "../case-analysis/collectors.ts";
 import {
+  CASE_ANALYSIS_FORMAT_VERSION,
+  CaseAnalysisDocumentSchema,
+  type CaseAnalysisDocument,
+} from "../case-analysis/document.ts";
+import {
   caseInputHash,
   readCaseAnalysisInput,
   type CaseAnalysisInput,
 } from "../case-analysis/input.ts";
-
-/** What a stored case analysis holds: case-engine's three documents for one input. */
-export interface CaseAnalysisDocument {
-  readonly formatVersion: 1;
-  readonly engineVersion: number;
-  readonly caseId: string;
-  readonly inputHash: string;
-  readonly coverage: CaseCoverage | EmptyCase;
-  readonly collectors: CaseCollectors | EmptyCase;
-  readonly breakdown: CaseBreakdown | EmptyCase;
-}
+import { DEFAULT_MAX_CASE_RECORDS, recordCount } from "../case-analysis/requests.ts";
 
 export type CaseAnalysisDisposition =
   | {
@@ -80,9 +75,6 @@ export class CaseAnalysisNotFoundError extends AppError {
     this.name = "CaseAnalysisNotFoundError";
   }
 }
-
-/** The most records one analysis reads by default: a bound on synchronous work. */
-export const DEFAULT_MAX_CASE_RECORDS = 50_000;
 
 export interface CaseAnalysisProcessorOptions {
   readonly db: Database;
@@ -235,34 +227,44 @@ export class CaseAnalysisProcessor {
         "The records behind the case changed after the analysis was requested; request it again for the case as it is now.",
       );
     }
-    const records =
-      read.input.evidence.length +
-      read.input.claims.length +
-      read.input.entities.length +
-      read.input.relationships.length +
-      read.input.jobs.length;
+    const records = recordCount(read);
     if (records > maxRecords) {
       return failed(
         "CASE_TOO_LARGE",
         `The case holds ${String(records)} records; one analysis reads at most ${String(maxRecords)}.`,
       );
     }
+    let document: CaseAnalysisDocument;
     try {
-      return {
-        document: {
-          formatVersion: 1,
-          engineVersion: ENGINE_VERSION,
-          caseId: analysis.caseId,
-          inputHash: analysis.inputHash,
-          coverage: caseCoverage(read.input),
-          collectors: caseCollectors(read.input),
-          breakdown: caseBreakdown(read.input),
+      document = {
+        formatVersion: CASE_ANALYSIS_FORMAT_VERSION,
+        engineVersion: ENGINE_VERSION,
+        caseId: analysis.caseId,
+        inputHash: analysis.inputHash,
+        basis: {
+          evidenceIds: read.input.evidence.map((e) => e.id).sort(byCodeUnit),
+          runIds: read.input.runs.map((r) => r.id).sort(byCodeUnit),
         },
+        coverage: caseCoverage(read.input),
+        collectors: caseCollectors(read.input),
+        breakdown: caseBreakdown(read.input),
       };
     } catch (error) {
       if (!(error instanceof CaseInputError)) throw error;
       return failed(error.code, error.message);
     }
+    // Validated before it is recorded, as every read validates it (CLAUDE.md §7).
+    const checked = CaseAnalysisDocumentSchema.safeParse(document);
+    if (!checked.success) {
+      return failed(
+        "CASE_DOCUMENT_INVALID",
+        `The analysis produced a document that does not match its schema: ${checked.error.issues
+          .slice(0, 5)
+          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+          .join("; ")}`,
+      );
+    }
+    return { document };
   }
 
   async #record(

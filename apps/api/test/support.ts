@@ -20,8 +20,15 @@ import {
   MasterKey,
   SlidingLogRateLimiter,
 } from "@repo/integrations";
-import { CollectorRuntime, createPlatformRegistry, type CollectorRegistry } from "@repo/collectors";
 import {
+  CollectorRuntime,
+  createPlatformRegistry,
+  HELD_PLATFORM_COLLECTORS,
+  type CollectorRegistry,
+} from "@repo/collectors";
+import {
+  CaseAnalysisQueue,
+  caseAnalysisCollectors,
   InvestigationQueue,
   ReportQueue,
   ReportRenderQueue,
@@ -107,6 +114,7 @@ export async function createTestApi(
   const replayer = new JobReplayer({ db, registry, connection: queue, retry: TEST_RETRY });
   const reports = new ReportQueue(queue, TEST_RETRY);
   const renders = new ReportRenderQueue(queue, TEST_RETRY);
+  const caseAnalyses = new CaseAnalysisQueue(queue, TEST_RETRY);
   const contentDir = await mkdtemp(join(tmpdir(), "api-content-"));
   const services: Services = {
     db,
@@ -139,6 +147,8 @@ export async function createTestApi(
       renders,
       contentStore: new FileSystemContentStore(contentDir),
       synthesisUnavailable: options.synthesisUnavailable ?? null,
+      caseAnalyses,
+      caseAnalysisCollectors: caseAnalysisCollectors(registry, HELD_PLATFORM_COLLECTORS),
     },
   };
   const app = await buildApp({ logger: false, services });
@@ -159,6 +169,7 @@ export async function createTestApi(
         replayer.close().catch(quiet),
         reports.close().catch(quiet),
         renders.close().catch(quiet),
+        caseAnalyses.close().catch(quiet),
       ]);
       await rm(contentDir, { recursive: true, force: true });
       await Promise.all([db.close(), authStore.close(), redis.quit().catch(quiet)]);

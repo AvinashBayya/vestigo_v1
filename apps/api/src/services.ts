@@ -3,6 +3,8 @@ import type { CollectorRegistry, CollectorRuntime } from "@repo/collectors";
 import type { CredentialVault } from "@repo/integrations";
 import type { ContentStore } from "@repo/db";
 import type {
+  CaseAnalysisCollectors,
+  CaseAnalysisQueue,
   InvestigationQueue,
   JobReplayer,
   ReportQueue,
@@ -32,6 +34,10 @@ export interface RunServices {
   readonly contentStore: ContentStore;
   /** Why a model-written synthesis cannot be offered, or null when it can. */
   readonly synthesisUnavailable: string | null;
+  /** Enqueues an attempt at a case analysis; the worker makes it. */
+  readonly caseAnalyses: CaseAnalysisQueue;
+  /** The registry and held collectors as a case analysis reads them, for its input hash. */
+  readonly caseAnalysisCollectors: CaseAnalysisCollectors;
 }
 
 /** Everything request handling needs. Constructed once, in server.ts or a test. */

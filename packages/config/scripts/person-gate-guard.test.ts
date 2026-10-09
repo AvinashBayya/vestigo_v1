@@ -207,6 +207,14 @@ describe("every route meets the shared gate or says why not (RELEASE-BLOCKING)",
     }
   });
 
+  it("the case analysis routes are exactly three, each gated (R1-b)", () => {
+    expect(ROUTE_GATING["apps/api/src/routes/case-analyses.ts"]).toEqual({
+      "POST /api/v1/cases/:id/analyses": "shared-gate",
+      "GET /api/v1/cases/:id/analyses": "shared-gate",
+      "GET /api/v1/case-analyses/:id": "shared-gate",
+    });
+  });
+
   it("catches an unclassified route, a missing route and a gated route without the gate", () => {
     const source = [
       'app.get("/api/v1/a", { config: { access: { permission: "p", action: "a.b", snapshot: true } } }, async () => { await requirePersonAccess(c, {}, "x"); });',
