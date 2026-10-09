@@ -438,8 +438,12 @@ Copied verbatim from the R1-0 brief. They bind every later prompt.
 4. observed_at and collected_at stay separate. Null stays null.
 5. People and organisations are never auto-merged by name. Merges are
    reversible records.
-6. Person data goes through requirePersonAccess (shared gate); the gate
-   refuses the whole read, never thins it. person-gate-guard must stay green.
+6. Person data goes through the shared gate: personGate in packages/access.
+   The API reaches it through requirePersonAccess and personLockFor; the case
+   analysis job calls it directly before it reads the case's records, and
+   fails with the gate's code if refused. The gate refuses the whole read,
+   never thins it. person-gate-guard must stay green. (Amended in R1-b under
+   D-28.)
 7. Any LLM call goes through packages/llm: open-weight allowlist, delimited
    collected content, schema-validated output, citation validation, per-tenant
    cache, token metering. No direct provider calls.
@@ -733,6 +737,12 @@ the same way (each relationship listed both ways), add indexes on
 (a forward-only migration), and measure again before R1-e shows the graph more widely.
 *Alternative:* cap the hop limit by tenant size. Cost of the alternative: a deep graph is
 refused to large tenants, and the probe's cost remains.
+
+**D-34. Report generation re-checks the person gate** **[RULED 2026-10-09: report generation
+re-checks the person gate in the job, no later than R1-f.]** (raised by R1-b). The API checks plan
+and vetting when a report is requested. `ReportGenerator` then reads the run, and may send it to
+a model, without checking again. The case analysis job re-checks before it reads the case's
+records (D-28); report generation does not yet. CLAUDE.md §9 states the gap and points here.
 
 **Noted, not a decision.** The brief refers to "the 11 non-negotiable rules" in CLAUDE.md. No
 document numbers eleven rules: CLAUDE.md has sections 1 to 10 plus three unnumbered ones (product
