@@ -95,6 +95,16 @@ export {
   type AssemblyInput,
   type AssemblyLimits,
 } from "./reports/assemble.ts";
+export { coveragePlan } from "./reports/stored-plan.ts";
+export { canonicalJson, CanonicalFormError, sha256Of } from "./case-analysis/canonical.ts";
+export { caseAnalysisCollectors, type CaseAnalysisCollectors } from "./case-analysis/collectors.ts";
+export {
+  caseInputHash,
+  CURRENT_HASH_BASIS,
+  readCaseAnalysisInput,
+  type CaseAnalysisInput,
+  type CaseInputHashBasis,
+} from "./case-analysis/input.ts";
 export {
   SYNTHESIS_NOTICE,
   SYNTHESIS_PROMPT_VERSION,

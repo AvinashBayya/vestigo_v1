@@ -128,6 +128,10 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "synthesise",
     "ReportGenerator",
     "ReportQueue",
+    "canonicalJson",
+    "caseInputHash",
+    "readCaseAnalysisInput",
+    "caseAnalysisCollectors",
   ],
   // Models: provider, routing, cache, metering, untrusted framing, output
   // guards and the citation validator. The only path to a model.
@@ -177,6 +181,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "CaseAnalysisEventsRepository",
     "CaseAnalysisRecordedOnceError",
     "CaseAnalysisOutOfOrderError",
+    "CaseScopeRepository",
   ],
   // Secrets, API key storage and rate limits: the only paths to each.
   "packages/integrations/src/index.ts": [

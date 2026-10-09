@@ -17,6 +17,7 @@ import {
   UsageEventsRepository,
 } from "./operations.ts";
 import { CaseAnalysesRepository, CaseAnalysisEventsRepository } from "./case-analyses.ts";
+import { CaseScopeRepository } from "./case-scope.ts";
 import { ReportPdfsRepository, ReportsRepository } from "./reports.ts";
 import { ApiKeysRepository, TenantsRepository, UsersRepository } from "./tenancy.ts";
 import {
@@ -120,10 +121,15 @@ export function createRepositories(scope: TenantScope): Repositories {
 export interface Reads {
   readonly exploration: ExplorationRepository;
   readonly graph: PostgresGraphStore;
+  readonly caseScope: CaseScopeRepository;
 }
 
 export function createReads(scope: TenantScope): Reads {
-  return { exploration: new ExplorationRepository(scope), graph: new PostgresGraphStore(scope) };
+  return {
+    exploration: new ExplorationRepository(scope),
+    graph: new PostgresGraphStore(scope),
+    caseScope: new CaseScopeRepository(scope),
+  };
 }
 
 export * from "./evidence.ts";
@@ -148,4 +154,5 @@ export * from "./tenancy.ts";
 export * from "./work.ts";
 export * from "./reports.ts";
 export * from "./case-analyses.ts";
+export { CaseScopeRepository, type CaseScopeRecords } from "./case-scope.ts";
 export { TenantRepository, type ListOptions } from "./base.ts";

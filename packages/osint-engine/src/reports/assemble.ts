@@ -19,7 +19,6 @@ import {
   sourceLabelOf,
   type CoverageCollector,
   type CoverageHeldCollector,
-  type CoveragePlan,
 } from "@repo/case-engine";
 import {
   HELD_PLATFORM_COLLECTORS,
@@ -44,8 +43,8 @@ import {
 } from "@repo/core";
 import type { Claim, Entity, Evidence, Job, Repositories } from "@repo/db";
 import { scanText, stringsIn, type UntrustedRecord } from "@repo/llm";
-import { z } from "zod";
 import { readRunProgress } from "../progress.ts";
+import { coveragePlan, StoredPlan } from "./stored-plan.ts";
 
 export class ReportRunNotSettledError extends AppError {
   readonly code = "RUN_NOT_SETTLED";
@@ -92,24 +91,6 @@ export interface AssembledReport {
   readonly refs: ReadonlyMap<string, { readonly number: number; readonly source: string }>;
 }
 
-const StoredPlan = z.looseObject({
-  targets: z.array(
-    z.union([
-      z.object({ type: z.string(), value: z.string() }),
-      z.object({ type: z.string(), invalid: z.string() }),
-    ]),
-  ),
-  excluded: z.array(
-    z.object({
-      collectorId: z.string(),
-      targetType: z.string().nullable(),
-      reason: z.string(),
-      message: z.string(),
-    }),
-  ),
-});
-const StoredPlanError = z.object({ error: z.object({ code: z.string(), message: z.string() }) });
-
 const MAX_IDS_PER_QUERY = 1000;
 /** Sources and claims per source given to a synthesis, so its prompt stays bounded. */
 const MAX_SYNTHESIS_SOURCES = 40;
@@ -149,26 +130,6 @@ function coverageHeld(held: readonly HeldCollector[]): CoverageHeldCollector[] {
     targetTypes: entry.collector.declaration.targetTypes,
     reason: entry.reason,
   }));
-}
-
-/** The run's stored plan, as coverage reads it: the plan, its recorded error, or nothing. */
-function coveragePlan(plan: unknown): CoveragePlan {
-  const failed = StoredPlanError.safeParse(plan);
-  if (failed.success) return { kind: "PLAN_FAILED", message: failed.data.error.message };
-  const parsed = StoredPlan.safeParse(plan);
-  if (!parsed.success) return { kind: "NOT_RECORDED" };
-  return {
-    kind: "PLANNED",
-    targetTypes: parsed.data.targets
-      .filter((t): t is { type: string; value: string } => "value" in t)
-      .map((t) => t.type as TargetType),
-    excluded: parsed.data.excluded.map((excluded) => ({
-      collectorId: excluded.collectorId,
-      targetType: excluded.targetType as TargetType | null,
-      reason: excluded.reason,
-      message: excluded.message,
-    })),
-  };
 }
 
 /** A run's coverage, from its stored plan, its jobs and the held collectors. */
