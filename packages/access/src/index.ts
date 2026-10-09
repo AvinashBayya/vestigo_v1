@@ -28,6 +28,7 @@ export {
   type TenantEntitlement,
   type VettingStatus,
 } from "./entitlements.ts";
+export { personGate, type PersonLock } from "./person-gate.ts";
 export { generateApiKey, hashApiKeySecret, parseApiKey, secretMatches } from "./api-keys/codec.ts";
 export type { GeneratedApiKey, ParsedApiKey } from "./api-keys/codec.ts";
 export { capApiKeyPermissions, grantableApiKeyScope } from "./api-keys/scope.ts";

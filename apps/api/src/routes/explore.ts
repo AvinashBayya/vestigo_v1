@@ -58,7 +58,7 @@ export const exploreRoutes =
     app.get(
       "/api/v1/graph",
       {
-        config: { access: { permission: "evidence:read", action: "graph.read" } },
+        config: { access: { permission: "evidence:read", action: "graph.read", snapshot: true } },
         schema: {
           operationId: "getGraph",
           summary: "Nodes and edges around a case's or run's entities, to a hop limit",
@@ -112,7 +112,9 @@ export const exploreRoutes =
     app.get(
       "/api/v1/timeline",
       {
-        config: { access: { permission: "evidence:read", action: "timeline.read" } },
+        config: {
+          access: { permission: "evidence:read", action: "timeline.read", snapshot: true },
+        },
         schema: {
           operationId: "getTimeline",
           summary: "Events (evidence) of a case or run, newest first by the chosen time",

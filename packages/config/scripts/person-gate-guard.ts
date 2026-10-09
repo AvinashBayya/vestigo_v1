@@ -272,6 +272,11 @@ const ROUTE_START = /\bapp\.(get|post|put|patch|delete)\(\s*"([^"]+)"/g;
 const ANY_REGISTRATION = /\bapp\.(?:get|post|put|patch|delete|head|options|all|route)\s*[<(]/g;
 /** A call of the shared gate whose result is used: awaited, or assigned from an await. */
 const SHARED_GATE_CALL = /\bawait\s+requirePersonAccess\s*\(|=\s*await\s+personLockFor\s*\(/;
+/**
+ * A route's access declaring one snapshot for its transaction (D-32): a gated
+ * read and its probe must see the same data, whatever commits between them.
+ */
+const SNAPSHOT_DECLARED = /\baccess\s*:\s*\{[^{}]*\bsnapshot\s*:\s*true\b[^{}]*\}/;
 
 /** After one of these (or at the start) a slash opens a regular expression, not a division. */
 const REGEX_MAY_FOLLOW = new Set(["(", ",", "=", ":", "[", "!", "&", "|", "?", "{", ";", ""]);
@@ -408,8 +413,14 @@ export function routeGatingProblems(
     const block = blocks.get(route);
     if (block === undefined) problems.push(`${file}: ${route} is classified but not registered`);
     else if (block === null) problems.push(`${file}: ${route} could not be read`);
-    else if (gating === "shared-gate" && !SHARED_GATE_CALL.test(block)) {
-      problems.push(`${file}: ${route} does not call the shared gate`);
+    else if (gating === "shared-gate") {
+      if (!SHARED_GATE_CALL.test(block)) {
+        problems.push(`${file}: ${route} does not call the shared gate`);
+      }
+      // Every gated read runs on one snapshot (D-32), so its probe sees what it read.
+      if (route.startsWith("GET ") && !SNAPSHOT_DECLARED.test(block)) {
+        problems.push(`${file}: ${route} is a gated read without a snapshot (snapshot: true)`);
+      }
     }
   }
   return problems;

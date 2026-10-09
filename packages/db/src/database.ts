@@ -40,13 +40,30 @@ export interface TenantContext {
   readonly reads: Reads;
 }
 
+/** How a tenant transaction reads. */
+export interface TenantTransactionOptions {
+  /**
+   * One snapshot for the whole transaction (REPEATABLE READ): every statement
+   * sees the data as it was at the first, whatever commits meanwhile. For a
+   * gated read and its person probe (owner ruling D-32), so a scope that
+   * shrinks (an unpin) or grows (a fusion) between the read and the probe
+   * cannot make them disagree. A write that conflicts with a concurrent commit
+   * fails with SnapshotConflictError instead of seeing it.
+   */
+  readonly snapshot?: boolean;
+}
+
 export interface Database {
   /**
    * Runs `work` in one transaction with the tenant set for that transaction
    * only (set_config is_local), so the setting cannot leak to the next user of
    * the pooled connection. This is the only way to reach tenant data.
    */
-  withTenant<T>(tenantId: TenantId, work: (context: TenantContext) => Promise<T>): Promise<T>;
+  withTenant<T>(
+    tenantId: TenantId,
+    work: (context: TenantContext) => Promise<T>,
+    options?: TenantTransactionOptions,
+  ): Promise<T>;
   /** Creates a tenant. Its row is written inside that tenant's own context. */
   provisionTenant(input: {
     readonly tenantId?: TenantId;
@@ -69,6 +86,13 @@ export class UnsafeDatabaseRoleError extends AppError {
 }
 
 const DEFAULT_STATEMENT_TIMEOUT_MS = 15_000;
+
+/** The isolation a transaction asks for: READ COMMITTED unless a snapshot is wanted. */
+function transactionConfig(
+  options: TenantTransactionOptions | undefined,
+): { readonly isolationLevel: "repeatable read" } | undefined {
+  return options?.snapshot === true ? { isolationLevel: "repeatable read" } : undefined;
+}
 const DEFAULT_CONNECTION_TIMEOUT_MS = 5_000;
 
 export function createDatabase(options: DatabaseOptions): Database {
@@ -92,7 +116,7 @@ export function createDatabase(options: DatabaseOptions): Database {
     if (row === undefined || row.unsafe) throw new UnsafeDatabaseRoleError(row?.role ?? "unknown");
   };
 
-  const withTenant: Database["withTenant"] = async (tenantId, work) => {
+  const withTenant: Database["withTenant"] = async (tenantId, work, options) => {
     // Re-validated at runtime for callers that bypassed the type system.
     const id = parseTenantId(tenantId);
     roleChecked ??= checkRole().catch((error: unknown) => {
@@ -119,7 +143,7 @@ export function createDatabase(options: DatabaseOptions): Database {
         } finally {
           closeScope(scope);
         }
-      });
+      }, transactionConfig(options));
     } catch (error) {
       // A lost connection also fails the rollback, and that driver error is
       // what leaves the transaction: it is typed here like any other.

@@ -70,6 +70,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "capApiKeyPermissions",
     "ApiKeyScopeError",
     "decideDisciplineAccess",
+    "personGate",
   ],
   // The collector frame: catalogue, registry, runtime and the evidence path's pure half.
   "packages/collectors/src/index.ts": [
@@ -182,6 +183,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "CaseAnalysisRecordedOnceError",
     "CaseAnalysisOutOfOrderError",
     "CaseScopeRepository",
+    "probeParts",
+    "SnapshotConflictError",
   ],
   // Secrets, API key storage and rate limits: the only paths to each.
   "packages/integrations/src/index.ts": [

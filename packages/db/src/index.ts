@@ -2,7 +2,12 @@
 // the scope registry are deliberately not exported: tenant data is reachable
 // only through Database.withTenant() and the repositories it hands out.
 export { createDatabase, UnsafeDatabaseRoleError } from "./database.ts";
-export type { Database, DatabaseOptions, TenantContext } from "./database.ts";
+export type {
+  Database,
+  DatabaseOptions,
+  TenantContext,
+  TenantTransactionOptions,
+} from "./database.ts";
 export { TenantScope } from "./scope.ts";
 export { createAuthStore, UnsafeAuthRoleError } from "./auth-store.ts";
 export type {

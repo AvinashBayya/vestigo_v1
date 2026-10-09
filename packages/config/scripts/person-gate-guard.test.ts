@@ -157,17 +157,24 @@ describe("the repository holds no copy of the person-data gate (RELEASE-BLOCKING
   });
 
   it("the shared gate is where the guard says it is, and decides with @repo/access", () => {
+    // D-28: the one decision is personGate in @repo/access, called by the API's
+    // gate file and by the case analysis job alike.
+    const shared = readFileSync(join(root, "packages/access/src/person-gate.ts"), "utf8");
+    expect(shared).toContain("export async function personGate(");
+    expect(
+      GATE_COPY_CHECKS.find((check) => check.name === "person-access-decision")?.regex.test(shared),
+    ).toBe(true);
     const gate = readFileSync(join(root, "apps/api/src/http/person-gate.ts"), "utf8");
     expect(gate).toContain("export async function requirePersonAccess(");
     expect(gate).toContain("export async function personLockFor(");
-    expect(
-      GATE_COPY_CHECKS.find((check) => check.name === "person-access-decision")?.regex.test(gate),
-    ).toBe(true);
+    expect(gate).toMatch(/import \{[^}]*\bpersonGate\b[^}]*\} from "@repo\/access";/);
+    expect(gate).toMatch(/await personGate\(/);
   });
 
   it("the person-data probe is where the guard says it is", () => {
     const probe = readFileSync(join(root, "packages/db/src/repositories/exploration.ts"), "utf8");
     expect(probe).toContain("async touchesPersonData(");
+    expect(probe).toContain("async restsOnPersonData(");
   });
 });
 
@@ -202,7 +209,7 @@ describe("every route meets the shared gate or says why not (RELEASE-BLOCKING)",
 
   it("catches an unclassified route, a missing route and a gated route without the gate", () => {
     const source = [
-      'app.get("/api/v1/a", {}, async () => { await requirePersonAccess(c, {}, "x"); });',
+      'app.get("/api/v1/a", { config: { access: { permission: "p", action: "a.b", snapshot: true } } }, async () => { await requirePersonAccess(c, {}, "x"); });',
       'app.post("/api/v1/b", {}, async () => ({ leaked: true }));',
       'app.delete("/api/v1/c", {}, async () => null);',
     ].join("\n");
@@ -227,26 +234,62 @@ describe("every route meets the shared gate or says why not (RELEASE-BLOCKING)",
   it("is not satisfied by the gate's name in a comment, in a helper, or by an unused result", () => {
     // REGRESSION (D-10 review): the check matched the gate's name anywhere up to the next route.
     const gated = { "GET /api/v1/a": "shared-gate" } as const;
-    const comment =
-      'app.get("/api/v1/a", {}, async () => {\n  // await requirePersonAccess(c, {}, "x");\n  return 1;\n});';
+    const access = '{ config: { access: { permission: "p", action: "a.b", snapshot: true } } }';
+    const comment = `app.get("/api/v1/a", ${access}, async () => {\n  // await requirePersonAccess(c, {}, "x");\n  return 1;\n});`;
     const helperAfter = [
-      'app.get("/api/v1/a", {}, async () => 1);',
+      `app.get("/api/v1/a", ${access}, async () => 1);`,
       'async function later() { await requirePersonAccess(c, {}, "x"); }',
     ].join("\n");
-    const unused = 'app.get("/api/v1/a", {}, async () => { void personLockFor(t, r, {}, "x"); });';
+    const unused = `app.get("/api/v1/a", ${access}, async () => { void personLockFor(t, r, {}, "x"); });`;
     for (const source of [comment, helperAfter, unused]) {
       expect(routeGatingProblems("f.ts", source, gated)).toEqual([
         "f.ts: GET /api/v1/a does not call the shared gate",
       ]);
     }
-    const lock =
-      'app.get("/api/v1/a", {}, async () => { const l = await personLockFor(t, r, {}, "x"); });';
+    const lock = `app.get("/api/v1/a", ${access}, async () => { const l = await personLockFor(t, r, {}, "x"); });`;
     expect(routeGatingProblems("f.ts", lock, gated)).toEqual([]);
+  });
+
+  it("flags a gated read without a snapshot, and needs none on a gated write (D-32)", () => {
+    const gate = 'async () => { await requirePersonAccess(c, {}, "x"); }';
+    const read = (access: string) =>
+      `app.get("/api/v1/a", { config: { access: ${access} } }, ${gate});`;
+    const gated = { "GET /api/v1/a": "shared-gate" } as const;
+    expect(routeGatingProblems("f.ts", read('{ permission: "p", action: "a.b" }'), gated)).toEqual([
+      "f.ts: GET /api/v1/a is a gated read without a snapshot (snapshot: true)",
+    ]);
+    expect(
+      routeGatingProblems(
+        "f.ts",
+        read('{ permission: "p", action: "a.b", snapshot: false }'),
+        gated,
+      ),
+    ).toEqual(["f.ts: GET /api/v1/a is a gated read without a snapshot (snapshot: true)"]);
+    // A snapshot named outside the access declaration does not count.
+    expect(
+      routeGatingProblems(
+        "f.ts",
+        `app.get("/api/v1/a", { config: { access: { permission: "p", action: "a.b" } }, snapshot: true }, ${gate});`,
+        gated,
+      ),
+    ).toEqual(["f.ts: GET /api/v1/a is a gated read without a snapshot (snapshot: true)"]);
+    expect(
+      routeGatingProblems(
+        "f.ts",
+        read('{ permission: "p", action: "a.b", snapshot: true }'),
+        gated,
+      ),
+    ).toEqual([]);
+    expect(
+      routeGatingProblems("f.ts", `app.post("/api/v1/a", {}, ${gate});`, {
+        "POST /api/v1/a": "shared-gate",
+      }),
+    ).toEqual([]);
   });
 
   it("reads past brackets in strings, templates and regular expressions, and flags a path it cannot read", () => {
     const tricky = [
-      'app.get("/api/v1/a", { schema: z.string().regex(/^[a-z(]{1,2}$/) }, async () => {',
+      'app.get("/api/v1/a", { config: { access: { permission: "p", action: "a.b", snapshot: true } }, schema: z.string().regex(/^[a-z(]{1,2}$/) }, async () => {',
       '  const s = ")"; const t = `}${"("}`;',
       '  await requirePersonAccess(c, {}, "x");',
       "});",

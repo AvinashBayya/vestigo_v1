@@ -76,7 +76,9 @@ export const evidenceRoutes =
     app.get(
       "/api/v1/evidence/:id",
       {
-        config: { access: { permission: "evidence:read", action: "evidence.read" } },
+        config: {
+          access: { permission: "evidence:read", action: "evidence.read", snapshot: true },
+        },
         schema: {
           operationId: "getEvidence",
           summary: "Read one evidence record: where it came from, when, and what rests on it",
@@ -149,7 +151,9 @@ export const evidenceRoutes =
     app.get(
       "/api/v1/evidence/:id/payload",
       {
-        config: { access: { permission: "evidence:read", action: "evidence.payload" } },
+        config: {
+          access: { permission: "evidence:read", action: "evidence.payload", snapshot: true },
+        },
         schema: {
           operationId: "downloadEvidencePayload",
           summary: "Download the raw payload exactly as it was collected",

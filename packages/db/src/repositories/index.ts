@@ -139,6 +139,8 @@ export {
   type EntityDetail,
   type EntityRelationshipView,
   type MergeCandidate,
+  probeParts,
+  PROBE_LIMIT,
   type PersonProbe,
   type ReadScope,
   type RelationshipDetail,

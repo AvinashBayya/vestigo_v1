@@ -350,7 +350,7 @@ export const runRoutes =
     app.get(
       "/api/v1/runs/:id",
       {
-        config: { access: { permission: "run:read", action: "run.read" } },
+        config: { access: { permission: "run:read", action: "run.read", snapshot: true } },
         schema: {
           operationId: "getRun",
           summary: "Read a run: its status, its plan, and every collector job's outcome",
@@ -375,7 +375,7 @@ export const runRoutes =
     app.get(
       "/api/v1/runs/:id/events",
       {
-        config: { access: { permission: STREAM_PERMISSION, action: "run.watch" } },
+        config: { access: { permission: STREAM_PERMISSION, action: "run.watch", snapshot: true } },
         schema: {
           operationId: "watchRun",
           summary: "Stream a run's progress as server-sent events",
@@ -423,26 +423,38 @@ export const runRoutes =
           // plan, vetting and person data in the same transaction as the progress read.
           read: async () => {
             const identity = await identityStanding(principal, all.authStore);
-            return all.db.withTenant(tenantId, async (ctx): Promise<StreamRead> => {
-              const tenant = await ctx.repos.tenants.current();
-              if (tenant === null) {
-                throw forbidden("TENANT_NOT_PROVISIONED", "This tenant has not been provisioned.");
-              }
-              const refused = await recheckAccess({
-                principal,
-                identity,
-                context: ctx,
-                tenant,
-                permission: STREAM_PERMISSION,
-              });
-              if (refused !== null) return { kind: "refused", refusal: refused };
-              // Read first, then probe: a job committed between a probe and a later read would
-              // reach a tenant that is now locked. The probe sees at least what the read saw.
-              const progress = await readRunProgress(ctx.repos, runId);
-              const lock = await personLockFor(tenant, ctx.reads, { runJobs: runId }, RUN_WITHHELD);
-              if (lock !== null) return { kind: "refused", refusal: refusalFromLock(lock) };
-              return { kind: "progress", progress };
-            });
+            return all.db.withTenant(
+              tenantId,
+              async (ctx): Promise<StreamRead> => {
+                const tenant = await ctx.repos.tenants.current();
+                if (tenant === null) {
+                  throw forbidden(
+                    "TENANT_NOT_PROVISIONED",
+                    "This tenant has not been provisioned.",
+                  );
+                }
+                const refused = await recheckAccess({
+                  principal,
+                  identity,
+                  context: ctx,
+                  tenant,
+                  permission: STREAM_PERMISSION,
+                });
+                if (refused !== null) return { kind: "refused", refusal: refused };
+                // Read, then probe, on one snapshot (D-32): the probe sees exactly what the
+                // read saw, whatever job commits between them.
+                const progress = await readRunProgress(ctx.repos, runId);
+                const lock = await personLockFor(
+                  tenant,
+                  ctx.reads,
+                  { runJobs: runId },
+                  RUN_WITHHELD,
+                );
+                if (lock !== null) return { kind: "refused", refusal: refusalFromLock(lock) };
+                return { kind: "progress", progress };
+              },
+              { snapshot: true },
+            );
           },
           log: request.log,
         });

@@ -337,7 +337,7 @@ export const caseRoutes =
     app.get(
       "/api/v1/cases/:id/pins",
       {
-        config: { access: { permission: "case:read", action: "case.list_pins" } },
+        config: { access: { permission: "case:read", action: "case.list_pins", snapshot: true } },
         schema: {
           operationId: "listCasePins",
           summary: "List what is pinned to a case, oldest first",

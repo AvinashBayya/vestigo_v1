@@ -63,10 +63,10 @@ export function accessServicesFor(services: Services | null): AccessServices {
       services === null
         ? Promise.reject(unavailable("authentication"))
         : resolvePrincipal(request, services),
-    withTenant: (tenantId, work) =>
+    withTenant: (tenantId, work, options) =>
       services === null
         ? Promise.reject(unavailable("tenant data"))
-        : services.db.withTenant(tenantId, work),
+        : services.db.withTenant(tenantId, work, options),
   };
 }
 

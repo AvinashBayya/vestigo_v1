@@ -5,8 +5,7 @@
  * count lowered. Walked through the whole lifecycle: no plan, vetting
  * pending, approved, suspended.
  */
-import { contentRef, ExplorationRepository, hashContent } from "@repo/db";
-import { probeParts } from "../src/http/person-gate.ts";
+import { contentRef, ExplorationRepository, hashContent, probeParts } from "@repo/db";
 import type { TenantId } from "@repo/core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -1556,6 +1555,8 @@ describe("a probe split in parts (RELEASE-BLOCKING)", () => {
       evidenceIds: many("e", 1500),
       claimIds: many("c", 10),
       entityIds: many("n", 2500),
+      // A case's runs (D-19): split with one place left for the probe's own run.
+      runIds: many("r", 2500),
     };
     const parts = probeParts(probe);
     expect(parts).toHaveLength(3);
@@ -1566,16 +1567,21 @@ describe("a probe split in parts (RELEASE-BLOCKING)", () => {
       scopeEntities: probe.scopeEntities,
     });
     for (const part of rest) {
-      expect(Object.keys(part).sort()).toEqual(["claimIds", "entityIds", "evidenceIds"]);
+      expect(Object.keys(part).sort()).toEqual(["claimIds", "entityIds", "evidenceIds", "runIds"]);
     }
-    for (const key of ["evidenceIds", "claimIds", "entityIds"] as const) {
+    for (const key of ["evidenceIds", "claimIds", "entityIds", "runIds"] as const) {
       const joined = parts.flatMap((part) => part[key] ?? []);
       expect(joined, key).toEqual(probe[key]);
       for (const part of parts) expect((part[key] ?? []).length, key).toBeLessThanOrEqual(1000);
     }
+    // The runs a part's statement reads, its own run included, stay within the limit.
+    for (const part of parts) {
+      const own = part.runJobs === undefined ? 0 : 1;
+      expect((part.runIds ?? []).length + own).toBeLessThanOrEqual(1000);
+    }
     // Nothing to split: one part, the probe as given.
     expect(probeParts({ scope: probe.scope })).toEqual([
-      { scope: probe.scope, evidenceIds: [], claimIds: [], entityIds: [] },
+      { scope: probe.scope, evidenceIds: [], claimIds: [], entityIds: [], runIds: [] },
     ]);
   });
 });

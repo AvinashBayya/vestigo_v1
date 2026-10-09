@@ -755,6 +755,13 @@ describe("the person-data probe over a scope's whole entity set and neighbourhoo
   });
 });
 
+/** Valid ids of no row, to make a probe longer than one statement reads. */
+const unrelatedIds = (count: number): string[] =>
+  Array.from(
+    { length: count },
+    (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+  );
+
 describe("the person-data probe on a run's jobs", () => {
   it("finds a person job whatever its outcome, through runJobs or a run scope, only in its own tenant", async () => {
     const result = await read(tenant, async ({ repos, reads }) => {
@@ -794,6 +801,18 @@ describe("the person-data probe on a run's jobs", () => {
         cleanRunScope: await reads.exploration.touchesPersonData({
           scope: { runId: tenant.runId },
         }),
+        // D-19: a case's runs as a list, the person run among clean ones.
+        byRunIds: await reads.exploration.touchesPersonData({
+          runIds: [tenant.runId, run.id],
+        }),
+        cleanRunIds: await reads.exploration.touchesPersonData({ runIds: [tenant.runId] }),
+        // More runs than one statement reads: split into parts, decided, never failed.
+        manyRunIds: await reads.exploration.restsOnPersonData({
+          runIds: [...unrelatedIds(1500), run.id],
+        }),
+        manyCleanRunIds: await reads.exploration.restsOnPersonData({
+          runIds: [...unrelatedIds(1500), tenant.runId],
+        }),
       };
     });
     expect(result).toMatchObject({
@@ -801,13 +820,18 @@ describe("the person-data probe on a run's jobs", () => {
       byRunScope: true,
       cleanRunJobs: false,
       cleanRunScope: false,
+      byRunIds: true,
+      cleanRunIds: false,
+      manyRunIds: true,
+      manyCleanRunIds: false,
     });
     const foreign = await read(other, ({ reads }) =>
       Promise.all([
         reads.exploration.touchesPersonData({ runJobs: result.runId }),
         reads.exploration.touchesPersonData({ scope: { runId: result.runId } }),
+        reads.exploration.touchesPersonData({ runIds: [result.runId] }),
       ]),
     );
-    expect(foreign).toEqual([false, false]);
+    expect(foreign).toEqual([false, false, false]);
   });
 });

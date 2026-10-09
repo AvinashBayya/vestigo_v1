@@ -185,6 +185,9 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   RUN_NOT_SETTLED: 409,
   // Phase 6a: entity merges (kind mismatch, name-only automerge, already undone).
   MERGE_RULE_VIOLATION: 409,
+  // R1-b: a snapshot request still conflicted with concurrent commits after its
+  // second run (D-32). Nothing was written; the request can be sent again.
+  SNAPSHOT_CONFLICT: 409,
 };
 
 export function registerErrorHandling(app: FastifyInstance): void {

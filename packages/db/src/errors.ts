@@ -179,6 +179,20 @@ export class CaseAnalysisOutOfOrderError extends AppError {
   }
 }
 
+/**
+ * A write in a snapshot transaction (REPEATABLE READ) conflicted with a
+ * concurrent commit (SQLSTATE 40001). Nothing was written; the whole
+ * transaction can be run again from the start.
+ */
+export class SnapshotConflictError extends AppError {
+  readonly code = "SNAPSHOT_CONFLICT";
+
+  constructor() {
+    super("A concurrent change conflicted with this transaction's snapshot; nothing was written.");
+    this.name = "SnapshotConflictError";
+  }
+}
+
 export class InvalidIdentifierError extends AppError {
   readonly code = "INVALID_IDENTIFIER";
 
@@ -352,6 +366,8 @@ export function translateDatabaseError(error: unknown): Error {
       return new JobRecordedOnceError(message);
     case "REP01":
       return new ReportRecordedOnceError(message);
+    case "40001":
+      return new SnapshotConflictError();
     case "CAN01":
       return new CaseAnalysisRecordedOnceError(message);
     case "CAN02":

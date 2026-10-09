@@ -183,7 +183,7 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
   app.get(
     "/api/v1/entities",
     {
-      config: { access: { permission: "evidence:read", action: "entity.list" } },
+      config: { access: { permission: "evidence:read", action: "entity.list", snapshot: true } },
       schema: {
         operationId: "listEntities",
         summary: "List the entities of a case or a run, with their measured counts",
@@ -220,7 +220,9 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
   app.get(
     "/api/v1/entities/merge-candidates",
     {
-      config: { access: { permission: "evidence:read", action: "entity.merge_candidates" } },
+      config: {
+        access: { permission: "evidence:read", action: "entity.merge_candidates", snapshot: true },
+      },
       schema: {
         operationId: "listMergeCandidates",
         summary: "Entities of a case or run that may be the same thing",
@@ -276,7 +278,7 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
   app.get(
     "/api/v1/entities/:id",
     {
-      config: { access: { permission: "evidence:read", action: "entity.read" } },
+      config: { access: { permission: "evidence:read", action: "entity.read", snapshot: true } },
       schema: {
         operationId: "getEntity",
         summary: "Read an entity with its claims, relationships and merged entities",
@@ -342,7 +344,9 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
   app.get(
     "/api/v1/relationships/:id",
     {
-      config: { access: { permission: "evidence:read", action: "relationship.read" } },
+      config: {
+        access: { permission: "evidence:read", action: "relationship.read", snapshot: true },
+      },
       schema: {
         operationId: "getRelationship",
         summary: "Read a relationship with both of its entities and the claims behind it",
@@ -398,7 +402,9 @@ export const entityRoutes: FastifyPluginAsyncZod = (app) => {
   app.get(
     "/api/v1/entity-merges",
     {
-      config: { access: { permission: "evidence:read", action: "entity_merge.list" } },
+      config: {
+        access: { permission: "evidence:read", action: "entity_merge.list", snapshot: true },
+      },
       schema: {
         operationId: "listEntityMerges",
         summary: "List merge decisions, active and undone",

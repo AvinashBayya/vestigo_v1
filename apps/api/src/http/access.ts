@@ -1,6 +1,11 @@
 import { decidePermissionModuleAccess, isPermission, type Permission } from "@repo/access";
 import { AppError, NotImplementedError, type LockReason, type TenantId } from "@repo/core";
-import type { Tenant, TenantContext } from "@repo/db";
+import {
+  SnapshotConflictError,
+  type Tenant,
+  type TenantContext,
+  type TenantTransactionOptions,
+} from "@repo/db";
 import type {
   FastifyInstance,
   FastifyReply,
@@ -14,9 +19,19 @@ import type { Principal } from "./principal.ts";
 /**
  * What every route must declare (CLAUDE.md, Phase 2B): either the permission
  * it requires and the audit action it records, or that it is public and why.
+ *
+ * `snapshot: true` runs the request's transaction on one snapshot (REPEATABLE
+ * READ), so a gated read and its person probe see the same data whatever
+ * commits meanwhile (owner ruling D-32). Every gated read declares it
+ * (packages/config/scripts/person-gate-guard.ts). A request that conflicts with
+ * a concurrent commit is run again once, from the start, in a new transaction.
  */
-export type RouteAccess =
-  { readonly permission: Permission; readonly action: string } | { readonly public: string };
+export type ProtectedAccess = {
+  readonly permission: Permission;
+  readonly action: string;
+  readonly snapshot?: true;
+};
+export type RouteAccess = ProtectedAccess | { readonly public: string };
 
 export interface RequestTenant extends TenantContext {
   readonly tenant: Tenant;
@@ -60,6 +75,7 @@ export interface AccessServices {
   readonly withTenant: <T>(
     tenantId: TenantId,
     work: (context: TenantContext) => Promise<T>,
+    options?: TenantTransactionOptions,
   ) => Promise<T>;
 }
 
@@ -229,9 +245,12 @@ export function enforceRouteAccess(
   });
 }
 
+/** Runs of a snapshot request: the first, and one more if a concurrent commit conflicted. */
+const SNAPSHOT_RUNS = 2;
+
 function protect(
   handler: RouteHandlerMethod,
-  access: { readonly permission: Permission; readonly action: string },
+  access: ProtectedAccess,
   url: string,
   services: () => AccessServices,
 ): RouteHandlerMethod {
@@ -250,80 +269,98 @@ function protect(
       requestId: request.id,
     };
 
-    // An object, because the flag is set inside the transaction's callback.
-    const progress = { handlerStarted: false };
-    try {
-      const result = await withTenant(principal.tenantId, async (context) => {
-        const tenant = await context.repos.tenants.current();
-        if (tenant === null) {
-          throw forbidden("TENANT_NOT_PROVISIONED", "This tenant has not been provisioned.");
-        }
+    const options: TenantTransactionOptions = { snapshot: access.snapshot === true };
+    for (let run = 1; ; run += 1) {
+      // An object, because the flag is set inside the transaction's callback.
+      const progress = { handlerStarted: false };
+      try {
+        const result = await withTenant(
+          principal.tenantId,
+          async (context) => {
+            const tenant = await context.repos.tenants.current();
+            if (tenant === null) {
+              throw forbidden("TENANT_NOT_PROVISIONED", "This tenant has not been provisioned.");
+            }
 
-        const profileActive =
-          principal.kind === "session"
-            ? (await context.repos.users.findById(principal.userId))?.status === "ACTIVE"
-            : true;
-        const denial = accessDenial({
-          tenant,
-          profileActive,
-          permissions: principal.permissions,
-          permission: access.permission,
-        });
-        if (denial !== null) {
-          await context.repos.auditLog.append({
-            ...base,
-            action: access.action,
-            target: null,
-            details: { method: request.method, route: url, reason: denial.code },
-            outcome: "DENIED",
-          });
-          return { denied: denial } as const;
-        }
+            const profileActive =
+              principal.kind === "session"
+                ? (await context.repos.users.findById(principal.userId))?.status === "ACTIVE"
+                : true;
+            const denial = accessDenial({
+              tenant,
+              profileActive,
+              permissions: principal.permissions,
+              permission: access.permission,
+            });
+            if (denial !== null) {
+              await context.repos.auditLog.append({
+                ...base,
+                action: access.action,
+                target: null,
+                details: { method: request.method, route: url, reason: denial.code },
+                outcome: "DENIED",
+              });
+              return { denied: denial } as const;
+            }
 
-        request.tenant = { ...context, tenant, principal };
-        progress.handlerStarted = true;
-        try {
-          const value: unknown = await handler.call(this, request, reply);
-          await context.repos.auditLog.append({
-            ...base,
-            action: access.action,
-            target: request.auditTarget,
-            details: { method: request.method, route: url },
-            outcome: "ALLOWED",
-          });
-          return { value } as const;
-        } finally {
-          request.tenant = null;
+            request.tenant = { ...context, tenant, principal };
+            progress.handlerStarted = true;
+            try {
+              const value: unknown = await handler.call(this, request, reply);
+              await context.repos.auditLog.append({
+                ...base,
+                action: access.action,
+                target: request.auditTarget,
+                details: { method: request.method, route: url },
+                outcome: "ALLOWED",
+              });
+              return { value } as const;
+            } finally {
+              request.tenant = null;
+            }
+          },
+          options,
+        );
+        if ("denied" in result) throw forbidden(result.denied.code, result.denied.message);
+        // Committed. Deferred work runs now, outside any transaction.
+        const deferred = request.afterCommit;
+        if (deferred === null) return result.value;
+        request.afterCommit = null;
+        return await deferred();
+      } catch (error) {
+        // Work deferred by a handler whose transaction failed never runs.
+        request.afterCommit = null;
+        // A snapshot that conflicted with a concurrent commit wrote nothing: run
+        // the request again, once, from the start, before anything is answered.
+        if (
+          error instanceof SnapshotConflictError &&
+          options.snapshot === true &&
+          run < SNAPSHOT_RUNS &&
+          !reply.sent
+        ) {
+          request.auditTarget = null;
+          continue;
         }
-      });
-      if ("denied" in result) throw forbidden(result.denied.code, result.denied.message);
-      // Committed. Deferred work runs now, outside any transaction.
-      const deferred = request.afterCommit;
-      if (deferred === null) return result.value;
-      request.afterCommit = null;
-      return await deferred();
-    } catch (error) {
-      // Work deferred by a handler whose transaction failed never runs.
-      request.afterCommit = null;
-      if (progress.handlerStarted) {
-        // The action's transaction rolled back; record the attempt on its own.
-        const code = error instanceof AppError ? error.code : "INTERNAL_ERROR";
-        await withTenant(principal.tenantId, ({ repos }) =>
-          repos.auditLog.append({
-            ...base,
-            action: access.action,
-            target: request.auditTarget,
-            details: { method: request.method, route: url, error: code },
-            outcome: "FAILED",
-          }),
-        ).catch((auditError: unknown) => {
-          request.log.error(
-            { err: auditError },
-            "could not record a failed action in the audit log",
-          );
-        });
+        if (progress.handlerStarted) {
+          // The action's transaction rolled back; record the attempt on its own.
+          const code = error instanceof AppError ? error.code : "INTERNAL_ERROR";
+          await withTenant(principal.tenantId, ({ repos }) =>
+            repos.auditLog.append({
+              ...base,
+              action: access.action,
+              target: request.auditTarget,
+              details: { method: request.method, route: url, error: code },
+              outcome: "FAILED",
+            }),
+          ).catch((auditError: unknown) => {
+            request.log.error(
+              { err: auditError },
+              "could not record a failed action in the audit log",
+            );
+          });
+        }
+        throw error;
       }
-      throw error;
     }
   };
 }

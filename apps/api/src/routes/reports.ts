@@ -381,7 +381,7 @@ export const reportRoutes =
     app.get(
       "/api/v1/runs/:id/reports",
       {
-        config: { access: { permission: "report:read", action: "report.list" } },
+        config: { access: { permission: "report:read", action: "report.list", snapshot: true } },
         schema: {
           operationId: "listReports",
           summary: "List a run's reports, oldest first",
@@ -419,7 +419,7 @@ export const reportRoutes =
     app.get(
       "/api/v1/reports/:id",
       {
-        config: { access: { permission: "report:read", action: "report.read" } },
+        config: { access: { permission: "report:read", action: "report.read", snapshot: true } },
         schema: {
           operationId: "getReport",
           summary: "Read a report: its generation state and, once generated, the report itself",
@@ -447,7 +447,7 @@ export const reportRoutes =
     app.get(
       "/api/v1/reports/:id/export/:format",
       {
-        config: { access: { permission: "report:read", action: "report.export" } },
+        config: { access: { permission: "report:read", action: "report.export", snapshot: true } },
         schema: {
           operationId: "exportReport",
           summary: "Download a generated report as PDF, JSON, CSV or a Maltego graph table",

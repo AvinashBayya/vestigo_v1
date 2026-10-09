@@ -117,15 +117,58 @@ export interface PersonProbe {
    * a NOT_FOUND records no evidence, and is still a finding about the target.
    */
   readonly runJobs?: string;
+  /**
+   * Runs whose jobs a read shows or rests on, each as `runJobs` (D-19): a case's
+   * coverage lists every job of every run its evidence came from, so a case
+   * read rests on all of those runs, a PERSON job that found nothing included.
+   */
+  readonly runIds?: readonly string[];
 }
 
+/** The most ids of one kind one probe statement reads. */
+export const PROBE_LIMIT = 1000;
+
 const uuidList = (ids: readonly string[]): SQL => {
-  if (ids.length > 1000) throw new RangeError("at most 1000 ids per kind in a probe");
+  if (ids.length > PROBE_LIMIT) throw new RangeError("at most 1000 ids per kind in a probe");
   return sql.join(
     ids.map((id) => sql`${requireUuid(id)}::uuid`),
     sql`, `,
   );
 };
+
+const slices = (ids: readonly string[], size: number = PROBE_LIMIT): string[][] => {
+  const out: string[][] = [];
+  for (let start = 0; start < ids.length; start += size) {
+    out.push(ids.slice(start, start + size));
+  }
+  return out;
+};
+
+/**
+ * A probe in parts of at most PROBE_LIMIT ids of each kind. The first part keeps
+ * everything else the probe names (its scope, its run, a scope's entities), so
+ * no field is lost; together the parts cover exactly what the probe does, and a
+ * read that names many records is decided, never failed. Moved here from the
+ * API's gate so every caller of the probe splits it the same way (D-28).
+ */
+export function probeParts(probe: PersonProbe): PersonProbe[] {
+  const evidenceIds = slices(probe.evidenceIds ?? []);
+  const claimIds = slices(probe.claimIds ?? []);
+  const entityIds = slices(probe.entityIds ?? []);
+  // One place is left in each part for the run a probe names by runJobs or by
+  // its run scope, which the first part keeps and the statement reads with these.
+  const runIds = slices(probe.runIds ?? [], PROBE_LIMIT - 1);
+  const count = Math.max(1, evidenceIds.length, claimIds.length, entityIds.length, runIds.length);
+  return Array.from({ length: count }, (_, index) => {
+    const ids = {
+      evidenceIds: evidenceIds[index] ?? [],
+      claimIds: claimIds[index] ?? [],
+      entityIds: entityIds[index] ?? [],
+      runIds: runIds[index] ?? [],
+    };
+    return index === 0 ? { ...probe, ...ids } : ids;
+  });
+}
 
 export interface ScopedEntity {
   readonly id: string;
@@ -357,13 +400,14 @@ export class ExplorationRepository extends TenantRepository {
     const runId =
       probe.runJobs ??
       (probe.scope !== undefined && "runId" in probe.scope ? probe.scope.runId : undefined);
-    if (runId !== undefined) {
+    const runIds = [...(runId === undefined ? [] : [runId]), ...(probe.runIds ?? [])];
+    if (runIds.length > 0) {
       checks.push(sql`exists (
           select 1 from ${jobs} j
           left join ${collectorsRegistry} cr
             on cr.tenant_id = j.tenant_id and cr.collector_id = j.collector_id
           where j.tenant_id = ${tenantId}
-            and j.run_id = ${requireUuid(runId)}
+            and j.run_id in (${uuidList(runIds)})
             and (cr.collector_id is null or cr.discipline = 'PERSON'))`);
     }
     if (checks.length === 0) return false;
@@ -375,6 +419,18 @@ export class ExplorationRepository extends TenantRepository {
       const row = firstRow(result.rows);
       return row !== null && row.held;
     });
+  }
+
+  /**
+   * Whether anything a probe of any size covers rests on person data: the probe
+   * split by probeParts, each part asked of touchesPersonData, true as soon as
+   * one part is. What the shared gate (personGate in @repo/access) is given.
+   */
+  async restsOnPersonData(probe: PersonProbe): Promise<boolean> {
+    for (const part of probeParts(probe)) {
+      if (await this.touchesPersonData(part)) return true;
+    }
+    return false;
   }
 
   /** Entities in scope, oldest first, with their measured counts. */
