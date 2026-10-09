@@ -30,6 +30,13 @@ describe("package boundaries (RELEASE-BLOCKING)", () => {
     ).toEqual(["@repo/core"]);
   });
 
+  it("packages/case-engine depends only on packages/core, and on no other package at all (CLAUDE.md §6)", () => {
+    // Not only no other workspace package: no third-party package either.
+    // Case analysis is pure, so it never needs the collector runtime, the
+    // database or a model to compute anything.
+    expect(runtimeDependencies("packages/case-engine")).toEqual(["@repo/core"]);
+  });
+
   it("packages/collectors has no database, Redis or integrations dependency: a collector is a pure function", () => {
     const dependencies = runtimeDependencies("packages/collectors");
     for (const forbidden of [

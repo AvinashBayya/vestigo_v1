@@ -87,6 +87,16 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "HELD_PLATFORM_COLLECTORS",
     "reportedPart",
   ],
+  // Case analysis over stored records, pure: the run report's coverage, and
+  // a case's coverage, collectors and discipline breakdown.
+  "packages/case-engine/src/index.ts": [
+    "COVERAGE_CAVEATS",
+    "coverageFromJob",
+    "coverageHeadline",
+    "runCoverage",
+    "sourceLabelOf",
+    "displayValue",
+  ],
   // The one path from a collector's result to evidence rows, and the job
   // system around it: planning, per-source queues, fault isolation, fusion.
   "packages/osint-engine/src/index.ts": [

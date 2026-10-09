@@ -66,6 +66,7 @@ packages/core     domain types, evidence model, target detection
 packages/access   permission catalogue, plan and vetting evaluation, API key hashing and verification
 packages/collectors  collector SDK, registry, collectors
 packages/osint-engine  orchestration, planner, fusion, merge
+packages/case-engine  case analysis over stored records: coverage, collectors, discipline breakdown
 packages/llm      provider interface, citation validation
 packages/db       schema, migrations, RLS policies
 packages/media-forensics
@@ -84,6 +85,7 @@ Rules:
 - Cross-package imports go through package entry points, never deep paths.
 - `packages/core` depends on nothing else in the repo.
 - `packages/access` depends only on `packages/core` and does no I/O.
+- `packages/case-engine` depends only on `packages/core` and is pure: no I/O, no clock, no randomness. It never depends on `packages/collectors` or `packages/osint-engine`, so case analysis cannot cause collection.
 - Every access decision is made in `packages/access`: permissions, plan, vetting and API key scope. The API and the workers therefore apply the same rules. `apps/api` keeps only the HTTP guards, the Fastify plugins, the identity provider's wiring and the sign-in routes.
 
 ## 7. Contracts and types

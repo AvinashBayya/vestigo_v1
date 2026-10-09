@@ -1,0 +1,30 @@
+{
+  "name": "@repo/case-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Case analysis over stored records: a case's coverage, its collectors and its discipline breakdown, and the run report's coverage. Pure: no I/O, no clock, no randomness. Depends only on @repo/core.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@repo/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^10.11.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1"
+  }
+}

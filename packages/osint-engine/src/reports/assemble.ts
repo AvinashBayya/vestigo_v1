@@ -5,17 +5,22 @@
  * strength and its citation, every source, and what was NOT collected and why.
  *
  * Nothing here is estimated. Coverage is named facts, never a percentage
- * (there is no honest denominator for "every source that exists"). This is
- * the previous codebase's completeness model (cases/case-report.ts,
- * INVENTORY: KEEP), with the two gaps its own caveats admitted closed, each
- * with a regression test:
- *   - it could not tell "ran and found nothing" from "failed": it read stored
- *     evidence only. Here each collector's recorded outcome decides its state;
- *   - it recomputed the plan at report time, so the plan could differ from the
- *     run. Here the run's own recorded plan is used.
- * A collector that needed credentials is reported from its recorded outcome,
- * not guessed from whether it declares any.
+ * (there is no honest denominator for "every source that exists"). The
+ * coverage model, and the display of a claim's value, live in
+ * @repo/case-engine (owner ruling D-1), which a case's coverage shares; this
+ * file reads the run's rows and hands them over as plain data.
  */
+import {
+  COVERAGE_CAVEATS,
+  coverageFromJob,
+  coverageHeadline,
+  displayValue,
+  runCoverage,
+  sourceLabelOf,
+  type CoverageCollector,
+  type CoverageHeldCollector,
+  type CoveragePlan,
+} from "@repo/case-engine";
 import {
   HELD_PLATFORM_COLLECTORS,
   type CollectorRegistry,
@@ -26,7 +31,6 @@ import {
   REPORT_FORMAT_VERSION,
   REPORT_WORDING,
   type ClaimStrength,
-  type CoverageEntry,
   type ReportAttribution,
   type ReportClaim,
   type ReportCoverage,
@@ -88,20 +92,6 @@ export interface AssembledReport {
   readonly refs: ReadonlyMap<string, { readonly number: number; readonly source: string }>;
 }
 
-/** The fixed caveats every report states. */
-export const COVERAGE_CAVEATS: readonly string[] = [
-  "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
-  "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
-  "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
-  "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
-  "Sources can change after collection. Each source shows when it was collected.",
-];
-
-const PASSIVE_CAVEAT =
-  "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.";
-const ACTIVE_CAVEAT =
-  "At least one collector contacted the target directly under a recorded scope authorisation; see the coverage entries.";
-
 const StoredPlan = z.looseObject({
   targets: z.array(
     z.union([
@@ -137,106 +127,51 @@ async function chunked<T>(
   return out;
 }
 
-/** A value as readable text: scalars as they are, flat objects as `key: value`, the rest as JSON. */
-export function displayValue(value: unknown, maxChars: number): ReportClaim["display"] {
-  const scalar = (v: unknown): string =>
-    typeof v === "string"
-      ? v
-      : typeof v === "number" || typeof v === "boolean"
-        ? String(v)
-        : JSON.stringify(v);
-  let text: string;
-  if (Array.isArray(value) && value.every((v) => typeof v !== "object" || v === null)) {
-    text = value.map(scalar).join(", ");
-  } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-    text = Object.entries(value)
-      .filter(([, v]) => v !== null)
-      .map(([k, v]) => `${k}: ${scalar(v)}`)
-      .join("; ");
-  } else {
-    text = scalar(value);
-  }
-  return text.length > maxChars
-    ? { text: text.slice(0, maxChars), truncated: true }
-    : { text, truncated: false };
+// The coverage functions moved to @repo/case-engine (owner ruling D-1). They
+// are re-exported here so the run report's golden test reads them where it
+// always has; test/coverage-golden.test.ts proves the output unchanged.
+export { COVERAGE_CAVEATS, coverageFromJob, coverageHeadline as headline, displayValue };
+
+/** The registry, as coverage reads it: each collector's id, label and mode. */
+function coverageCollectors(registry: CollectorRegistry): CoverageCollector[] {
+  return registry.list().map((entry) => ({
+    id: entry.id,
+    label: entry.label,
+    collectionMode: entry.collectionMode,
+  }));
 }
 
-function labelOf(registry: CollectorRegistry, collectorId: string): string {
-  // Labels come only from the registry. A collector no longer registered is
-  // named by its id, and says so: nothing stands in for a label.
-  return registry.list().some((entry) => entry.id === collectorId)
-    ? registry.entry(collectorId).label
-    : `${collectorId} (not in the current registry)`;
+/** The held collectors, as coverage reads them. */
+function coverageHeld(held: readonly HeldCollector[]): CoverageHeldCollector[] {
+  return held.map((entry) => ({
+    id: entry.collector.declaration.id,
+    displayName: entry.collector.declaration.displayName,
+    targetTypes: entry.collector.declaration.targetTypes,
+    reason: entry.reason,
+  }));
 }
 
-export function coverageFromJob(job: Job, label: string): CoverageEntry {
-  const base = {
-    collectorId: job.collectorId,
-    sourceLabel: label,
-    targetType: job.targetType,
-    attempts: job.attempts,
-    // A job that found nothing recorded no evidence: a measured zero.
-    evidenceCount: job.evidenceIds === null ? 0 : job.evidenceIds.length,
+/** The run's stored plan, as coverage reads it: the plan, its recorded error, or nothing. */
+function coveragePlan(plan: unknown): CoveragePlan {
+  const failed = StoredPlanError.safeParse(plan);
+  if (failed.success) return { kind: "PLAN_FAILED", message: failed.data.error.message };
+  const parsed = StoredPlan.safeParse(plan);
+  if (!parsed.success) return { kind: "NOT_RECORDED" };
+  return {
+    kind: "PLANNED",
+    targetTypes: parsed.data.targets
+      .filter((t): t is { type: string; value: string } => "value" in t)
+      .map((t) => t.type as TargetType),
+    excluded: parsed.data.excluded.map((excluded) => ({
+      collectorId: excluded.collectorId,
+      targetType: excluded.targetType as TargetType | null,
+      reason: excluded.reason,
+      message: excluded.message,
+    })),
   };
-  const error = { reasonCode: job.lastErrorCode, detail: job.lastErrorMessage };
-  switch (job.status) {
-    case "SUCCEEDED":
-      return job.outcome === "FOUND"
-        ? { ...base, state: "COLLECTED", reasonCode: null, detail: null }
-        : { ...base, state: "NOTHING_FOUND", reasonCode: null, detail: job.outcomeDetail };
-    case "FAILED":
-      return {
-        ...base,
-        state:
-          job.outcome === "NEEDS_CREDENTIALS"
-            ? "NEEDS_CREDENTIALS"
-            : job.outcome === "REFUSED"
-              ? "REFUSED"
-              : "FAILED",
-        ...error,
-      };
-    case "DEAD_LETTERED":
-      return { ...base, state: "FAILED", ...error };
-    case "CANCELLED":
-      return {
-        ...base,
-        state: "NOT_FINISHED",
-        reasonCode: "CANCELLED",
-        detail: "The job was cancelled.",
-      };
-    case "QUEUED":
-    case "RUNNING":
-      return { ...base, state: "NOT_FINISHED", reasonCode: job.status, detail: null };
-  }
 }
 
-export function headline(
-  status: RunStatus,
-  entries: readonly CoverageEntry[],
-  planError: string | null,
-): string {
-  if (planError !== null) return `FAILED RUN: the run could not be planned (${planError}).`;
-  const ran = entries.filter((e) => e.attempts !== null);
-  const completed = ran.filter((e) => e.state === "COLLECTED" || e.state === "NOTHING_FOUND");
-  const found = ran.filter((e) => e.state === "COLLECTED").length;
-  const notRun = entries.filter((e) => e.attempts === null).length;
-  const notRunNote =
-    notRun === 0
-      ? ""
-      : ` ${String(notRun)} further collector(s) were excluded or held and did not run.`;
-  const counts = `${String(found)} found something, ${String(completed.length - found)} found nothing`;
-  switch (status) {
-    case "SUCCEEDED":
-      return `COMPLETE RUN: all ${String(ran.length)} planned collectors finished (${counts}).${notRunNote}`;
-    case "PARTIAL":
-      return `PARTIAL RUN: ${String(ran.length - completed.length)} of ${String(ran.length)} planned collectors did not complete, so this report does not cover what they would have collected (${counts}).${notRunNote}`;
-    case "FAILED":
-      return `FAILED RUN: none of the ${String(ran.length)} planned collectors completed.${notRunNote}`;
-    default:
-      return `The run's status is ${status}.`;
-  }
-}
-
+/** A run's coverage, from its stored plan, its jobs and the held collectors. */
 export function coverageOf(
   registry: CollectorRegistry,
   status: RunStatus,
@@ -244,70 +179,13 @@ export function coverageOf(
   jobs: readonly Job[],
   held: readonly HeldCollector[],
 ): ReportCoverage {
-  const failed = StoredPlanError.safeParse(plan);
-  const parsed = StoredPlan.safeParse(plan);
-  const entries: CoverageEntry[] = jobs.map((job) =>
-    coverageFromJob(job, labelOf(registry, job.collectorId)),
-  );
-  const notApplicable: { collectorId: string; sourceLabel: string }[] = [];
-  let planError: string | null = null;
-  let validTypes: TargetType[] = [];
-
-  if (failed.success) {
-    planError = failed.data.error.message;
-  } else if (!parsed.success) {
-    planError = "its plan was not recorded";
-  } else {
-    validTypes = parsed.data.targets
-      .filter((t): t is { type: string; value: string } => "value" in t)
-      .map((t) => t.type as TargetType);
-    for (const excluded of parsed.data.excluded) {
-      const label = labelOf(registry, excluded.collectorId);
-      if (excluded.reason === "TARGET_TYPE_NOT_ACCEPTED") {
-        notApplicable.push({ collectorId: excluded.collectorId, sourceLabel: label });
-        continue;
-      }
-      entries.push({
-        collectorId: excluded.collectorId,
-        sourceLabel: label,
-        state: "EXCLUDED",
-        targetType: excluded.targetType as TargetType | null,
-        reasonCode: excluded.reason,
-        detail: excluded.message,
-        evidenceCount: 0,
-        attempts: null,
-      });
-    }
-  }
-  for (const entry of held) {
-    const declaration = entry.collector.declaration;
-    const applies = declaration.targetTypes.find((type) => validTypes.includes(type));
-    if (applies === undefined) continue;
-    entries.push({
-      collectorId: declaration.id,
-      sourceLabel: declaration.displayName,
-      state: "HELD",
-      targetType: applies,
-      reasonCode: "COLLECTOR_HELD",
-      detail: entry.reason,
-      evidenceCount: 0,
-      attempts: null,
-    });
-  }
-
-  const active = jobs.some(
-    (job) =>
-      registry.list().some((e) => e.id === job.collectorId) &&
-      registry.entry(job.collectorId).collectionMode === "ACTIVE",
-  );
-  return {
-    runStatus: status,
-    partial: status !== "SUCCEEDED" || planError !== null,
-    headline: headline(status, entries, planError),
-    entries,
-    notApplicable,
-    caveats: [active ? ACTIVE_CAVEAT : PASSIVE_CAVEAT, ...COVERAGE_CAVEATS],
-  };
+  return runCoverage({
+    registry: coverageCollectors(registry),
+    status,
+    plan: coveragePlan(plan),
+    jobs,
+    held: coverageHeld(held),
+  });
 }
 
 const endpoint = (entity: Entity) => ({
@@ -334,6 +212,7 @@ export async function assembleReport(
     run === null ? null : await repos.investigations.findById(run.investigationId);
   if (run === null || investigation === null) throw new ReportRunNotFoundError();
   const jobs = await repos.jobs.listForRun(input.runId, { limit: 1000 });
+  const collectors = coverageCollectors(registry);
 
   // Evidence, in the order the jobs cited it.
   const evidenceIds = jobs.flatMap((job) =>
@@ -420,7 +299,7 @@ export async function assembleReport(
       number,
       evidenceId,
       collectorId: row.collectorId,
-      sourceLabel: labelOf(registry, row.collectorId),
+      sourceLabel: sourceLabelOf(collectors, row.collectorId),
       sourceUrl: row.sourceUrl,
       collectedAt: iso(row.collectedAt),
       observedAt: iso(row.observedAt),
