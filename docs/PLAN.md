@@ -3440,3 +3440,109 @@ R1-a was approved, and every item it raised is ruled. The rulings are recorded i
   - the display fixes, as a behaviour change with updated golden files;
   - a clear failure when the test database is unreachable.
 
+## R1-b: persistence, the analysis job, three endpoints, the person gate over a case (2026-10-09)
+
+A case's analysis can be requested, is made in the background from the case's stored records, is
+recorded once, and is read with its state. No UI, no model call, no cross-intelligence and no
+contradictions. R1-c is not started. Commits: A e4ea3f8, B be77d4e, D 926de9d (built before C, as
+D-32 is C's prerequisite), C b7aeee2, E/F 1c77eb8, review fixes ddf2c97 and 76675e0.
+
+- **A. `case_analyses`, written once** (migrations 0021, 0022; 0023 from the review).
+  - **The analysis:** one row per tenant, case and input hash (unique). Where it stands is a
+    second, append-only table, `case_analysis_events`:
+    - each attempt is requested (PENDING), then finishes once;
+    - a finish is COMPLETE, with the document and the wording it was made under, or FAILED, with
+      a code and a message;
+    - a failed analysis gets a new attempt, and nothing follows a document.
+  - **The database's guarantees:**
+    - forced RLS with the canonical tenant policy on both tables;
+    - `app_runtime` holds SELECT and INSERT only;
+    - statement-level triggers refuse UPDATE and TRUNCATE to every role, the owner included
+      (CAN01);
+    - an AFTER INSERT trigger refuses an event out of order (CAN02);
+    - partial unique indexes allow one request and one finish per attempt, and one document per
+      analysis.
+  - **Deletion:** DELETE is not refused, so the future retention path is never blocked (tested
+    as the owner).
+  - **The basis (0023):** records what each analysis rests on, the evidence and run ids of its
+    input, with the request. Its columns are nullable for expand-safety; a read refuses a row
+    without one.
+- **B. The input and its hash.**
+  - **The read:** `CaseScopeRepository.records` reads the case as D-4 defines it.
+  - **The hash:** `caseInputHash` is SHA-256 over a canonical form (sorted keys and lists, null
+    kept apart from absent) of:
+    - the input, with a case id spelled in capitals read as the stored id;
+    - the active merge ids (R1-c folds them);
+    - the engine version and the wording.
+- **C. The job.**
+  - **Where it lives:** `CaseAnalysisProcessor` (`packages/osint-engine/src/jobs`), injected by
+    the worker.
+  - **The queue:** `case-analyses`, with its own global bulkhead (`CASE_ANALYSIS_CONCURRENCY`),
+    a per-attempt timeout (`CASE_ANALYSIS_TIMEOUT_MS`) and dead-letter kind `CASE_ANALYSIS`.
+  - **Idempotency:** keyed by the analysis (case and input hash) and the attempt. A replay or a
+    concurrent delivery records once.
+  - **Each refusal fails the attempt whole:**
+    - the seven input refusals (CASE_INPUT_INVALID);
+    - CASE_INPUT_CHANGED;
+    - CASE_TOO_LARGE, counted in the database before anything is read (bound 50,000 records);
+    - CASE_ANALYSIS_TIMEOUT;
+    - CASE_DOCUMENT_INVALID (the document is validated against its zod schema before it is
+      recorded);
+    - the gate's codes.
+  - **Dead letters:** the record is written whatever the cleanup does, for every kind, one per
+    final failure. Enqueueing a pending attempt whose job was kept as failed delivers it again.
+  - **Passive:** an allowlist module-graph test (zod and `node:crypto` only outside the repo)
+    refuses any other module and any load it cannot follow.
+- **D. The person gate.**
+  - **D-19:** the probe takes a list of runs.
+  - **D-28:** `personGate` in `packages/access` is the one decision. The API's helpers call it,
+    and the job calls it before it reads the case's records.
+  - **D-32:** `withTenant(..., { snapshot: true })` runs each gated read in a repeatable-read
+    transaction:
+    - one retry on a serialisation conflict, then 409 SNAPSHOT_CONFLICT;
+    - the guard requires a snapshot on every gated GET.
+- **E/F. Endpoints** (contract 0.4.0).
+  - **The routes:**
+    - `POST /api/v1/cases/:id/analyses` (case:analyse) answers a summary without the documents;
+    - `GET /api/v1/cases/:id/analyses` and `GET /api/v1/case-analyses/:id` (case:read) answer
+      the analysis with its documents.
+  - **The gate:** all three are shared-gate, on one snapshot. A stored analysis is probed by its
+    basis, whatever its status, as well as by the case as it is now.
+  - **Read states:** NONE_YET, PENDING, COMPLETE, FAILED (with its code) and STALE, each with a
+    reason, and none claims progress that was not measured.
+  - **Credits:** `estimatedCredits` is null, with its reason, and no usage event is recorded.
+- **Review.** Two passes, each by three critics (data and migration; gate and concurrency; API
+  and contract), with each finding adversarially verified:
+  - first pass: 7 confirmed, 1 plausible and 2 refuted;
+  - second pass: 8 confirmed (one defect found twice).
+  - Every confirmed and plausible finding is fixed, each with a test that fails when its fix is
+    removed.
+- **Pipeline after R1-b.** 54 tasks; 2,024 tests:
+  - core 25, access 59, config 205, case-engine 62, collectors 482, llm 130, integrations 122,
+    db 289, osint-engine 154, worker 4, api 220, ui 95, web 177.
+  - The fabrication check is clean over 489 files, with no allowlist. No dependency was added.
+- **Raised, for the owner's ruling:**
+  - **Retention:** analyses hold entity values, so they must go where their evidence goes.
+    - Recommended: a tenant deletion removes them, events first; deleting evidence removes every
+      analysis whose recorded basis lists it; there is no time-based expiry.
+    - Today, no deletion path exists and nothing is enforced.
+  - **Status as appended rows:** built as a separate append-only events table. This keeps
+    `case_analyses` unique per input, and no row is ever rewritten.
+  - **Permission:** `case:analyse` (TECHINT; analyst, admin and owner) to request; `case:read` to
+    read.
+  - **API keys:** allowed when scoped. The issuer is recorded as the requester, and a request
+    never answers the documents.
+  - **The processor's home:** `packages/osint-engine`. The brief chose it, but it is neither
+    option the R1-a ruling named.
+  - **The development seed:** it writes evidence that its job's result does not list, so an
+    analysis of a seeded case fails as CASE_INPUT_INVALID.
+  - **The size bound:** 50,000 records, not configurable. A read of a case past it answers 409,
+    so its earlier analyses cannot be read until it shrinks.
+  - **Cost of freshness:** every GET reads and hashes the case to judge freshness.
+  - **Archived cases:** can be analysed.
+  - **Deterministic failures:** a failed analysis with a deterministic code is retried on request
+    and fails the same way.
+  - **Unbounded enqueues elsewhere:** the run and report routes still enqueue without a bound.
+  - **Report generation:** it does not re-check the gate (the D-28 follow-up).
+- **Awaiting the owner's approval, uncommitted:** the CLAUDE.md §9 sentence and standing rule 6,
+  amended for D-28.
