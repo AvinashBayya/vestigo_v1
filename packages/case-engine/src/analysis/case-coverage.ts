@@ -13,8 +13,8 @@
  * one its run recorded, and a case spans as many runs as its evidence came
  * from.
  *
- * Its caveats are codes. Their wording is for the owner to approve (D-22's
- * rule for fixed wording), and joins the stored wording with R1-b.
+ * Its caveats are codes. Their approved wording is core's CASE_WORDING, which a
+ * stored analysis copies (R1-b).
  */
 import { ENGINE_VERSION } from "../version.ts";
 import { byCodeUnit, type CaseEvidence, type CaseInput } from "./case-input.ts";

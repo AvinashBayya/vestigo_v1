@@ -62,6 +62,7 @@ export {
   type TimeSpan,
 } from "./analysis/case-coverage.ts";
 export {
+  breakdownHeadline,
   CASE_BREAKDOWN_CAVEATS,
   caseBreakdown,
   DISCIPLINE_METRICS,

@@ -46,6 +46,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "SYNTHESIS_STRENGTHS",
     "CLAIM_STRENGTH_DEFINITIONS",
     "REPORT_WORDING",
+    "CASE_WORDING",
     "fillWording",
   ],
   // Who may do what, for the API and the workers alike.
@@ -103,6 +104,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "caseCoverage",
     "caseCollectors",
     "caseBreakdown",
+    "breakdownHeadline",
   ],
   // The one path from a collector's result to evidence rows, and the job
   // system around it: planning, per-source queues, fault isolation, fusion.

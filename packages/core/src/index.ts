@@ -55,6 +55,7 @@ export {
   REPORT_WORDING,
   type ReportWording,
 } from "./report-wording.ts";
+export { CASE_WORDING, type CaseWording } from "./case-wording.ts";
 export {
   COVERAGE_STATES,
   REPORT_FORMAT_VERSION,

@@ -19,16 +19,17 @@
  * measured 0, an omitted media flag defaulted to "in the case") and which filed
  * a discipline no collector declares as "not case-scoped". Here every input is
  * required, nothing missing becomes a number, and records are attributed
- * through their evidence (see case-view.ts). Its one-line headline is not
- * ported yet: its wording waits for the owner with the caveats'.
+ * through their evidence (see case-view.ts).
  *
- * Its caveats are codes; their wording waits for the owner, as for coverage.
- * Under a person lock the whole breakdown is refused by the read that serves
+ * Its caveats are codes. Their approved wording, and the headline's, is core's
+ * CASE_WORDING, which a stored analysis copies (R1-b). Under a person lock the whole breakdown is refused by the read that serves
  * it (CLAUDE.md §9): nothing here hides a section or lowers a total.
  */
 import {
+  CASE_WORDING,
   CLAIM_STRENGTHS,
   COLLECTOR_DISCIPLINES,
+  fillWording,
   LOCK_REASONS,
   type CollectorDiscipline,
 } from "@repo/core";
@@ -369,4 +370,30 @@ export function caseBreakdown(input: CaseInput): CaseBreakdown | EmptyCase {
     ),
     caveats: [...CASE_BREAKDOWN_CAVEATS],
   };
+}
+
+/**
+ * One line for a breakdown's header, in the approved wording: the disciplines
+ * present and the case's totals. When every evidence record comes from
+ * collectors no longer registered, it says so. Never a percentage: the counts
+ * overlap.
+ */
+export function breakdownHeadline(breakdown: CaseBreakdown): string {
+  const wording = CASE_WORDING.breakdownHeadline;
+  const present = breakdown.sections
+    .filter((section) => section.status === "PRESENT")
+    .map((section) => section.discipline);
+  const { evidence, entities, relationships } = breakdown.totals;
+  if (present.length > 0) {
+    return fillWording(wording.present, {
+      disciplines: present.join(", "),
+      evidence: String(evidence.count),
+      entities: String(entities.count),
+      relationships: String(relationships.count),
+    });
+  }
+  if (evidence.count > 0 && breakdown.notRegistered.evidence.count === evidence.count) {
+    return fillWording(wording.onlyUnregistered, { evidence: String(evidence.count) });
+  }
+  return fillWording(wording.noDiscipline, { evidence: String(evidence.count) });
 }

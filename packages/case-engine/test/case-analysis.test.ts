@@ -6,9 +6,12 @@
  * previous codebase's version (R1-INVENTORY.md, cases/case-report.ts and
  * cases/case-intelligence-breakdown.ts).
  */
-import { CLAIM_STRENGTHS, COLLECTOR_DISCIPLINES } from "@repo/core";
+import { CASE_WORDING, CLAIM_STRENGTHS, COLLECTOR_DISCIPLINES } from "@repo/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  breakdownHeadline,
+  CASE_BREAKDOWN_CAVEATS,
+  CASE_COVERAGE_CAVEATS,
   caseBreakdown,
   caseCollectors,
   caseCoverage,
@@ -88,6 +91,9 @@ describe("unavailable: nothing registered and nothing held", () => {
       count: 5,
       ids: ids("ev1", "ev2", "ev4", "ev5", "ev6"),
     });
+    expect(breakdownHeadline(document)).toBe(
+      "5 evidence records are held, all from collectors no longer registered.",
+    );
   });
 
   it("names every collector by its id, saying it is not registered", () => {
@@ -522,6 +528,20 @@ describe("the discipline breakdown", () => {
       entities: { count: 1, ids: ids("e3") },
       relationships: { count: 0, ids: [] },
     });
+  });
+
+  it("headline: the disciplines present and the case's totals, in the approved wording", () => {
+    expect(breakdownHeadline(breakdown())).toBe(
+      "TECHINT, SOCMINT present · 5 evidence, 4 entities, 2 relationships in this case.",
+    );
+    expect(breakdownHeadline(breakdown({ ...EMPTY, entities: [{ id: id("e9") }] }))).toBe(
+      "No discipline in this case holds any stored record. 0 evidence records total.",
+    );
+  });
+
+  it("has approved wording for every caveat code, and no wording without a code", () => {
+    expect(Object.keys(CASE_WORDING.coverageCaveats)).toEqual([...CASE_COVERAGE_CAVEATS]);
+    expect(Object.keys(CASE_WORDING.breakdownCaveats)).toEqual([...CASE_BREAKDOWN_CAVEATS]);
   });
 
   it("has one section per discipline, in core's order", () => {
