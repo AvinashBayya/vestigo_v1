@@ -1,0 +1,62 @@
+[
+  {
+    "fixture": "QUEUED, no entries",
+    "output": "The run's status is QUEUED."
+  },
+  {
+    "fixture": "RUNNING, no entries",
+    "output": "The run's status is RUNNING."
+  },
+  {
+    "fixture": "SUCCEEDED, no entries",
+    "output": "COMPLETE RUN: all 0 planned collectors finished (0 found something, 0 found nothing)."
+  },
+  {
+    "fixture": "PARTIAL, no entries",
+    "output": "PARTIAL RUN: 0 of 0 planned collectors did not complete, so this report does not cover what they would have collected (0 found something, 0 found nothing)."
+  },
+  {
+    "fixture": "FAILED, no entries",
+    "output": "FAILED RUN: none of the 0 planned collectors completed."
+  },
+  {
+    "fixture": "CANCELLED, no entries",
+    "output": "The run's status is CANCELLED."
+  },
+  {
+    "fixture": "QUEUED, every state once",
+    "output": "The run's status is QUEUED."
+  },
+  {
+    "fixture": "RUNNING, every state once",
+    "output": "The run's status is RUNNING."
+  },
+  {
+    "fixture": "SUCCEEDED, every state once",
+    "output": "COMPLETE RUN: all 6 planned collectors finished (1 found something, 1 found nothing). 2 further collector(s) were excluded or held and did not run."
+  },
+  {
+    "fixture": "PARTIAL, every state once",
+    "output": "PARTIAL RUN: 4 of 6 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 1 found nothing). 2 further collector(s) were excluded or held and did not run."
+  },
+  {
+    "fixture": "FAILED, every state once",
+    "output": "FAILED RUN: none of the 6 planned collectors completed. 2 further collector(s) were excluded or held and did not run."
+  },
+  {
+    "fixture": "CANCELLED, every state once",
+    "output": "The run's status is CANCELLED."
+  },
+  {
+    "fixture": "a plan error decides, whatever the status",
+    "output": "FAILED RUN: the run could not be planned ([test] Ünïcödé — 計画 failed)."
+  },
+  {
+    "fixture": "an empty plan error is still a plan error",
+    "output": "FAILED RUN: the run could not be planned ()."
+  },
+  {
+    "fixture": "one excluded collector only",
+    "output": "COMPLETE RUN: all 0 planned collectors finished (0 found something, 0 found nothing). 1 further collector(s) were excluded or held and did not run."
+  }
+]

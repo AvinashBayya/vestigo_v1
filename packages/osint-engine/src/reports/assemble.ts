@@ -169,7 +169,7 @@ function labelOf(registry: CollectorRegistry, collectorId: string): string {
     : `${collectorId} (not in the current registry)`;
 }
 
-function coverageFromJob(job: Job, label: string): CoverageEntry {
+export function coverageFromJob(job: Job, label: string): CoverageEntry {
   const base = {
     collectorId: job.collectorId,
     sourceLabel: label,
@@ -210,7 +210,7 @@ function coverageFromJob(job: Job, label: string): CoverageEntry {
   }
 }
 
-function headline(
+export function headline(
   status: RunStatus,
   entries: readonly CoverageEntry[],
   planError: string | null,
@@ -237,7 +237,7 @@ function headline(
   }
 }
 
-function coverageOf(
+export function coverageOf(
   registry: CollectorRegistry,
   status: RunStatus,
   plan: unknown,

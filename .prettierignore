@@ -11,3 +11,6 @@ packages/db/migrations/meta/
 
 # Upstream data recorded as received (IANA RDAP bootstrap); kept byte-exact.
 packages/collectors/test/snapshots/
+
+# Golden files: the run report's coverage output, compared byte for byte.
+packages/osint-engine/test/golden/

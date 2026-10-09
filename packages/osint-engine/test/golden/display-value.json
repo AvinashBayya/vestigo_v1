@@ -1,0 +1,690 @@
+[
+  {
+    "fixture": "null, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "null, at most 1 characters",
+    "output": {
+      "text": "n",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "null, at most 5 characters",
+    "output": {
+      "text": "null",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "null, at most 600 characters",
+    "output": {
+      "text": "null",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "undefined, at most 0 characters",
+    "throws": "TypeError"
+  },
+  {
+    "fixture": "undefined, at most 1 characters",
+    "throws": "TypeError"
+  },
+  {
+    "fixture": "undefined, at most 5 characters",
+    "throws": "TypeError"
+  },
+  {
+    "fixture": "undefined, at most 600 characters",
+    "throws": "TypeError"
+  },
+  {
+    "fixture": "true, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "true, at most 1 characters",
+    "output": {
+      "text": "t",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "true, at most 5 characters",
+    "output": {
+      "text": "true",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "true, at most 600 characters",
+    "output": {
+      "text": "true",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "false, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "false, at most 1 characters",
+    "output": {
+      "text": "f",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "false, at most 5 characters",
+    "output": {
+      "text": "false",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "false, at most 600 characters",
+    "output": {
+      "text": "false",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "zero, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "zero, at most 1 characters",
+    "output": {
+      "text": "0",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "zero, at most 5 characters",
+    "output": {
+      "text": "0",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "zero, at most 600 characters",
+    "output": {
+      "text": "0",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "negative zero, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "negative zero, at most 1 characters",
+    "output": {
+      "text": "0",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "negative zero, at most 5 characters",
+    "output": {
+      "text": "0",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "negative zero, at most 600 characters",
+    "output": {
+      "text": "0",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "NaN, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "NaN, at most 1 characters",
+    "output": {
+      "text": "N",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "NaN, at most 5 characters",
+    "output": {
+      "text": "NaN",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "NaN, at most 600 characters",
+    "output": {
+      "text": "NaN",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "Infinity, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "Infinity, at most 1 characters",
+    "output": {
+      "text": "I",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "Infinity, at most 5 characters",
+    "output": {
+      "text": "Infin",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "Infinity, at most 600 characters",
+    "output": {
+      "text": "Infinity",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "large number, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "large number, at most 1 characters",
+    "output": {
+      "text": "1",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "large number, at most 5 characters",
+    "output": {
+      "text": "1.5e+",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "large number, at most 600 characters",
+    "output": {
+      "text": "1.5e+21",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "fraction, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "fraction, at most 1 characters",
+    "output": {
+      "text": "0",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "fraction, at most 5 characters",
+    "output": {
+      "text": "0.300",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "fraction, at most 600 characters",
+    "output": {
+      "text": "0.30000000000000004",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty string, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty string, at most 1 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty string, at most 5 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty string, at most 600 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "plain string, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "plain string, at most 1 characters",
+    "output": {
+      "text": "[",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "plain string, at most 5 characters",
+    "output": {
+      "text": "[valu",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "plain string, at most 600 characters",
+    "output": {
+      "text": "[value]",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "unicode string, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "unicode string, at most 1 characters",
+    "output": {
+      "text": "Z",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "unicode string, at most 5 characters",
+    "output": {
+      "text": "Zoë –",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "unicode string, at most 600 characters",
+    "output": {
+      "text": "Zoë – 東京 🛰️ 👩‍👩‍👧 ﬁ ‮ reversed",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "surrogate pair at the cut, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "surrogate pair at the cut, at most 1 characters",
+    "output": {
+      "text": "a",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "surrogate pair at the cut, at most 5 characters",
+    "output": {
+      "text": "abcd\ud83d",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "surrogate pair at the cut, at most 600 characters",
+    "output": {
+      "text": "abcd🛰️efg",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "long string, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "long string, at most 1 characters",
+    "output": {
+      "text": "[",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "long string, at most 5 characters",
+    "output": {
+      "text": "[long",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "long string, at most 600 characters",
+    "output": {
+      "text": "[long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long] [long",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "empty array, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty array, at most 1 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty array, at most 5 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty array, at most 600 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "array of scalars and null, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array of scalars and null, at most 1 characters",
+    "output": {
+      "text": "1",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array of scalars and null, at most 5 characters",
+    "output": {
+      "text": "1, a,",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array of scalars and null, at most 600 characters",
+    "output": {
+      "text": "1, a, true, null, 東京",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "array with undefined, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array with undefined, at most 1 characters",
+    "output": {
+      "text": ",",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array with undefined, at most 5 characters",
+    "output": {
+      "text": ", 1",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "array with undefined, at most 600 characters",
+    "output": {
+      "text": ", 1",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "array holding an object, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array holding an object, at most 1 characters",
+    "output": {
+      "text": "[",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array holding an object, at most 5 characters",
+    "output": {
+      "text": "[{\"a\"",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "array holding an object, at most 600 characters",
+    "output": {
+      "text": "[{\"a\":1}]",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "nested array, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "nested array, at most 1 characters",
+    "output": {
+      "text": "[",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "nested array, at most 5 characters",
+    "output": {
+      "text": "[[1,2",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "nested array, at most 600 characters",
+    "output": {
+      "text": "[[1,2],3]",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty object, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty object, at most 1 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty object, at most 5 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "empty object, at most 600 characters",
+    "output": {
+      "text": "",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "flat object, a null skipped, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "flat object, a null skipped, at most 1 characters",
+    "output": {
+      "text": "a",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "flat object, a null skipped, at most 5 characters",
+    "output": {
+      "text": "a: 1;",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "flat object, a null skipped, at most 600 characters",
+    "output": {
+      "text": "a: 1; c: x; d: false",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "object with undefined, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "object with undefined, at most 1 characters",
+    "output": {
+      "text": "a",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "object with undefined, at most 5 characters",
+    "output": {
+      "text": "a: un",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "object with undefined, at most 600 characters",
+    "output": {
+      "text": "a: undefined",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "nested object, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "nested object, at most 1 characters",
+    "output": {
+      "text": "n",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "nested object, at most 5 characters",
+    "output": {
+      "text": "neste",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "nested object, at most 600 characters",
+    "output": {
+      "text": "nested: {\"deep\":[1,\"二\"]}; list: [1,2]",
+      "truncated": false
+    }
+  },
+  {
+    "fixture": "unicode keys, at most 0 characters",
+    "output": {
+      "text": "",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "unicode keys, at most 1 characters",
+    "output": {
+      "text": "名",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "unicode keys, at most 5 characters",
+    "output": {
+      "text": "名前: 東",
+      "truncated": true
+    }
+  },
+  {
+    "fixture": "unicode keys, at most 600 characters",
+    "output": {
+      "text": "名前: 東京; ключ: значение",
+      "truncated": false
+    }
+  }
+]

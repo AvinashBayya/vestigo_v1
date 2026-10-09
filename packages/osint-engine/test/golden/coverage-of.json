@@ -1,0 +1,5553 @@
+[
+  {
+    "fixture": "empty run: planned, nothing ran, nothing excluded",
+    "output": {
+      "runStatus": "SUCCEEDED",
+      "partial": false,
+      "headline": "COMPLETE RUN: all 0 planned collectors finished (0 found something, 0 found nothing).",
+      "entries": [],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "empty run: no valid target, so no held collector applies",
+    "output": {
+      "runStatus": "FAILED",
+      "partial": true,
+      "headline": "FAILED RUN: none of the 0 planned collectors completed.",
+      "entries": [],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "empty run: the plan was not recorded",
+    "output": {
+      "runStatus": "QUEUED",
+      "partial": true,
+      "headline": "FAILED RUN: the run could not be planned (its plan was not recorded).",
+      "entries": [],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "empty run: the plan recorded an error",
+    "output": {
+      "runStatus": "FAILED",
+      "partial": true,
+      "headline": "FAILED RUN: the run could not be planned ([test] the target could not be detected).",
+      "entries": [],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "a plan holding both an error and targets: the error decides",
+    "output": {
+      "runStatus": "FAILED",
+      "partial": true,
+      "headline": "FAILED RUN: the run could not be planned ([test] both).",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "a plan with no excluded list is not a recorded plan",
+    "output": {
+      "runStatus": "SUCCEEDED",
+      "partial": true,
+      "headline": "FAILED RUN: the run could not be planned (its plan was not recorded).",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 2,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "partial run: found, nothing found, failed, excluded, not applicable, held",
+    "output": {
+      "runStatus": "PARTIAL",
+      "partial": true,
+      "headline": "PARTIAL RUN: 1 of 3 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 1 found nothing). 4 further collector(s) were excluded or held and did not run.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 3,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[test] no certificates"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "UPSTREAM_TIMEOUT",
+          "detail": "[test] timed out"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "SCOPE_AUTHORISATION_REQUIRED",
+          "detail": "[test] needs a scope authorisation",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[test] module not in plan",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held",
+          "sourceLabel": "[fake golden.held]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Held off the platform until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held.unicode",
+          "sourceLabel": "[fake golden.held.unicode Ωmega]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Gehalten — 保留中 🛑 until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        }
+      ],
+      "notApplicable": [
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]"
+        }
+      ],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "failed collectors: credentials, refusal, failure, dead letter",
+    "output": {
+      "runStatus": "FAILED",
+      "partial": true,
+      "headline": "FAILED RUN: none of the 4 planned collectors completed.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "CREDENTIAL_MISSING",
+          "detail": "[test] no credential stored"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "UPSTREAM_REFUSED",
+          "detail": "[test] refused"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 5,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "UPSTREAM_RESPONSE_INVALID",
+          "detail": "[test] invalid response"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 7,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "UPSTREAM_UNAVAILABLE",
+          "detail": "[test] retries ran out"
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "held collector: applies through its second target type, once each",
+    "output": {
+      "runStatus": "SUCCEEDED",
+      "partial": false,
+      "headline": "COMPLETE RUN: all 1 planned collectors finished (1 found something, 0 found nothing). 2 further collector(s) were excluded or held and did not run.",
+      "entries": [
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.held",
+          "sourceLabel": "[fake golden.held]",
+          "state": "HELD",
+          "targetType": "USERNAME",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Held off the platform until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held.unicode",
+          "sourceLabel": "[fake golden.held.unicode Ωmega]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Gehalten — 保留中 🛑 until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "nulls: every nullable field null, unfinished and cancelled jobs, an unregistered collector",
+    "output": {
+      "runStatus": "RUNNING",
+      "partial": true,
+      "headline": "The run's status is RUNNING.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": null,
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": null,
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.gone",
+          "sourceLabel": "golden.gone (not in the current registry)",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.removed",
+          "sourceLabel": "golden.removed (not in the current registry)",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.gone",
+          "sourceLabel": "golden.gone (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "NOT_IMPLEMENTED",
+          "detail": "[test] not implemented",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held",
+          "sourceLabel": "[fake golden.held]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Held off the platform until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held.unicode",
+          "sourceLabel": "[fake golden.held.unicode Ωmega]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Gehalten — 保留中 🛑 until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "unicode: labels, details, messages and target values",
+    "output": {
+      "runStatus": "PARTIAL",
+      "partial": true,
+      "headline": "PARTIAL RUN: 1 of 3 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 1 found nothing). 3 further collector(s) were excluded or held and did not run.",
+      "entries": [
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 2,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[test] Keine Einträge für bücher — 記録なし 🙅"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "UPSTREAM_RESPONSE_INVALID",
+          "detail": "[test] réponse invalide ‮ reversed \u0000 nul"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "SCOPE_AUTHORISATION_REQUIRED",
+          "detail": "[test] Für «aktive» Sammlung — 需要授权 🔒",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held",
+          "sourceLabel": "[fake golden.held]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Held off the platform until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held.unicode",
+          "sourceLabel": "[fake golden.held.unicode Ωmega]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Gehalten — 保留中 🛑 until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "an active collector ran: the active caveat",
+    "output": {
+      "runStatus": "SUCCEEDED",
+      "partial": false,
+      "headline": "COMPLETE RUN: all 1 planned collectors finished (1 found something, 0 found nothing).",
+      "entries": [
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "At least one collector contacted the target directly under a recorded scope authorisation; see the coverage entries.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "run status QUEUED, one found and one failed",
+    "output": {
+      "runStatus": "QUEUED",
+      "partial": true,
+      "headline": "The run's status is QUEUED.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "run status RUNNING, one found and one failed",
+    "output": {
+      "runStatus": "RUNNING",
+      "partial": true,
+      "headline": "The run's status is RUNNING.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "run status SUCCEEDED, one found and one failed",
+    "output": {
+      "runStatus": "SUCCEEDED",
+      "partial": false,
+      "headline": "COMPLETE RUN: all 2 planned collectors finished (1 found something, 0 found nothing).",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "run status PARTIAL, one found and one failed",
+    "output": {
+      "runStatus": "PARTIAL",
+      "partial": true,
+      "headline": "PARTIAL RUN: 1 of 2 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 0 found nothing).",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "run status FAILED, one found and one failed",
+    "output": {
+      "runStatus": "FAILED",
+      "partial": true,
+      "headline": "FAILED RUN: none of the 2 planned collectors completed.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "run status CANCELLED, one found and one failed",
+    "output": {
+      "runStatus": "CANCELLED",
+      "partial": true,
+      "headline": "The run's status is CANCELLED.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": null,
+          "detail": null
+        }
+      ],
+      "notApplicable": [],
+      "caveats": [
+        "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  },
+  {
+    "fixture": "large run: 420 jobs over every status and outcome, 60 exclusions, an active collector",
+    "output": {
+      "runStatus": "PARTIAL",
+      "partial": true,
+      "headline": "PARTIAL RUN: 350 of 420 planned collectors did not complete, so this report does not cover what they would have collected (10 found something, 60 found nothing). 50 further collector(s) were excluded or held and did not run.",
+      "entries": [
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 2,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 75]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 76]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 77]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 78]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 79]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_105",
+          "detail": "[error 105]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 1,
+          "state": "FAILED",
+          "reasonCode": "ERR_106",
+          "detail": "[error 106]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 2,
+          "state": "FAILED",
+          "reasonCode": "ERR_107",
+          "detail": "[error 107]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_108",
+          "detail": "[error 108]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "FAILED",
+          "reasonCode": "ERR_109",
+          "detail": "[error 109]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_110",
+          "detail": "[error 110]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_111",
+          "detail": "[error 111]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_112",
+          "detail": "[error 112]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_113",
+          "detail": "[error 113]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_114",
+          "detail": "[error 114]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_115",
+          "detail": "[error 115]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_116",
+          "detail": "[error 116]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_117",
+          "detail": "[error 117]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_118",
+          "detail": "[error 118]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_119",
+          "detail": "[error 119]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_120",
+          "detail": "[error 120]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_121",
+          "detail": "[error 121]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_122",
+          "detail": "[error 122]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_123",
+          "detail": "[error 123]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_124",
+          "detail": "[error 124]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_125",
+          "detail": "[error 125]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_126",
+          "detail": "[error 126]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_127",
+          "detail": "[error 127]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_128",
+          "detail": "[error 128]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_129",
+          "detail": "[error 129]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_130",
+          "detail": "[error 130]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_131",
+          "detail": "[error 131]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_132",
+          "detail": "[error 132]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_133",
+          "detail": "[error 133]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_134",
+          "detail": "[error 134]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_135",
+          "detail": "[error 135]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_136",
+          "detail": "[error 136]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_137",
+          "detail": "[error 137]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_138",
+          "detail": "[error 138]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_139",
+          "detail": "[error 139]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 2,
+          "state": "FAILED",
+          "reasonCode": "ERR_140",
+          "detail": "[error 140]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_141",
+          "detail": "[error 141]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 1,
+          "state": "FAILED",
+          "reasonCode": "ERR_142",
+          "detail": "[error 142]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 2,
+          "state": "FAILED",
+          "reasonCode": "ERR_143",
+          "detail": "[error 143]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_144",
+          "detail": "[error 144]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_145",
+          "detail": "[error 145]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_146",
+          "detail": "[error 146]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_147",
+          "detail": "[error 147]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_148",
+          "detail": "[error 148]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_149",
+          "detail": "[error 149]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_150",
+          "detail": "[error 150]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_151",
+          "detail": "[error 151]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_152",
+          "detail": "[error 152]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_153",
+          "detail": "[error 153]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_154",
+          "detail": "[error 154]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_155",
+          "detail": "[error 155]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_156",
+          "detail": "[error 156]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_157",
+          "detail": "[error 157]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_158",
+          "detail": "[error 158]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_159",
+          "detail": "[error 159]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_160",
+          "detail": "[error 160]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_161",
+          "detail": "[error 161]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_162",
+          "detail": "[error 162]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_163",
+          "detail": "[error 163]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_164",
+          "detail": "[error 164]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_165",
+          "detail": "[error 165]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_166",
+          "detail": "[error 166]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_167",
+          "detail": "[error 167]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_168",
+          "detail": "[error 168]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_169",
+          "detail": "[error 169]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_170",
+          "detail": "[error 170]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_171",
+          "detail": "[error 171]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_172",
+          "detail": "[error 172]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_173",
+          "detail": "[error 173]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_174",
+          "detail": "[error 174]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "QUEUED",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "RUNNING",
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 1,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 2,
+          "state": "COLLECTED",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 285]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 286]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 287]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 288]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": "[detail 289]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOTHING_FOUND",
+          "reasonCode": null,
+          "detail": null
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_315",
+          "detail": "[error 315]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "FAILED",
+          "reasonCode": "ERR_316",
+          "detail": "[error 316]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "FAILED",
+          "reasonCode": "ERR_317",
+          "detail": "[error 317]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_318",
+          "detail": "[error 318]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 1,
+          "state": "FAILED",
+          "reasonCode": "ERR_319",
+          "detail": "[error 319]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_320",
+          "detail": "[error 320]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_321",
+          "detail": "[error 321]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_322",
+          "detail": "[error 322]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_323",
+          "detail": "[error 323]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_324",
+          "detail": "[error 324]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_325",
+          "detail": "[error 325]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_326",
+          "detail": "[error 326]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_327",
+          "detail": "[error 327]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_328",
+          "detail": "[error 328]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_329",
+          "detail": "[error 329]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_330",
+          "detail": "[error 330]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_331",
+          "detail": "[error 331]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_332",
+          "detail": "[error 332]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_333",
+          "detail": "[error 333]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_334",
+          "detail": "[error 334]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_335",
+          "detail": "[error 335]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_336",
+          "detail": "[error 336]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_337",
+          "detail": "[error 337]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_338",
+          "detail": "[error 338]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NEEDS_CREDENTIALS",
+          "reasonCode": "ERR_339",
+          "detail": "[error 339]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_340",
+          "detail": "[error 340]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_341",
+          "detail": "[error 341]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_342",
+          "detail": "[error 342]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_343",
+          "detail": "[error 343]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "REFUSED",
+          "reasonCode": "ERR_344",
+          "detail": "[error 344]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_345",
+          "detail": "[error 345]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_346",
+          "detail": "[error 346]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_347",
+          "detail": "[error 347]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_348",
+          "detail": "[error 348]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_349",
+          "detail": "[error 349]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 2,
+          "state": "FAILED",
+          "reasonCode": "ERR_350",
+          "detail": "[error 350]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_351",
+          "detail": "[error 351]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "FAILED",
+          "reasonCode": "ERR_352",
+          "detail": "[error 352]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "FAILED",
+          "reasonCode": "ERR_353",
+          "detail": "[error 353]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_354",
+          "detail": "[error 354]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_355",
+          "detail": "[error 355]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_356",
+          "detail": "[error 356]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_357",
+          "detail": "[error 357]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_358",
+          "detail": "[error 358]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_359",
+          "detail": "[error 359]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_360",
+          "detail": "[error 360]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_361",
+          "detail": "[error 361]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_362",
+          "detail": "[error 362]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_363",
+          "detail": "[error 363]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_364",
+          "detail": "[error 364]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_365",
+          "detail": "[error 365]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_366",
+          "detail": "[error 366]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_367",
+          "detail": "[error 367]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_368",
+          "detail": "[error 368]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_369",
+          "detail": "[error 369]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_370",
+          "detail": "[error 370]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_371",
+          "detail": "[error 371]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_372",
+          "detail": "[error 372]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_373",
+          "detail": "[error 373]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_374",
+          "detail": "[error 374]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_375",
+          "detail": "[error 375]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_376",
+          "detail": "[error 376]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_377",
+          "detail": "[error 377]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_378",
+          "detail": "[error 378]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_379",
+          "detail": "[error 379]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_380",
+          "detail": "[error 380]"
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_381",
+          "detail": "[error 381]"
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_382",
+          "detail": "[error 382]"
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_383",
+          "detail": "[error 383]"
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "FAILED",
+          "reasonCode": "ERR_384",
+          "detail": "[error 384]"
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 1,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 2,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.dns",
+          "sourceLabel": "[fake golden.dns]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.crt",
+          "sourceLabel": "[fake golden.crt]",
+          "targetType": "DOMAIN",
+          "attempts": 1,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.whois",
+          "sourceLabel": "[fake golden.whois]",
+          "targetType": "DOMAIN",
+          "attempts": 2,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.active",
+          "sourceLabel": "[fake golden.active]",
+          "targetType": "DOMAIN",
+          "attempts": 3,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.unicode",
+          "sourceLabel": "[fake golden.unicode Zoë 東京 🛰️ ﬁ]",
+          "targetType": "DOMAIN",
+          "attempts": 0,
+          "evidenceCount": 0,
+          "state": "NOT_FINISHED",
+          "reasonCode": "CANCELLED",
+          "detail": "The job was cancelled."
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 1]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-2",
+          "sourceLabel": "golden.excluded-2 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 2]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 3]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-4",
+          "sourceLabel": "golden.excluded-4 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 4]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-6",
+          "sourceLabel": "golden.excluded-6 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 6]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 7]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-8",
+          "sourceLabel": "golden.excluded-8 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 8]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 9]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 11]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-12",
+          "sourceLabel": "golden.excluded-12 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 12]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 13]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-14",
+          "sourceLabel": "golden.excluded-14 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 14]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-16",
+          "sourceLabel": "golden.excluded-16 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 16]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 17]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-18",
+          "sourceLabel": "golden.excluded-18 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 18]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 19]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 21]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-22",
+          "sourceLabel": "golden.excluded-22 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 22]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 23]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-24",
+          "sourceLabel": "golden.excluded-24 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 24]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-26",
+          "sourceLabel": "golden.excluded-26 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 26]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 27]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-28",
+          "sourceLabel": "golden.excluded-28 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 28]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 29]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 31]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-32",
+          "sourceLabel": "golden.excluded-32 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 32]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 33]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-34",
+          "sourceLabel": "golden.excluded-34 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 34]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-36",
+          "sourceLabel": "golden.excluded-36 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 36]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 37]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-38",
+          "sourceLabel": "golden.excluded-38 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 38]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 39]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 41]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-42",
+          "sourceLabel": "golden.excluded-42 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 42]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 43]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-44",
+          "sourceLabel": "golden.excluded-44 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 44]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-46",
+          "sourceLabel": "golden.excluded-46 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 46]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 47]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-48",
+          "sourceLabel": "golden.excluded-48 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 48]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 49]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 51]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-52",
+          "sourceLabel": "golden.excluded-52 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 52]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 53]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-54",
+          "sourceLabel": "golden.excluded-54 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 54]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-56",
+          "sourceLabel": "golden.excluded-56 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "MODULE_NOT_IN_PLAN",
+          "detail": "[exclusion 56]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": null,
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 57]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.excluded-58",
+          "sourceLabel": "golden.excluded-58 (not in the current registry)",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 58]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]",
+          "state": "EXCLUDED",
+          "targetType": "DOMAIN",
+          "reasonCode": "LICENCE_BLOCKED",
+          "detail": "[exclusion 59]",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held",
+          "sourceLabel": "[fake golden.held]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Held off the platform until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        },
+        {
+          "collectorId": "golden.held.unicode",
+          "sourceLabel": "[fake golden.held.unicode Ωmega]",
+          "state": "HELD",
+          "targetType": "DOMAIN",
+          "reasonCode": "COLLECTOR_HELD",
+          "detail": "[test] Gehalten — 保留中 🛑 until [condition].",
+          "evidenceCount": 0,
+          "attempts": null
+        }
+      ],
+      "notApplicable": [
+        {
+          "collectorId": "golden.excluded-0",
+          "sourceLabel": "golden.excluded-0 (not in the current registry)"
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]"
+        },
+        {
+          "collectorId": "golden.excluded-10",
+          "sourceLabel": "golden.excluded-10 (not in the current registry)"
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]"
+        },
+        {
+          "collectorId": "golden.excluded-20",
+          "sourceLabel": "golden.excluded-20 (not in the current registry)"
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]"
+        },
+        {
+          "collectorId": "golden.excluded-30",
+          "sourceLabel": "golden.excluded-30 (not in the current registry)"
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]"
+        },
+        {
+          "collectorId": "golden.excluded-40",
+          "sourceLabel": "golden.excluded-40 (not in the current registry)"
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]"
+        },
+        {
+          "collectorId": "golden.excluded-50",
+          "sourceLabel": "golden.excluded-50 (not in the current registry)"
+        },
+        {
+          "collectorId": "golden.user",
+          "sourceLabel": "[fake golden.user]"
+        }
+      ],
+      "caveats": [
+        "At least one collector contacted the target directly under a recorded scope authorisation; see the coverage entries.",
+        "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+        "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+        "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+        "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+        "Sources can change after collection. Each source shows when it was collected."
+      ]
+    }
+  }
+]
