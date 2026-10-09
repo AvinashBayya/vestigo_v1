@@ -814,6 +814,10 @@ async function requestAnalysis(engine: Engine, fixture: CaseFixture): Promise<st
         engineVersion: ENGINE_VERSION,
         requestedByUserId: fixture.userId,
         requestedAt: new Date(),
+        basis: {
+          evidenceIds: read.input.evidence.map((e) => e.id),
+          runIds: read.input.runs.map((r) => r.id),
+        },
       });
       await repos.caseAnalysisEvents.request({
         analysisId: analysis.id,
@@ -971,6 +975,74 @@ describe("a hung or failing case analysis holds only its own slots (RELEASE-BLOC
       );
     } finally {
       hang.release();
+      await letters.close();
+      await engine.close();
+    }
+  }, 60_000);
+});
+
+describe("a case analysis whose last attempt cannot be failed is still dead-lettered, and resumes (RELEASE-BLOCKING)", () => {
+  it("dead-letters it while the database refuses the cleanup; enqueueing it again delivers it again", async () => {
+    const fixture = await createCaseFixture(db, "analysis-unrecorded");
+    await asOwner(fixture.tenantId, "update public.tenants set plan = $1, vetting_status = $2", [
+      "TECHINT_AND_PERSON",
+      "APPROVED",
+    ]);
+    // Every delivery fails while "the database is down", and so does the
+    // dead-letter step's attempt to record the failure.
+    const outage = { on: true };
+    class DuringAnOutage extends CaseAnalysisProcessor {
+      override async failUnrecorded(
+        ...args: Parameters<CaseAnalysisProcessor["failUnrecorded"]>
+      ): Promise<void> {
+        if (outage.on) throw new Error("[database unreachable]");
+        return super.failUnrecorded(...args);
+      }
+    }
+    const processor = new DuringAnOutage({
+      db,
+      collectors: FIXTURE_COLLECTORS,
+      timeoutMs: 8_000,
+      readInput: async (reads, caseId, collectors) => {
+        if (outage.on) throw new Error("[database unreachable]");
+        return readCaseAnalysisInput(reads, caseId, collectors);
+      },
+    });
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({ sources: [], collectors: [] }),
+      allowUnverifiedSources: false,
+      network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
+    });
+    const engine = await startEngine(runtime, { caseAnalyses: { processor, concurrency: 1 } });
+    const letters = new Queue(DEAD_LETTER_QUEUE, {
+      connection: { url: engine.connection.url },
+      prefix: engine.connection.prefix,
+    });
+    try {
+      const analysisId = await requestAnalysis(engine, fixture);
+      const dead = await waitFor(
+        "the dead-letter record",
+        async () =>
+          (await letters.getJobs(["waiting", "wait"]))
+            .map((job) => DEAD_LETTER_MESSAGE.parse(job.data))
+            .filter((row) => row.caseAnalysisId === analysisId),
+        (rows) => rows.length === 1,
+      );
+      expect(dead[0]).toMatchObject({ kind: "CASE_ANALYSIS", errorCode: "WORKER_ERROR" });
+      // The cleanup could not record the failure: the attempt is still pending.
+      expect((await standingOf(fixture, analysisId))?.status).toBe("PENDING");
+
+      // The database is back. Requesting the analysis again enqueues the same
+      // attempt: its failed job is delivered again, and it completes.
+      outage.on = false;
+      await engine.analyses.enqueueAnalysis(fixture.tenantId, analysisId, 1);
+      const completed = await waitFor(
+        "the resumed attempt",
+        () => standingOf(fixture, analysisId),
+        (standing) => standing?.status === "COMPLETE",
+      );
+      expect(completed).toMatchObject({ attempt: 1, status: "COMPLETE" });
+    } finally {
       await letters.close();
       await engine.close();
     }

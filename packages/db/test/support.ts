@@ -288,6 +288,7 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       engineVersion: 1,
       requestedByUserId: user.id,
       requestedAt: new Date(Date.parse("2026-10-09T10:00:00.000Z")),
+      basis: { evidenceIds: [evidence.id], runIds: [run.id] },
     });
     await repos.caseAnalysisEvents.request({
       analysisId: analysis.id,

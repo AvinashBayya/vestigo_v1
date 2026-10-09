@@ -402,6 +402,14 @@ describe("the input read from a case's pins (RELEASE-BLOCKING)", () => {
     expect(caseInputHash(await readNow())).toBe(caseInputHash(await readNow()));
   });
 
+  it("reads and hashes a case id spelled in capitals as the stored id", async () => {
+    const upper = await db.withTenant(fixture.tenantId, ({ reads }) =>
+      readCaseAnalysisInput(reads, fixture.caseId.toUpperCase(), FIXTURE_COLLECTORS),
+    );
+    expect(upper.input.caseId).toBe(fixture.caseId);
+    expect(caseInputHash(upper)).toBe(caseInputHash(await readNow()));
+  });
+
   it("changes with an unpin, and with a new claim on a pinned entity", async () => {
     const f = await createCaseFixture(db, "case-input-changes");
     const before = caseInputHash(await readNow(f));

@@ -549,6 +549,7 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
           engineVersion: 1,
           requestedByUserId: null,
           requestedAt: new Date(Date.parse("2026-10-09T11:00:00.000Z")),
+          basis: { evidenceIds: [], runIds: [] },
         }),
       (r, v, a) =>
         r.caseAnalyses.findOrCreate({
@@ -557,6 +558,7 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
           engineVersion: 1,
           requestedByUserId: v.userId,
           requestedAt: new Date(Date.parse("2026-10-09T11:00:00.000Z")),
+          basis: { evidenceIds: [], runIds: [] },
         }),
     ],
     list: (r) => r.caseAnalyses.list(page),

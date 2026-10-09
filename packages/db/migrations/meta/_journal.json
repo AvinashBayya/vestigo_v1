@@ -162,6 +162,13 @@
       "when": 1791531072453,
       "tag": "0022_r1b_case_analyses_security",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791543515048,
+      "tag": "0023_r1b_case_analysis_basis",
+      "breakpoints": true
     }
   ]
 }

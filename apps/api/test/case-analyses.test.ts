@@ -15,22 +15,30 @@
  *     nothing (D-19); an analysis is refused by the records it read, after
  *     they are unpinned;
  *   - one snapshot for each read and its probes (D-32);
- *   - no credit estimate (null, with the reason) and no usage event.
+ *   - no credit estimate (null, with the reason) and no usage event;
+ *   - a request answers without the documents, which only case:read shows;
+ *   - the recorded requester, the 409s and the 503 after commit;
+ *   - a case id spelled in capitals is the same case and the same input.
  * Analyses are made by the real processor, called directly.
  */
 import { randomUUID } from "node:crypto";
 import type { TenantId } from "@repo/core";
 import {
+  CaseAnalysisEventsRepository,
   CaseScopeRepository,
   contentRef,
   ExplorationRepository,
   hashContent,
+  UniqueConflictError,
+  type CaseScopeRecords,
   type PersonProbe,
 } from "@repo/db";
 import {
   CASE_ANALYSIS_STATE_REASONS,
   CaseAnalysisDocumentSchema,
   CaseAnalysisProcessor,
+  DEFAULT_MAX_CASE_RECORDS,
+  QueueUnavailableError,
 } from "@repo/osint-engine";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -229,6 +237,7 @@ interface Read {
   readonly analysis: {
     readonly id: string;
     readonly inputHash: string;
+    readonly requestedByUserId: string | null;
     readonly attempt: number;
     readonly status: string;
     readonly finishedAt: string | null;
@@ -306,8 +315,17 @@ describe("requesting and reading a case analysis (RELEASE-BLOCKING)", () => {
         reason: CASE_ANALYSIS_STATE_REASONS.PENDING,
         estimatedCredits: null,
         estimatedCreditsReason: expect.stringContaining("No credit cost") as unknown,
-        analysis: { attempt: 1, status: "PENDING", document: null, finishedAt: null, error: null },
+        analysis: {
+          attempt: 1,
+          status: "PENDING",
+          finishedAt: null,
+          requestedByUserId: tenant.userId,
+        },
       });
+      // A request answers without the documents: only case:read shows them.
+      for (const key of ["document", "wording", "error"]) {
+        expect(body.analysis).not.toHaveProperty(key);
+      }
       expect(body.analysis?.inputHash).toBe(body.currentInputHash);
       analysisId = body.analysis?.id ?? "";
       expect(calls).toEqual([{ analysisId, attempt: 1, committed: true }]);
@@ -415,7 +433,7 @@ describe("requesting and reading a case analysis (RELEASE-BLOCKING)", () => {
       expect(retried.status).toBe(202);
       expect(retried.json<Read>()).toMatchObject({
         state: "PENDING",
-        analysis: { id: pending.id, attempt: 2, error: null },
+        analysis: { id: pending.id, attempt: 2, finishedAt: null },
       });
       expect(calls).toEqual([{ analysisId: pending.id, attempt: 2, committed: true }]);
     } finally {
@@ -499,10 +517,182 @@ describe("who may request and read a case analysis (RELEASE-BLOCKING)", () => {
     const reader = await issue(["case:read"]);
     const requested = await withKey(full, "POST", `/api/v1/cases/${caseId}/analyses`);
     expect(requested.statusCode).toBe(202);
+    // A key's request is recorded as its issuer's.
+    expect(requested.json<Read>().analysis?.requestedByUserId).toBe(tenant.userId);
     expect((await withKey(reader, "GET", `/api/v1/cases/${caseId}/analyses`)).statusCode).toBe(200);
     const refused = await withKey(reader, "POST", `/api/v1/cases/${caseId}/analyses`);
     expect(refused.statusCode).toBe(403);
     expect(refused.json()).toMatchObject({ code: "PERMISSION_DENIED" });
+
+    // case:analyse alone may request, and is answered without the documents,
+    // even for a complete analysis; reading them is refused.
+    const analyst = await issue(["case:analyse"]);
+    const analysisId = requested.json<Read>().analysis?.id ?? "";
+    await processor().process(tenant.tenantId, analysisId, 1);
+    const existing = await withKey(analyst, "POST", `/api/v1/cases/${caseId}/analyses`);
+    expect(existing.statusCode).toBe(200);
+    const body = existing.json<Read>();
+    expect(body).toMatchObject({ state: "COMPLETE", analysis: { id: analysisId } });
+    for (const key of ["document", "wording", "error"]) {
+      expect(body.analysis).not.toHaveProperty(key);
+    }
+    for (const url of [`/api/v1/cases/${caseId}/analyses`, `/api/v1/case-analyses/${analysisId}`]) {
+      const read = await withKey(analyst, "GET", url);
+      expect(read.statusCode).toBe(403);
+      expect(read.json()).toMatchObject({ code: "PERMISSION_DENIED" });
+    }
+  });
+});
+
+describe("a case id is the case's, however it is spelled (RELEASE-BLOCKING)", () => {
+  it("a request and a read in capitals are the same case, input and analysis", async () => {
+    const tenant = await newTenant("analyses-capitals");
+    const seeded = await seedRun(tenant, "NONE");
+    const { caseId } = await caseOf(tenant, [seeded.techEntityId]);
+    const upper = caseId.toUpperCase();
+    const requested = await post(tenant, upper);
+    expect(requested.status).toBe(202);
+    const body = requested.json<Read>();
+    expect(body.caseId).toBe(caseId);
+    const analysisId = body.analysis?.id ?? "";
+    // The job reads the case by its stored id and finds the same input.
+    expect((await processor().process(tenant.tenantId, analysisId, 1)).kind).toBe("COMPLETED");
+    for (const id of [caseId, upper]) {
+      expect((await latest(tenant, id)).json<Read>()).toMatchObject({
+        state: "COMPLETE",
+        currentInputHash: body.currentInputHash,
+        analysis: { id: analysisId },
+      });
+      const again = await post(tenant, id);
+      expect(again.status).toBe(200);
+      expect(again.json<Read>().analysis?.id).toBe(analysisId);
+    }
+  });
+});
+
+describe("requests refused, or not taken by the queue (RELEASE-BLOCKING)", () => {
+  it("refuses a case past the size bound with 409 CASE_TOO_LARGE, recording nothing", async () => {
+    const tenant = await newTenant("analyses-too-large");
+    const seeded = await seedRun(tenant, "NONE");
+    const { caseId } = await caseOf(tenant, [seeded.techEntityId]);
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- called below with each instance as `this`
+    const original = CaseScopeRepository.prototype.records;
+    const spy = vi
+      .spyOn(CaseScopeRepository.prototype, "records")
+      .mockImplementation(async function (
+        this: CaseScopeRepository,
+        id,
+      ): Promise<CaseScopeRecords> {
+        const records = await original.call(this, id);
+        const [job] = records.jobs;
+        if (job === undefined) return records;
+        // One record past the bound, without writing tens of thousands of rows.
+        return {
+          ...records,
+          jobs: [...records.jobs, ...Array.from({ length: DEFAULT_MAX_CASE_RECORDS }, () => job)],
+        };
+      });
+    try {
+      const response = await post(tenant, caseId);
+      expect(response.status).toBe(409);
+      expect(response.json()).toMatchObject({ code: "CASE_TOO_LARGE" });
+    } finally {
+      spy.mockRestore();
+    }
+    const analyses = await api.db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.caseAnalyses.listForCase(caseId, { limit: 10 }),
+    );
+    expect(analyses).toEqual([]);
+  });
+
+  it("answers 409 CASE_ANALYSIS_REQUEST_CONFLICT when another request recorded the retry first", async () => {
+    const tenant = await newTenant("analyses-conflict");
+    const seeded = await seedRun(tenant, "NONE");
+    const { caseId } = await caseOf(tenant, [seeded.techEntityId]);
+    const analysisId = (await post(tenant, caseId)).json<Read>().analysis?.id ?? "";
+    await api.db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.caseAnalysisEvents.fail({
+        analysisId,
+        attempt: 1,
+        error: { code: "WORKER_ERROR", message: "[failed]" },
+        at: AT,
+      }),
+    );
+    // The database refuses the retry's request as a duplicate: another request won.
+    const spy = vi
+      .spyOn(CaseAnalysisEventsRepository.prototype, "request")
+      .mockRejectedValue(new UniqueConflictError("case_analysis_events_one_request"));
+    try {
+      const response = await post(tenant, caseId);
+      expect(response.status).toBe(409);
+      expect(response.json()).toMatchObject({ code: "CASE_ANALYSIS_REQUEST_CONFLICT" });
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await latest(tenant, caseId)).json<Read>()).toMatchObject({
+      state: "FAILED",
+      analysis: { id: analysisId, attempt: 1 },
+    });
+  });
+
+  it("answers 503 when the queue does not take the job; the analysis is recorded, and a new request resumes it", async () => {
+    const tenant = await newTenant("analyses-queue-down");
+    const seeded = await seedRun(tenant, "NONE");
+    const { caseId } = await caseOf(tenant, [seeded.techEntityId]);
+    const queue = api.services.runs.caseAnalyses;
+    const spy = vi
+      .spyOn(queue, "enqueueAnalysis")
+      .mockRejectedValue(new QueueUnavailableError(5_000));
+    let analysisId: string;
+    try {
+      const response = await post(tenant, caseId);
+      expect(response.status).toBe(503);
+      expect(response.json()).toMatchObject({ code: "QUEUE_UNAVAILABLE" });
+      const recorded = (await latest(tenant, caseId)).json<Read>();
+      expect(recorded).toMatchObject({ state: "PENDING", analysis: { attempt: 1 } });
+      analysisId = recorded.analysis?.id ?? "";
+    } finally {
+      spy.mockRestore();
+    }
+    const { calls, spy: watching } = watchEnqueues(tenant.tenantId);
+    try {
+      const resumed = await post(tenant, caseId);
+      expect(resumed.status).toBe(200);
+      expect(calls).toEqual([{ analysisId, attempt: 1, committed: true }]);
+    } finally {
+      watching.mockRestore();
+    }
+  });
+});
+
+describe("STALE says whether the analysis holds a document (RELEASE-BLOCKING)", () => {
+  it("a stale pending or failed analysis is said to hold no document", async () => {
+    const tenant = await newTenant("analyses-stale-empty");
+    const seeded = await seedRun(tenant, "NONE");
+    const { caseId } = await caseOf(tenant, [seeded.techEntityId]);
+    const analysisId = (await post(tenant, caseId)).json<Read>().analysis?.id ?? "";
+    const change = (value: string) =>
+      api.db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.claims.create({
+          evidenceId: seeded.techEvidenceId,
+          subject: { entityId: seeded.techEntityId },
+          attribute: "note",
+          value,
+          strength: "REPORTED",
+        }),
+      );
+    await change("[late claim]");
+    expect((await one(tenant, analysisId)).json<Read>()).toMatchObject({
+      state: "STALE",
+      reason: CASE_ANALYSIS_STATE_REASONS.STALE_WITHOUT_DOCUMENT,
+      analysis: { status: "PENDING", document: null },
+    });
+    await processor().process(tenant.tenantId, analysisId, 1);
+    expect((await one(tenant, analysisId)).json<Read>()).toMatchObject({
+      state: "STALE",
+      reason: CASE_ANALYSIS_STATE_REASONS.STALE_WITHOUT_DOCUMENT,
+      analysis: { status: "FAILED", error: { code: "CASE_INPUT_CHANGED" }, document: null },
+    });
   });
 });
 
@@ -579,6 +769,42 @@ describe("the person gate over a case and its runs, on every route (RELEASE-BLOC
     const fresh = await post(tenant, caseId);
     expect(fresh.status).toBe(202);
     expect(fresh.json<Read>().analysis?.id).not.toBe(analysisId);
+  });
+
+  it("refuses a pending or failed analysis by the records it read, after they are unpinned", async () => {
+    const tenant = await newTenant("analyses-gate-no-document");
+    const seeded = await seedRun(tenant, "NONE");
+    const person = await seedRun(tenant, "FOUND");
+    if (person.personEntityId === null) return expect.fail("[test] a person entity");
+    const { caseId, pins } = await caseOf(tenant, [seeded.techEntityId, person.personEntityId]);
+    await setEntitlement(tenant.tenantId, ENTITLED);
+    const pendingId = (await post(tenant, caseId)).json<Read>().analysis?.id ?? "";
+    // A second case's analysis fails, its message naming records it read.
+    const failedCase = await caseOf(tenant, [seeded.techEntityId, person.personEntityId]);
+    const failedId = (await post(tenant, failedCase.caseId)).json<Read>().analysis?.id ?? "";
+    await api.db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.caseAnalysisEvents.fail({
+        analysisId: failedId,
+        attempt: 1,
+        error: {
+          code: "CASE_INPUT_INVALID",
+          message: `[EVIDENCE_NOT_IN_JOB_RESULT (evidence ${String(person.personEvidenceId)})]`,
+        },
+        at: AT,
+      }),
+    );
+    for (const pin of [pins[1], failedCase.pins[1]]) {
+      if (pin === undefined) return expect.fail("[test] the person pin");
+      await api.db.withTenant(tenant.tenantId, ({ repos }) => repos.casePins.unpin(pin));
+    }
+    await setEntitlement(tenant.tenantId, LOCKED);
+    for (const [id, ofCase] of [
+      [pendingId, caseId],
+      [failedId, failedCase.caseId],
+    ] as const) {
+      expectRefusedWhole(await one(tenant, id), [id]);
+      expectRefusedWhole(await latest(tenant, ofCase), [id]);
+    }
   });
 
   it("answers a locked organisation in full for a case resting on no person data", async () => {

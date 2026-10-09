@@ -55,6 +55,7 @@ async function newAnalysis(inputHash = nextHash()) {
       engineVersion: 3,
       requestedByUserId: tenant.userId,
       requestedAt: at("2026-10-09T12:00:00.000Z"),
+      basis: { evidenceIds: [tenant.evidenceId], runIds: [tenant.runId] },
     }),
   );
 }
@@ -266,6 +267,46 @@ describe("what an event holds (RELEASE-BLOCKING)", () => {
   });
 });
 
+describe("what an analysis rests on (RELEASE-BLOCKING)", () => {
+  it("records the evidence and runs of its input with the request, as given", async () => {
+    const { analysis } = await newAnalysis();
+    expect(analysis.basisEvidenceIds).toEqual([tenant.evidenceId]);
+    expect(analysis.basisRunIds).toEqual([tenant.runId]);
+  });
+
+  it("refuses a basis that is not ids, and a row with half a basis", async () => {
+    const malformed = await db
+      .withTenant(tenant.tenantId, ({ repos }) =>
+        repos.caseAnalyses.findOrCreate({
+          caseId: tenant.caseId,
+          inputHash: nextHash(),
+          engineVersion: 3,
+          requestedByUserId: null,
+          requestedAt: at("2026-10-09T12:00:00.000Z"),
+          basis: { evidenceIds: ["[not an id]"], runIds: [] },
+        }),
+      )
+      .catch((error: unknown) => error);
+    expect(malformed).toMatchObject({ code: "INVALID_IDENTIFIER" });
+    const owner = await rawClient(TEST_DATABASE.ownerUrl);
+    try {
+      const state = await asTenant(owner, tenant.tenantId, () =>
+        sqlStateOf(async () => {
+          await owner.query(
+            `insert into public.case_analyses
+               (tenant_id, case_id, input_hash, engine_version, requested_at, basis_evidence_ids, basis_run_ids)
+             values ($1, $2, $3, 3, now(), '{}', null)`,
+            [tenant.tenantId, tenant.caseId, nextHash()],
+          );
+        }),
+      );
+      expect(state).toBe("23514");
+    } finally {
+      await owner.end();
+    }
+  });
+});
+
 describe("written once, whatever role writes (RELEASE-BLOCKING)", () => {
   it("gives the application no UPDATE or DELETE on either table", async () => {
     const analysis = await completed();
@@ -312,6 +353,7 @@ describe("written once, whatever role writes (RELEASE-BLOCKING)", () => {
           });
         return [
           await attempt(`update public.case_analyses set input_hash = input_hash where id = $1`),
+          await attempt(`update public.case_analyses set basis_run_ids = '{}' where id = $1`),
           await attempt(
             `update public.case_analysis_events set document = '{"forged": true}' where analysis_id = $1`,
           ),
@@ -320,7 +362,7 @@ describe("written once, whatever role writes (RELEASE-BLOCKING)", () => {
           await attempt(`truncate public.case_analysis_events, public.case_analyses`, []),
         ];
       });
-      expect(states).toEqual(["CAN01", "CAN01", "CAN01", "CAN01"]);
+      expect(states).toEqual(["CAN01", "CAN01", "CAN01", "CAN01", "CAN01"]);
     } finally {
       await owner.end();
     }

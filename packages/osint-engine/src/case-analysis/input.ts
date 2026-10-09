@@ -36,10 +36,13 @@ export async function readCaseAnalysisInput(
   caseId: string,
   collectors: CaseAnalysisCollectors,
 ): Promise<CaseAnalysisInput> {
-  const records = await reads.caseScope.records(caseId);
+  // A uuid's text is lowercase, as Postgres returns it: the hash never depends
+  // on how a caller spelled the case id.
+  const id = caseId.toLowerCase();
+  const records = await reads.caseScope.records(id);
   return {
     input: {
-      caseId,
+      caseId: id,
       evidence: records.evidence.map((row) => ({
         id: row.id,
         collectorId: row.collectorId,

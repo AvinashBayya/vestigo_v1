@@ -19,6 +19,11 @@ export interface NewCaseAnalysis {
   readonly engineVersion: number;
   readonly requestedByUserId: string | null;
   readonly requestedAt: Date;
+  /** The evidence and runs of the input the hash names: what the analysis rests on. */
+  readonly basis: {
+    readonly evidenceIds: readonly string[];
+    readonly runIds: readonly string[];
+  };
 }
 
 /**
@@ -47,6 +52,8 @@ export class CaseAnalysesRepository extends TenantRepository {
             requestedByUserId:
               input.requestedByUserId === null ? null : requireUuid(input.requestedByUserId),
             requestedAt: input.requestedAt,
+            basisEvidenceIds: input.basis.evidenceIds.map(requireUuid),
+            basisRunIds: input.basis.runIds.map(requireUuid),
           })
           .onConflictDoNothing({
             target: [caseAnalyses.tenantId, caseAnalyses.caseId, caseAnalyses.inputHash],

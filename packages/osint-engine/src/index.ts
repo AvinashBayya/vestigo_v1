@@ -63,14 +63,18 @@ export {
   readView,
   recordCount,
   requestCaseAnalysis,
+  requestedView,
   type CaseAnalysisReadState,
   type CaseAnalysisReadView,
   type CaseAnalysisRecord,
   type CaseAnalysisRequest,
+  type CaseAnalysisRequestedView,
 } from "./case-analysis/requests.ts";
 export {
   CASE_ANALYSES_QUEUE,
   CaseAnalysisQueue,
+  DEFAULT_ENQUEUE_TIMEOUT_MS,
+  QueueUnavailableError,
   collectQueueName,
   DEAD_LETTER_MESSAGE,
   DEAD_LETTER_QUEUE,

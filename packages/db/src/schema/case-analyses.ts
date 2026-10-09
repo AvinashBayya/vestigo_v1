@@ -43,6 +43,16 @@ export const caseAnalyses = pgTable(
     requestedByUserId: uuid("requested_by_user_id"),
     /** When it was first requested, as the requester's clock recorded it. Never defaulted. */
     requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    /**
+     * What the analysis rests on, recorded with the request (R1-b): the evidence
+     * and the runs of the input its hash names. Every attempt reads exactly
+     * that input, so every read of the analysis, whatever its status, probes
+     * these for person data as well as the case as it is now (CLAUDE.md §9).
+     * Null only on a row written before 0023, which a read refuses as not
+     * recorded whole; the repository always writes both.
+     */
+    basisEvidenceIds: uuid("basis_evidence_ids").array(),
+    basisRunIds: uuid("basis_run_ids").array(),
   },
   (t) => [
     primaryKey({ name: "case_analyses_pk", columns: [t.tenantId, t.id] }),
@@ -65,6 +75,10 @@ export const caseAnalyses = pgTable(
     index("case_analyses_case_idx").on(t.tenantId, t.caseId, t.requestedAt),
     check("case_analyses_input_hash_format", sql`${t.inputHash} ~ '^sha256:[0-9a-f]{64}$'`),
     check("case_analyses_engine_version_positive", sql`${t.engineVersion} >= 1`),
+    check(
+      "case_analyses_basis_whole",
+      sql`(${t.basisEvidenceIds} is null) = (${t.basisRunIds} is null)`,
+    ),
   ],
 );
 

@@ -181,36 +181,76 @@ export class ReportQueue {
 }
 
 /** What the API uses to request an attempt at a case analysis. It never waits on the analysis. */
+/** The queue could not take a job within its bound. Nothing about the job's record changed. */
+export class QueueUnavailableError extends AppError {
+  readonly code = "QUEUE_UNAVAILABLE";
+
+  constructor(timeoutMs: number) {
+    super(`The job queue did not take the job within ${String(timeoutMs)} ms.`);
+    this.name = "QueueUnavailableError";
+  }
+}
+
+/** How long enqueueing an analysis may wait on the queue (CLAUDE.md section 5: no unbounded waits). */
+export const DEFAULT_ENQUEUE_TIMEOUT_MS = 5_000;
+
 export class CaseAnalysisQueue {
   readonly #queue: Queue;
   readonly #retry: RetryPolicy;
+  readonly #timeoutMs: number;
 
-  constructor(connection: QueueConnection, retry: RetryPolicy) {
+  constructor(
+    connection: QueueConnection,
+    retry: RetryPolicy,
+    options: { readonly enqueueTimeoutMs?: number } = {},
+  ) {
     this.#queue = new Queue(CASE_ANALYSES_QUEUE, {
       connection: bullConnection(connection),
       prefix: connection.prefix,
     });
     this.#retry = retry;
+    this.#timeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   }
 
   /**
-   * Enqueues one attempt; enqueueing the same attempt twice adds it once. Keyed
-   * by the analysis (one per case and input hash) and the attempt: BullMQ keeps
-   * a failed job, so a retry after a failure is a new attempt, never the old id.
+   * Enqueues one attempt, keyed by the analysis (one per case and input hash)
+   * and the attempt: a retry after a failure is a new attempt, never the old id.
+   * Enqueueing an attempt that is already waiting or running adds nothing. An
+   * attempt whose job finished without recording an outcome (BullMQ keeps a
+   * failed job) is delivered again under the same id, so requesting a pending
+   * analysis again always resumes it. Bounded: past the bound it throws
+   * QueueUnavailableError, and an add still in flight may land later, which is
+   * harmless (a delivery of a finished attempt records nothing).
    */
   async enqueueAnalysis(
     tenantId: TenantId,
     caseAnalysisId: string,
     attempt: number,
   ): Promise<void> {
-    await this.#queue.add(
-      "analyse",
-      CASE_ANALYSIS_MESSAGE.parse({ tenantId, caseAnalysisId, attempt }),
-      {
-        ...deliveryOptions(this.#retry),
-        jobId: `case-analysis-${caseAnalysisId}-${String(attempt)}`,
-      },
-    );
+    const message = CASE_ANALYSIS_MESSAGE.parse({ tenantId, caseAnalysisId, attempt });
+    const jobId = `case-analysis-${caseAnalysisId}-${String(attempt)}`;
+    const work = (async () => {
+      const existing = await this.#queue.getJob(jobId);
+      if (existing !== undefined) {
+        const state = await existing.getState();
+        if (state !== "failed" && state !== "completed") return;
+        await existing.remove();
+      }
+      await this.#queue.add("analyse", message, { ...deliveryOptions(this.#retry), jobId });
+    })();
+    // An abandoned add is never an unhandled rejection.
+    work.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const expired = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new QueueUnavailableError(this.#timeoutMs));
+      }, this.#timeoutMs);
+    });
+    try {
+      await Promise.race([work, expired]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async close(): Promise<void> {
@@ -473,17 +513,35 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
       const final = (await delivery.getState()) === "failed";
       observer.deliveryFailed?.(queue, final, error);
       if (!final) return;
+      const deliveryId = delivery.id ?? `${queue}-${String(Date.now())}`;
+      // The kind's cleanup (failing what the last attempt left unrecorded), then
+      // the dead-letter record. The record is written whatever the cleanup does:
+      // a cleanup that fails (the database still down after the last attempt)
+      // is reported, and never keeps the job out of the dead-letter queue
+      // (CLAUDE.md section 5).
+      const settle = async (cleanup: () => Promise<unknown>, letter: DeadLetter) => {
+        try {
+          await cleanup();
+        } catch (cleanupError) {
+          observer.deadLetterFailed?.(queue, cleanupError);
+        }
+        await recordDeadLetter(letter, deliveryId);
+      };
       try {
         const code = errorCode(error);
         if (kind === "REPORT_PDF") {
           const report = REPORT_MESSAGE.parse(delivery.data);
           // A crash on the last attempt: the render is failed here, never left RENDERING.
-          await options.renders?.renderer.failUnrecorded(
-            parseTenantId(report.tenantId),
-            report.reportId,
-            { code, message: "The PDF render's last attempt failed without recording an outcome." },
-          );
-          await recordDeadLetter(
+          await settle(
+            async () =>
+              options.renders?.renderer.failUnrecorded(
+                parseTenantId(report.tenantId),
+                report.reportId,
+                {
+                  code,
+                  message: "The PDF render's last attempt failed without recording an outcome.",
+                },
+              ),
             {
               kind,
               tenantId: report.tenantId,
@@ -494,24 +552,26 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
               queue,
               errorCode: code,
             },
-            delivery.id ?? `${queue}-${String(Date.now())}`,
           );
           return;
         }
         if (kind === "CASE_ANALYSIS") {
           const analysis = CASE_ANALYSIS_MESSAGE.parse(delivery.data);
           // A crash on the last attempt: the attempt is failed here, never left
-          // PENDING. An attempt that recorded its failure is left as it is.
-          await options.caseAnalyses?.processor.failUnrecorded(
-            parseTenantId(analysis.tenantId),
-            analysis.caseAnalysisId,
-            analysis.attempt,
-            {
-              code,
-              message: "The analysis's last attempt failed without recording an outcome.",
-            },
-          );
-          await recordDeadLetter(
+          // PENDING. An attempt that recorded its failure is left as it is. If
+          // this cannot be written, the attempt stays PENDING with its dead
+          // letter, and requesting the analysis again delivers it again.
+          await settle(
+            async () =>
+              options.caseAnalyses?.processor.failUnrecorded(
+                parseTenantId(analysis.tenantId),
+                analysis.caseAnalysisId,
+                analysis.attempt,
+                {
+                  code,
+                  message: "The analysis's last attempt failed without recording an outcome.",
+                },
+              ),
             {
               kind,
               tenantId: analysis.tenantId,
@@ -522,19 +582,19 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
               queue,
               errorCode: code,
             },
-            delivery.id ?? `${queue}-${String(Date.now())}`,
           );
           return;
         }
         if (kind === "REPORT") {
           const report = REPORT_MESSAGE.parse(delivery.data);
           // A crash on the last attempt: the report is failed here, never left RUNNING.
-          await options.reports?.generator.failUnrecorded(
-            parseTenantId(report.tenantId),
-            report.reportId,
-            { code, message: "The report's last attempt failed without recording an outcome." },
-          );
-          await recordDeadLetter(
+          await settle(
+            async () =>
+              options.reports?.generator.failUnrecorded(
+                parseTenantId(report.tenantId),
+                report.reportId,
+                { code, message: "The report's last attempt failed without recording an outcome." },
+              ),
             {
               kind,
               tenantId: report.tenantId,
@@ -545,7 +605,6 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
               queue,
               errorCode: code,
             },
-            delivery.id ?? `${queue}-${String(Date.now())}`,
           );
           return;
         }
@@ -553,30 +612,28 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
           kind === "COLLECT"
             ? COLLECT_MESSAGE.parse(delivery.data)
             : { ...RUN_MESSAGE.parse(delivery.data), jobId: null };
-        if (kind === "COLLECT" && message.jobId !== null) {
-          // A crash or an infrastructure failure on the last attempt: the job
-          // has no outcome recorded, so it is dead-lettered here.
-          await options.processor.deadLetterUnrecorded(
-            parseTenantId(message.tenantId),
-            message.jobId,
-            {
-              code,
-              message: "The job's last attempt failed without recording an outcome.",
-            },
-          );
-        }
-        await recordDeadLetter(
+        const { jobId } = message;
+        await settle(
+          async () => {
+            // A crash or an infrastructure failure on the last attempt: the job
+            // has no outcome recorded, so it is dead-lettered here.
+            if (kind === "COLLECT" && jobId !== null) {
+              await options.processor.deadLetterUnrecorded(parseTenantId(message.tenantId), jobId, {
+                code,
+                message: "The job's last attempt failed without recording an outcome.",
+              });
+            }
+          },
           {
             kind,
             tenantId: message.tenantId,
             runId: message.runId,
-            jobId: message.jobId,
+            jobId,
             reportId: null,
             caseAnalysisId: null,
             queue,
             errorCode: code,
           },
-          delivery.id ?? `${queue}-${String(Date.now())}`,
         );
       } catch (deadLetterError) {
         observer.deadLetterFailed?.(queue, deadLetterError);

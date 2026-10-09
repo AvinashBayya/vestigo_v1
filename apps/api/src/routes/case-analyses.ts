@@ -10,7 +10,9 @@ import {
   latestAnalysis,
   readView,
   requestCaseAnalysis,
+  requestedView,
   type CaseAnalysisReadView,
+  type CaseAnalysisRecord,
 } from "@repo/osint-engine";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -27,7 +29,8 @@ import {
   SECURITY,
 } from "./schemas.ts";
 
-const CaseAnalysisView = z.object({
+/** An analysis without its documents: what a request answers (it needs only case:analyse). */
+const CaseAnalysisSummary = z.object({
   id: z.uuid(),
   caseId: z.uuid(),
   /** `sha256:<hex>` of everything the analysis reads: the same input is one analysis. */
@@ -42,6 +45,10 @@ const CaseAnalysisView = z.object({
   attemptRequestedAt: z.iso.datetime(),
   /** When the latest attempt finished; null while it has not. */
   finishedAt: optionalInstant,
+});
+
+/** An analysis as a read shows it (case:read): where it stands, and its documents. */
+const CaseAnalysisView = CaseAnalysisSummary.extend({
   /** Why the latest attempt failed; null unless it did. */
   error: z.object({ code: z.string(), message: z.string() }).nullable(),
   /** case-engine's documents; present only when COMPLETE. */
@@ -63,16 +70,38 @@ const CaseAnalysisRead = z
   })
   .meta({ id: "CaseAnalysisRead" });
 
-const CaseAnalysisRequested = CaseAnalysisRead.extend({
-  /** Null: no credit cost is declared for a case analysis, and none is charged. */
-  estimatedCredits: z.number().int().min(0).nullable(),
-  /** Why `estimatedCredits` is null; null when a cost is given. */
-  estimatedCreditsReason: z.string().nullable(),
-}).meta({ id: "CaseAnalysisRequested" });
+const CaseAnalysisRequested = z
+  .object({
+    /** A request answers the analysis of the case as it is now: never NONE_YET, FAILED or STALE. */
+    state: z.enum(["PENDING", "COMPLETE"]),
+    reason: z.string(),
+    caseId: z.uuid(),
+    currentInputHash: z.string(),
+    /** Without its documents: those are read with case:read, from the two GET routes. */
+    analysis: CaseAnalysisSummary,
+    /** Null: no credit cost is declared for a case analysis, and none is charged. */
+    estimatedCredits: z.number().int().min(0).nullable(),
+    /** Why `estimatedCredits` is null; null when a cost is given. */
+    estimatedCreditsReason: z.string().nullable(),
+  })
+  .meta({ id: "CaseAnalysisRequested" });
 
 const NO_COST_REASON = "No credit cost is declared for a case analysis, so none is estimated.";
 
 const CONFLICT = { 409: ProblemSchema } as const;
+
+const summary = (record: CaseAnalysisRecord): z.infer<typeof CaseAnalysisSummary> => ({
+  id: record.analysis.id,
+  caseId: record.analysis.caseId,
+  inputHash: record.analysis.inputHash,
+  engineVersion: record.analysis.engineVersion,
+  requestedByUserId: record.analysis.requestedByUserId,
+  requestedAt: iso(record.analysis.requestedAt),
+  attempt: record.attempt,
+  status: record.status,
+  attemptRequestedAt: iso(record.attemptRequestedAt),
+  finishedAt: isoOrNull(record.finishedAt),
+});
 
 const view = (read: CaseAnalysisReadView): z.infer<typeof CaseAnalysisRead> => {
   const record = read.analysis;
@@ -85,16 +114,7 @@ const view = (read: CaseAnalysisReadView): z.infer<typeof CaseAnalysisRead> => {
       record === null
         ? null
         : {
-            id: record.analysis.id,
-            caseId: record.analysis.caseId,
-            inputHash: record.analysis.inputHash,
-            engineVersion: record.analysis.engineVersion,
-            requestedByUserId: record.analysis.requestedByUserId,
-            requestedAt: iso(record.analysis.requestedAt),
-            attempt: record.attempt,
-            status: record.status,
-            attemptRequestedAt: iso(record.attemptRequestedAt),
-            finishedAt: isoOrNull(record.finishedAt),
+            ...summary(record),
             error: record.error,
             document: record.document,
             wording: record.wording,
@@ -125,7 +145,7 @@ export const caseAnalysisRoutes =
           operationId: "requestCaseAnalysis",
           summary: "Request an analysis of a case as it is now, made in the background",
           description:
-            "Reads the case's stored records, hashes them, and returns the analysis of exactly that input: 202 with a new one (or a new attempt at one that failed), 200 with the existing one when it is pending or complete. Nothing is collected. Refused whole (403 with a `locked` block) when the case rests on person-investigation data the organisation cannot access, a run whose person collector found nothing included; 409 CASE_TOO_LARGE past the size one analysis reads; 409 when a concurrent request for the same analysis won.",
+            "Reads the case's stored records, hashes them, and returns the analysis of exactly that input, without its documents (read them with the GET routes, under case:read): 202 with a new one (or a new attempt at one that failed), 200 with the existing one when it is pending or complete. Nothing is collected. Refused whole (403 with a `locked` block) when the case rests on person-investigation data the organisation cannot access, a run whose person collector found nothing included; 409 CASE_TOO_LARGE past the size one analysis reads; 409 when a concurrent request for the same analysis won.",
           tags: ["cases"],
           security: SECURITY,
           params: IdParams,
@@ -140,8 +160,11 @@ export const caseAnalysisRoutes =
       async (request, reply) => {
         const context = tenantOf(request);
         const { repos, reads } = context;
-        const caseId = request.params.id;
-        if ((await repos.cases.findById(caseId)) === null) throw notFound("The case");
+        const caseRow = await repos.cases.findById(request.params.id);
+        if (caseRow === null) throw notFound("The case");
+        // The id as stored, never as the caller spelled it: the input hash
+        // depends on it.
+        const caseId = caseRow.id;
         await requirePersonAccess(
           context,
           caseProbe(caseId, await reads.caseScope.runIds(caseId)),
@@ -156,8 +179,13 @@ export const caseAnalysisRoutes =
         });
         const { analysis } = requested.record;
         request.auditTarget = { type: "case_analysis", id: analysis.id };
+        const answer = requestedView(requested);
         const body = {
-          ...view(readView(caseId, requested.currentInputHash, requested.record)),
+          state: answer.state,
+          reason: answer.reason,
+          caseId: answer.caseId,
+          currentInputHash: answer.currentInputHash,
+          analysis: summary(answer.analysis),
           estimatedCredits: null,
           estimatedCreditsReason: NO_COST_REASON,
         };
@@ -208,9 +236,11 @@ export const caseAnalysisRoutes =
       async (request) => {
         const context = tenantOf(request);
         const { repos, reads } = context;
-        const caseId = request.params.id;
-        request.auditTarget = { type: "case", id: caseId };
-        if ((await repos.cases.findById(caseId)) === null) throw notFound("The case");
+        request.auditTarget = { type: "case", id: request.params.id };
+        const caseRow = await repos.cases.findById(request.params.id);
+        if (caseRow === null) throw notFound("The case");
+        // The id as stored, never as the caller spelled it: the input hash depends on it.
+        const caseId = caseRow.id;
         // The case as it is now first, before any analysis is looked at.
         await requirePersonAccess(
           context,
@@ -219,12 +249,13 @@ export const caseAnalysisRoutes =
         );
         const current = await currentInput(context, caseId, services().runs.caseAnalysisCollectors);
         const analysis = await latestAnalysis(context, caseId, current.inputHash);
-        const record = analysis === null ? null : await analysisRecord(context, analysis);
+        // Then what the shown analysis read, whatever its status, before its record is read.
         await requirePersonAccess(
           context,
-          analysisProbe(caseId, current.runIds, record),
+          analysisProbe(caseId, current.runIds, analysis),
           WITHHELD.latest,
         );
+        const record = analysis === null ? null : await analysisRecord(context, analysis);
         return view(readView(caseId, current.inputHash, record));
       },
     );
@@ -259,12 +290,13 @@ export const caseAnalysisRoutes =
           WITHHELD.one,
         );
         const current = await currentInput(context, caseId, services().runs.caseAnalysisCollectors);
-        const record = await analysisRecord(context, analysis);
+        // Then what the analysis read, whatever its status, before its record is read.
         await requirePersonAccess(
           context,
-          analysisProbe(caseId, current.runIds, record),
+          analysisProbe(caseId, current.runIds, analysis),
           WITHHELD.one,
         );
+        const record = await analysisRecord(context, analysis);
         return view(readView(caseId, current.inputHash, record));
       },
     );

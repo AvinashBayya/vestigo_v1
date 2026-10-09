@@ -101,13 +101,18 @@ async function request(
   return db.withTenant(
     tenantId,
     async ({ repos, reads }) => {
-      const inputHash = caseInputHash(await readInput(reads, caseId, collectors));
+      const read = await readInput(reads, caseId, collectors);
+      const inputHash = caseInputHash(read);
       const { analysis } = await repos.caseAnalyses.findOrCreate({
         caseId,
         inputHash,
         engineVersion: ENGINE_VERSION,
         requestedByUserId: null,
         requestedAt: AT,
+        basis: {
+          evidenceIds: read.input.evidence.map((e) => e.id),
+          runIds: read.input.runs.map((r) => r.id),
+        },
       });
       await repos.caseAnalysisEvents.request({
         analysisId: analysis.id,
@@ -195,6 +200,7 @@ describe("one attempt at a case analysis (RELEASE-BLOCKING)", () => {
         engineVersion: ENGINE_VERSION,
         requestedByUserId: null,
         requestedAt: AT,
+        basis: { evidenceIds: [], runIds: [] },
       }),
     );
     expect(again).toMatchObject({ created: false, analysis: { id: first.analysisId } });

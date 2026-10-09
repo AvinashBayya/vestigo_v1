@@ -2,14 +2,19 @@
  * RELEASE-BLOCKING. Requesting a case analysis (R1-b), against the database:
  * the same input is one analysis; a case past the size one analysis reads is
  * refused before anything is recorded; two requests racing to retry a failed
- * analysis record one attempt, and the other is told to send again.
+ * analysis record one attempt, and the other is told to send again; and
+ * enqueueing an attempt never waits past its bound on a queue it cannot reach.
  */
 import { ENGINE_VERSION } from "@repo/case-engine";
 import { CaseAnalysisEventsRepository, createDatabase, type Database } from "@repo/db";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { parseTenantId } from "@repo/core";
+import { randomUUID } from "node:crypto";
 import {
+  CaseAnalysisQueue,
   CaseAnalysisRequestConflictError,
   CaseTooLargeError,
+  QueueUnavailableError,
   requestCaseAnalysis,
 } from "../src/index.ts";
 import { createCaseFixture, FIXTURE_COLLECTORS } from "./case-fixture.ts";
@@ -29,6 +34,29 @@ afterAll(async () => {
 });
 
 const AT = new Date(Date.parse("2026-10-09T10:00:00.000Z"));
+
+describe("enqueueing an attempt (RELEASE-BLOCKING)", () => {
+  it("gives up past its bound when the queue cannot be reached (QUEUE_UNAVAILABLE)", async () => {
+    // Nothing listens on port 1: the client keeps trying to connect.
+    const queue = new CaseAnalysisQueue(
+      { url: "redis://127.0.0.1:1", prefix: `unreachable-${randomUUID().slice(0, 8)}` },
+      { maxAttempts: 1, baseDelayMs: 10, maxDelayMs: 10 },
+      { enqueueTimeoutMs: 300 },
+    );
+    const started = Date.now();
+    try {
+      const refused = await queue
+        .enqueueAnalysis(parseTenantId(randomUUID()), randomUUID(), 1)
+        .catch((error: unknown) => error);
+      expect(refused).toBeInstanceOf(QueueUnavailableError);
+      expect(refused).toMatchObject({ code: "QUEUE_UNAVAILABLE" });
+      expect(Date.now() - started).toBeLessThan(5_000);
+    } finally {
+      // Closing a queue that never connected must not hold the suite open.
+      await Promise.race([queue.close(), new Promise((resolve) => setTimeout(resolve, 2_000))]);
+    }
+  });
+});
 
 describe("requesting a case analysis (RELEASE-BLOCKING)", () => {
   it("is one analysis per input: CREATED once, then EXISTING", async () => {

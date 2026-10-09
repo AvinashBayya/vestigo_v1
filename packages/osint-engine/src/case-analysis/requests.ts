@@ -15,11 +15,16 @@
  *   FAILED    the latest attempt failed, with its code;
  *   STALE     the analysis is of an input the case no longer has (its records,
  *             or the analysis code or wording, changed since). Its own status
- *             and document are still shown, as of then.
+ *             and document, if it has one, are still shown, as of then.
  * A read of a case shows the analysis of the case as it is now when there is
  * one, else the most recently requested one, as STALE.
+ *
+ * What an analysis rests on (its basis: the evidence and runs of its input) is
+ * recorded with the request, so every read of it, whatever its status, is
+ * probed for person data by what it read as well as by the case as it is now
+ * (CLAUDE.md section 9: the gate applies however old the data is).
  */
-import { ENGINE_VERSION } from "@repo/case-engine";
+import { byCodeUnit, ENGINE_VERSION } from "@repo/case-engine";
 import { AppError, type CaseAnalysisStatus } from "@repo/core";
 import type { CaseAnalysis, PersonProbe, TenantContext } from "@repo/db";
 import type { CaseAnalysisCollectors } from "./collectors.ts";
@@ -46,7 +51,10 @@ export const CASE_ANALYSIS_STATE_REASONS = {
     "The latest attempt at the analysis failed ({code}), and no document was stored from it. Requesting the analysis again makes a new attempt.",
   STALE:
     "The case's records, or the analysis code or its wording, have changed since this analysis was requested. It describes the case as it was then; request a new analysis for the case as it is now.",
-} as const satisfies Readonly<Record<CaseAnalysisReadState, string>>;
+  /** STALE, for an analysis whose latest attempt holds no document (PENDING or FAILED). */
+  STALE_WITHOUT_DOCUMENT:
+    "The case's records, or the analysis code or its wording, have changed since this analysis was requested, and it holds no document. Request a new analysis for the case as it is now.",
+} as const satisfies Readonly<Record<CaseAnalysisReadState | "STALE_WITHOUT_DOCUMENT", string>>;
 
 /** The most records one analysis reads, unless the caller sets another bound. */
 export const DEFAULT_MAX_CASE_RECORDS = 50_000;
@@ -101,14 +109,15 @@ export class CaseAnalysisRequestConflictError extends AppError {
 }
 
 /**
- * A stored analysis whose attempt is not recorded whole (no request, or a
- * failure with no code). The database writes them together, so a defect.
+ * A stored analysis not recorded whole: an attempt with no request, a failure
+ * with no code, or no record of what it rests on (a row written before
+ * migration 0023). The application writes them together, so a defect.
  */
 export class CaseAnalysisUnrecordedError extends AppError {
   readonly code = "CASE_ANALYSIS_UNRECORDED";
 
   constructor() {
-    super("A case analysis's latest attempt is not recorded whole.");
+    super("A case analysis is not recorded whole, so it cannot be read.");
     this.name = "CaseAnalysisUnrecordedError";
   }
 }
@@ -138,19 +147,22 @@ export function caseProbe(caseId: string, runIds: readonly string[]): PersonProb
 
 /**
  * The case as it is now and a stored analysis together: the case's probe,
- * and the evidence and runs the analysis's document read when it ran (its
- * basis), however long ago that was (CLAUDE.md §9).
+ * and the evidence and runs the analysis's input held when it was requested
+ * (its basis), whatever its status and however long ago (CLAUDE.md §9). An
+ * analysis with no recorded basis is refused as not recorded whole: what it
+ * rests on cannot be known, so it is never answered.
  */
 export function analysisProbe(
   caseId: string,
   runIds: readonly string[],
-  record: CaseAnalysisRecord | null,
+  analysis: CaseAnalysis | null,
 ): PersonProbe {
-  const basis = record?.document?.basis;
-  if (basis === undefined) return caseProbe(caseId, runIds);
+  if (analysis === null) return caseProbe(caseId, runIds);
+  const { basisEvidenceIds, basisRunIds } = analysis;
+  if (basisEvidenceIds === null || basisRunIds === null) throw new CaseAnalysisUnrecordedError();
   return {
-    ...caseProbe(caseId, [...new Set([...runIds, ...basis.runIds])]),
-    evidenceIds: basis.evidenceIds,
+    ...caseProbe(caseId, [...new Set([...runIds, ...basisRunIds])]),
+    evidenceIds: basisEvidenceIds,
   };
 }
 
@@ -201,7 +213,10 @@ export function readView(
   if (record.analysis.inputHash !== currentInputHash) {
     return {
       state: "STALE",
-      reason: CASE_ANALYSIS_STATE_REASONS.STALE,
+      reason:
+        record.document === null
+          ? CASE_ANALYSIS_STATE_REASONS.STALE_WITHOUT_DOCUMENT
+          : CASE_ANALYSIS_STATE_REASONS.STALE,
       caseId,
       currentInputHash,
       analysis: record,
@@ -217,7 +232,7 @@ export function readView(
   return { state: record.status, reason, caseId, currentInputHash, analysis: record };
 }
 
-/** The case's input now, its hash, and the runs it rests on. */
+/** The case's input now, its hash, and what it rests on (its basis). */
 export async function currentInput(
   context: Context,
   caseId: string,
@@ -226,12 +241,18 @@ export async function currentInput(
   readonly read: CaseAnalysisInput;
   readonly inputHash: string;
   readonly runIds: string[];
+  readonly basis: { readonly evidenceIds: string[]; readonly runIds: string[] };
 }> {
   const read = await readCaseAnalysisInput(context.reads, caseId, collectors);
+  const runIds = read.input.runs.map((run) => run.id).sort(byCodeUnit);
   return {
     read,
     inputHash: caseInputHash(read),
-    runIds: read.input.runs.map((run) => run.id),
+    runIds,
+    basis: {
+      evidenceIds: read.input.evidence.map((evidence) => evidence.id).sort(byCodeUnit),
+      runIds,
+    },
   };
 }
 
@@ -263,6 +284,31 @@ export interface CaseAnalysisRequest {
 }
 
 /**
+ * What a request answers: the analysis of the case as it is now, PENDING or
+ * COMPLETE (a failed one was given a new attempt), without its document. The
+ * document is read with case:read, never through a request.
+ */
+export interface CaseAnalysisRequestedView {
+  readonly state: "PENDING" | "COMPLETE";
+  readonly reason: string;
+  readonly caseId: string;
+  readonly currentInputHash: string;
+  readonly analysis: CaseAnalysisRecord;
+}
+
+export function requestedView(requested: CaseAnalysisRequest): CaseAnalysisRequestedView {
+  const { record } = requested;
+  if (record.status === "FAILED") throw new CaseAnalysisUnrecordedError();
+  return {
+    state: record.status,
+    reason: CASE_ANALYSIS_STATE_REASONS[record.status],
+    caseId: record.analysis.caseId,
+    currentInputHash: requested.currentInputHash,
+    analysis: record,
+  };
+}
+
+/**
  * Requests the analysis of the case as it is now. The caller has already
  * passed the person gate for the case (caseProbe), on the same snapshot.
  */
@@ -276,7 +322,7 @@ export async function requestCaseAnalysis(
     readonly maxRecords?: number;
   },
 ): Promise<CaseAnalysisRequest> {
-  const { read, inputHash } = await currentInput(context, input.caseId, input.collectors);
+  const { read, inputHash, basis } = await currentInput(context, input.caseId, input.collectors);
   const maxRecords = input.maxRecords ?? DEFAULT_MAX_CASE_RECORDS;
   const records = recordCount(read);
   if (records > maxRecords) throw new CaseTooLargeError(records, maxRecords);
@@ -288,6 +334,7 @@ export async function requestCaseAnalysis(
     engineVersion: ENGINE_VERSION,
     requestedByUserId: input.requestedByUserId,
     requestedAt: input.at,
+    basis,
   });
   const requestAttempt = async (attempt: number): Promise<void> => {
     try {
