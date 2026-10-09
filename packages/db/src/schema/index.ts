@@ -21,5 +21,6 @@ export { entities, entityRelationships, entityMerges } from "./entities.ts";
 export { evidence, claims } from "./evidence.ts";
 export { cases, casePins } from "./cases.ts";
 export { reportPdfs, reports } from "./reports.ts";
+export { caseAnalyses, caseAnalysisEvents } from "./case-analyses.ts";
 export { monitors, alerts, credentials, usageEvents, tenantQuotas } from "./operations.ts";
 export type { ModelCallUsage } from "./operations.ts";

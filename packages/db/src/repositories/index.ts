@@ -16,6 +16,7 @@ import {
   TenantQuotasRepository,
   UsageEventsRepository,
 } from "./operations.ts";
+import { CaseAnalysesRepository, CaseAnalysisEventsRepository } from "./case-analyses.ts";
 import { ReportPdfsRepository, ReportsRepository } from "./reports.ts";
 import { ApiKeysRepository, TenantsRepository, UsersRepository } from "./tenancy.ts";
 import {
@@ -52,6 +53,8 @@ export interface Repositories {
   readonly tenantQuotas: TenantQuotasRepository;
   readonly reports: ReportsRepository;
   readonly reportPdfs: ReportPdfsRepository;
+  readonly caseAnalyses: CaseAnalysesRepository;
+  readonly caseAnalysisEvents: CaseAnalysisEventsRepository;
 }
 
 /** Table each repository owns; the isolation tests check every table is covered. */
@@ -79,6 +82,8 @@ export const REPOSITORY_TABLES: Readonly<Record<keyof Repositories, string>> = {
   tenantQuotas: "tenant_quotas",
   reports: "reports",
   reportPdfs: "report_pdfs",
+  caseAnalyses: "case_analyses",
+  caseAnalysisEvents: "case_analysis_events",
 };
 
 export function createRepositories(scope: TenantScope): Repositories {
@@ -106,6 +111,8 @@ export function createRepositories(scope: TenantScope): Repositories {
     tenantQuotas: new TenantQuotasRepository(scope),
     reports: new ReportsRepository(scope),
     reportPdfs: new ReportPdfsRepository(scope),
+    caseAnalyses: new CaseAnalysesRepository(scope),
+    caseAnalysisEvents: new CaseAnalysisEventsRepository(scope),
   };
 }
 
@@ -140,4 +147,5 @@ export * from "./operations.ts";
 export * from "./tenancy.ts";
 export * from "./work.ts";
 export * from "./reports.ts";
+export * from "./case-analyses.ts";
 export { TenantRepository, type ListOptions } from "./base.ts";

@@ -119,20 +119,28 @@ describe("schema invariants (RELEASE-BLOCKING)", () => {
       select table_name, string_agg(privilege_type, ',' order by privilege_type) as privileges
       from information_schema.role_table_grants
       where grantee = 'app_runtime'
-        and table_name in ('audit_log', 'evidence', 'claims', 'entity_relationships', 'usage_events')
+        and table_name in ('audit_log', 'evidence', 'claims', 'entity_relationships', 'usage_events',
+                           'case_analyses', 'case_analysis_events')
       group by table_name order by table_name`);
     expect(grants).toEqual(
-      ["audit_log", "claims", "entity_relationships", "evidence", "usage_events"].map(
-        (table_name) => ({
-          table_name,
-          privileges: "INSERT,SELECT",
-        }),
-      ),
+      [
+        "audit_log",
+        "case_analyses",
+        "case_analysis_events",
+        "claims",
+        "entity_relationships",
+        "evidence",
+        "usage_events",
+      ].map((table_name) => ({
+        table_name,
+        privileges: "INSERT,SELECT",
+      })),
     );
     const columnUpdates = await rows<{ table_name: string }>(`
       select distinct table_name from information_schema.column_privileges
       where grantee = 'app_runtime' and privilege_type = 'UPDATE'
-        and table_name in ('audit_log', 'evidence', 'claims', 'entity_relationships', 'usage_events')`);
+        and table_name in ('audit_log', 'evidence', 'claims', 'entity_relationships', 'usage_events',
+                           'case_analyses', 'case_analysis_events')`);
     expect(columnUpdates).toEqual([]);
   });
 

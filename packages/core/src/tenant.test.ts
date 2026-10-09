@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { InvalidTenantIdError, parseTenantId } from "./tenant.ts";
+import { CASE_ANALYSIS_STATUSES } from "./case-analysis.ts";
 import { CLAIM_STRENGTHS, LOCK_REASONS } from "./vocabulary.ts";
 
 describe("parseTenantId", () => {
@@ -15,6 +16,12 @@ describe("parseTenantId", () => {
       expect(() => parseTenantId(value)).toThrow(InvalidTenantIdError);
     },
   );
+});
+
+describe("CASE_ANALYSIS_STATUSES", () => {
+  it("is exactly an attempt's three states: requested, finished with a document, failed", () => {
+    expect(CASE_ANALYSIS_STATUSES).toEqual(["PENDING", "COMPLETE", "FAILED"]);
+  });
 });
 
 describe("LOCK_REASONS", () => {

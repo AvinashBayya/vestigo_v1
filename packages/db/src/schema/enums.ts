@@ -2,6 +2,7 @@ import {
   AUDIT_ACTOR_KINDS,
   AUDIT_OUTCOMES,
   AUTH_METHODS,
+  CASE_ANALYSIS_STATUSES,
   CLAIM_STRENGTHS,
   COLLECTION_MODES,
   COLLECTOR_DISCIPLINES,
@@ -52,6 +53,7 @@ export const jobOutcome = pgEnum("job_outcome", JOB_OUTCOMES);
 export const quotaPeriod = pgEnum("quota_period", QUOTA_PERIODS);
 export const reportStatus = pgEnum("report_status", REPORT_STATUSES);
 export const reportPdfStatus = pgEnum("report_pdf_status", REPORT_PDF_STATUSES);
+export const caseAnalysisStatus = pgEnum("case_analysis_status", CASE_ANALYSIS_STATUSES);
 export const usageUnit = pgEnum("usage_unit", USAGE_UNITS);
 export const tenantRegion = pgEnum("tenant_region", TENANT_REGIONS);
 

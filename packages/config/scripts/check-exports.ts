@@ -47,6 +47,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "CLAIM_STRENGTH_DEFINITIONS",
     "REPORT_WORDING",
     "CASE_WORDING",
+    "CASE_ANALYSIS_STATUSES",
     "fillWording",
   ],
   // Who may do what, for the API and the workers alike.
@@ -172,6 +173,10 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "JobRecordedOnceError",
     "ReportsRepository",
     "ReportRecordedOnceError",
+    "CaseAnalysesRepository",
+    "CaseAnalysisEventsRepository",
+    "CaseAnalysisRecordedOnceError",
+    "CaseAnalysisOutOfOrderError",
   ],
   // Secrets, API key storage and rate limits: the only paths to each.
   "packages/integrations/src/index.ts": [

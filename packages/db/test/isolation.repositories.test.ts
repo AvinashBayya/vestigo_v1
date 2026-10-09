@@ -534,6 +534,59 @@ const ATTACKS: Record<keyof Repositories, Attack> = {
     ],
     list: (r) => r.reports.list(page),
   },
+  caseAnalyses: {
+    reads: [
+      (r, v) => r.caseAnalyses.findById(v.caseAnalysisId),
+      (r, v) => r.caseAnalyses.findForInput(v.caseId, v.caseAnalysisInputHash),
+      (r, v) => r.caseAnalyses.listForCase(v.caseId, page).then((rows) => rows[0] ?? null),
+    ],
+    writes: [], // written once: the application has no way to change an analysis
+    references: [
+      (r, v) =>
+        r.caseAnalyses.findOrCreate({
+          caseId: v.caseId,
+          inputHash: v.caseAnalysisInputHash,
+          engineVersion: 1,
+          requestedByUserId: null,
+          requestedAt: new Date(Date.parse("2026-10-09T11:00:00.000Z")),
+        }),
+      (r, v, a) =>
+        r.caseAnalyses.findOrCreate({
+          caseId: a.caseId,
+          inputHash: `sha256:${"0".repeat(64)}`,
+          engineVersion: 1,
+          requestedByUserId: v.userId,
+          requestedAt: new Date(Date.parse("2026-10-09T11:00:00.000Z")),
+        }),
+    ],
+    list: (r) => r.caseAnalyses.list(page),
+  },
+  caseAnalysisEvents: {
+    reads: [
+      (r, v) =>
+        r.caseAnalysisEvents.listForAnalysis(v.caseAnalysisId).then((rows) => rows[0] ?? null),
+      (r, v) => r.caseAnalysisEvents.standing(v.caseAnalysisId),
+    ],
+    writes: [], // added only: the application has no way to change an event
+    references: [
+      (r, v) =>
+        r.caseAnalysisEvents.request({
+          analysisId: v.caseAnalysisId,
+          attempt: 1,
+          requestedByUserId: null,
+          at: new Date(Date.parse("2026-10-09T11:00:00.000Z")),
+        }),
+      // The attacker's own analysis accepts a retry: only the victim's user is foreign.
+      (r, v, a) =>
+        r.caseAnalysisEvents.request({
+          analysisId: a.caseAnalysisId,
+          attempt: 2,
+          requestedByUserId: v.userId,
+          at: new Date(Date.parse("2026-10-09T11:00:00.000Z")),
+        }),
+    ],
+    list: (r) => r.caseAnalysisEvents.list(page),
+  },
   tenantQuotas: {
     // Both tenants have a quota for the same unit and period; A must only get its own.
     reads: [
@@ -572,6 +625,8 @@ async function victimSnapshot(): Promise<unknown> {
     usage: await repos.usageEvents.findById(victim.usageEventId),
     identified: await repos.entities.findById(victim.identifiedEntityId),
     quotas: await repos.tenantQuotas.list(page),
+    caseAnalysis: await repos.caseAnalyses.findById(victim.caseAnalysisId),
+    caseAnalysisEvents: await repos.caseAnalysisEvents.listForAnalysis(victim.caseAnalysisId),
   }));
 }
 

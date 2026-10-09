@@ -152,6 +152,33 @@ export class ReportRecordedOnceError extends AppError {
   }
 }
 
+/**
+ * The database refused to change a stored case analysis or any record of where
+ * it stands: both are written once, even by the schema owner (migration 0022).
+ */
+export class CaseAnalysisRecordedOnceError extends AppError {
+  readonly code = "CASE_ANALYSIS_RECORDED_ONCE";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "CaseAnalysisRecordedOnceError";
+  }
+}
+
+/**
+ * The database refused a case analysis event out of order: a finish with no
+ * request, a retry before a failure, or anything after a document
+ * (migration 0022).
+ */
+export class CaseAnalysisOutOfOrderError extends AppError {
+  readonly code = "CASE_ANALYSIS_OUT_OF_ORDER";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "CaseAnalysisOutOfOrderError";
+  }
+}
+
 export class InvalidIdentifierError extends AppError {
   readonly code = "INVALID_IDENTIFIER";
 
@@ -325,6 +352,10 @@ export function translateDatabaseError(error: unknown): Error {
       return new JobRecordedOnceError(message);
     case "REP01":
       return new ReportRecordedOnceError(message);
+    case "CAN01":
+      return new CaseAnalysisRecordedOnceError(message);
+    case "CAN02":
+      return new CaseAnalysisOutOfOrderError(message);
     default:
       // Data exceptions (class 22) can echo the offending input value.
       return sqlState?.startsWith("22")

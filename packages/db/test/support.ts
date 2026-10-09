@@ -86,6 +86,10 @@ export interface TenantFixture {
   readonly usageEventId: string;
   readonly scopeAuthorisationId: string;
   readonly reportId: string;
+  /** A case analysis whose first attempt failed, so a retry is the next event it accepts. */
+  readonly caseAnalysisId: string;
+  readonly caseAnalysisInputHash: string;
+  readonly caseAnalysisEventId: string;
   /** An entity resolved by identifier; both fixtures use the same identifier. */
   readonly identifiedEntityId: string;
   /** Written as the schema owner: the application cannot write quotas. */
@@ -277,6 +281,27 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
     // Its PDF row, so cross-tenant probes of report PDFs aim at a row that exists.
     await repos.reportPdfs.create(report.id);
 
+    const inputHash = `sha256:${createHash("sha256").update(`[case input ${tag}]`).digest("hex")}`;
+    const { analysis } = await repos.caseAnalyses.findOrCreate({
+      caseId: caseRow.id,
+      inputHash,
+      engineVersion: 1,
+      requestedByUserId: user.id,
+      requestedAt: new Date(Date.parse("2026-10-09T10:00:00.000Z")),
+    });
+    await repos.caseAnalysisEvents.request({
+      analysisId: analysis.id,
+      attempt: 1,
+      requestedByUserId: user.id,
+      at: new Date(Date.parse("2026-10-09T10:00:00.000Z")),
+    });
+    const failed = await repos.caseAnalysisEvents.fail({
+      analysisId: analysis.id,
+      attempt: 1,
+      error: { code: "FIXTURE_FAILURE", message: "[fixture failure]" },
+      at: new Date(Date.parse("2026-10-09T10:00:01.000Z")),
+    });
+
     return {
       tenantId,
       userId: user.id,
@@ -302,6 +327,9 @@ export async function createTenantFixture(db: Database, tag: string): Promise<Te
       usageEventId: usage.id,
       scopeAuthorisationId: scope.id,
       reportId: report.id,
+      caseAnalysisId: analysis.id,
+      caseAnalysisInputHash: inputHash,
+      caseAnalysisEventId: failed.id,
       identifiedEntityId: identified.entity.id,
     };
   });
