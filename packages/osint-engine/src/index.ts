@@ -3,9 +3,11 @@
 // generating reports from a settled run.
 export {
   CollectionExecutor,
+  CollectionInJobError,
   TenantNotProvisionedError,
   type CollectionReport,
   type CollectionRequest,
+  type StandaloneCollectionRequest,
 } from "./executor.ts";
 export {
   VaultCredentialSource,

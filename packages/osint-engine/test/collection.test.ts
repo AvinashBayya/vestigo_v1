@@ -45,6 +45,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   CollectionExecutor,
+  CollectionInJobError,
   redisUpstreamRateLimiter,
   VaultCredentialSource,
   type CollectionReport,
@@ -642,6 +643,36 @@ describe("a failed collection never produces evidence, a zero or an empty result
     expect(row?.collectedAt).toBeInstanceOf(Date);
     const stored = await contentStore.get(tenantId, expectedHash);
     expect(new TextDecoder().decode(stored)).toBe('["a","b"]');
+  });
+});
+
+describe("collect() runs outside a job only (R1-a ruling)", () => {
+  it("refuses a request that names a job before anything runs, so no evidence names a job that does not list it", async () => {
+    const { tenantId } = await newTenant("collect-in-job");
+    routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));
+    const before = called.length;
+    const inJob = {
+      collectorId: "fake.one",
+      target: DOMAIN,
+      jobId: randomUUID(),
+      requestId: null,
+    };
+    // @ts-expect-error a job's collection is the job processor's, never collect()'s
+    const refused = engine().collect(tenantId, inJob);
+    await expect(refused).rejects.toBeInstanceOf(CollectionInJobError);
+    await expect(refused).rejects.toMatchObject({ code: "COLLECTION_IN_JOB" });
+    expect(called.length).toBe(before);
+    expect(requests).toEqual([]);
+    expect(await evidenceCount(tenantId)).toBe(0);
+  });
+
+  it("writes evidence that names no job when it runs", async () => {
+    const { tenantId } = await newTenant("collect-no-job");
+    routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));
+    const report = await collect(engine(), tenantId, "fake.one");
+    expect(report.outcome.status).toBe("FOUND");
+    const rows = await db.withTenant(tenantId, ({ repos }) => repos.evidence.list({ limit: 10 }));
+    expect(rows.map((row) => row.jobId)).toEqual([null]);
   });
 });
 

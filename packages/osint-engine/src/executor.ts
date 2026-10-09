@@ -26,11 +26,36 @@ export interface CollectionRequest {
   readonly meter?: UsageMeter;
 }
 
+/**
+ * A collection outside any job: what `collect` takes. A job's collection goes
+ * through CollectorJobProcessor, which records the job's result together with
+ * the evidence it found, in one transaction.
+ */
+export type StandaloneCollectionRequest = Omit<CollectionRequest, "jobId"> & {
+  readonly jobId: null;
+};
+
 /** What a collection did. Evidence ids are present only for FOUND. */
 export interface CollectionReport {
   readonly collectorId: string;
   readonly outcome: CollectionOutcome;
   readonly evidenceIds: readonly string[];
+}
+
+/**
+ * `collect` was given a job. Evidence it wrote would name the job while the
+ * job's recorded result did not list it, which case analysis refuses
+ * (EVIDENCE_NOT_IN_JOB_RESULT); so it refuses first, before anything runs.
+ */
+export class CollectionInJobError extends AppError {
+  readonly code = "COLLECTION_IN_JOB";
+
+  constructor() {
+    super(
+      "A collection that belongs to a job runs through the job processor, which records the job's result with its evidence.",
+    );
+    this.name = "CollectionInJobError";
+  }
 }
 
 /** The tenant has no row: it was never provisioned. */
@@ -166,14 +191,24 @@ export class CollectionExecutor {
     return ids;
   }
 
-  /** All three steps: admit, run, and for FOUND write the evidence in its own transaction. */
-  async collect(tenantId: TenantId, request: CollectionRequest): Promise<CollectionReport> {
+  /**
+   * All three steps, for a collection outside any job: admit, run, and for
+   * FOUND write the evidence in its own transaction. The evidence names no job,
+   * so it is "evidence with no recorded collection job" wherever it is read. A
+   * request that names a job is refused before anything runs.
+   */
+  async collect(
+    tenantId: TenantId,
+    request: StandaloneCollectionRequest,
+  ): Promise<CollectionReport> {
+    // The type forbids a job; this holds for a caller that bypassed it.
+    if ((request as CollectionRequest).jobId !== null) throw new CollectionInJobError();
     const outcome = await this.run(tenantId, request);
     if (outcome.status !== "FOUND") {
       return { collectorId: outcome.collectorId, outcome, evidenceIds: [] };
     }
     const evidenceIds = await this.#db.withTenant(tenantId, (ctx) =>
-      this.persistEvidence(ctx, tenantId, outcome, request.jobId),
+      this.persistEvidence(ctx, tenantId, outcome, null),
     );
     return { collectorId: outcome.collectorId, outcome, evidenceIds };
   }
