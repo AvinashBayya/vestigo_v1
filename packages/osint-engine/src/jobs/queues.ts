@@ -126,6 +126,48 @@ function deliveryOptions(policy: RetryPolicy) {
   } as const;
 }
 
+/** The queue could not take a job within its bound. Nothing about the job's record changed. */
+export class QueueUnavailableError extends AppError {
+  readonly code = "QUEUE_UNAVAILABLE";
+
+  constructor(timeoutMs: number) {
+    super(`The job queue did not take the job within ${String(timeoutMs)} ms.`);
+    this.name = "QueueUnavailableError";
+  }
+}
+
+/** How long any enqueue may wait on the queue (CLAUDE.md section 5: no unbounded waits). */
+export const DEFAULT_ENQUEUE_TIMEOUT_MS = 5_000;
+
+/**
+ * One enqueue, bounded. While Redis cannot be reached, a BullMQ add waits in
+ * the client's offline queue and reconnects forever; past the bound this throws
+ * QueueUnavailableError instead. The abandoned add may still land when Redis
+ * returns. Every enqueue here tolerates that, since each is keyed and adds its
+ * job once, and a failure of the abandoned add is never an unhandled rejection.
+ * Every producer, in the API and in the worker, enqueues through this.
+ */
+async function bounded(work: Promise<unknown>, timeoutMs: number): Promise<void> {
+  work.catch(() => undefined);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new QueueUnavailableError(timeoutMs));
+    }, timeoutMs);
+  });
+  try {
+    await Promise.race([work, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Options every producer takes. */
+export interface ProducerOptions {
+  /** How long an enqueue may wait on the queue; DEFAULT_ENQUEUE_TIMEOUT_MS when absent. */
+  readonly enqueueTimeoutMs?: number;
+}
+
 // ── Producing ─────────────────────────────────────────────────────────────
 
 /** What the API uses: start a run. It never waits on any collection work. */
@@ -133,20 +175,24 @@ export class InvestigationQueue {
   readonly #queue: Queue;
   readonly #retry: RetryPolicy;
 
-  constructor(connection: QueueConnection, retry: RetryPolicy) {
+  readonly #timeoutMs: number;
+
+  constructor(connection: QueueConnection, retry: RetryPolicy, options: ProducerOptions = {}) {
     this.#queue = new Queue(INVESTIGATIONS_QUEUE, {
       connection: bullConnection(connection),
       prefix: connection.prefix,
     });
     this.#retry = retry;
+    this.#timeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   }
 
-  /** Enqueues the run's planning job; enqueueing the same run twice adds it once. */
+  /** Enqueues the run's planning job; enqueueing the same run twice adds it once. Bounded. */
   async enqueueRun(tenantId: TenantId, runId: string): Promise<void> {
-    await this.#queue.add("plan", RUN_MESSAGE.parse({ tenantId, runId }), {
-      ...deliveryOptions(this.#retry),
-      jobId: `plan-${runId}`,
-    });
+    const message = RUN_MESSAGE.parse({ tenantId, runId });
+    await bounded(
+      this.#queue.add("plan", message, { ...deliveryOptions(this.#retry), jobId: `plan-${runId}` }),
+      this.#timeoutMs,
+    );
   }
 
   async close(): Promise<void> {
@@ -159,20 +205,27 @@ export class ReportQueue {
   readonly #queue: Queue;
   readonly #retry: RetryPolicy;
 
-  constructor(connection: QueueConnection, retry: RetryPolicy) {
+  readonly #timeoutMs: number;
+
+  constructor(connection: QueueConnection, retry: RetryPolicy, options: ProducerOptions = {}) {
     this.#queue = new Queue(REPORTS_QUEUE, {
       connection: bullConnection(connection),
       prefix: connection.prefix,
     });
     this.#retry = retry;
+    this.#timeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   }
 
-  /** Enqueues the report's generation; enqueueing the same report twice adds it once. */
+  /** Enqueues the report's generation; enqueueing the same report twice adds it once. Bounded. */
   async enqueueReport(tenantId: TenantId, reportId: string): Promise<void> {
-    await this.#queue.add("generate", REPORT_MESSAGE.parse({ tenantId, reportId }), {
-      ...deliveryOptions(this.#retry),
-      jobId: `report-${reportId}`,
-    });
+    const message = REPORT_MESSAGE.parse({ tenantId, reportId });
+    await bounded(
+      this.#queue.add("generate", message, {
+        ...deliveryOptions(this.#retry),
+        jobId: `report-${reportId}`,
+      }),
+      this.#timeoutMs,
+    );
   }
 
   async close(): Promise<void> {
@@ -181,29 +234,12 @@ export class ReportQueue {
 }
 
 /** What the API uses to request an attempt at a case analysis. It never waits on the analysis. */
-/** The queue could not take a job within its bound. Nothing about the job's record changed. */
-export class QueueUnavailableError extends AppError {
-  readonly code = "QUEUE_UNAVAILABLE";
-
-  constructor(timeoutMs: number) {
-    super(`The job queue did not take the job within ${String(timeoutMs)} ms.`);
-    this.name = "QueueUnavailableError";
-  }
-}
-
-/** How long enqueueing an analysis may wait on the queue (CLAUDE.md section 5: no unbounded waits). */
-export const DEFAULT_ENQUEUE_TIMEOUT_MS = 5_000;
-
 export class CaseAnalysisQueue {
   readonly #queue: Queue;
   readonly #retry: RetryPolicy;
   readonly #timeoutMs: number;
 
-  constructor(
-    connection: QueueConnection,
-    retry: RetryPolicy,
-    options: { readonly enqueueTimeoutMs?: number } = {},
-  ) {
+  constructor(connection: QueueConnection, retry: RetryPolicy, options: ProducerOptions = {}) {
     this.#queue = new Queue(CASE_ANALYSES_QUEUE, {
       connection: bullConnection(connection),
       prefix: connection.prefix,
@@ -246,19 +282,7 @@ export class CaseAnalysisQueue {
       }
       await this.#queue.add("analyse", message, { ...deliveryOptions(this.#retry), jobId });
     })();
-    // An abandoned add is never an unhandled rejection.
-    work.catch(() => undefined);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const expired = new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(() => {
-        reject(new QueueUnavailableError(this.#timeoutMs));
-      }, this.#timeoutMs);
-    });
-    try {
-      await Promise.race([work, expired]);
-    } finally {
-      clearTimeout(timer);
-    }
+    await bounded(work, this.#timeoutMs);
   }
 
   async close(): Promise<void> {
@@ -271,17 +295,20 @@ export class ReportRenderQueue {
   readonly #queue: Queue;
   readonly #retry: RetryPolicy;
 
-  constructor(connection: QueueConnection, retry: RetryPolicy) {
+  readonly #timeoutMs: number;
+
+  constructor(connection: QueueConnection, retry: RetryPolicy, options: ProducerOptions = {}) {
     this.#queue = new Queue(REPORT_RENDERS_QUEUE, {
       connection: bullConnection(connection),
       prefix: connection.prefix,
     });
     this.#retry = retry;
+    this.#timeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   }
 
-  /** Enqueues the report's render; enqueueing the same report twice adds it once. */
+  /** Enqueues the report's render; enqueueing the same report twice adds it once. Bounded. */
   async enqueueRender(tenantId: TenantId, reportId: string): Promise<void> {
-    await enqueueRender(this.#queue, this.#retry, tenantId, reportId);
+    await enqueueRender(this.#queue, this.#retry, tenantId, reportId, this.#timeoutMs);
   }
 
   async close(): Promise<void> {
@@ -294,11 +321,13 @@ async function enqueueRender(
   retry: RetryPolicy,
   tenantId: string,
   reportId: string,
+  timeoutMs: number,
 ): Promise<void> {
-  await queue.add("render", REPORT_MESSAGE.parse({ tenantId, reportId }), {
-    ...deliveryOptions(retry),
-    jobId: `render-${reportId}`,
-  });
+  const message = REPORT_MESSAGE.parse({ tenantId, reportId });
+  await bounded(
+    queue.add("render", message, { ...deliveryOptions(retry), jobId: `render-${reportId}` }),
+    timeoutMs,
+  );
 }
 
 /** Adds a run's flow: its collector jobs on their source queues, under one fusion parent. */
@@ -312,9 +341,10 @@ async function addRunFlow(
     /** Distinguishes a replay's flow from the run's first one; empty for the first. */
     readonly suffix: string;
   },
+  timeoutMs: number,
 ): Promise<void> {
   const delivery = deliveryOptions(retry);
-  await flows.add({
+  const work = flows.add({
     name: "fuse",
     queueName: FUSION_QUEUE,
     data: RUN_MESSAGE.parse({ tenantId: input.tenantId, runId: input.runId }),
@@ -336,6 +366,7 @@ async function addRunFlow(
       },
     })),
   });
+  await bounded(work, timeoutMs);
 }
 
 export class JobNotReplayableError extends AppError {
@@ -359,13 +390,16 @@ export class JobReplayer {
   readonly #registry: CollectorRegistry;
   readonly #flows: FlowProducer;
   readonly #retry: RetryPolicy;
+  readonly #timeoutMs: number;
 
-  constructor(options: {
-    readonly db: Database;
-    readonly registry: CollectorRegistry;
-    readonly connection: QueueConnection;
-    readonly retry: RetryPolicy;
-  }) {
+  constructor(
+    options: {
+      readonly db: Database;
+      readonly registry: CollectorRegistry;
+      readonly connection: QueueConnection;
+      readonly retry: RetryPolicy;
+    } & ProducerOptions,
+  ) {
     this.#db = options.db;
     this.#registry = options.registry;
     this.#flows = new FlowProducer({
@@ -373,6 +407,7 @@ export class JobReplayer {
       prefix: options.connection.prefix,
     });
     this.#retry = options.retry;
+    this.#timeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   }
 
   async replay(tenantId: TenantId, jobId: string): Promise<{ readonly runId: string }> {
@@ -395,13 +430,20 @@ export class JobReplayer {
       return row;
     });
     if (job === null) throw new ReplayTargetNotFoundError();
-    await addRunFlow(this.#flows, this.#retry, {
-      tenantId,
-      runId: job.runId,
-      jobs: [{ jobId: job.id, sourceId: this.#registry.entry(job.collectorId).source.id }],
-      // The attempt count is monotonic, so each replay gets new delivery ids.
-      suffix: `-replay-${String(job.attempts)}`,
-    });
+    // Bounded: past it, QueueUnavailableError, with the job already marked
+    // QUEUED (the queue may still take the abandoned add when it recovers).
+    await addRunFlow(
+      this.#flows,
+      this.#retry,
+      {
+        tenantId,
+        runId: job.runId,
+        jobs: [{ jobId: job.id, sourceId: this.#registry.entry(job.collectorId).source.id }],
+        // The attempt count is monotonic, so each replay gets new delivery ids.
+        suffix: `-replay-${String(job.attempts)}`,
+      },
+      this.#timeoutMs,
+    );
     return { runId: job.runId };
   }
 
@@ -454,6 +496,8 @@ export interface WorkerPoolOptions {
   readonly processor: CollectorJobProcessor;
   readonly fusion: RunFusion;
   readonly retry: RetryPolicy;
+  /** How long the pool's own enqueues may wait on the queue; DEFAULT_ENQUEUE_TIMEOUT_MS when absent. */
+  readonly enqueueTimeoutMs?: number;
   /** The bulkhead: at most this many of a source's jobs run at once, across every worker. */
   readonly collectConcurrency: (sourceId: string) => number;
   readonly investigationConcurrency: number;
@@ -497,6 +541,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
   // Where a generated report's PDF render is enqueued.
   const renderQueue = new Queue(REPORT_RENDERS_QUEUE, { connection, prefix });
   const settings = { backoffStrategy: backoffStrategy(options.retry) };
+  const enqueueTimeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   const observer = options.observer ?? {};
 
   const recordDeadLetter = async (letter: DeadLetter, deliveryId: string): Promise<void> => {
@@ -688,12 +733,13 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
           throw error;
         }
         if (planned.jobs.length > 0) {
-          await addRunFlow(flows, options.retry, {
-            tenantId,
-            runId: planned.runId,
-            jobs: planned.jobs,
-            suffix: "",
-          });
+          // Bounded: past it, the planning job fails and is delivered again.
+          await addRunFlow(
+            flows,
+            options.retry,
+            { tenantId, runId: planned.runId, jobs: planned.jobs, suffix: "" },
+            enqueueTimeoutMs,
+          );
         }
         return { jobs: planned.jobs.length };
       });
@@ -719,11 +765,13 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
         // too: a delivery that crashed after recording success, before this,
         // is delivered again and enqueues it then.
         if (disposition.status === "SUCCEEDED") {
+          // Bounded: past it, this delivery fails and the next enqueues it.
           await enqueueRender(
             renderQueue,
             options.retry,
             message.data.tenantId,
             message.data.reportId,
+            enqueueTimeoutMs,
           );
         }
         return { disposition: disposition.kind };

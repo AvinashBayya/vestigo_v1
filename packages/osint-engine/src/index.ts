@@ -75,6 +75,7 @@ export {
   CaseAnalysisQueue,
   DEFAULT_ENQUEUE_TIMEOUT_MS,
   QueueUnavailableError,
+  type ProducerOptions,
   collectQueueName,
   DEAD_LETTER_MESSAGE,
   DEAD_LETTER_QUEUE,

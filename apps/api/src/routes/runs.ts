@@ -1,6 +1,7 @@
 import type { ServerResponse } from "node:http";
 import { JOB_OUTCOMES, JOB_STATUSES, RUN_STATUSES, TARGET_TYPES } from "@repo/core";
 import {
+  QueueUnavailableError,
   readRunProgress,
   ReplayTargetNotFoundError,
   usageSummary,
@@ -491,10 +492,17 @@ export const runRoutes =
           { runJobs: job.runId },
           "This job's replay: its run's collection and its recorded outcome.",
         );
-        const replayed = await services().runs.replayer.replay(
-          principal.tenantId,
-          request.params.id,
-        );
+        let replayed;
+        try {
+          replayed = await services().runs.replayer.replay(principal.tenantId, request.params.id);
+        } catch (error) {
+          if (!(error instanceof QueueUnavailableError)) throw error;
+          throw new HttpError(
+            503,
+            "QUEUE_UNAVAILABLE",
+            "The job is marked for replay, but the job queue did not take it in time. Until the queue takes it, the job stays queued and is not collected.",
+          );
+        }
         void reply.code(202);
         return replayed;
       },

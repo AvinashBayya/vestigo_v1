@@ -192,6 +192,8 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
   // recorded the same attempt first (nothing written, send it again).
   CASE_TOO_LARGE: 409,
   CASE_ANALYSIS_REQUEST_CONFLICT: 409,
+  // A bounded enqueue gave up: the queue did not take the job in time (CLAUDE.md §5).
+  QUEUE_UNAVAILABLE: 503,
 };
 
 export function registerErrorHandling(app: FastifyInstance): void {

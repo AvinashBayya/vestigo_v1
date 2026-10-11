@@ -524,7 +524,15 @@ export const reportRoutes =
           // render whose enqueue was lost.
           const status = pdf.status === "RENDERING" ? "RENDERING" : "PENDING";
           afterCommit(request, async () => {
-            await renders.enqueueRender(tenantId, report.id);
+            try {
+              await renders.enqueueRender(tenantId, report.id);
+            } catch {
+              throw new HttpError(
+                503,
+                "QUEUE_UNAVAILABLE",
+                "The report's PDF is still to be rendered, but the job queue did not take it in time. Request it again.",
+              );
+            }
             void reply.code(202).header("retry-after", String(PDF_RETRY_AFTER_SECONDS));
             return {
               status,
