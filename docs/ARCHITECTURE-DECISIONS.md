@@ -89,6 +89,13 @@ Three parts of the schema carry the product's integrity:
 - **Merges are reversible.** People and organisations are never auto-merged by name. Merge decisions are records carrying reason and confidence, and can be undone without losing evidence.
 - **Locations are never auto-merged by name either** (amended 2026-10-08, D-23). The earlier codebase merged location entities whose names matched; two places can share a name. No collector creates LOCATION entities yet, so the database's rule that refuses an automatic merge on a name alone is extended to LOCATION when R3 first creates them, with a test.
 - **Claim labels are first-class.** OBSERVED / REPORTED / DERIVED / CORRELATED / INFERRED / HYPOTHESIS is a column, not a string in a report.
+- **A case analysis is derived data, removed with what it rests on** (amended 2026-10-11, R1-b). A stored analysis holds values read from evidence, so it goes wherever that evidence goes: deletion genuinely removes derived data. No deletion path exists yet, and nothing is enforced. The one that is built does this:
+  - deleting a tenant removes its analyses' events, then its analyses;
+  - deleting a case removes its analyses, events first;
+  - deleting evidence removes every analysis whose recorded basis lists it, events first. The basis is the evidence and run ids of the analysis's input, recorded with each request in `case_analyses.basis_evidence_ids` (migration 0023);
+  - analyses do not expire with time.
+
+  The rows are written once. The write-once trigger never refuses a DELETE, and the application role holds no DELETE grant, so deletion runs as the role that owns retention. The foreign keys take no action on delete, so the deletion removes events, then analyses, then what they rest on.
 
 Supporting choices: evidence partitioned by month from day one; pgvector enabled for semantic deduplication; Postgres full-text plus trigram search; a `region` field on tenants even with one region today; point-in-time recovery; cross-tenant isolation tests in CI that block the build.
 
@@ -116,6 +123,13 @@ Because jobs are now durable and background, the old 60-second global cap become
 - Degradation is a product behaviour: a failed collector renders as failed beside the ones that succeeded.
 
 **Metering.** Every external call records units consumed (API credits, search queries, LLM tokens) against the tenant, and quotas are checked before dispatch.
+
+**Case analysis limits** (recorded 2026-10-11, R1-b). Two limits are accepted as built:
+
+- **50,000 records per analysis.** This is the evidence, claims, entities, relationships and jobs one analysis reads (`DEFAULT_MAX_CASE_RECORDS`, not configurable). The count is made in the database before anything is read. A case past it is refused with 409 `CASE_TOO_LARGE` on all three analysis routes, and the job refuses it the same way. Its earlier analyses cannot be read until the case shrinks, because their freshness cannot be judged without reading it.
+- **Freshness is recomputed on every read.** Each GET of an analysis reads the case's records and hashes them to say whether the analysis is still current (STALE when the hash differs). The work is bounded by the same 50,000 records, runs on every read, and is not cached.
+
+*Revisit if* cases routinely approach the bound, or reads of analyses are frequent enough for the hashing to show in latency.
 
 **Monitors** are defined in Postgres, not only as Redis repeatable jobs, so schedules survive a Redis flush.
 

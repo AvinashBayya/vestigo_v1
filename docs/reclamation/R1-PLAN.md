@@ -52,7 +52,8 @@ On the items R1-a raised (2026-10-09, after R1-a was approved):
 - **D-3's input hash** is computed in R1-b's job, not in `case-engine`.
 - **The job processor is not in `case-engine`** (supersedes D-1's processor clause).
   `case-engine` stays pure, on `core` only. The processor goes in `apps/worker`, or in a thin
-  package depending on `case-engine`, `db`, `llm` and `access`.
+  package depending on `case-engine`, `db`, `llm` and `access`. *(This wording is superseded by
+  the R1-b ruling below: the processor lives in `packages/osint-engine/src/jobs`.)*
 - **HELD stays.** A discipline whose collectors were all locked shows null with the reason
   `LOCKED`, not a measured zero.
 - **The lock reasons move to `core`**, in a commit of their own.
@@ -65,6 +66,37 @@ On the items R1-a raised (2026-10-09, after R1-a was approved):
 - **Fixed as a behaviour change**, in a separate commit with updated golden files:
   `displayValue(undefined)`, truncation that splits an emoji, and the "all 0 planned collectors"
   headline.
+
+On the items R1-b raised (2026-10-11, after R1-b was approved):
+
+- **The person-gate amendments** to CLAUDE.md §9 and standing rule 6 are approved. §9 also
+  names the gap in report generation, tracked as D-34 (ruled: report generation re-checks the
+  person gate in the job, no later than R1-f).
+- **Retention: accepted as recommended,** with one addition: deleting a case removes its
+  analyses. Recorded in `docs/ARCHITECTURE-DECISIONS.md` §5.
+- **Status as an append-only events table: accepted.**
+- **Permissions: accepted.** `case:analyse` requests an analysis, and `case:read` reads one.
+- **API keys: accepted,** scoped only.
+- **Plan and build reconciled:**
+  - `GET /api/v1/cases/:id/analyses` returns the latest analysis with its freshness, not a
+    list;
+  - the processor lives in `packages/osint-engine`, superseding the R1-a ruling's wording;
+  - the input hash covers everything the analysis reads.
+
+  The R1-b sub-stage below now describes what was built.
+- **Fixed now, each in its own small commit:**
+  - the development seed lists each job's evidence;
+  - the two planned-collector wording leftovers (ENGINE_VERSION 4);
+  - the worker's runtime dependency on `osint-engine`;
+  - a time limit on every enqueue;
+  - a failure the same inputs repeat (CASE_INPUT_INVALID) is returned, not tried again.
+- **Raised again, awaiting a ruling:**
+  - analysing an archived case (recommended: refuse);
+  - BLOCKED and NOT_IMPLEMENTED registry entries counted as registered (recommended: exclude,
+    with the wording effect shown first).
+- **Documented as limits:** the 50,000-record bound and the hashing on every read
+  (`docs/ARCHITECTURE-DECISIONS.md` §6).
+- **D-33: accepted.** It is built in its own commit before R1-c.
 
 ## What R1 is, after reading the code
 
@@ -195,66 +227,88 @@ replaces and from the closest existing module here; confidence in each estimate 
 
 ### R1-b: persistence, job and API
 
-- **Prerequisite (D-32, ruled).** Before anything else in R1-b: each gated read and its probe
-  run on one snapshot (a repeatable-read transaction for gated reads), so a case scope that
-  shrinks (an unpin) or grows (a fusion) between the read and the probe cannot leak.
-- **Scope.** A write-once case analysis record and the job that produces it, following the
-  `reports` pattern (D-3):
-  - migration: `case_analyses` (tenant_id, id, case_id, status, the **input hash**, engine
-    version, idempotency key unique, `document` jsonb written once on success, error code and
-    message, requested by, created, started and finished times), with its `_security.sql`
-    partner (forced RLS, the tenant policy, column grants, the write-once trigger). The input
-    hash covers what the analysis actually read, not the pins: a case's scope includes every
-    claim on a pinned entity or relationship (`exploration.ts:44-50`), which later runs extend
-    (`fuse.ts:131-141`), and merges and undos change what is folded. So it hashes the evidence
-    ids, claim ids, active merge ids, the contributing jobs with their status and outcome, the
-    held collector list, the registry disciplines and labels used, and the engine version;
-  - deletion and retention: the document holds entity values, so it must go wherever the
-    evidence it rests on goes (CLAUDE.md §9). No tenant deletion path exists yet and retention is
-    not enforced (`enforced: false`), so R1-b makes sure the write-once trigger never blocks a
-    delete and lists `case_analyses` wherever that future deletion enumerates tenant tables;
-  - repository in `packages/db` under tenant context, listed in `REPOSITORY_TABLES` so the
-    isolation tests cover it;
-  - queue `case-analyses` with a zod message, a dead-letter kind, a deterministic job id, its own
-    concurrency setting and a job timeout; the processor in `apps/worker` or a thin package
-    depending on `case-engine`, `db`, `llm` and `access` (not in `case-engine`, ruled
-    2026-10-09), which also computes the input hash (D-3);
-  - API: `POST /api/v1/cases/:id/analyses` (request; the same input hash returns the existing
-    analysis unless it failed, or its summary failed, in which case a new attempt is made, keyed
-    by input hash and attempt), `GET /api/v1/cases/:id/analyses` and `GET /api/v1/case-analyses/:id`, with zod
-    schemas so the OpenAPI entries and the web client are generated.
+*Updated 2026-10-11 to describe what was built (owner ruling on R1-b's raised items). The build
+record, with commits and test counts, is in `docs/PLAN.md`, under "R1-b".*
+
+- **Prerequisite (D-32, ruled, built first).** Each gated read and its probe run on one snapshot:
+  `withTenant(..., { snapshot: true })` opens a repeatable-read transaction. A serialisation
+  conflict is retried once, then answered 409 SNAPSHOT_CONFLICT. The person-gate guard requires a
+  snapshot on every gated GET.
+- **Scope, as built.**
+  - **Migrations 0021, 0022 and 0023.** They create two tables.
+    - `case_analyses` holds one row per tenant, case and input hash (unique). Each row is
+      written once and records the input hash, the engine version, the requester and the time.
+      It also records the analysis's basis (0023): the evidence and run ids of its input, what
+      it rests on.
+    - `case_analysis_events` is append-only, and holds where an analysis stands (the events
+      table, ruled). Each attempt is requested (PENDING), then finishes once: COMPLETE, with the
+      document and its wording, or FAILED, with a code and a message.
+
+    Security:
+    - RLS is forced, with the tenant policy, and `app_runtime` holds SELECT and INSERT only;
+    - triggers refuse UPDATE and TRUNCATE to every role (CAN01), and events out of order
+      (CAN02);
+    - a DELETE is never refused: retention is set out in `docs/ARCHITECTURE-DECISIONS.md` §5.
+  - **The input hash** is SHA-256 over a canonical form, and covers everything the analysis
+    reads (ruled; a superset of the list first planned here):
+    - every field of case-engine's input: the records, the contributing runs with their plans
+      and jobs, the registry's labels and disciplines, and the held collectors;
+    - the active merge ids reachable from the case;
+    - the engine version and the wording.
+  - **Repositories** live in `packages/db` under tenant context, listed in `REPOSITORY_TABLES`.
+  - **The queue** is `case-analyses`, with its own global bulkhead (`CASE_ANALYSIS_CONCURRENCY`),
+    a per-attempt timeout (`CASE_ANALYSIS_TIMEOUT_MS`) and dead-letter kind `CASE_ANALYSIS`. Job
+    ids are keyed by analysis and attempt.
+  - **The processor** is `CaseAnalysisProcessor` in `packages/osint-engine/src/jobs`, injected
+    by the worker. This was ruled, and supersedes the R1-a ruling's wording. It recomputes the
+    input hash, and refuses an input that changed since the request.
+  - **The API** is contract 0.4.0:
+    - `POST /api/v1/cases/:id/analyses` (`case:analyse`). The same input hash returns the
+      existing analysis, as a summary, never with its documents. A failed analysis gets a new
+      attempt, unless the same input repeats its failure (CASE_INPUT_INVALID), when the stored
+      failure is returned instead.
+    - `GET /api/v1/cases/:id/analyses` (`case:read`): the latest analysis, with its freshness,
+      not a list (ruled).
+    - `GET /api/v1/case-analyses/:id` (`case:read`).
+
+    API keys may request and read when scoped (ruled). The read states are NONE_YET, PENDING,
+    COMPLETE, FAILED (with its code) and STALE, each with a reason.
 - **Modules.** None ported; it runs R1-a's functions.
-- **Person data.** Requesting and reading an analysis are reads resting on the case scope **and on
-  every run that contributed to it**: case coverage lists each run's jobs, including a person
-  collector's NOTHING_FOUND, and CLAUDE.md §9 says a run that used a person collector is person
-  data whatever its jobs found. Today `touchesPersonData` checks a case scope's evidence only, and
-  `PersonProbe.runJobs` takes one run (`exploration.ts:110`, `:267`, `:300-311`), so the shared
-  probe gains a list of runs (D-19). A stored analysis holds what it read when it ran, and the
-  gate applies however old the data is, so reading one (`GET /api/v1/case-analyses/:id`, and
-  each item of `GET /api/v1/cases/:id/analyses`) probes the evidence ids and run ids recorded in
-  that document as well as the case as it is now (`PersonProbe.evidenceIds`, in chunks under
-  its 1,000-id limit at `exploration.ts:114`, plus D-19's run list). All three endpoints use
-  `requirePersonAccess` and are refused whole. A read recomputes the input hash and says "the
-  evidence behind this case has changed since" when it differs.
-- **Release-blocking tests.** Cross-tenant isolation for the new table (RLS and repository);
-  schema test (tenant_id, forced RLS, tenant-first indexes); the person gate refuses the whole
-  read and the request when any pinned record is person data, **and when a contributing run had a
-  PERSON job that found nothing** (both POST and GET); an analysis made while a person record was
-  pinned is refused after that pin is removed; idempotency (same input, one analysis, one job);
-  a failed analysis can be requested again; a new run adding a claim to a pinned entity makes the next request a new analysis; a
-  failing analysis lands in the dead-letter queue and never blocks collection or reports; the
-  document cannot be rewritten, yet a delete under tenant context succeeds; the OpenAPI contract
-  test and the generated client.
+- **Person data, as built.**
+  - Every route probes the case as it is now, and every run its evidence came from, including a
+    person collector's run that found nothing (D-19).
+  - A stored analysis is also probed by its recorded basis, whatever its status and however old.
+  - All three routes go through the shared gate and are refused whole.
+  - The job calls `personGate` before it reads the case's records, and a refusal fails it with
+    the gate's code (D-28).
+- **Limits** (ruled; documented in `docs/ARCHITECTURE-DECISIONS.md` §6):
+  - one analysis reads at most 50,000 records, counted before anything is read; past that, every
+    route answers 409 CASE_TOO_LARGE;
+  - freshness is recomputed on every GET: the case is read and hashed.
+- **Release-blocking tests.**
+  - Cross-tenant isolation for both tables (RLS and repository), and the schema test.
+  - Write-once: no UPDATE or DELETE grant; owner edits and TRUNCATE refused; events in order; a
+    delete under the owner succeeds.
+  - Hash canonicalisation.
+  - The person gate refuses the request and both reads whole when a pinned record is person
+    data, and when a contributing run had a PERSON job that found nothing. An analysis is
+    refused by what it read after its records leave the case.
+  - D-32 races on a read and on a request.
+  - D-28: an entitlement withdrawn before the job runs fails the job with the gate's code, and
+    no document is written.
+  - Each of the seven input refusals refuses the whole analysis.
+  - Idempotency (same input, one analysis, one job); a failed analysis can be requested again; a
+    repeating failure is returned.
+  - A hung or failing analysis is dead-lettered and never blocks collection, reports or other
+    cases.
+  - Every enqueue is bounded.
+  - The module graph reaches no network client.
+  - An empty case reads EMPTY_CASE.
+  - The guard classifies the three routes as gated.
 - **Turns on.** Nothing visible yet (R1-e shows it).
 - **Depends on.** R1-a; D-3, D-19, D-28, D-32 (its prerequisite, built first); D-10 fixed
   first (a person-gate defect in the merge routes, so the stage does not build on it).
-- **Size.** About 1,300 + 1,300 lines (migration, repository, queue, processor, routes).
-  Confidence: medium-low; the queue wiring touches eight places (see the worker's pattern for
-  reports).
-- **Stops at.** An analysis can be requested and read through the API in a live run, both themes
-  irrelevant (no UI). **Checkpoint:** migration and security file, endpoints with their
-  operation ids, the isolation and person-gate test results, a live request against a provisioned
-  tenant, pipeline counts.
+- **Stopped at.** The checkpoint in `docs/PLAN.md` ("R1-b"), approved 2026-10-11.
 
 ### R1-c: cross-intelligence
 
