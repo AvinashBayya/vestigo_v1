@@ -110,6 +110,16 @@ async function seedTenant(
       collectedAt: null,
       claimStrength: "HYPOTHESIS",
     });
+    // The job's outcome, recorded as the job processor records it: it found
+    // something, and its result lists the evidence it found. Evidence whose
+    // job does not list it is refused whole by a case analysis
+    // (EVIDENCE_NOT_IN_JOB_RESULT). Its times stay unknown, like the evidence's.
+    await repos.jobs.transition(job.id, {
+      status: "SUCCEEDED",
+      attempts: 1,
+      outcome: "FOUND",
+      evidenceIds: [evidence.id],
+    });
     const domain = await repos.entities.create({ kind: "DOMAIN", displayName: spec.domain });
     const subdomain = await repos.entities.create({ kind: "DOMAIN", displayName: spec.subdomain });
     const address = await repos.entities.create({ kind: "IP_ADDRESS", displayName: spec.address });

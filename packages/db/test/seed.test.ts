@@ -60,6 +60,31 @@ describe("development seed", () => {
     }
   });
 
+  it("seeds cases a case analysis accepts: every evidence item is listed by the job that found it", async () => {
+    // Read as the analysis reads a case (CaseScopeRepository.records). These are
+    // the invariants behind EVIDENCE_NOT_IN_JOB_RESULT and FOUND_RESULT_NOT_RECORDED.
+    for (const spec of SEED_TENANTS) {
+      const records = await db.withTenant(spec.tenantId, async ({ repos, reads }) => {
+        const [caseRow] = await repos.cases.list({ limit: 1 });
+        if (caseRow === undefined) throw new TypeError("[test] a seeded case");
+        return reads.caseScope.records(caseRow.id);
+      });
+      expect(records.evidence.length).toBeGreaterThan(0);
+      const jobs = new Map(records.jobs.map((job) => [job.id, job]));
+      for (const evidence of records.evidence) {
+        if (evidence.jobId === null) continue;
+        const job = jobs.get(evidence.jobId);
+        expect(job?.evidenceIds).toContain(evidence.id);
+      }
+      for (const job of records.jobs) {
+        if (job.outcome === "FOUND") expect(job.evidenceIds).not.toBeNull();
+      }
+      expect(records.jobs.map((job) => [job.status, job.outcome])).toEqual([
+        ["SUCCEEDED", "FOUND"],
+      ]);
+    }
+  });
+
   it("is idempotent: a second run changes nothing", async () => {
     const before = await db.withTenant(SEED_TENANTS[0].tenantId, ({ repos }) =>
       repos.cases.list({ limit: 100 }),
