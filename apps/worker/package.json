@@ -19,10 +19,10 @@
     "@repo/db": "workspace:*",
     "@repo/integrations": "workspace:*",
     "pino": "10.3.1",
-    "@repo/llm": "workspace:*"
+    "@repo/llm": "workspace:*",
+    "@repo/osint-engine": "workspace:*"
   },
   "devDependencies": {
-    "@repo/osint-engine": "workspace:*",
     "@types/node": "^24.0.0",
     "eslint": "^10.11.0",
     "typescript": "~6.0.3",

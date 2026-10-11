@@ -3,8 +3,9 @@
  * each package.json. Lint rules stop the imports; this stops the dependency
  * itself, so the boundary has two independent layers.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { findRepoRoot } from "./repo-root.ts";
 
@@ -59,4 +60,66 @@ describe("package boundaries (RELEASE-BLOCKING)", () => {
       expect(dependencies).not.toContain(forbidden);
     }
   });
+});
+
+/** Every runtime source file of a package: no tests, no build output. */
+function runtimeSources(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory())
+      return name === "node_modules" || name === "dist" ? [] : runtimeSources(path);
+    return /\.tsx?$/.test(name) && !/\.(test|d)\.tsx?$/.test(name) ? [path] : [];
+  });
+}
+
+/** The packages a file loads at runtime: value imports and re-exports, never `import type`. */
+function runtimeImports(file: string): string[] {
+  const source = ts.createSourceFile(
+    file,
+    readFileSync(file, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const names: string[] = [];
+  const visit = (node: ts.Node): void => {
+    let specifier: string | null = null;
+    if (
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword
+    ) {
+      specifier = node.moduleSpecifier.text;
+    } else if (
+      ts.isExportDeclaration(node) &&
+      !node.isTypeOnly &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specifier = node.moduleSpecifier.text;
+    }
+    if (specifier !== null && !specifier.startsWith(".") && !specifier.startsWith("node:")) {
+      const parts = specifier.split("/");
+      names.push(specifier.startsWith("@") ? parts.slice(0, 2).join("/") : (parts[0] ?? specifier));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return names;
+}
+
+describe("a deployed app installs what it runs (RELEASE-BLOCKING)", () => {
+  // A production install skips devDependencies: a package the app loads at
+  // runtime but lists only there is missing when the app starts.
+  for (const app of ["apps/api", "apps/worker"]) {
+    it(`${app}: every package its source loads at runtime is a runtime dependency`, () => {
+      const declared = new Set(runtimeDependencies(app));
+      const missing = new Set<string>();
+      for (const file of runtimeSources(join(root, app, "src"))) {
+        for (const name of runtimeImports(file)) {
+          if (!declared.has(name)) missing.add(name);
+        }
+      }
+      expect([...missing].sort()).toEqual([]);
+    });
+  }
 });

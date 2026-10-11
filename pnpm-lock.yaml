@@ -357,13 +357,13 @@ importers:
       '@repo/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@repo/osint-engine':
+        specifier: workspace:*
+        version: link:../../packages/osint-engine
       pino:
         specifier: 10.3.1
         version: 10.3.1
     devDependencies:
-      '@repo/osint-engine':
-        specifier: workspace:*
-        version: link:../../packages/osint-engine
       '@types/node':
         specifier: ^24.0.0
         version: 24.13.6
