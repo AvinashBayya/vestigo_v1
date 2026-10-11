@@ -21,7 +21,9 @@ import {
   CaseAnalysisRequestConflictError,
   CaseTooLargeError,
   QueueUnavailableError,
+  REPEATING_FAILURES,
   requestCaseAnalysis,
+  requestedView,
 } from "../src/index.ts";
 import { createCaseFixture, FIXTURE_COLLECTORS } from "./case-fixture.ts";
 import { TEST_ENGINE } from "./config.ts";
@@ -135,6 +137,66 @@ describe("requesting a case analysis (RELEASE-BLOCKING)", () => {
       repos.caseAnalyses.listForCase(fixture.caseId, { limit: 10 }),
     );
     expect(analyses).toEqual([]);
+  });
+
+  it("returns a failure the same input repeats, and tries any other again", async () => {
+    const fixture = await createCaseFixture(db, "request-repeating");
+    const request = () =>
+      db.withTenant(fixture.tenantId, (context) =>
+        requestCaseAnalysis(context, {
+          caseId: fixture.caseId,
+          collectors: FIXTURE_COLLECTORS,
+          requestedByUserId: null,
+          at: AT,
+        }),
+      );
+    const created = await request();
+    const analysisId = created.record.analysis.id;
+    await db.withTenant(fixture.tenantId, ({ repos }) =>
+      repos.caseAnalysisEvents.fail({
+        analysisId,
+        attempt: 1,
+        error: { code: "CASE_INPUT_INVALID", message: "[contradiction]" },
+        at: AT,
+      }),
+    );
+    const repeated = await request();
+    expect(repeated).toMatchObject({
+      kind: "EXISTING",
+      enqueue: false,
+      record: { attempt: 1, status: "FAILED", error: { code: "CASE_INPUT_INVALID" } },
+    });
+    expect(requestedView(repeated)).toMatchObject({
+      state: "FAILED",
+      reason: expect.stringContaining("inputs are unchanged") as unknown,
+    });
+    expect([...REPEATING_FAILURES]).toEqual(["CASE_INPUT_INVALID"]);
+
+    // Any other failure depends on more than the input: a new attempt.
+    const other = await createCaseFixture(db, "request-not-repeating");
+    const requestOther = () =>
+      db.withTenant(other.tenantId, (context) =>
+        requestCaseAnalysis(context, {
+          caseId: other.caseId,
+          collectors: FIXTURE_COLLECTORS,
+          requestedByUserId: null,
+          at: AT,
+        }),
+      );
+    const first = await requestOther();
+    await db.withTenant(other.tenantId, ({ repos }) =>
+      repos.caseAnalysisEvents.fail({
+        analysisId: first.record.analysis.id,
+        attempt: 1,
+        error: { code: "CASE_ANALYSIS_TIMEOUT", message: "[timed out]" },
+        at: AT,
+      }),
+    );
+    expect(await requestOther()).toMatchObject({
+      kind: "RETRIED",
+      enqueue: true,
+      record: { attempt: 2 },
+    });
   });
 
   it("two requests retrying a failed analysis at once record one attempt", async () => {

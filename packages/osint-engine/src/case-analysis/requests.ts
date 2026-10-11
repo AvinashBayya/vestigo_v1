@@ -5,7 +5,9 @@
  *
  * A request reads the case as it is now, hashes it, and finds or creates the
  * analysis for that hash: the same input is one analysis. A FAILED analysis
- * gets a new attempt; a PENDING or COMPLETE one is returned as it is.
+ * gets a new attempt, unless its failure is one the same input always repeats
+ * (REPEATING_FAILURES): then the stored failure is returned, with no new
+ * attempt. A PENDING or COMPLETE one is returned as it is.
  *
  * A read answers with one of five states, each with a reason, and never with
  * progress it did not measure:
@@ -49,12 +51,37 @@ export const CASE_ANALYSIS_STATE_REASONS = {
   COMPLETE: "The analysis finished, and the case's records are as they were when it was requested.",
   FAILED:
     "The latest attempt at the analysis failed ({code}), and no document was stored from it. Requesting the analysis again makes a new attempt.",
+  /** FAILED, with a failure the same input always repeats (REPEATING_FAILURES). */
+  FAILED_REPEATING:
+    "The latest attempt at the analysis failed ({code}), and no document was stored from it. The case's inputs fail the same way every time, so requesting the analysis again returns this failure until they change.",
+  /** What a request answers when it returns such a failure instead of a new attempt. */
+  FAILED_INPUTS_UNCHANGED:
+    "This analysis failed ({code}), and the case's inputs are unchanged since: the same records, analysis code, wording and collector registry, which fail the same way. No new attempt was made; change what the case holds to analyse it again.",
   STALE:
     "The case's records, or the analysis code or its wording, have changed since this analysis was requested. It describes the case as it was then; request a new analysis for the case as it is now.",
   /** STALE, for an analysis whose latest attempt holds no document (PENDING or FAILED). */
   STALE_WITHOUT_DOCUMENT:
     "The case's records, or the analysis code or its wording, have changed since this analysis was requested, and it holds no document. Request a new analysis for the case as it is now.",
-} as const satisfies Readonly<Record<CaseAnalysisReadState | "STALE_WITHOUT_DOCUMENT", string>>;
+} as const satisfies Readonly<
+  Record<
+    | CaseAnalysisReadState
+    | "STALE_WITHOUT_DOCUMENT"
+    | "FAILED_REPEATING"
+    | "FAILED_INPUTS_UNCHANGED",
+    string
+  >
+>;
+
+/**
+ * Failures the same input always repeats. The input hash names everything the
+ * analysis reads (the records, the engine version, the wording, the registry),
+ * and case-engine's input checks are a pure function of it, so an analysis
+ * that failed CASE_INPUT_INVALID fails the same way on every attempt. Asking
+ * again returns the stored failure (owner ruling, R1-b). Other failures depend
+ * on more than the input (the clock, the queue, the database, entitlement, or
+ * records changed between request and run) and get a new attempt.
+ */
+export const REPEATING_FAILURES: ReadonlySet<string> = new Set(["CASE_INPUT_INVALID"]);
 
 /** The most records one analysis reads, unless the caller sets another bound. */
 export const DEFAULT_MAX_CASE_RECORDS = 50_000;
@@ -228,7 +255,10 @@ export function readView(
   let reason: string;
   if (record.status === "FAILED") {
     if (record.error === null) throw new CaseAnalysisUnrecordedError();
-    reason = CASE_ANALYSIS_STATE_REASONS.FAILED.replace("{code}", record.error.code);
+    const template = REPEATING_FAILURES.has(record.error.code)
+      ? CASE_ANALYSIS_STATE_REASONS.FAILED_REPEATING
+      : CASE_ANALYSIS_STATE_REASONS.FAILED;
+    reason = template.replace("{code}", record.error.code);
   } else {
     reason = CASE_ANALYSIS_STATE_REASONS[record.status];
   }
@@ -283,7 +313,8 @@ export async function latestAnalysis(
 export interface CaseAnalysisRequest {
   /**
    * CREATED: a new analysis, attempt 1. RETRIED: the analysis had failed; a new
-   * attempt. EXISTING: it is pending or complete, returned as it is.
+   * attempt. EXISTING: it is pending or complete, or failed in a way the same
+   * input always repeats, and is returned as it is.
    */
   readonly kind: "CREATED" | "RETRIED" | "EXISTING";
   readonly record: CaseAnalysisRecord;
@@ -293,12 +324,13 @@ export interface CaseAnalysisRequest {
 }
 
 /**
- * What a request answers: the analysis of the case as it is now, PENDING or
- * COMPLETE (a failed one was given a new attempt), without its document. The
- * document is read with case:read, never through a request.
+ * What a request answers: the analysis of the case as it is now, without its
+ * document (the document is read with case:read, never through a request).
+ * PENDING or COMPLETE; or FAILED, when its failure is one the same input
+ * always repeats and the stored failure is returned instead of a new attempt.
  */
 export interface CaseAnalysisRequestedView {
-  readonly state: "PENDING" | "COMPLETE";
+  readonly state: CaseAnalysisStatus;
   readonly reason: string;
   readonly caseId: string;
   readonly currentInputHash: string;
@@ -307,10 +339,22 @@ export interface CaseAnalysisRequestedView {
 
 export function requestedView(requested: CaseAnalysisRequest): CaseAnalysisRequestedView {
   const { record } = requested;
-  if (record.status === "FAILED") throw new CaseAnalysisUnrecordedError();
+  let reason: string;
+  if (record.status === "FAILED") {
+    // Only a repeating failure is returned; any other was given a new attempt.
+    if (record.error === null || !REPEATING_FAILURES.has(record.error.code)) {
+      throw new CaseAnalysisUnrecordedError();
+    }
+    reason = CASE_ANALYSIS_STATE_REASONS.FAILED_INPUTS_UNCHANGED.replace(
+      "{code}",
+      record.error.code,
+    );
+  } else {
+    reason = CASE_ANALYSIS_STATE_REASONS[record.status];
+  }
   return {
     state: record.status,
-    reason: CASE_ANALYSIS_STATE_REASONS[record.status],
+    reason,
     caseId: record.analysis.caseId,
     currentInputHash: requested.currentInputHash,
     analysis: record,
@@ -376,6 +420,14 @@ export async function requestCaseAnalysis(
     };
   }
   const existing = await analysisRecord(context, analysis);
+  // The same input repeats this failure: return it, with no new attempt.
+  if (
+    existing.status === "FAILED" &&
+    existing.error !== null &&
+    REPEATING_FAILURES.has(existing.error.code)
+  ) {
+    return { kind: "EXISTING", record: existing, currentInputHash: inputHash, enqueue: false };
+  }
   if (existing.status === "FAILED") {
     await requestAttempt(existing.attempt + 1);
     return {

@@ -45,6 +45,8 @@ const CaseAnalysisSummary = z.object({
   attemptRequestedAt: z.iso.datetime(),
   /** When the latest attempt finished; null while it has not. */
   finishedAt: optionalInstant,
+  /** Why the latest attempt failed, by code only (its message is read with case:read); null unless it did. */
+  error: z.object({ code: z.string() }).nullable(),
 });
 
 /** An analysis as a read shows it (case:read): where it stands, and its documents. */
@@ -72,8 +74,12 @@ const CaseAnalysisRead = z
 
 const CaseAnalysisRequested = z
   .object({
-    /** A request answers the analysis of the case as it is now: never NONE_YET, FAILED or STALE. */
-    state: z.enum(["PENDING", "COMPLETE"]),
+    /**
+     * A request answers the analysis of the case as it is now: never NONE_YET or
+     * STALE. FAILED only when the same inputs repeat its failure (CASE_INPUT_INVALID):
+     * the stored failure is returned, and no new attempt is made.
+     */
+    state: z.enum(CASE_ANALYSIS_STATUSES),
     reason: z.string(),
     caseId: z.uuid(),
     currentInputHash: z.string(),
@@ -101,6 +107,7 @@ const summary = (record: CaseAnalysisRecord): z.infer<typeof CaseAnalysisSummary
   status: record.status,
   attemptRequestedAt: iso(record.attemptRequestedAt),
   finishedAt: isoOrNull(record.finishedAt),
+  error: record.error === null ? null : { code: record.error.code },
 });
 
 const view = (read: CaseAnalysisReadView): z.infer<typeof CaseAnalysisRead> => {
@@ -145,7 +152,7 @@ export const caseAnalysisRoutes =
           operationId: "requestCaseAnalysis",
           summary: "Request an analysis of a case as it is now, made in the background",
           description:
-            "Reads the case's stored records, hashes them, and returns the analysis of exactly that input, without its documents (read them with the GET routes, under case:read): 202 with a new one (or a new attempt at one that failed), 200 with the existing one when it is pending or complete. Nothing is collected. Refused whole (403 with a `locked` block) when the case rests on person-investigation data the organisation cannot access, a run whose person collector found nothing included; 409 CASE_TOO_LARGE past the size one analysis reads; 409 when a concurrent request for the same analysis won.",
+            "Reads the case's stored records, hashes them, and returns the analysis of exactly that input, without its documents (read them with the GET routes, under case:read): 202 with a new one (or a new attempt at one that failed), 200 with the existing one when it is pending or complete. 200 with the stored failure, and no new attempt, when it failed in a way the same inputs always repeat (CASE_INPUT_INVALID): the inputs are unchanged. Nothing is collected. Refused whole (403 with a `locked` block) when the case rests on person-investigation data the organisation cannot access, a run whose person collector found nothing included; 409 CASE_TOO_LARGE past the size one analysis reads; 409 when a concurrent request for the same analysis won.",
           tags: ["cases"],
           security: SECURITY,
           params: IdParams,

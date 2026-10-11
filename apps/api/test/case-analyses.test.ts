@@ -323,9 +323,10 @@ describe("requesting and reading a case analysis (RELEASE-BLOCKING)", () => {
         },
       });
       // A request answers without the documents: only case:read shows them.
-      for (const key of ["document", "wording", "error"]) {
+      for (const key of ["document", "wording"]) {
         expect(body.analysis).not.toHaveProperty(key);
       }
+      expect(body.analysis?.error).toBeNull();
       expect(body.analysis?.inputHash).toBe(body.currentInputHash);
       analysisId = body.analysis?.id ?? "";
       expect(calls).toEqual([{ analysisId, attempt: 1, committed: true }]);
@@ -446,6 +447,61 @@ describe("requesting and reading a case analysis (RELEASE-BLOCKING)", () => {
     });
   });
 
+  it("a failure the same inputs repeat is returned (200), not tried again", async () => {
+    // A case of its own, so its input is unchanged between the failure and the request.
+    const repeating = (await caseOf(tenant, [seeded.techEntityId])).caseId;
+    const requested = await post(tenant, repeating);
+    expect(requested.status).toBe(202);
+    const failedId = requested.json<Read>().analysis?.id ?? "";
+    const message = `[EVIDENCE_NOT_IN_JOB_RESULT (evidence ${seeded.techEvidenceId})]`;
+    await api.db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.caseAnalysisEvents.fail({
+        analysisId: failedId,
+        attempt: 1,
+        error: { code: "CASE_INPUT_INVALID", message },
+        at: AT,
+      }),
+    );
+    // A read says so: requesting it again returns this failure.
+    expect((await latest(tenant, repeating)).json<Read>()).toMatchObject({
+      state: "FAILED",
+      reason: CASE_ANALYSIS_STATE_REASONS.FAILED_REPEATING.replace("{code}", "CASE_INPUT_INVALID"),
+      analysis: { id: failedId, attempt: 1, error: { code: "CASE_INPUT_INVALID", message } },
+    });
+    const { calls, spy } = watchEnqueues(tenant.tenantId);
+    try {
+      const again = await post(tenant, repeating);
+      expect(again.status).toBe(200);
+      const body = again.json<Read>();
+      expect(body).toMatchObject({
+        state: "FAILED",
+        reason: CASE_ANALYSIS_STATE_REASONS.FAILED_INPUTS_UNCHANGED.replace(
+          "{code}",
+          "CASE_INPUT_INVALID",
+        ),
+        analysis: {
+          id: failedId,
+          attempt: 1,
+          status: "FAILED",
+          error: { code: "CASE_INPUT_INVALID" },
+        },
+      });
+      expect(body.reason).toContain("inputs are unchanged");
+      // The code only: the message, which names records, is read with case:read.
+      expect(again.body).not.toContain(seeded.techEvidenceId);
+      expect(calls).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
+    const events = await api.db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.caseAnalysisEvents.listForAnalysis(failedId),
+    );
+    expect(events.map((e) => [e.attempt, e.status])).toEqual([
+      [1, "PENDING"],
+      [1, "FAILED"],
+    ]);
+  });
+
   it("two requests at once for a new input make one analysis", async () => {
     await api.db.withTenant(tenant.tenantId, ({ repos }) =>
       repos.claims.create({
@@ -533,9 +589,10 @@ describe("who may request and read a case analysis (RELEASE-BLOCKING)", () => {
     expect(existing.statusCode).toBe(200);
     const body = existing.json<Read>();
     expect(body).toMatchObject({ state: "COMPLETE", analysis: { id: analysisId } });
-    for (const key of ["document", "wording", "error"]) {
+    for (const key of ["document", "wording"]) {
       expect(body.analysis).not.toHaveProperty(key);
     }
+    expect(body.analysis?.error).toBeNull();
     for (const url of [`/api/v1/cases/${caseId}/analyses`, `/api/v1/case-analyses/${analysisId}`]) {
       const read = await withKey(analyst, "GET", url);
       expect(read.statusCode).toBe(403);

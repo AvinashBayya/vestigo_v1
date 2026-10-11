@@ -61,6 +61,7 @@ export {
   DEFAULT_MAX_CASE_RECORDS,
   latestAnalysis,
   readView,
+  REPEATING_FAILURES,
   requestCaseAnalysis,
   requireCaseWithinBound,
   requestedView,
