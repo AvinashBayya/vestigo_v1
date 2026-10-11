@@ -94,15 +94,29 @@ describe("coverageHeadline", () => {
   const NOTHING =
     "NOTHING PLANNED: no collector was planned to run, so there is nothing to report on.";
 
-  it("no collector planned, complete or failed: nothing to report on, never 'all 0' or 'none of the 0'", () => {
-    expect(coverageHeadline("SUCCEEDED", [], null)).toBe(NOTHING);
-    expect(coverageHeadline("FAILED", [], null)).toBe(NOTHING);
-    expect(coverageHeadline("SUCCEEDED", [entry("EXCLUDED")], null)).toBe(
-      `${NOTHING} 1 further collector(s) were excluded or held and did not run.`,
+  it("no collector planned, complete, partial or failed: nothing to report on, never 'all 0', '0 of 0' or 'none of the 0'", () => {
+    for (const status of ["SUCCEEDED", "PARTIAL", "FAILED"] as const) {
+      expect(coverageHeadline(status, [], null)).toBe(NOTHING);
+      expect(coverageHeadline(status, [entry("EXCLUDED")], null)).toBe(
+        `${NOTHING} 1 further collector was excluded or held and did not run.`,
+      );
+    }
+  });
+
+  it("the note on collectors that did not run agrees in number", () => {
+    expect(coverageHeadline("SUCCEEDED", [entry("COLLECTED"), entry("EXCLUDED")], null)).toBe(
+      "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing). 1 further collector was excluded or held and did not run.",
     );
-    expect(coverageHeadline("FAILED", [entry("EXCLUDED")], null)).toBe(
-      `${NOTHING} 1 further collector(s) were excluded or held and did not run.`,
+    expect(
+      coverageHeadline(
+        "SUCCEEDED",
+        [entry("COLLECTED"), entry("EXCLUDED"), entry("EXCLUDED")],
+        null,
+      ),
+    ).toBe(
+      "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing). 2 further collectors were excluded or held and did not run.",
     );
+    expect(coverageHeadline("SUCCEEDED", [entry("COLLECTED")], null)).not.toContain("further");
   });
 
   it("one planned collector is singular wherever the count is rendered", () => {

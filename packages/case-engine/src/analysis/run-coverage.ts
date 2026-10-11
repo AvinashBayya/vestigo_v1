@@ -9,7 +9,8 @@
  * packages/osint-engine/test/golden proved the output identical, byte for
  * byte. Changed since only by the owner's rulings, each a commit of its own
  * with its golden diff: a run in which no collector was planned says so
- * ("NOTHING PLANNED"), and a count of one planned collector is singular.
+ * ("NOTHING PLANNED"), whatever its status, and every count agrees in number
+ * ("1 planned collector", "1 further collector was").
  *
  * Nothing here is estimated. Coverage is named facts, never a percentage
  * (there is no honest denominator for "every source that exists"). This is
@@ -172,7 +173,9 @@ export function coverageHeadline(
   const notRunNote =
     notRun === 0
       ? ""
-      : ` ${String(notRun)} further collector(s) were excluded or held and did not run.`;
+      : notRun === 1
+        ? " 1 further collector was excluded or held and did not run."
+        : ` ${String(notRun)} further collectors were excluded or held and did not run.`;
   const counts = `${String(found)} found something, ${String(completed.length - found)} found nothing`;
   const planned = `${String(ran.length)} planned ${ran.length === 1 ? "collector" : "collectors"}`;
   // A run that planned no collector cannot have finished or failed to finish any.
@@ -183,7 +186,9 @@ export function coverageHeadline(
         ? nothingPlanned
         : `COMPLETE RUN: all ${planned} finished (${counts}).${notRunNote}`;
     case "PARTIAL":
-      return `PARTIAL RUN: ${String(ran.length - completed.length)} of ${planned} did not complete, so this report does not cover what they would have collected (${counts}).${notRunNote}`;
+      return ran.length === 0
+        ? nothingPlanned
+        : `PARTIAL RUN: ${String(ran.length - completed.length)} of ${planned} did not complete, so this report does not cover what they would have collected (${counts}).${notRunNote}`;
     case "FAILED":
       return ran.length === 0
         ? nothingPlanned

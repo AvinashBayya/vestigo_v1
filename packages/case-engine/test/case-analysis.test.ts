@@ -140,7 +140,7 @@ describe("case coverage", () => {
       });
     }
     expect(document.runs[0]?.coverage.headline).toBe(
-      "PARTIAL RUN: 1 of 4 planned collectors did not complete, so this report does not cover what they would have collected (2 found something, 1 found nothing). 3 further collector(s) were excluded or held and did not run.",
+      "PARTIAL RUN: 1 of 4 planned collectors did not complete, so this report does not cover what they would have collected (2 found something, 1 found nothing). 3 further collectors were excluded or held and did not run.",
     );
   });
 
@@ -416,7 +416,7 @@ describe("the discipline breakdown", () => {
       runA.coverage.entries.filter((entry) => entry.collectorId === "news").map((e) => e.state),
     ).toEqual(["COLLECTED"]);
     // phone and active did not run; news is no longer counted among them.
-    expect(runA.coverage.headline).toContain(" 2 further collector(s) were excluded or held");
+    expect(runA.coverage.headline).toContain(" 2 further collectors were excluded or held");
     expect(runA.coverage.entries.filter((entry) => entry.state === "HELD")).toEqual([]);
     expect(runA.jobs.find((job) => job.collectorId === "news")?.state).toBe("COLLECTED_NOT_PINNED");
     // It could have collected, so the discipline's zero is measured.
@@ -934,7 +934,7 @@ describe("regressions: cases/case-report.ts", () => {
       expect(run.coverage.entries.map((entry) => entry.collectorId)).not.toContain("late");
     }
     expect(document.runs[1]?.coverage.headline).toBe(
-      "COMPLETE RUN: all 2 planned collectors finished (1 found something, 1 found nothing). 1 further collector(s) were excluded or held and did not run.",
+      "COMPLETE RUN: all 2 planned collectors finished (1 found something, 1 found nothing). 1 further collector was excluded or held and did not run.",
     );
     expect(collectorIds(sectionOf(breakdown(), "TECHINT").collectors.notInAnyRun)).toEqual([
       "late",

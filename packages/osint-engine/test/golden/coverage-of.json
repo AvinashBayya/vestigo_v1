@@ -134,7 +134,7 @@
     "output": {
       "runStatus": "PARTIAL",
       "partial": true,
-      "headline": "PARTIAL RUN: 1 of 3 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 1 found nothing). 4 further collector(s) were excluded or held and did not run.",
+      "headline": "PARTIAL RUN: 1 of 3 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 1 found nothing). 4 further collectors were excluded or held and did not run.",
       "entries": [
         {
           "collectorId": "golden.dns",
@@ -287,7 +287,7 @@
     "output": {
       "runStatus": "SUCCEEDED",
       "partial": false,
-      "headline": "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing). 2 further collector(s) were excluded or held and did not run.",
+      "headline": "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing). 2 further collectors were excluded or held and did not run.",
       "entries": [
         {
           "collectorId": "golden.user",
@@ -445,7 +445,7 @@
     "output": {
       "runStatus": "PARTIAL",
       "partial": true,
-      "headline": "PARTIAL RUN: 1 of 3 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 1 found nothing). 3 further collector(s) were excluded or held and did not run.",
+      "headline": "PARTIAL RUN: 1 of 3 planned collectors did not complete, so this report does not cover what they would have collected (1 found something, 1 found nothing). 3 further collectors were excluded or held and did not run.",
       "entries": [
         {
           "collectorId": "golden.unicode",
@@ -787,7 +787,7 @@
     "output": {
       "runStatus": "PARTIAL",
       "partial": true,
-      "headline": "PARTIAL RUN: 350 of 420 planned collectors did not complete, so this report does not cover what they would have collected (10 found something, 60 found nothing). 50 further collector(s) were excluded or held and did not run.",
+      "headline": "PARTIAL RUN: 350 of 420 planned collectors did not complete, so this report does not cover what they would have collected (10 found something, 60 found nothing). 50 further collectors were excluded or held and did not run.",
       "entries": [
         {
           "collectorId": "golden.dns",
