@@ -3,6 +3,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { entities, entityMerges, entityRelationships } from "../schema/index.ts";
 import { casePins, claims, collectorsRegistry, evidence, jobs } from "../schema/index.ts";
 import { firstRow, limitOf, requireUuid, TenantRepository, type ListOptions } from "./base.ts";
+import { reachCte } from "./walk.ts";
 
 /**
  * What a read is about: everything pinned to a case, or everything one run
@@ -58,12 +59,15 @@ function scopeEntities(tenantId: string, scope: ReadScope): SQL {
     "runId" in scope
       ? sql`select c.id, c.entity_id, c.relationship_id from ${claims} c
           where c.tenant_id = ${tenantId} and c.evidence_id in (${scopeEvidence(tenantId, scope)})`
-      : sql`select c.id, c.entity_id, c.relationship_id from ${claims} c
-          where c.tenant_id = ${tenantId} and (
-            c.id in (select p.claim_id from ${casePins} p
-              where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)} and p.claim_id is not null)
-            or c.evidence_id in (select p.evidence_id from ${casePins} p
-              where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)} and p.evidence_id is not null))`;
+      : // Two lookups, each driven by the case's pins through an index, rather than one
+        // scan of every claim testing either condition (D-35).
+        sql`select c.id, c.entity_id, c.relationship_id from ${casePins} p
+          join ${claims} c on c.tenant_id = p.tenant_id and c.id = p.claim_id
+          where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)}
+        union
+        select c.id, c.entity_id, c.relationship_id from ${casePins} p
+          join ${claims} c on c.tenant_id = p.tenant_id and c.evidence_id = p.evidence_id
+          where p.tenant_id = ${tenantId} and p.case_id = ${requireUuid(scope.caseId)}`;
   // A case's pinned entities, and both ends of its pinned relationships.
   const pinnedEntities =
     "caseId" in scope
@@ -330,6 +334,7 @@ export class ExplorationRepository extends TenantRepository {
     // The entities the read names: given ones, a scope's whole set or its neighbourhood.
     const ctes: SQL[] = [];
     const seeds: SQL[] = [];
+    let aroundLinked = false;
     const entityIds = probe.entityIds ?? [];
     if (entityIds.length > 0) {
       seeds.push(sql`select e.id from ${entities} e
@@ -343,25 +348,8 @@ export class ExplorationRepository extends TenantRepository {
       if (around.hops === 0) {
         seeds.push(scopeEntities(tenantId, around.scope));
       } else {
-        // The walk the graph store makes: undirected, to the hop limit, and no node cap. Each
-        // relationship is listed both ways, so every step is one equality join Postgres can
-        // hash; testing source or target row by row timed out at three hops on a large
-        // tenant (docs/PLAN.md, D-10c).
-        ctes.push(
-          sql`edges(a, b) as (
-            select r.source_entity_id, r.target_entity_id from ${entityRelationships} r
-            where r.tenant_id = ${tenantId}
-            union all
-            select r.target_entity_id, r.source_entity_id from ${entityRelationships} r
-            where r.tenant_id = ${tenantId}
-          )`,
-          sql`reach(entity_id, hop) as (
-            select s.id, 0 from (${scopeEntities(tenantId, around.scope)}) s
-            union
-            select e.b, reach.hop + 1 from reach join edges e on e.a = reach.entity_id
-            where reach.hop < ${around.hops}
-          )`,
-        );
+        // The graph store's own walk (walk.ts): undirected, to the hop limit, and no node cap.
+        ctes.push(reachCte(tenantId, scopeEntities(tenantId, around.scope), around.hops));
         seeds.push(sql`select entity_id from reach`);
       }
     }
@@ -377,17 +365,42 @@ export class ExplorationRepository extends TenantRepository {
           join ${entityMerges} m on m.tenant_id = ${tenantId} and m.reverted_at is null
             and (m.surviving_entity_id = l.id or m.merged_entity_id = l.id)
         )`);
-      parts.push(
-        sql`select c.evidence_id as id from ${claims} c
-          where c.tenant_id = ${tenantId} and c.entity_id in (select id from linked)`,
-        sql`select c.evidence_id as id from ${claims} c
-          join ${entityRelationships} r on r.tenant_id = c.tenant_id and r.id = c.relationship_id
-          where c.tenant_id = ${tenantId}
-            and (r.source_entity_id in (select id from linked)
-              or r.target_entity_id in (select id from linked))`,
+      // Do those entities rest on person data: does any claim about one of them, or about
+      // a relationship one of them is at either end of, cite person evidence (D-35)? Each
+      // set is computed once (materialized) and then probed, as a hash in every plan
+      // measured. The planner's estimate of the walk is meaningless, and this keeps it from
+      // turning a step into one subplan per relationship (which timed out from one hop on a
+      // large tenant, docs/PLAN.md D-33) or into a loop over every person claim (seconds on
+      // a tenant holding much person data, D-35). The relationships come from two index
+      // lookups per linked entity.
+      ctes.push(
+        sql`linked_set(id) as materialized (select distinct id from linked)`,
+        sql`around(id) as materialized (
+          select r.id from linked_set l
+          join ${entityRelationships} r on r.tenant_id = ${tenantId} and r.source_entity_id = l.id
+          union
+          select r.id from linked_set l
+          join ${entityRelationships} r on r.tenant_id = ${tenantId} and r.target_entity_id = l.id
+        )`,
+        sql`person_evidence(id) as (
+          select ev.id from ${evidence} ev
+          left join ${collectorsRegistry} cr
+            on cr.tenant_id = ev.tenant_id and cr.collector_id = ev.collector_id
+          where ev.tenant_id = ${tenantId}
+            and (cr.collector_id is null or cr.discipline = 'PERSON')
+        )`,
       );
+      aroundLinked = true;
     }
     const checks: SQL[] = [];
+    if (aroundLinked) {
+      checks.push(sql`exists (
+          select 1 from ${claims} c
+          join person_evidence pe on pe.id = c.evidence_id
+          where c.tenant_id = ${tenantId}
+            and (c.entity_id in (select id from linked_set)
+              or c.relationship_id in (select id from around)))`);
+    }
     if (parts.length > 0) {
       checks.push(sql`exists (
           select 1 from ${evidence} ev
@@ -413,9 +426,21 @@ export class ExplorationRepository extends TenantRepository {
     if (checks.length === 0) return false;
     const preamble = ctes.length === 0 ? sql`` : sql`with recursive ${sql.join(ctes, sql`, `)} `;
     return this.run(async (tx) => {
+      // JIT off for this statement only (D-35). The planner's estimate of a walk bears no
+      // relation to its size and grows with the tenant, and past jit_above_cost Postgres
+      // compiles the statement first: the probe before D-35 was estimated at over 2 million
+      // and spent 1 to 2 s compiling at D-10c's size. This one is estimated just under the
+      // threshold there, so a larger tenant would cross it. The setting changes how the
+      // statement runs, never what it returns, and is put back after it, so the rest of
+      // the transaction plans as before.
+      const previous = firstRow(
+        (await tx.execute<{ jit: string }>(sql`select current_setting('jit') as jit`)).rows,
+      );
+      await tx.execute(sql`select set_config('jit', 'off', true)`);
       const result = await tx.execute<{ held: boolean }>(
         sql`${preamble}select (${sql.join(checks, sql` or `)}) as held`,
       );
+      if (previous !== null) await tx.execute(sql`select set_config('jit', ${previous.jit}, true)`);
       const row = firstRow(result.rows);
       return row !== null && row.held;
     });

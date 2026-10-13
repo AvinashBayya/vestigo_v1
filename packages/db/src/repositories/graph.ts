@@ -13,6 +13,7 @@ import { sql } from "drizzle-orm";
 import { claims, entities, entityMerges, entityRelationships } from "../schema/index.ts";
 import { requireUuid, TenantRepository } from "./base.ts";
 import { sortStrengths } from "./exploration.ts";
+import { reachCte } from "./walk.ts";
 
 interface NodeRow extends Record<string, unknown> {
   id: string;
@@ -39,11 +40,9 @@ interface EdgeRow extends Record<string, unknown> {
  * graphs; a graph database replaces this behind the same interface when the
  * triggers in ARCHITECTURE-DECISIONS §5 are met.
  *
- * It walks as the person probe walks (D-33, exploration.ts touchesPersonData):
- * each relationship is listed both ways, so every step is one equality join
- * Postgres can hash. Testing `source = x or target = x` row by row, as this
- * did before, timed out at two hops on a large tenant (docs/PLAN.md, D-10c
- * and D-33). The result is the same: each entity at its nearest hop.
+ * It walks exactly as the person probe walks (walk.ts, owner ruling on D-36):
+ * each step follows a reached entity's relationships from both ends, as two
+ * index lookups. The result is each entity at its nearest hop.
  */
 export class PostgresGraphStore extends TenantRepository implements GraphStore {
   async neighbourhood(query: GraphNeighbourhoodQuery): Promise<GraphSlice> {
@@ -68,21 +67,12 @@ export class PostgresGraphStore extends TenantRepository implements GraphStore {
 
     return this.run(async (tx) => {
       const nodeRows = await tx.execute<NodeRow>(sql`
-        with recursive edges(a, b) as (
-          select r.source_entity_id, r.target_entity_id from ${entityRelationships} r
-          where r.tenant_id = ${this.tenantId}
-          union all
-          select r.target_entity_id, r.source_entity_id from ${entityRelationships} r
-          where r.tenant_id = ${this.tenantId}
-        ), reach(entity_id, hop) as (
-          select e.id, 0 from ${entities} e
-            where e.tenant_id = ${this.tenantId} and e.id in (${seedList})
-          union
-          select edges.b, reach.hop + 1
-          from reach
-          join edges on edges.a = reach.entity_id
-          where reach.hop < ${maxHops}
-        ), nearest as (
+        with recursive ${reachCte(
+          this.tenantId,
+          sql`select e.id from ${entities} e
+            where e.tenant_id = ${this.tenantId} and e.id in (${seedList})`,
+          maxHops,
+        )}, nearest as (
           select entity_id, min(hop) as hop from reach group by entity_id
         )
         select e.id, e.kind, e.display_name, e.identifier, n.hop,

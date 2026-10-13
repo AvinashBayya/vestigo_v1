@@ -98,6 +98,26 @@ On the items R1-b raised (2026-10-11, after R1-b was approved):
   (`docs/ARCHITECTURE-DECISIONS.md` §6).
 - **D-33: accepted.** It is built in its own commit before R1-c.
 
+On the items raised after those rulings were carried out (2026-10-13):
+
+- **Analysing an archived case: refused.** A new analysis is refused with 409 `CASE_ARCHIVED`,
+  and the case's earlier analyses still read. Done in its own commit (6d50a8c).
+- **BLOCKED and NOT_IMPLEMENTED registry entries:** listed with their name and discipline, but
+  not counted as collectors that could run. The changed coverage wording for the BLOCKED case
+  goes to the owner before it is committed, and the false "(not in the current registry)"
+  statement stays out. Not yet committed.
+- **D-35 and D-36: fixed properly, in their own commit, before R1-c.**
+  - No depth cap as a stopgap.
+  - The walk is decided with the check, so the graph read and the person check walk the same
+    way.
+  - The aim is well below 3 to 4 s on the 125k-entity tenant. Computing reachability once per
+    tenant state is to be considered, and any schema change raised first.
+  - Required tests, each failing on the old walk: person data at the deepest hop is still
+    refused, and a locked tenant's refusal and body stay whole.
+  - The gap with D-10c's figure is explained, or said to be unexplainable, and the re-measured
+    numbers are committed. Done: `docs/PLAN.md`, D-35 and D-36.
+- **Kept as they are:** contract 0.4.0, and the item 7 commits, which are not squashed.
+
 ## What R1 is, after reading the code
 
 `docs/MASTER-BUILD-SEQUENCE.md` (lines 77-83) scopes R1 as cross-intelligence correlation,
@@ -798,7 +818,7 @@ and vetting when a report is requested. `ReportGenerator` then reads the run, an
 a model, without checking again. The case analysis job re-checks before it reads the case's
 records (D-28); report generation does not yet. CLAUDE.md §9 states the gap and points here.
 
-**D-35. The person probe's cost from one hop** (raised by D-33). The probe times out from one
+**D-35. The person probe's cost from one hop** **[RULED 2026-10-13: fix properly, with no depth cap. Done 2026-10-13: the probe's check is reworked and its statement runs without JIT. On this tenant it answers in 0.02 to 0.63 s at every hop. docs/PLAN.md, D-35 and D-36, which raised D-37 and D-38.]** (raised by D-33). The probe times out from one
 hop, with or without the new indexes. It was re-measured at D-10c's size, as above, and the
 timings are in docs/PLAN.md, D-33. The graph read calls the probe for every tenant without person
 access, so on a tenant this size the graph cannot be read past 0 hops.
@@ -814,7 +834,7 @@ statement timeout, before R1-e shows the graph more widely.
 *Alternative:* cap the hop limit of the graph read for a tenant without person access. Cost of
 the alternative: such a tenant reads no deep graph.
 
-**D-36. Which walk the graph store and the probe share** (raised by D-33). D-33 ruled that the
+**D-36. Which walk the graph store and the probe share** **[RULED 2026-10-13: decide with D-35; one walk for both. Done 2026-10-13: both take their walk from `reachCte`, two index lookups per step.]** (raised by D-33). D-33 ruled that the
 graph store walks as the probe does, listing each relationship both ways. Measured with the two
 new indexes, the old walk (`source = x or target = x`) was faster at every hop: 0.01 to 0.24 s,
 against 0.03 to 0.52 s for the walk as ruled. The index lets Postgres answer the old step with
@@ -827,6 +847,33 @@ refuses. If an index-driven walk wins, use it in both: two index lookups per ent
 each side.
 *Alternative:* keep the ruled walk as built. Cost: a flat few hundred milliseconds per read at
 this size.
+
+**D-37. Person marks kept per tenant** (raised by D-35). The probe's cost now has two parts:
+- the relationships around the walked entities, which grow with the reach;
+- the claims citing person evidence, which grow with how much person data the tenant holds.
+
+At D-10c's size the whole probe stays under 0.65 s at three hops, even with 100,000 person
+claims the case cannot reach. A larger tenant costs more, in proportion.
+
+*Recommended:* before tenants reach several times this size, keep a table of the entities that
+person data marks: directly, or as either end of a relationship that person data marks.
+- A trigger writes it as claims are written.
+- It is recomputed when a collector's discipline changes.
+- The check then looks up only the walked entities in it, whatever else the tenant holds.
+
+This is a schema change (a table, a trigger and a backfill), so it is raised, not built.
+
+*Alternative:* keep the check as built and re-measure as tenants grow. Cost: the probe's time
+grows with the tenant.
+
+**D-38. A statement that times out answers 500** (raised by D-35). When a query hits the
+statement timeout, the API answers 500 `INTERNAL_ERROR`, "Internal error." This was seen when the
+old probe ran out of time in the D-35 tests. A caller cannot tell a timeout, worth trying again
+later, from a defect.
+
+*Recommended:* turn Postgres's cancellation (SQLSTATE 57014) into a typed error, answered 503
+with its own code, as `QUEUE_UNAVAILABLE` is.
+*Alternative:* leave it as 500. Cost: a timeout reads as a defect.
 
 **Noted, not a decision.** The brief refers to "the 11 non-negotiable rules" in CLAUDE.md. No
 document numbers eleven rules: CLAUDE.md has sections 1 to 10 plus three unnumbered ones (product

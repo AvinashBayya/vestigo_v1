@@ -82,10 +82,18 @@ export async function createTestApi(
     readonly registry?: CollectorRegistry;
     /** Why synthesis is unavailable; null (the default) offers it. */
     readonly synthesisUnavailable?: string | null;
+    /** The application database's statement timeout. Defaults to the database's own default. */
+    readonly statementTimeoutMs?: number;
   } = {},
 ): Promise<TestApi> {
   const quiet = () => undefined;
-  const db = createDatabase({ connectionString: TEST_API.runtimeUrl, onConnectionError: quiet });
+  const db = createDatabase({
+    connectionString: TEST_API.runtimeUrl,
+    onConnectionError: quiet,
+    ...(options.statementTimeoutMs === undefined
+      ? {}
+      : { statementTimeoutMs: options.statementTimeoutMs }),
+  });
   const authStore = createAuthStore({
     connectionString: TEST_API.authUrl,
     onConnectionError: quiet,

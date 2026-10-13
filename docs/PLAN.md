@@ -3654,3 +3654,170 @@ check is clean on 491 files.
 | collectors | 482 | web | 177 |
 | llm | 130 | integrations | 122 |
 | db | 291 | | |
+
+## D-35 and D-36: the person probe and the shared walk (2026-10-13)
+
+**The rulings** (2026-10-13, recorded in `docs/reclamation/R1-PLAN.md`):
+- Fix both properly, in their own commit, before R1-c, with no depth cap.
+- Decide the walk with the check, so the graph read and the person check walk the same way.
+- Aim well below 3 to 4 s on the 125k-entity tenant. Consider computing reachability once per
+  tenant state, and raise any schema change first.
+
+**Built.** There is no schema change and no depth cap.
+- **One walk (D-36).** `reachCte` in `packages/db/src/repositories/walk.ts` is the only walk.
+  The graph store and the probe both take theirs from it.
+  - Each step makes two index lookups per entity: one by source, through the unique key, and one
+    by target, through migration 0024's index.
+  - It replaces D-33's listing of every relationship both ways, and reaches the same entities.
+- **The probe's check (D-35).** The question is unchanged: does any claim about a walked entity,
+  or about a relationship one of them is at either end of, cite person evidence?
+  - It now computes the walked set once, then the relationships around it (two index lookups per
+    entity).
+  - It then reads the claims citing person evidence and tests each against those two sets as
+    hashes.
+  - Computing each set once stops the planner turning a step into one subplan per relationship.
+    That subplan is what timed out from one hop (D-33).
+- **JIT off for the probe's statement,** put back after it.
+  - The planner's estimate of a walk bears no relation to its size. Past `jit_above_cost`,
+    Postgres compiles the statement before running it.
+  - The probe before D-35 was estimated at about 2 million and compiled for 1 to 2 s.
+  - The new one is estimated just under the threshold on this tenant, so a larger tenant would
+    cross it.
+  - JIT changes how a statement runs, never what it returns.
+- **A case's claims** are read with two index-driven lookups (by pinned claim, by pinned
+  evidence) instead of one scan testing both conditions.
+
+**Considered, not built.**
+- **Reachability once per tenant state.** A stored reach depends on the seeds and the hop limit,
+  so it would have to be kept per case and per limit. Every new relationship or merge would
+  invalidate it. Connected-component labels do not bound hops: the shared nameservers join
+  nearly the whole graph. It is not needed at this size.
+- **Person marks kept per tenant.** This would make the check cost only the walk, however much
+  person data the tenant holds. It is a schema change, raised as D-37.
+- **Starting from the person evidence.** This was the fastest shape when person data is rare,
+  0.13 s at worst. It took 4 to 5 s on a tenant holding 100,000 person claims, so it was not
+  built.
+
+**Re-measured** on the D-33 tenant, the same synthetic size, on one machine:
+- 125,001 entities, 260,000 relationships and 385,001 claims;
+- one person entity that nothing reaches, so the whole walk runs;
+- reach of 6 / 14 / 3,151 / 18,796 entities at 0 / 1 / 2 / 3 hops.
+
+Then on a copy of it with 50,000 person entities, 49,999 relationships between them and 100,000
+claims citing person evidence, none of which the case reaches. That is the worst case for the
+new check. It might be a tenant that held person access and lost it.
+
+Each figure is the range of three or six runs in milliseconds. Every run goes through the
+application's own database access, with its 15 s statement timeout. "Old" is the code at 0e42d8d,
+run as the database is configured (JIT on).
+
+| What is timed | Hops 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| The probe, old | 1,936 to 2,509 | over 15 s | over 15 s | over 15 s |
+| The probe, old, JIT off | 531 to 602 | over 15 s | over 15 s | over 15 s |
+| The probe, new | 19 to 123 | 19 to 33 | 42 to 159 | 287 to 631 |
+| The graph store, new | 11 to 20 | 6 to 18 | 30 to 130 | 98 to 244 |
+| The walk alone: `source = x or target = x` (before D-33) | 2 to 6 | 3 to 4 | 21 to 35 | 61 to 99 |
+| The walk alone: both ways (D-33) | 32 to 82 | 207 to 231 | 144 to 399 | 396 to 526 |
+| The walk alone: `reachCte` (now) | 3 to 4 | 4 to 5 | 12 to 22 | 52 to 55 |
+| With 100,000 unreachable person claims: the probe, old | 1,551 to 2,554 | over 15 s | over 15 s | over 15 s |
+| The same: the probe, new | 91 to 96 | 86 to 124 | 195 to 212 | 543 to 603 |
+| The same: the graph store, new | 17 to 25 | 11 | 70 to 129 | 153 to 274 |
+| The same, with person data on a relationship at an entity first reached at hop 3: the probe, new | | | 168 to 305 (not held) | 377 to 596 (held) |
+
+The three walks reached the same entities at every hop.
+
+**Shapes of the check tried** (JIT off, the same walk, the slowest run at any hop):
+
+| Shape | D-33 tenant | With 100,000 person claims |
+|---|---|---|
+| Person side: one index lookup per person claim | 131 | 5,057 |
+| Person side: plain joins | 603 | over 15 s |
+| Person side: each set computed once, then joined | 401 | over 15 s |
+| Person side: each set computed once, the walked set hashed | 515 | 789 |
+| Person side: each person relationship's ends looked up | 1,079 | 2,301 |
+| Walk side: one test per kind of claim | 1,009 | 2,323 |
+| Walk side: every claim around the walked set listed | 1,007 | 1,205 |
+| Walk side: each set computed once, then hashed (built) | 554 | 703 |
+
+"Person side" starts from the person evidence, and "walk side" from the walked entities. Two
+shapes stayed under a second on both tenants. The built one was also the fastest of all eight
+at 0 to 2 hops on the D-33 tenant.
+
+**The gap with D-10c's figure.** D-10c recorded this probe at 94 / 336 / 621 / 802 ms at 0 to 3
+hops, on a tenant of this size. D-33 measured the same code at 1.8 to 2.4 s at 0 hops, and over
+15 s from one hop. The gap is partly explained:
+- **At 0 hops, by JIT.** With JIT off, the same code answers in 0.53 to 0.60 s, inside D-10c's
+  range. With it on, it spends 1 to 2 s compiling first. Whether D-10c's server compiled cannot
+  be checked.
+- **In part, by statistics.** The old probe is slow only once the planner has statistics. On a
+  graph of 1,000 domains (2,012 entities) probed straight after it was built, before autovacuum
+  had analysed it, it answered in 35 to 116 ms. After ANALYZE it took 0.3 to 0.4 s with JIT off,
+  and about 2 s with it. At 3,000 domains it took 48 to 56 ms before ANALYZE, and 1.3 to 3.9 s
+  after it with JIT off.
+- **From one hop at D-10c's size, it cannot be explained.**
+  - Here the old probe runs out of time from one hop, with or without JIT and with or without
+    statistics.
+  - Its relationship step, `source in (linked) or target in (linked)`, runs as one subplan per
+    relationship. The planner estimates the walked set at 116 billion rows, so it never builds a
+    hash of it, even with `work_mem` at 1 GB.
+  - D-10c's figures need a plan that hashed that step. D-10c's generator and data were not kept,
+    so what made its planner do so cannot be found.
+
+**Tests** (release-blocking):
+- **The graph.** `buildProbeGraph` in `@repo/db/testing` builds the graph both new test files
+  use. It is a tenant on which the old probe took 5 to 14 s with JIT off:
+  - 6,000 domains with 12,016 entities, 18,008 relationships and 30,026 claims, analysed as
+    autovacuum would;
+  - a chain from one case's pin to an entity three relationships out, which carries a person
+    claim;
+  - a chain from another case's pin to an entity three relationships out, a relationship at
+    which carries a person claim.
+- **Database level** (`person-probe-depth.test.ts`, 5 tests, with a 2 s statement timeout):
+  - person data three relationships out, on an entity and on a relationship, is held at 3 hops
+    and never nearer;
+  - the JIT setting is put back after the probe;
+  - the graph store and the probe both take their walk from `reachCte`, and nothing else walks;
+  - the graph's size is pinned.
+- **API** (`person-gate-depth.test.ts`, 4 tests, with the application's statement timeout at 2 s;
+  `createTestApi` takes the timeout as an option):
+  - with no plan, and then with vetting pending, a locked tenant's graph read reaching that
+    person data is refused whole: 403, the Locked detail complete, no nodes or edges, no person
+    data in the refusal;
+  - its read one hop shorter returns 200 with the whole graph;
+  - once approved, the same short read returns the same body, byte for byte.
+- **Old-code proof.** With `exploration.ts` and `graph.ts` restored from 6d50a8c, 4 of the 5
+  database tests fail. The probes ran out of time, and the walk guard found the store's own walk.
+  The size check passes; it does not use the probe. All 4 API tests fail: every locked read
+  answered 500.
+
+**Pipeline** (`pnpm turbo lint typecheck test --force`, in a clean worktree of this commit):
+- 54 of 54 tasks, nothing cached, 2,042 tests;
+- the fabrication check is clean on 493 files, and the export check passes.
+
+| Package | Tests | Package | Tests |
+|---|---|---|---|
+| core | 25 | osint-engine | 161 |
+| access | 59 | worker | 4 |
+| config | 200 | api | 228 |
+| case-engine | 63 | ui | 95 |
+| collectors | 482 | web | 177 |
+| llm | 130 | integrations | 122 |
+| db | 296 | | |
+
+Against the last record:
+- **This change:** db +5 and api +4.
+- **Archived cases (6d50a8c):** api +1 and osint-engine +1.
+- **Config, 7 fewer:** the earlier run counted an uncommitted `.gitignore` test from the main
+  working tree. A clean worktree does not have it.
+
+**Raised.**
+- **D-37:** person marks kept per tenant, a schema change.
+- **D-38:** a statement that times out answers 500 `INTERNAL_ERROR`, as the old-code proof
+  showed.
+
+**Noted.** `packages/collectors/src/catalogue.ts` imports
+`packages/collectors/src/data/rdap-registry-hosts.ts`, which has never been committed: the
+committed `.gitignore` rule `data/` matches its folder. A fresh clone or worktree therefore cannot
+build the collectors. It was copied in by hand for this work. The `.gitignore` files were left
+alone, as ruled.
