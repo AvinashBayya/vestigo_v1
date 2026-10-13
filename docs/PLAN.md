@@ -3614,3 +3614,43 @@ Notes on the table:
     in 2.9 to 3.7 / 3.8 to 4.1 / 4.1 to 4.2 / 3.5 to 3.7 s, and still finds no person data.
   - **Against D-10c.** D-10c recorded the probe at 94 to 802 ms on its own tenant. Its generator
     was not kept, so the difference cannot be traced to the data or to the code.
+
+## R1-b: rulings carried out (2026-10-13)
+
+The owner approved R1-b and ruled on what it raised (recorded in
+`docs/reclamation/R1-PLAN.md`, Owner's rulings). Carried out, each in its own commit:
+
+- **2da4572** The person-gate amendments: CLAUDE.md §9 and standing rule 6, with D-34 for report
+  generation.
+- **98cb450** The worker installs `@repo/osint-engine` at runtime. A guard checks that what the
+  API and the worker load at runtime is a runtime dependency.
+- **fca803e** The last two planned-collector wording leftovers. A PARTIAL run that planned
+  nothing says NOTHING PLANNED, and "1 further collector was" agrees in number. Golden diff of 9
+  lines; ENGINE_VERSION 4.
+- **bd83d11** Every enqueue is bounded at 5 s and gives up with QUEUE_UNAVAILABLE. The API's 503
+  answers say what was recorded.
+- **c5f69dc** A failure the same inputs repeat (CASE_INPUT_INVALID) is returned with 200, and no
+  new attempt is made.
+- **bfa1805** The development seed lists each job's evidence, so its cases can be analysed.
+- **d3baa8c** Rulings recorded:
+  - retention and case deletion, in ARCHITECTURE-DECISIONS.md §5;
+  - the analysis limits, in §6;
+  - the R1-b sub-stage, rewritten to describe what was built.
+- **0e42d8d** D-33: the graph walk and indexes, re-measured above. It raised D-35 and D-36.
+
+Raised again, awaiting a ruling: analysing an archived case (recommended: refuse), and BLOCKED
+and NOT_IMPLEMENTED registry entries counted as registered (recommended: exclude them from what
+can run, keeping their label). Also open: D-35 (the probe's cost) and D-36 (which walk to keep).
+
+**Pipeline** (`pnpm turbo lint typecheck test`): 54 of 54 tasks, 2,038 tests. The fabrication
+check is clean on 491 files.
+
+| Package | Tests | Package | Tests |
+|---|---|---|---|
+| core | 25 | osint-engine | 160 |
+| access | 59 | worker | 4 |
+| config | 207 | api | 223 |
+| case-engine | 63 | ui | 95 |
+| collectors | 482 | web | 177 |
+| llm | 130 | integrations | 122 |
+| db | 291 | | |
