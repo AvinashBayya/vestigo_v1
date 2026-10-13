@@ -55,6 +55,7 @@ export {
   CASE_ANALYSIS_STATE_REASONS,
   CaseAnalysisRequestConflictError,
   CaseAnalysisUnrecordedError,
+  CaseArchivedError,
   caseProbe,
   CaseTooLargeError,
   currentInput,

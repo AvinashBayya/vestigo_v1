@@ -17,7 +17,8 @@
  *   - one snapshot for each read and its probes (D-32);
  *   - no credit estimate (null, with the reason) and no usage event;
  *   - a request answers without the documents, which only case:read shows;
- *   - the recorded requester, the 409s and the 503 after commit;
+ *   - the recorded requester, the 409s (an archived case takes no request) and
+ *     the 503 after commit;
  *   - a case id spelled in capitals is the same case and the same input.
  * Analyses are made by the real processor, called directly.
  */
@@ -659,6 +660,57 @@ describe("requests refused, or not taken by the queue (RELEASE-BLOCKING)", () =>
       repos.caseAnalyses.listForCase(caseId, { limit: 10 }),
     );
     expect(analyses.map((a) => a.id)).toEqual([analysisId]);
+  });
+
+  it("refuses any request for an archived case with 409 CASE_ARCHIVED; its earlier analysis still reads", async () => {
+    const tenant = await newTenant("analyses-archived");
+    const seeded = await seedRun(tenant, "NONE");
+    const { caseId } = await caseOf(tenant, [seeded.techEntityId]);
+    const analysisId = (await post(tenant, caseId)).json<Read>().analysis?.id ?? "";
+    await processor().process(tenant.tenantId, analysisId, 1);
+    const archived = await tenant.browser.request("PATCH", `/api/v1/cases/${caseId}`, {
+      archived: true,
+    });
+    expect(archived.status).toBe(200);
+    const expectRefused = async () => {
+      const { calls, spy } = watchEnqueues(tenant.tenantId);
+      try {
+        const refused = await post(tenant, caseId);
+        expect(refused.status).toBe(409);
+        expect(refused.json()).toMatchObject({ code: "CASE_ARCHIVED" });
+        expect(calls).toEqual([]);
+      } finally {
+        spy.mockRestore();
+      }
+    };
+    // The same input, whose analysis exists: refused too (it is read with GET).
+    await expectRefused();
+    // A changed input, which would have been a new analysis.
+    await api.db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.claims.create({
+        evidenceId: seeded.techEvidenceId,
+        subject: { entityId: seeded.techEntityId },
+        attribute: "note",
+        value: "[late claim]",
+        strength: "REPORTED",
+      }),
+    );
+    await expectRefused();
+    const analyses = await api.db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.caseAnalyses.listForCase(caseId, { limit: 10 }),
+    );
+    expect(analyses.map((a) => a.id)).toEqual([analysisId]);
+    // The earlier analysis still reads, with its document, as of then.
+    for (const response of [await latest(tenant, caseId), await one(tenant, analysisId)]) {
+      expect(response.status).toBe(200);
+      const body = response.json<Read>();
+      expect(body).toMatchObject({
+        state: "STALE",
+        reason: CASE_ANALYSIS_STATE_REASONS.STALE,
+        analysis: { id: analysisId, status: "COMPLETE" },
+      });
+      expect(CaseAnalysisDocumentSchema.safeParse(body.analysis?.document).success).toBe(true);
+    }
   });
 
   it("answers 409 CASE_ANALYSIS_REQUEST_CONFLICT when another request recorded the retry first", async () => {

@@ -4,7 +4,9 @@
  * requested, which analysis a read shows and what its state says live here.
  *
  * A request reads the case as it is now, hashes it, and finds or creates the
- * analysis for that hash: the same input is one analysis. A FAILED analysis
+ * analysis for that hash: the same input is one analysis. An archived case
+ * takes no request at all (CASE_ARCHIVED); its earlier analyses are still
+ * read as before (owner ruling, 2026-10-13). A FAILED analysis
  * gets a new attempt, unless its failure is one the same input always repeats
  * (REPEATING_FAILURES): then the stored failure is returned, with no new
  * attempt. A PENDING or COMPLETE one is returned as it is.
@@ -120,6 +122,16 @@ export class CaseTooLargeError extends AppError {
       `The case holds ${String(records)} records; one analysis reads at most ${String(maxRecords)}.`,
     );
     this.name = "CaseTooLargeError";
+  }
+}
+
+/** The case is archived: it takes no new analysis. Nothing was read or written. */
+export class CaseArchivedError extends AppError {
+  readonly code = "CASE_ARCHIVED";
+
+  constructor() {
+    super("An archived case takes no new analyses. Its earlier analyses can still be read.");
+    this.name = "CaseArchivedError";
   }
 }
 
@@ -363,7 +375,10 @@ export function requestedView(requested: CaseAnalysisRequest): CaseAnalysisReque
 
 /**
  * Requests the analysis of the case as it is now. The caller has already
- * passed the person gate for the case (caseProbe), on the same snapshot.
+ * passed the person gate for the case (caseProbe), on the same snapshot. An
+ * archived case is refused first, before the case is counted or read: every
+ * request, including one whose analysis already exists (that one is read with
+ * case:read).
  */
 export async function requestCaseAnalysis(
   context: Context,
@@ -375,6 +390,10 @@ export async function requestCaseAnalysis(
     readonly maxRecords?: number;
   },
 ): Promise<CaseAnalysisRequest> {
+  // Read in the caller's transaction, on the same snapshot as the records the
+  // request hashes. A missing case is the caller's 404 to answer.
+  const caseRow = await context.repos.cases.findById(input.caseId);
+  if (caseRow !== null && caseRow.archivedAt !== null) throw new CaseArchivedError();
   const { inputHash, basis } = await currentInput(
     context,
     input.caseId,

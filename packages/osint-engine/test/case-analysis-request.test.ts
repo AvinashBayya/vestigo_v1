@@ -1,8 +1,9 @@
 /**
  * RELEASE-BLOCKING. Requesting a case analysis (R1-b), against the database:
- * the same input is one analysis; a case past the size one analysis reads is
- * refused before anything is recorded; two requests racing to retry a failed
- * analysis record one attempt, and the other is told to send again; and
+ * the same input is one analysis; a case past the size one analysis reads, or
+ * an archived case, is refused before anything is recorded; two requests
+ * racing to retry a failed analysis record one attempt, and the other is told
+ * to send again; and
  * enqueueing an attempt never waits past its bound on a queue it cannot reach.
  */
 import { ENGINE_VERSION } from "@repo/case-engine";
@@ -19,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import {
   CaseAnalysisQueue,
   CaseAnalysisRequestConflictError,
+  CaseArchivedError,
   CaseTooLargeError,
   QueueUnavailableError,
   REPEATING_FAILURES,
@@ -132,6 +134,35 @@ describe("requesting a case analysis (RELEASE-BLOCKING)", () => {
       });
     expect(refused).toBeInstanceOf(CaseTooLargeError);
     // Counted in the database: the case was never loaded.
+    expect(loads).not.toHaveBeenCalled();
+    const analyses = await db.withTenant(fixture.tenantId, ({ repos }) =>
+      repos.caseAnalyses.listForCase(fixture.caseId, { limit: 10 }),
+    );
+    expect(analyses).toEqual([]);
+  });
+
+  it("refuses an archived case before counting or reading it, recording nothing", async () => {
+    const fixture = await createCaseFixture(db, "request-archived");
+    await db.withTenant(fixture.tenantId, ({ repos }) => repos.cases.archive(fixture.caseId));
+    const counts = vi.spyOn(CaseScopeRepository.prototype, "count");
+    const loads = vi.spyOn(CaseScopeRepository.prototype, "records");
+    const refused = await db
+      .withTenant(fixture.tenantId, (context) =>
+        requestCaseAnalysis(context, {
+          caseId: fixture.caseId,
+          collectors: FIXTURE_COLLECTORS,
+          requestedByUserId: null,
+          at: AT,
+        }),
+      )
+      .catch((error: unknown) => error)
+      .finally(() => {
+        counts.mockRestore();
+        loads.mockRestore();
+      });
+    expect(refused).toBeInstanceOf(CaseArchivedError);
+    expect(refused).toMatchObject({ code: "CASE_ARCHIVED" });
+    expect(counts).not.toHaveBeenCalled();
     expect(loads).not.toHaveBeenCalled();
     const analyses = await db.withTenant(fixture.tenantId, ({ repos }) =>
       repos.caseAnalyses.listForCase(fixture.caseId, { limit: 10 }),
