@@ -2,8 +2,11 @@ node_modules
 dist
 .turbo
 coverage
+# Environment files never leave this machine. The generated template is the
+# only one committed (packages/config/scripts/gitignore.test.ts pins this).
 .env
-.env.local
+.env.*
+!.env.example
 data/
 legacy/
 
