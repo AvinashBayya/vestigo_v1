@@ -92,6 +92,9 @@ export const entityRelationships = pgTable(
       t.targetEntityId,
       t.kind,
     ),
+    // The walk steps from a target as often as from a source (D-33); the
+    // unique key above serves the source side.
+    index("entity_relationships_target_idx").on(t.tenantId, t.targetEntityId),
     check("entity_relationships_kind_format", sql`${t.kind} ~ '^[a-z][a-z_]*$'`),
   ],
 );

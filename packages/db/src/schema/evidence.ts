@@ -123,6 +123,8 @@ export const claims = pgTable(
     }),
     index("claims_entity_idx").on(t.tenantId, t.entityId),
     index("claims_evidence_idx").on(t.tenantId, t.evidenceId),
+    // A relationship's claims, counted for every edge the graph returns (D-33).
+    index("claims_relationship_idx").on(t.tenantId, t.relationshipId),
     check("claims_one_subject", sql`num_nonnulls(${t.entityId}, ${t.relationshipId}) = 1`),
     check("claims_attribute_format", sql`${t.attribute} ~ '^[a-z][a-z0-9_]*$'`),
   ],

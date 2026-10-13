@@ -777,7 +777,7 @@ gated read and its probe on one snapshot (a repeatable-read transaction for gate
 *Alternative:* probe before and after each case-scope read. Cost: the windows are milliseconds
 and need a concurrent unpin or fusion; the first is a change to the transaction layer.
 
-**D-33. The cost of a three-hop neighbourhood** (raised by D-10c). Measured on one machine, on
+**D-33. The cost of a three-hop neighbourhood** **[RULED 2026-10-11: accepted. Done 2026-10-13: the graph store walks as the probe does, and migration 0024 adds both indexes. Re-measured in docs/PLAN.md, D-33, which raised D-35 and D-36.]** (raised by D-10c). Measured on one machine, on
 a synthetic TECHINT-shaped tenant of 125k entities, 260k relationships and 385k claims, where
 person evidence exists but none is reachable (the worst case, as the whole walk runs). The
 person probe as built takes 0.1 s at 0 hops, 0.3 s at 1, 0.6 s at 2 and 0.8 s at 3; it runs only
@@ -797,6 +797,36 @@ re-checks the person gate in the job, no later than R1-f.]** (raised by R1-b). T
 and vetting when a report is requested. `ReportGenerator` then reads the run, and may send it to
 a model, without checking again. The case analysis job re-checks before it reads the case's
 records (D-28); report generation does not yet. CLAUDE.md §9 states the gap and points here.
+
+**D-35. The person probe's cost from one hop** (raised by D-33). The probe times out from one
+hop, with or without the new indexes. It was re-measured at D-10c's size, as above, and the
+timings are in docs/PLAN.md, D-33. The graph read calls the probe for every tenant without person
+access, so on a tenant this size the graph cannot be read past 0 hops.
+
+The cause is the probe's last step. It finds the claims on relationships touching the walked
+entities with `source in (linked) or target in (linked)`, which Postgres runs as a per-row
+subplan over every relationship. Written as two joins, the step finishes in 3 to 4 s at every
+hop, which is no longer a timeout but is still slow.
+
+*Recommended:* rework the probe's claim and relationship steps as joins Postgres can drive from
+the walked entities. Measure the whole probe at this size, aiming to fit well inside the
+statement timeout, before R1-e shows the graph more widely.
+*Alternative:* cap the hop limit of the graph read for a tenant without person access. Cost of
+the alternative: such a tenant reads no deep graph.
+
+**D-36. Which walk the graph store and the probe share** (raised by D-33). D-33 ruled that the
+graph store walks as the probe does, listing each relationship both ways. Measured with the two
+new indexes, the old walk (`source = x or target = x`) was faster at every hop: 0.01 to 0.24 s,
+against 0.03 to 0.52 s for the walk as ruled. The index lets Postgres answer the old step with
+two index scans, while the ruled walk reads every relationship twice in each query. The ruled
+walk is built, and answers well within the timeout.
+
+*Recommended:* decide this with D-35, measuring the probe and the store together with each walk.
+They should walk the same way, so a reach difference can never let one see what the other
+refuses. If an index-driven walk wins, use it in both: two index lookups per entity, one from
+each side.
+*Alternative:* keep the ruled walk as built. Cost: a flat few hundred milliseconds per read at
+this size.
 
 **Noted, not a decision.** The brief refers to "the 11 non-negotiable rules" in CLAUDE.md. No
 document numbers eleven rules: CLAUDE.md has sections 1 to 10 plus three unnumbered ones (product

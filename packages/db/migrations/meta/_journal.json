@@ -169,6 +169,13 @@
       "when": 1791543515048,
       "tag": "0023_r1b_case_analysis_basis",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791740727227,
+      "tag": "0024_d33_graph_indexes",
+      "breakpoints": true
     }
   ]
 }

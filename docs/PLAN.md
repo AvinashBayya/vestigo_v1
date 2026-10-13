@@ -3546,3 +3546,71 @@ D-32 is C's prerequisite), C b7aeee2, E/F 1c77eb8, review fixes ddf2c97 and 7667
   - **Report generation:** it does not re-check the gate (the D-28 follow-up).
 - **Awaiting the owner's approval, uncommitted:** the CLAUDE.md §9 sentence and standing rule 6,
   amended for D-28.
+
+## D-33: graph walk and indexes (2026-10-13)
+
+**The ruling** (D-33, accepted 2026-10-11): walk the graph store as the probe does, add the two
+indexes in a forward-only migration, re-measure at the same synthetic size, and commit the
+numbers, before R1-c.
+
+**Built.**
+- **The graph store's walk** (`PostgresGraphStore.neighbourhood`) now lists each relationship
+  both ways and steps by one equality join, as the person probe does. Before, it tested
+  `source = x or target = x` row by row. The result is unchanged: each entity at its nearest
+  hop, the same order, the same node cap. The graph store's tests pass unchanged.
+- **Migration 0024** adds `entity_relationships (tenant_id, target_entity_id)` and
+  `claims (tenant_id, relationship_id)`. It is a plain CREATE INDEX: the migrator runs in a
+  transaction, where CONCURRENTLY is not allowed, as in every index migration here. Writes to
+  the two tables wait while each builds. A schema test pins both indexes.
+
+**Re-measured** on one machine, on a synthetic TECHINT-shaped tenant of D-10c's size: 125,001
+entities, 260,000 relationships and 385,001 claims. D-10c's generator was not kept, so a new one
+was written, outside the repository:
+- 25,000 domains, each with two subdomains, its own nameserver, one of 8 hub nameservers (each
+  shared by 3,125 domains) and an address;
+- each subdomain resolves to two addresses, and each nameserver to one;
+- 10,000 mail links;
+- a claim on every entity and every relationship, citing 1,000 evidence rows;
+- one PERSON entity with person evidence that nothing reaches, so the probe walks everything
+  (the worst case).
+
+The seeds are the six entities a case pins: a domain, its two subdomains, its own nameserver and
+two addresses. They reach 6 / 14 / 3,151 / 18,796 entities at 0 / 1 / 2 / 3 hops, against
+D-10c's 6 / 14 / 3,144 / 18,901. Each figure below is three runs, in milliseconds, with a 15 s
+statement timeout.
+
+| What is timed | Hops 0 | 1 | 2 | 3 |
+|---|---|---|---|---|
+| The walk alone, old, without the indexes | 266 to 476 | 493 to 645 | 581 to 710 | over 15 s |
+| The walk alone, new, without the indexes | 46 to 58 | 97 to 217 | 207 to 389 | 401 to 514 |
+| The walk alone, old, with the indexes | 10 to 12 | 9 to 10 | 34 to 50 | 119 to 242 |
+| The walk alone, new, with the indexes | 31 to 76 | 210 to 221 | 189 to 242 | 427 to 518 |
+| The graph store as the API calls it (new walk, edges and claim counts), without the indexes | 647 to 843 | 1,717 to 1,899 | over 15 s | not run |
+| The graph store as the API calls it, with the indexes (0024) | 63 to 123 | 79 to 150 | 176 to 294 | 303 to 575 |
+| The person probe as built, without the indexes | 1,791 to 2,409 | over 15 s | over 15 s | over 15 s |
+| The person probe as built, with the indexes | 1,772 to 1,933 | over 15 s | over 15 s | over 15 s |
+
+Notes on the table:
+- **Agreement.** The old and new walks returned the same nodes at the same hops wherever both
+  finished: hops 0 to 2 without the indexes, and 0 to 3 with them.
+- **Index builds.** At this size, `entity_relationships_target_idx` built in 375 ms and
+  `claims_relationship_idx` in 447 ms.
+
+**What the numbers show.**
+- **The graph store now answers at every hop:** under 0.6 s at three hops, where it timed out at
+  two (D-10c).
+- **The claims index is what bounds the edges step.** Without it, the store timed out at two
+  hops counting each edge's claims, even with the new walk.
+- **With the target index, the old walk is faster than the new one at every hop.** The index lets
+  Postgres answer `source = x or target = x` with two index scans. The walk as ruled reads every
+  relationship twice in each query (520,000 rows) and does not use the indexes. Raised as D-36.
+- **The person probe times out from one hop, with or without the indexes.** The graph read calls
+  the probe for every tenant without person access, so on a tenant this size the graph cannot be
+  read past 0 hops until the probe is fixed. Raised as D-35.
+  - **The cause.** Its last step finds claims on relationships touching the walked entities with
+    `source in (linked) or target in (linked)`, which Postgres runs as a per-row subplan over
+    every relationship.
+  - **A tried rewrite.** That step written as two joins (not built: evidence for D-35) finishes
+    in 2.9 to 3.7 / 3.8 to 4.1 / 4.1 to 4.2 / 3.5 to 3.7 s, and still finds no person data.
+  - **Against D-10c.** D-10c recorded the probe at 94 to 802 ms on its own tenant. Its generator
+    was not kept, so the difference cannot be traced to the data or to the code.

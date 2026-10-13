@@ -38,6 +38,12 @@ interface EdgeRow extends Record<string, unknown> {
  * entity_relationships, treated as undirected for reach. Fine for case-sized
  * graphs; a graph database replaces this behind the same interface when the
  * triggers in ARCHITECTURE-DECISIONS §5 are met.
+ *
+ * It walks as the person probe walks (D-33, exploration.ts touchesPersonData):
+ * each relationship is listed both ways, so every step is one equality join
+ * Postgres can hash. Testing `source = x or target = x` row by row, as this
+ * did before, timed out at two hops on a large tenant (docs/PLAN.md, D-10c
+ * and D-33). The result is the same: each entity at its nearest hop.
  */
 export class PostgresGraphStore extends TenantRepository implements GraphStore {
   async neighbourhood(query: GraphNeighbourhoodQuery): Promise<GraphSlice> {
@@ -62,16 +68,19 @@ export class PostgresGraphStore extends TenantRepository implements GraphStore {
 
     return this.run(async (tx) => {
       const nodeRows = await tx.execute<NodeRow>(sql`
-        with recursive reach(entity_id, hop) as (
+        with recursive edges(a, b) as (
+          select r.source_entity_id, r.target_entity_id from ${entityRelationships} r
+          where r.tenant_id = ${this.tenantId}
+          union all
+          select r.target_entity_id, r.source_entity_id from ${entityRelationships} r
+          where r.tenant_id = ${this.tenantId}
+        ), reach(entity_id, hop) as (
           select e.id, 0 from ${entities} e
             where e.tenant_id = ${this.tenantId} and e.id in (${seedList})
           union
-          select case when r.source_entity_id = reach.entity_id
-                      then r.target_entity_id else r.source_entity_id end,
-                 reach.hop + 1
+          select edges.b, reach.hop + 1
           from reach
-          join ${entityRelationships} r on r.tenant_id = ${this.tenantId}
-            and (r.source_entity_id = reach.entity_id or r.target_entity_id = reach.entity_id)
+          join edges on edges.a = reach.entity_id
           where reach.hop < ${maxHops}
         ), nearest as (
           select entity_id, min(hop) as hop from reach group by entity_id

@@ -77,6 +77,24 @@ describe("schema invariants (RELEASE-BLOCKING)", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("the graph walk's two indexes exist, tenant first (D-33)", async () => {
+    // The walk steps from a relationship's target as often as from its source,
+    // and counts each returned edge's claims; without these, a three-hop read of
+    // a large tenant times out (docs/PLAN.md, D-33).
+    const found = await rows<{ index: string; columns: string }>(`
+      select i.indexrelid::regclass::text as index,
+        string_agg(a.attname, ',' order by k.ordinality) as columns
+      from pg_index i
+      join lateral unnest(i.indkey) with ordinality as k(attnum, ordinality) on true
+      join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum
+      where i.indexrelid::regclass::text in ('entity_relationships_target_idx', 'claims_relationship_idx')
+      group by i.indexrelid order by 1`);
+    expect(found).toEqual([
+      { index: "claims_relationship_idx", columns: "tenant_id,relationship_id" },
+      { index: "entity_relationships_target_idx", columns: "tenant_id,target_entity_id" },
+    ]);
+  });
+
   it("every foreign key is composite on tenant_id, so no row can reference another tenant's", async () => {
     const offenders = await rows<{ constraint: string }>(`
       with t as (${PUBLIC_TABLES})
