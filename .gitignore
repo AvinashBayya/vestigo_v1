@@ -7,7 +7,7 @@ coverage
 .env
 .env.*
 !.env.example
-data/
+/data/
 legacy/
 
 # Generated at build time; never hand-edited.
