@@ -165,13 +165,18 @@ export class CasePinsRepository extends TenantRepository {
     return counts;
   }
 
+  /**
+   * A case's pins, oldest first. Pins made in one transaction share their
+   * time, so the id breaks the tie: the same pins always come in the same
+   * order, and a page never repeats or skips one.
+   */
   async listForCase(caseId: string): Promise<CasePin[]> {
     return this.run((tx) =>
       tx
         .select()
         .from(casePins)
         .where(and(this.inTenant(casePins), eq(casePins.caseId, requireUuid(caseId))))
-        .orderBy(asc(casePins.createdAt)),
+        .orderBy(asc(casePins.createdAt), asc(casePins.id)),
     );
   }
 
@@ -181,7 +186,7 @@ export class CasePinsRepository extends TenantRepository {
         .select()
         .from(casePins)
         .where(this.inTenant(casePins))
-        .orderBy(asc(casePins.createdAt))
+        .orderBy(asc(casePins.createdAt), asc(casePins.id))
         .limit(limitOf(options)),
     );
   }

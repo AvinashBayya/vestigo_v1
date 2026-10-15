@@ -1,7 +1,7 @@
 import { CLAIM_STRENGTHS, MAX_GRAPH_HOPS, type ClaimStrength, type EntityKind } from "@repo/core";
 import { sql, type SQL } from "drizzle-orm";
 import { entities, entityMerges, entityRelationships } from "../schema/index.ts";
-import { casePins, claims, collectorsRegistry, evidence, jobs } from "../schema/index.ts";
+import { casePins, claims, collectorsRegistry, evidence, jobs, runs } from "../schema/index.ts";
 import { firstRow, limitOf, requireUuid, TenantRepository, type ListOptions } from "./base.ts";
 import { reachCte } from "./walk.ts";
 
@@ -119,6 +119,8 @@ export interface PersonProbe {
    * A run whose jobs a read shows or rests on. The run is person data when any
    * of its jobs is a person-discipline collector's, whatever the job's outcome:
    * a NOT_FOUND records no evidence, and is still a finding about the target.
+   * It is person data, too, when it is person-bearing (its target is a TOPIC),
+   * whichever collectors it used, and before it has any job.
    */
   readonly runJobs?: string;
   /**
@@ -310,7 +312,10 @@ export class ExplorationRepository extends TenantRepository {
    * person-discipline collector, or, for a run, any job of one. The discipline
    * is read from the tenant's own registry row, which every job and every piece
    * of evidence references; one with no row is treated as person data (fail
-   * closed). Reads only: the caller decides what to do.
+   * closed). A person-bearing run (its target is a TOPIC, recorded on the run
+   * when it was created) is person data itself, and so is everything collected
+   * in it, whichever collector collected it. Reads only: the caller decides
+   * what to do.
    *
    * A run scope covers the run's jobs as well as its evidence. Were it to cover
    * evidence alone, a read of the run would be refused when a person collector
@@ -400,15 +405,31 @@ export class ExplorationRepository extends TenantRepository {
           where c.tenant_id = ${tenantId}
             and (c.entity_id in (select id from linked_set)
               or c.relationship_id in (select id from around)))`);
+      // Or does such a claim cite evidence a person-bearing run collected (its
+      // target is a TOPIC), whichever collector collected it? Read from the
+      // claims, as the check above reads them, and by key to their evidence,
+      // its job and its run: no evidence beyond theirs is read, and no set of a
+      // person-bearing run's jobs has to fit in memory.
+      checks.push(sql`exists (
+          select 1 from ${claims} c
+          join ${evidence} ev on ev.tenant_id = c.tenant_id and ev.id = c.evidence_id
+          join ${jobs} j on j.tenant_id = ev.tenant_id and j.id = ev.job_id
+          join ${runs} r on r.tenant_id = j.tenant_id and r.id = j.run_id
+          where c.tenant_id = ${tenantId} and r.person_bearing
+            and (c.entity_id in (select id from linked_set)
+              or c.relationship_id in (select id from around)))`);
     }
     if (parts.length > 0) {
+      // Driven by the evidence the read names, each reaching its job and run by key.
       checks.push(sql`exists (
           select 1 from ${evidence} ev
           left join ${collectorsRegistry} cr
             on cr.tenant_id = ev.tenant_id and cr.collector_id = ev.collector_id
+          left join ${jobs} j on j.tenant_id = ev.tenant_id and j.id = ev.job_id
+          left join ${runs} r on r.tenant_id = j.tenant_id and r.id = j.run_id
           where ev.tenant_id = ${tenantId}
             and ev.id in (${sql.join(parts, sql` union `)})
-            and (cr.collector_id is null or cr.discipline = 'PERSON'))`);
+            and (cr.collector_id is null or cr.discipline = 'PERSON' or r.person_bearing))`);
     }
     const runId =
       probe.runJobs ??
@@ -422,6 +443,12 @@ export class ExplorationRepository extends TenantRepository {
           where j.tenant_id = ${tenantId}
             and j.run_id in (${uuidList(runIds)})
             and (cr.collector_id is null or cr.discipline = 'PERSON'))`);
+      // A person-bearing run is person data whatever its jobs, and before it has any.
+      checks.push(sql`exists (
+          select 1 from ${runs} r
+          where r.tenant_id = ${tenantId}
+            and r.id in (${uuidList(runIds)})
+            and r.person_bearing)`);
     }
     if (checks.length === 0) return false;
     const preamble = ctes.length === 0 ? sql`` : sql`with recursive ${sql.join(ctes, sql`, `)} `;

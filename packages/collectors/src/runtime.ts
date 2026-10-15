@@ -1,4 +1,4 @@
-import { decideDisciplineAccess, type TenantEntitlement } from "@repo/access";
+import { decideDisciplineAccess, decideTargetAccess, type TenantEntitlement } from "@repo/access";
 import type { z } from "zod";
 import { AppError, type TargetType } from "@repo/core";
 import {
@@ -157,7 +157,8 @@ function outcomeOfError(
  * collector's code is reached, and every outcome is checked after:
  *   - licence: BLOCKED never runs; UNVERIFIED only where allowed;
  *   - an implementation exists and the target type is accepted and valid;
- *   - plan and vetting for the discipline (@repo/access);
+ *   - plan and vetting for the discipline, and for a person target type
+ *     whatever the discipline (a TOPIC; @repo/access);
  *   - a scope authorisation for the exact target, for ACTIVE collectors;
  *   - required credentials are present.
  * Then the collector runs within its budget, with a fetch bound to its source,
@@ -229,6 +230,18 @@ export class CollectorRuntime {
         module.reason === "VETTING_NOT_APPROVED"
           ? "This collector needs the tenant's vetting to be approved."
           : "This collector's module is not in the tenant's plan.",
+      );
+    }
+    // A person target type (a TOPIC) is person data whatever collects it: it
+    // needs the person module's plan and vetting even from a news collector.
+    const targetAccess = decideTargetAccess(admission.entitlement, target.type);
+    if (!targetAccess.allowed) {
+      return refused(
+        entry.id,
+        targetAccess.reason,
+        targetAccess.reason === "VETTING_NOT_APPROVED"
+          ? `A ${target.type} target may name a person, so collecting on it needs the tenant's vetting to be approved.`
+          : `A ${target.type} target may name a person, so collecting on it needs the person investigation module in the tenant's plan.`,
       );
     }
     if (entry.collectionMode === "ACTIVE") {

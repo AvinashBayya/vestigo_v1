@@ -6,7 +6,8 @@
  *   - a collector cannot set, override or influence its source label, and two
  *     collectors on different upstreams produce distinguishable evidence;
  *   - collectors sharing an upstream share its rate limit;
- *   - ACTIVE needs a scope authorisation, PERSON needs plan and vetting;
+ *   - ACTIVE needs a scope authorisation, PERSON needs plan and vetting, and
+ *     so does a TOPIC target, whatever the collector's discipline;
  *   - a failure never becomes FOUND, an empty result, or evidence.
  */
 import { allowsUnverifiedSources } from "@repo/config";
@@ -496,6 +497,52 @@ describe("ACTIVE and PERSON collectors are gated (RELEASE-BLOCKING)", () => {
     ).toBe("MODULE_NOT_IN_PLAN");
     expect(calls.count).toBe(0);
     expectStatus(await runtime.execute("fake.person", request()), "FOUND");
+  });
+
+  it("refuses a TOPIC target without the person plan and vetting, whatever the collector's discipline", async () => {
+    // A news collector (MEDIAINT) that takes a domain or a topic: the domain
+    // needs nothing more, the topic needs what a PERSON collector needs.
+    routes.set("one.test/names?q=elections", (res) => res.end('["a"]'));
+    routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));
+    const calls = { count: 0 };
+    const runtime = runtimeWith([
+      defineCollector(
+        declaration("fake.news", "one", {
+          discipline: "MEDIAINT",
+          targetTypes: ["DOMAIN", "TOPIC"],
+        }),
+        namesFrom("one.test", calls),
+      ),
+    ]);
+    const topic = parseTarget("TOPIC", "elections");
+    const noPlan = { plan: "TECHINT", vettingStatus: "APPROVED" } as const;
+    const noVetting = { plan: "TECHINT_AND_PERSON", vettingStatus: "SUSPENDED" } as const;
+    const onTopic = (entitlement: sdk.DispatchRequest["entitlement"]) =>
+      runtime.execute("fake.news", request({ target: topic, entitlement }));
+    const refusal = expectStatus(await onTopic(noPlan), "REFUSED");
+    expect(refusal.reason).toBe("MODULE_NOT_IN_PLAN");
+    expect(refusal.message).toMatch(/TOPIC target may name a person/);
+    expect(expectStatus(await onTopic(noVetting), "REFUSED").reason).toBe("VETTING_NOT_APPROVED");
+    expect(
+      runtime.admit("fake.news", { target: topic, entitlement: noPlan, scopeAuthorisation: null }),
+    ).toMatchObject({ status: "REFUSED", reason: "MODULE_NOT_IN_PLAN" });
+    expect(calls.count).toBe(0);
+    // The same collector on a domain runs for the plan without the person module.
+    expectStatus(await runtime.execute("fake.news", request({ entitlement: noPlan })), "FOUND");
+    expect(calls.count).toBe(1);
+    // And on the topic once the tenant holds the plan and approved vetting.
+    expectStatus(await onTopic(ENTITLED), "FOUND");
+    expect(calls.count).toBe(2);
+  });
+
+  it("parses a TOPIC as typed, its spacing made single, within its length", () => {
+    expect(parseTarget("TOPIC", "  #elections ")).toEqual({ type: "TOPIC", value: "#elections" });
+    expect(parseTarget("TOPIC", '"a   quoted\tphrase"')).toEqual({
+      type: "TOPIC",
+      value: '"a quoted phrase"',
+    });
+    expect(() => parseTarget("TOPIC", "   ")).toThrow(sdk.InvalidTargetError);
+    expect(() => parseTarget("TOPIC", "x".repeat(301))).toThrow(sdk.InvalidTargetError);
   });
 });
 

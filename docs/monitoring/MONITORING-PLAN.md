@@ -356,7 +356,7 @@ Each is specified in `docs/DESIGN-SYSTEM.md` §9 first and shown in the dev gall
 
 | Id | Decision | Recommendation |
 |---|---|---|
-| D-M1 | Add `TOPIC` to `TARGET_TYPES` (additive; pg enum value) | Accept |
+| D-M1 | Add `TOPIC` to `TARGET_TYPES` (additive; pg enum value) | **Ruled 2026-10-15 (Day 1), built:** accepted, and every TOPIC run is person data whatever collects it, failing closed on the target type with no name detector (`docs/PLAN.md`, Track M Day 1) |
 | D-M2 | Add `NARRATIVE`, `HASHTAG` entity kinds; posts/articles are items, not entities | Accept |
 | D-M3 | Open-host sources (RSS feeds, Mastodon instances) with tenant-declared hosts under the same SSRF rules | Accept, with the host recorded on evidence and no redirects off-host |
 | D-M4 | Un-hold GDELT with the canary test for a false-empty answer | Accept |

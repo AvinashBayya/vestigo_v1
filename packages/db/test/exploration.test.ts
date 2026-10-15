@@ -323,6 +323,39 @@ describe("pins", () => {
       expect(counts.get(other.caseId)).toBe(0);
     });
   });
+
+  it("REGRESSION (Day 1 pipeline): pins made in one transaction come in one order, by id, every time", async () => {
+    // They share their time; ordered by it alone, two reads could list them
+    // differently (the person-gate lifecycle test saw a clean case's pins swap).
+    const { pinIds, firstRead, secondRead } = await read(tenant, async ({ repos }) => {
+      const caseRow = await repos.cases.create({
+        title: "[pins in one transaction]",
+        description: null,
+        createdByUserId: tenant.userId,
+      });
+      const pinIds: string[] = [];
+      for (const target of [
+        { entityId: tenant.otherEntityId },
+        { evidenceId: tenant.evidenceId },
+        { claimId: tenant.claimId },
+        { entityId: tenant.entityId },
+        { relationshipId: tenant.relationshipId },
+      ]) {
+        const pin = await repos.casePins.pin({
+          caseId: caseRow.id,
+          target,
+          pinnedByUserId: tenant.userId,
+          note: null,
+        });
+        pinIds.push(pin.id);
+      }
+      const firstRead = (await repos.casePins.listForCase(caseRow.id)).map((pin) => pin.id);
+      const secondRead = (await repos.casePins.listForCase(caseRow.id)).map((pin) => pin.id);
+      return { pinIds, firstRead, secondRead };
+    });
+    expect(firstRead).toEqual([...pinIds].sort());
+    expect(secondRead).toEqual(firstRead);
+  });
 });
 
 describe("a relationship", () => {
@@ -833,5 +866,155 @@ describe("the person-data probe on a run's jobs", () => {
       ]),
     );
     expect(foreign).toEqual([false, false, false]);
+  });
+});
+
+describe("the person-data probe on a person-bearing run (a TOPIC; Day 1, D-M1)", () => {
+  it("finds the run, and everything collected in it, whichever collector collected it", async () => {
+    // A news collector, not a person one: what it collects for a TOPIC is person
+    // data because of the target, and only because of the target.
+    const found = await read(tenant, async ({ repos, reads }) => {
+      await repos.collectorsRegistry.register({
+        collectorId: "probe-news",
+        sourceLabel: "[News probe fixture]",
+        discipline: "MEDIAINT",
+        collectionMode: "PASSIVE_API",
+        dataLicence: "[not applicable: test fixture]",
+        commercialUse: "UNVERIFIED",
+        enabled: true,
+        disabledReason: null,
+      });
+      const collect = async (target: string, requestedTargetType: "TOPIC" | null, tag: string) => {
+        const investigation = await repos.investigations.create({
+          title: `[${tag}]`,
+          target,
+          createdByUserId: tenant.userId,
+        });
+        const run = await repos.runs.create({
+          investigationId: investigation.id,
+          status: "QUEUED",
+          requestedByUserId: tenant.userId,
+          requestedTargetType,
+        });
+        const job = await repos.jobs.create({
+          runId: run.id,
+          collectorId: "probe-news",
+          idempotencyKey: `probe-news:${run.id}`,
+          status: "QUEUED",
+          ...(requestedTargetType === null
+            ? { targetType: "DOMAIN" as const, target }
+            : { targetType: requestedTargetType, target }),
+        });
+        const evidence = await repos.evidence.record({
+          collectorId: "probe-news",
+          collectorVersion: "0.0.0-test",
+          jobId: job.id,
+          sourceUrl: null,
+          contentHash: `sha256:${(tag === "topic" ? "d" : "c").repeat(64)}`,
+          payloadRef: `[${tag} payload]`,
+          observedAt: null,
+          collectedAt: null,
+          claimStrength: "REPORTED",
+        });
+        const entity = await repos.entities.create({
+          kind: "URL",
+          displayName: `[${tag} article]`,
+        });
+        const claim = await repos.claims.create({
+          evidenceId: evidence.id,
+          subject: { entityId: entity.id },
+          attribute: "headline",
+          value: `[${tag} headline]`,
+          strength: "REPORTED",
+        });
+        const caseRow = await repos.cases.create({
+          title: `[${tag} case]`,
+          description: null,
+          createdByUserId: tenant.userId,
+        });
+        await repos.casePins.pin({
+          caseId: caseRow.id,
+          target: { evidenceId: evidence.id },
+          pinnedByUserId: tenant.userId,
+          note: null,
+        });
+        const probe = reads.exploration.touchesPersonData.bind(reads.exploration);
+        return {
+          ids: { run: run.id, evidence: evidence.id, claim: claim.id, entity: entity.id },
+          personBearing: run.personBearing,
+          byRunJobs: await probe({ runJobs: run.id }),
+          byRunScope: await probe({ scope: { runId: run.id } }),
+          byRunIds: await probe({ runIds: [tenant.runId, run.id] }),
+          byEvidence: await probe({ evidenceIds: [evidence.id] }),
+          byClaim: await probe({ claimIds: [claim.id] }),
+          byEntity: await probe({ entityIds: [entity.id] }),
+          byCase: await probe({ scope: { caseId: caseRow.id } }),
+          byCaseEntities: await probe({
+            scopeEntities: { scope: { caseId: caseRow.id }, hops: 0 },
+          }),
+        };
+      };
+      // The same collector on a domain: nothing here is person data.
+      const plain = await collect("news.example.com", null, "plain");
+      const topic = await collect("[a subject]", "TOPIC", "topic");
+      // A person-bearing run is person data before it has any job.
+      const fresh = await repos.runs.create({
+        investigationId: (
+          await repos.investigations.create({
+            title: "[fresh topic]",
+            target: "#elections",
+            createdByUserId: tenant.userId,
+          })
+        ).id,
+        status: "QUEUED",
+        requestedByUserId: tenant.userId,
+      });
+      return {
+        plain,
+        topic,
+        fresh: {
+          id: fresh.id,
+          personBearing: fresh.personBearing,
+          byRunJobs: await reads.exploration.touchesPersonData({ runJobs: fresh.id }),
+        },
+      };
+    });
+    const { ids: plainIds, ...plain } = found.plain;
+    const { ids: topicIds, ...topic } = found.topic;
+    expect(plain).toEqual({
+      personBearing: false,
+      byRunJobs: false,
+      byRunScope: false,
+      byRunIds: false,
+      byEvidence: false,
+      byClaim: false,
+      byEntity: false,
+      byCase: false,
+      byCaseEntities: false,
+    });
+    expect(topic).toEqual({
+      personBearing: true,
+      byRunJobs: true,
+      byRunScope: true,
+      byRunIds: true,
+      byEvidence: true,
+      byClaim: true,
+      byEntity: true,
+      byCase: true,
+      byCaseEntities: true,
+    });
+    expect(found.fresh).toMatchObject({ personBearing: true, byRunJobs: true });
+    expect(plainIds.run).not.toBe(topicIds.run);
+    // Another tenant asking about these ids learns nothing: they are not there for it.
+    const foreign = await read(other, ({ reads }) =>
+      Promise.all([
+        reads.exploration.touchesPersonData({ runJobs: topicIds.run }),
+        reads.exploration.touchesPersonData({ runIds: [topicIds.run, found.fresh.id] }),
+        reads.exploration.touchesPersonData({ evidenceIds: [topicIds.evidence] }),
+        reads.exploration.touchesPersonData({ claimIds: [topicIds.claim] }),
+        reads.exploration.touchesPersonData({ entityIds: [topicIds.entity] }),
+      ]),
+    );
+    expect(foreign).toEqual([false, false, false, false, false]);
   });
 });

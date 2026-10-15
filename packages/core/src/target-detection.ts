@@ -43,6 +43,13 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DOMAIN = /^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i;
 const PHONE = /^\+?[\d\s().-]{7,}$/;
 const FILE_REFERENCE = /^sha256:[0-9a-f]{64}$/;
+/**
+ * A hashtag: # and one word of letters, digits or underscores. Combining marks
+ * count as part of a word: Devanagari and other Indic vowel signs are marks.
+ */
+const HASHTAG = /^#[\p{L}\p{M}\p{N}_]+$/u;
+/** A phrase in straight or curly double quotes, with something inside them. */
+const QUOTED_PHRASE = /^(?:"[^"]*\S[^"]*"|“[^“”]*\S[^“”]*”)$/;
 /** Bare words longer than this are not usernames on any platform the collectors read. */
 const MAX_USERNAME_LENGTH = 30;
 
@@ -57,8 +64,11 @@ function isIPv6(value: string): boolean {
 
 /**
  * Precedence-ordered: an unambiguous shape (file reference, IP address, URL,
- * email address, domain, phone number) wins outright. What is left is
- * ambiguous and is returned with its alternates.
+ * email address, domain, phone number, hashtag, quoted phrase) wins outright.
+ * What is left is ambiguous and is returned with its alternates. A hashtag or a
+ * quoted phrase is a topic. Other words with spaces are an organisation's name
+ * first, and may be a topic: the analyst chooses, nothing here guesses (a topic
+ * may name a person, which no rule can tell from any other words).
  */
 export function detectTargetType(raw: string): DetectedTarget {
   const input = raw.trim();
@@ -74,10 +84,17 @@ export function detectTargetType(raw: string): DetectedTarget {
   if (PHONE.test(input) && input.replace(/\D/g, "").length >= 7) {
     return { primaryType: "PHONE_NUMBER", alternateTypes: [] };
   }
+  if (HASHTAG.test(input) || QUOTED_PHRASE.test(input)) {
+    return { primaryType: "TOPIC", alternateTypes: [] };
+  }
   // Legacy offered "person" here. There is no person target type: a bare word
   // is a plausible handle or a plausible organisation's name.
   if (!input.includes(" ") && input.length <= MAX_USERNAME_LENGTH) {
     return { primaryType: "USERNAME", alternateTypes: ["ORGANIZATION"] };
   }
-  return { primaryType: "ORGANIZATION", alternateTypes: [] };
+  // Words with spaces may be a topic; one long word is an organisation's name, as before.
+  return {
+    primaryType: "ORGANIZATION",
+    alternateTypes: /\s/.test(input) ? ["TOPIC"] : [],
+  };
 }

@@ -6,9 +6,10 @@
  * apps/api/src/http/person-gate.ts. Whether data IS person data is answered in
  * one place, the probe in packages/db. Each decision is built from a few
  * recognisable pieces: an access decision from @repo/access, a collector
- * discipline compared with the person discipline, or the person module
- * compared by name. This scan fails on any of those pieces outside the files
- * that are their home.
+ * discipline compared with the person discipline, the person module compared
+ * by name, or a target type compared with the person target type (a TOPIC is
+ * person data whatever collects it). This scan fails on any of those pieces
+ * outside the files that are their home.
  *
  * The homes (and only these):
  *   - apps/api/src/http/person-gate.ts: the shared read gate.
@@ -34,17 +35,34 @@ export interface GateCopyCheck {
   readonly name: string;
   readonly regex: RegExp;
   readonly note: string;
+  /**
+   * Files allowed this one piece besides GATE_HOMES, each for a stated reason:
+   * the files that write a record the probe reads. They are no home for any
+   * other piece.
+   */
+  readonly alsoAllowedIn?: readonly string[];
 }
 
 const QUOTE = "[\"'`]";
 const COMPARE = "(?:===|!==|==|!=|<>|=|\\s+in\\s*\\(\\s*)";
+/** An ASCII word in any case (an SQL keyword or identifier), where the rest of a pattern keeps its case. */
+const anyCase = (word: string): string =>
+  word.replace(/[a-z]/gi, (char) => `[${char.toLowerCase()}${char.toUpperCase()}]`);
+/**
+ * Not inside an SQL UPDATE's SET list: no `set` earlier on the line with no
+ * `where` between. Setting a value decides nothing. Placed after the operator
+ * it guards, so the look back runs only where an operator matched.
+ */
+const NOT_IN_SET_LIST = `(?<!\\b${anyCase("set")}\\b(?:(?!\\b${anyCase("where")}\\b)[^;])*)`;
+/** The list of person target types, named in pieces so this file does not use it. */
+const TARGET_LIST = "PERSON_TARGET" + "_TYPES";
 
 export const GATE_COPY_CHECKS: readonly GateCopyCheck[] = [
   {
     name: "person-access-decision",
-    // A call of the discipline or module access decision.
-    regex: new RegExp("\\bdecide(?:Discipline|Module)Access\\s*\\("),
-    note: "decides module or discipline access outside the shared gate: call requirePersonAccess or personLockFor (apps/api/src/http/person-gate.ts)",
+    // A call of the discipline, module or target-type access decision.
+    regex: new RegExp("\\bdecide(?:Discipline|Module|Target)Access\\s*\\("),
+    note: "decides module, discipline or target-type access outside the shared gate: call requirePersonAccess or personLockFor (apps/api/src/http/person-gate.ts)",
   },
   {
     name: "discipline-module-lookup",
@@ -72,6 +90,77 @@ export const GATE_COPY_CHECKS: readonly GateCopyCheck[] = [
     ),
     note: "compares the person module by name outside @repo/access",
   },
+  {
+    name: "person-target-comparison",
+    // A target type compared with the person target type (a TOPIC is person
+    // data whatever collects it): in code, either way round, in a membership
+    // test or a query builder; in SQL by the value, either way round, wrapped
+    // or not, in an IN or ANY list or a CASE (keywords in any case; the value
+    // is the enum label, always as written). Setting the value (an UPDATE's SET
+    // list) is not a comparison and is not matched.
+    regex: new RegExp(
+      [
+        `${QUOTE}TOPIC${QUOTE}\\s*(?:===|!==|==|!=)`,
+        `(?:===|!==|==|!=)\\s*${QUOTE}TOPIC${QUOTE}`,
+        `(?:=|<>|!=)${NOT_IN_SET_LIST}\\s*'TOPIC'`,
+        `'TOPIC'\\s*(?:=|<>|!=)`,
+        `\\b(?:${anyCase("in")}|${anyCase("any")})\\s*\\([^)]*'TOPIC'`,
+        `\\b${anyCase("when")}\\s+'TOPIC'`,
+        `\\b(?:eq|ne|inArray|notInArray)\\([^)]*${QUOTE}TOPIC${QUOTE}`,
+        `${QUOTE}TOPIC${QUOTE}\\s*\\]\\s*\\)?\\s*\\.\\s*(?:includes|has)\\s*\\(`,
+        `\\.\\s*(?:includes|has)\\s*\\(\\s*${QUOTE}TOPIC${QUOTE}`,
+      ].join("|"),
+    ),
+    note: "decides whether a target is person data outside @repo/access: a run records it when it is created (runs.person_bearing), and the probe reads it through the shared gate",
+  },
+  {
+    name: "person-target-decision",
+    // The shared helpers that decide it, called outside their home.
+    regex: new RegExp("\\b(?:targetRestsOnPersonData|runRestsOnPersonTarget)\\s*\\("),
+    note: "decides whether a target is person data outside @repo/access: only the runs repository records it, when a run is created; reads ask the probe through the shared gate",
+    // Records runs.person_bearing when a run is created.
+    alsoAllowedIn: ["packages/db/src/repositories/work.ts"],
+  },
+  {
+    name: "person-target-list",
+    // The list of person target types used as a value outside its home: an
+    // inline copy of the shared helpers. Importing or re-exporting it, naming
+    // it in a string, or a comment line is not matched.
+    regex: new RegExp(
+      `^(?!\\s*(?:(?:import|export)\\b|\\*|\\/\\/|\\/\\*)).*(?:(?:\\.\\.\\.|[(,=[])\\s*${TARGET_LIST}\\b|\\b${TARGET_LIST}\\s*[.)\\]])`,
+    ),
+    note: "decides whether a target is person data outside @repo/access with the list itself: the probe reads the run's record through the shared gate",
+    alsoAllowedIn: [
+      // The check on runs is built from the list.
+      "packages/db/src/schema/work.ts",
+      // Keeps the database's own rules in step with the list, type by type.
+      "packages/db/test/person-target.test.ts",
+    ],
+  },
+  {
+    name: "person-run-record",
+    // A decision on a run's person-bearing record: in SQL after a condition
+    // keyword (with or without a bracket or a function) or compared; in code in
+    // a condition, a predicate, a comparison, a query builder or a drizzle
+    // template. Naming the column (an insert's column list, a test's expected
+    // record) or setting it (an UPDATE's SET list) decides nothing.
+    regex: new RegExp(
+      [
+        `\\b(?:where|and|or|on|not|when|then|case|if)\\s*\\(?\\s*(?:\\w+\\(\\s*)?[\\w."]*person_bearing\\b`,
+        `\\bperson_bearing\\s*(?:=|<>|!=|\\bis\\b)${NOT_IN_SET_LIST}`,
+        `\\.personBearing\\b\\s*(?:&&|\\|\\||\\?(?![.?])|===|!==|==|!=)`,
+        `(?:!|&&|\\|\\||=>|\\bif\\s*\\()\\s*[\\w$.()?]*\\.personBearing\\b`,
+        `\\bif\\s*\\(\\s*!?\\s*personBearing\\b`,
+        `\\b(?:eq|ne|and|or|not)\\([^;]*\\.personBearing\\b`,
+        `\\.where\\(\\s*[\\w$.]*\\.personBearing\\b`,
+        `\\$\\{\\s*[\\w$.]*\\.personBearing\\s*\\}`,
+      ].join("|"),
+      "i",
+    ),
+    note: "decides on a run's person-bearing record outside the probe: ask the probe (packages/db) through the shared gate",
+    // Declares the column and its check.
+    alsoAllowedIn: ["packages/db/src/schema/work.ts"],
+  },
 ];
 
 /** Where the pieces of the gate may appear: a file path, or a directory ending in "/". */
@@ -92,12 +181,16 @@ export interface GateCopyMatch {
   readonly text: string;
 }
 
-/** The gate's pieces in one file; none for a file that is one of their homes. */
+/**
+ * The gate's pieces in one file; none for a file that is one of their homes,
+ * and none of a piece the file is also allowed (alsoAllowedIn).
+ */
 export function scanForGateCopies(file: string, content: string): GateCopyMatch[] {
   if (isHome(file)) return [];
+  const checks = GATE_COPY_CHECKS.filter((check) => !(check.alsoAllowedIn ?? []).includes(file));
   const matches: GateCopyMatch[] = [];
   content.split(/\r?\n/).forEach((text, index) => {
-    for (const check of GATE_COPY_CHECKS) {
+    for (const check of checks) {
       if (check.regex.test(text)) {
         matches.push({ check: check.name, file, line: index + 1, text: text.trim() });
       }
@@ -179,9 +272,9 @@ export const ROUTE_GATING: Readonly<Record<string, Readonly<Record<string, Route
     },
   },
   "apps/api/src/routes/runs.ts": {
-    "POST /api/v1/investigations/:id/runs": {
-      why: "Returns the new run before any job exists (docs/PLAN.md, Phase 6a ruling).",
-    },
+    // Day 1 (Track M, D-M1): a run on a TOPIC is person data from the moment it
+    // exists, so the gate decides on the new run before anything is queued.
+    "POST /api/v1/investigations/:id/runs": "shared-gate",
     "GET /api/v1/investigations/:id/runs": {
       why: "Run ids, statuses and times: found and not found are both SUCCEEDED, so it shows collector health, not findings (docs/PLAN.md, Phase 6a ruling).",
     },

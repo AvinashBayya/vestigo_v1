@@ -54,6 +54,12 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
   ],
   // Who may do what, for the API and the workers alike.
   "packages/access/src/index.ts": [
+    // Track M D-M1: a TOPIC is person data whatever collects it.
+    "PERSON_TARGET_TYPES",
+    "targetRestsOnPersonData",
+    "plannedTargetTypes",
+    "runRestsOnPersonTarget",
+    "decideTargetAccess",
     "PERMISSIONS",
     "Permission",
     "isPermission",
@@ -189,6 +195,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "CaseAnalysisEventsRepository",
     "CaseAnalysisRecordedOnceError",
     "CaseAnalysisOutOfOrderError",
+    "PersonTargetOutsidePersonRunError",
     "CaseScopeRepository",
     "probeParts",
     "SnapshotConflictError",

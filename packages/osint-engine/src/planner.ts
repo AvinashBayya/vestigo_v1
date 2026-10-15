@@ -13,6 +13,10 @@
  *     ACTIVE collector. The API and the workers apply the same rules.
  *   - A candidate type whose value does not parse as that type is dropped
  *     with its reason, never passed to a collector.
+ *   - A person target type (a TOPIC) is planned only when it was chosen or
+ *     detected first (plannedTargetTypes, @repo/access), and only for a tenant
+ *     whose plan and vetting allow person data: the runtime refuses it as it
+ *     refuses a PERSON collector.
  */
 import {
   InvalidTargetError,
@@ -22,7 +26,7 @@ import {
   type ScopeClearance,
 } from "@repo/collectors";
 import { detectTargetType, type DetectedTarget, type TargetType } from "@repo/core";
-import type { TenantEntitlement } from "@repo/access";
+import { plannedTargetTypes, type TenantEntitlement } from "@repo/access";
 
 export interface PlannedJob {
   readonly collectorId: string;
@@ -51,7 +55,23 @@ export interface RunPlan {
   )[];
   readonly jobs: readonly PlannedJob[];
   readonly excluded: readonly ExcludedCollector[];
+  /**
+   * Types detection offered that the run did not plan, each with why: a
+   * person target type (a TOPIC) that was only an alternate. So the plan says
+   * what it did not cover, and a reading shown as an alternate is never taken
+   * for one that ran. Absent from plans recorded before Day 1.
+   */
+  readonly notPlanned: readonly NotPlannedType[];
 }
+
+/** A detected type the run did not plan, and why. */
+export interface NotPlannedType {
+  readonly type: TargetType;
+  readonly reason: typeof NOT_PLANNED_UNLESS_CHOSEN;
+  readonly message: string;
+}
+
+export const NOT_PLANNED_UNLESS_CHOSEN = "NOT_PLANNED_UNLESS_CHOSEN";
 
 export interface PlanRequest {
   readonly input: string;
@@ -70,12 +90,17 @@ export interface PlanRequest {
  */
 export async function planRun(runtime: CollectorRuntime, request: PlanRequest): Promise<RunPlan> {
   const detected = request.requestedType === null ? detectTargetType(request.input) : null;
-  const candidateTypes: readonly TargetType[] =
-    request.requestedType !== null
-      ? [request.requestedType]
-      : detected === null
-        ? []
-        : [detected.primaryType, ...detected.alternateTypes];
+  // The same types the run was recorded as resting on when it was created
+  // (runRestsOnPersonTarget): a person target type that detection offers only
+  // as an alternate is not planned; it stays in `detected` for the analyst to choose.
+  const candidateTypes = plannedTargetTypes(request.input, request.requestedType);
+  const notPlanned: NotPlannedType[] = (detected?.alternateTypes ?? [])
+    .filter((type) => !candidateTypes.includes(type))
+    .map((type) => ({
+      type,
+      reason: NOT_PLANNED_UNLESS_CHOSEN,
+      message: `Not planned unless chosen: the input may be a ${type} only as an alternate reading, and a ${type} may name a person, so it is person data whatever collects it.`,
+    }));
 
   const targets: RunPlan["targets"][number][] = [];
   const valid: { readonly type: TargetType; readonly value: string }[] = [];
@@ -134,5 +159,6 @@ export async function planRun(runtime: CollectorRuntime, request: PlanRequest): 
     targets,
     jobs,
     excluded,
+    notPlanned,
   };
 }

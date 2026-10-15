@@ -364,6 +364,7 @@ const TARGET_PHRASE: Readonly<Record<TargetType, string>> = {
   ORGANIZATION: "an organisation",
   URL: "a URL",
   FILE: "a file",
+  TOPIC: "a topic",
 };
 
 /** The kind of target a run was for: the analyst's choice, else what detection found. */

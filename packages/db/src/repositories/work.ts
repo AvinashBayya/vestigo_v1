@@ -10,7 +10,7 @@ import type {
   RunStatus,
   TargetType,
 } from "@repo/core";
-import type { Permission } from "@repo/access";
+import { runRestsOnPersonTarget, targetRestsOnPersonData, type Permission } from "@repo/access";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import {
   auditLog,
@@ -371,6 +371,12 @@ export interface RunTransition {
 }
 
 export class RunsRepository extends TenantRepository {
+  /**
+   * Creates a run, recording whether it rests on person data by its target
+   * alone (runRestsOnPersonTarget, @repo/access): decided here from the
+   * investigation's own target, never taken from the caller, so no path can
+   * create a TOPIC run that the person-data probe does not see as one.
+   */
   async create(input: {
     readonly investigationId: string;
     readonly status: RunStatus;
@@ -378,20 +384,36 @@ export class RunsRepository extends TenantRepository {
     /** The type the analyst chose, or null to leave it to detection. */
     readonly requestedTargetType?: TargetType | null;
   }): Promise<Run> {
-    return this.run(async (tx) =>
-      onlyRow(
+    const investigationId = requireUuid(input.investigationId);
+    const requestedTargetType = input.requestedTargetType ?? null;
+    return this.run(async (tx) => {
+      const investigation = firstRow(
+        await tx
+          .select({ target: investigations.target })
+          .from(investigations)
+          .where(this.owned(investigations, investigationId)),
+      );
+      // No investigation (none in this tenant): the insert below fails on its
+      // foreign key. The chosen type alone decides then, so the check on runs
+      // cannot answer first with the wrong reason.
+      const personBearing =
+        investigation === null
+          ? requestedTargetType !== null && targetRestsOnPersonData(requestedTargetType)
+          : runRestsOnPersonTarget(investigation.target, requestedTargetType);
+      return onlyRow(
         await tx
           .insert(runs)
           .values({
             tenantId: this.tenantId,
-            investigationId: requireUuid(input.investigationId),
+            investigationId,
             status: input.status,
             requestedByUserId: input.requestedByUserId,
-            requestedTargetType: input.requestedTargetType ?? null,
+            requestedTargetType,
+            personBearing,
           })
           .returning(),
-      ),
-    );
+      );
+    });
   }
 
   /** The run, locked for update until the transaction ends. Null if it does not exist here. */

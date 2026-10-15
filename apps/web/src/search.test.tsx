@@ -112,6 +112,7 @@ function estimateFor(input: string, overrides: Partial<Estimate> = {}): Estimate
         message: "[the types it accepts]",
       },
     ],
+    notPlanned: [],
     total: { estimatedCredits: null, estimatedCreditsReason: NO_COST },
     ...overrides,
   };

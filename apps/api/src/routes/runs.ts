@@ -82,6 +82,14 @@ const PlanView = z.union([
         message: z.string(),
       }),
     ),
+    /**
+     * Types detection offered that the run did not plan, with why (a TOPIC that
+     * was only an alternate is planned only when chosen). Absent from plans
+     * recorded before it existed.
+     */
+    notPlanned: z
+      .array(z.object({ type: z.enum(TARGET_TYPES), reason: z.string(), message: z.string() }))
+      .optional(),
   }),
   /** The run could not be planned at all (an empty target). */
   z.object({ error: z.object({ code: z.string(), message: z.string() }) }),
@@ -169,6 +177,10 @@ const QUOTA_UNIT = "UPSTREAM_REQUEST";
 /** What a locked run read or progress stream would have shown. */
 const RUN_WITHHELD =
   "This run's progress: each collector's outcome, its errors and the evidence it recorded.";
+
+/** What a refused run start would have begun. */
+const RUN_START_WITHHELD =
+  "A new run on this target, and everything it would collect. A topic may name a person, so a TOPIC target is person data whatever collects it. No run was started.";
 
 /**
  * Sent when the stream's access re-check refuses access, just before the
@@ -264,7 +276,7 @@ export const runRoutes =
           operationId: "startRun",
           summary: "Start a run of an investigation: plan it and collect in the background",
           description:
-            "Returns at once with the QUEUED run; collection happens in background jobs. Follow it with GET /api/v1/runs/{id} or the /events stream. Refused with 429 QUOTA_EXCEEDED when a quota is spent.",
+            "Returns at once with the QUEUED run; collection happens in background jobs. Follow it with GET /api/v1/runs/{id} or the /events stream. Refused with 429 QUOTA_EXCEEDED when a quota is spent. A run on a TOPIC target (chosen, or detected first, as a hashtag or a quoted phrase is) is person data whatever collects it: for an organisation whose plan or vetting does not allow person investigation it is refused whole, with 403 MODULE_NOT_IN_PLAN or VETTING_NOT_APPROVED and the Locked detail, and no run is created.",
           tags: ["runs"],
           security: SECURITY,
           params: IdParams,
@@ -276,7 +288,8 @@ export const runRoutes =
         },
       },
       async (request, reply) => {
-        const { repos, principal } = tenantOf(request);
+        const context = tenantOf(request);
+        const { repos, principal } = context;
         const runs = services().runs;
         const investigation = await repos.investigations.findById(request.params.id);
         if (investigation === null) throw notFound("The investigation");
@@ -294,6 +307,11 @@ export const runRoutes =
           requestedByUserId: principal.kind === "session" ? principal.userId : null,
           requestedTargetType: request.body.targetType ?? null,
         });
+        // A run whose target is person data whatever collects it (a TOPIC) is
+        // recorded so when it is created. The shared gate decides on the run as
+        // it is now, before anything is queued: refused, the transaction rolls
+        // back, so no run exists and nothing is collected.
+        await requirePersonAccess(context, { runJobs: run.id }, RUN_START_WITHHELD);
         request.auditTarget = { type: "run", id: run.id };
         try {
           // Enqueued inside the run's own transaction: if it rolls back, the

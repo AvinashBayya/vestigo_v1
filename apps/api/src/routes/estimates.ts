@@ -35,7 +35,7 @@ export const estimateRoutes =
           operationId: "estimateRun",
           summary: "Before a run: what a target is, what would run, and what it would cost",
           description:
-            "Plans the run exactly as starting it would, but starts nothing and calls no source. Collectors the plan excludes are listed with their reasons. No collector declares a credit cost yet, so every estimate is null with the reason stated.",
+            "Plans the run exactly as starting it would, but starts nothing and calls no source. Collectors the plan excludes are listed with their reasons. No collector declares a credit cost yet, so every estimate is null with the reason stated. A TOPIC target is person data whatever collects it: for an organisation whose plan or vetting does not allow person investigation, each collector that takes topics is listed as refused (MODULE_NOT_IN_PLAN or VETTING_NOT_APPROVED), and starting the run is refused whole (403).",
           tags: ["runs"],
           security: SECURITY,
           body: z.object({
@@ -82,6 +82,13 @@ export const estimateRoutes =
                     reason: z.string(),
                     message: z.string(),
                   }),
+                ),
+                /**
+                 * Alternate types the run would not plan, with why: a TOPIC that is
+                 * only an alternate is planned only when chosen. Empty otherwise.
+                 */
+                notPlanned: z.array(
+                  z.object({ type: TargetType, reason: z.string(), message: z.string() }),
                 ),
                 total: Cost,
               })
@@ -145,6 +152,11 @@ export const estimateRoutes =
             collectorId: row.collectorId,
             sourceLabel: labelOf(row.collectorId),
             targetType: row.targetType,
+            reason: row.reason,
+            message: row.message,
+          })),
+          notPlanned: plan.notPlanned.map((row) => ({
+            type: row.type,
             reason: row.reason,
             message: row.message,
           })),

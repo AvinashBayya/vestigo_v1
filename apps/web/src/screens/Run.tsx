@@ -219,10 +219,18 @@ function RunHeader({
         : plan.detected === null
           ? null
           : `Detected: ${TYPE_LABEL[plan.detected.primaryType].toLowerCase()}`;
+  // An alternate the run did not plan (a topic, planned only when chosen) says so.
+  const notPlanned = new Set((plan?.notPlanned ?? []).map((entry) => entry.type));
   const alternates =
     plan === null || plan.detected === null || plan.detected.alternateTypes.length === 0
       ? null
-      : plan.detected.alternateTypes.map((entry) => TYPE_LABEL[entry].toLowerCase()).join(", ");
+      : plan.detected.alternateTypes
+          .map((entry) =>
+            notPlanned.has(entry)
+              ? `${TYPE_LABEL[entry].toLowerCase()} (not run unless chosen)`
+              : TYPE_LABEL[entry].toLowerCase(),
+          )
+          .join(", ");
 
   return (
     <ContextHeader

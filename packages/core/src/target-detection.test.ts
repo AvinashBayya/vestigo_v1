@@ -13,9 +13,34 @@ describe("detectTargetType", () => {
     ["+44 20 7946 0000", "PHONE_NUMBER", []],
     [`sha256:${"a".repeat(64)}`, "FILE", []],
     ["octocat", "USERNAME", ["ORGANIZATION"]],
-    ["Internet Assigned Numbers Authority", "ORGANIZATION", []],
+    // Words with spaces: an organisation's name first, and possibly a topic.
+    ["Internet Assigned Numbers Authority", "ORGANIZATION", ["TOPIC"]],
+    // One long word is an organisation's name alone, as before TOPIC existed.
+    ["a".repeat(31), "ORGANIZATION", []],
+    ["#elections", "TOPIC", []],
+    ["#चुनाव_2026", "TOPIC", []],
+    ['"a quoted phrase"', "TOPIC", []],
+    ["“a curly-quoted phrase”", "TOPIC", []],
   ] as const)("%s is %s", (input, primaryType, alternateTypes) => {
     expect(detectTargetType(input)).toEqual({ primaryType, alternateTypes });
+  });
+
+  it("never guesses a topic away: words that may be one say so, and nothing reads a name", () => {
+    // A topic may name a person, and a name reads like any other words: no rule
+    // here tries to tell them apart. The ambiguity is reported, not resolved.
+    expect(detectTargetType("[given name] [family name]")).toEqual({
+      primaryType: "ORGANIZATION",
+      alternateTypes: ["TOPIC"],
+    });
+  });
+
+  it("does not read a bare #, empty quotes or a hashtag with spaces as a topic", () => {
+    expect(detectTargetType("#").primaryType).not.toBe("TOPIC");
+    expect(detectTargetType('"   "').primaryType).not.toBe("TOPIC");
+    expect(detectTargetType("#two words")).toEqual({
+      primaryType: "ORGANIZATION",
+      alternateTypes: ["TOPIC"],
+    });
   });
 
   it("does not read an out-of-range dotted quad as an IP address", () => {

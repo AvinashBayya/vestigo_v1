@@ -1282,3 +1282,110 @@ describe("one worker codebase, deployed as pools selected by queue", () => {
     }
   });
 });
+
+/** A local analysis that takes a topic: a collector that is not a person one. */
+const topicCollector = defineCollector(
+  {
+    id: "fake.topic",
+    version: "1.0.0",
+    displayName: "[fake topic analysis]",
+    discipline: "MEDIAINT",
+    targetTypes: ["TOPIC"],
+    collectionMode: "LOCAL_ANALYSIS",
+    source: "topic-local",
+    credentials: { vaultIds: [], runsWithout: true },
+    claimStrength: "DERIVED",
+    timeoutMs: 5_000,
+    resultSchema: LOCAL_RESULT,
+  },
+  (ctx) => {
+    const result = { analysed: ctx.target.value };
+    return Promise.resolve(ctx.found(result, [{ response: ctx.record(result), observedAt: null }]));
+  },
+);
+
+describe("a TOPIC job only ever sits in a person-bearing run (RELEASE-BLOCKING; Day 1, D-M1)", () => {
+  it("collects in a run recorded as person-bearing, and refuses, at once and visibly, one that is not", async () => {
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({
+        sources: [fakeSource("topic-local", false)],
+        collectors: [topicCollector],
+      }),
+      allowUnverifiedSources: false,
+      network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
+    });
+    const engine = await startEngine(runtime, {
+      extractors: { "fake.topic": () => ({ entities: [], relationships: [], claims: [] }) },
+    });
+    const letters = new Queue(DEAD_LETTER_QUEUE, {
+      connection: { url: engine.connection.url },
+      prefix: engine.connection.prefix,
+    });
+    try {
+      const tenant = await newTenant("topic-record");
+      await asOwner(
+        tenant.tenantId,
+        "update public.tenants set plan = 'TECHINT_AND_PERSON', vetting_status = 'APPROVED'",
+        [],
+      );
+      // As the repository records it: a hashtag is a topic, so the run is person-bearing.
+      const recorded = await startRun(engine, tenant, "#elections");
+      const finished = await finishedRun(tenant.tenantId, recorded);
+      expect(finished).toMatchObject({ personBearing: true, status: "SUCCEEDED" });
+      expect((await jobsOf(tenant.tenantId, recorded)).map((job) => job.targetType)).toEqual([
+        "TOPIC",
+      ]);
+
+      // A run whose record says otherwise, as one still queued when migration 0025
+      // ran would: the database refuses its TOPIC job, and no retry changes that.
+      const evidenceBefore = await evidenceIdsOf(tenant.tenantId);
+      const investigation = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.investigations.create({
+          title: "[queued before the record existed]",
+          target: "#elections",
+          createdByUserId: tenant.userId,
+        }),
+      );
+      const stale = randomUUID();
+      await asOwner(
+        tenant.tenantId,
+        `insert into public.runs (tenant_id, id, investigation_id, status, person_bearing)
+         values ($1, $2, $3, 'QUEUED', false)`,
+        [tenant.tenantId, stale, investigation.id],
+      );
+      await engine.investigations.enqueueRun(tenant.tenantId, stale);
+      const dead = await waitFor(
+        "the planning job's dead-letter record",
+        async () =>
+          (await letters.getJobs(["waiting", "wait"]))
+            .map((job) => DEAD_LETTER_MESSAGE.parse(job.data))
+            .filter((letter) => letter.runId === stale),
+        (rows) => rows.length > 0,
+      );
+      expect(dead).toEqual([
+        expect.objectContaining({
+          kind: "INVESTIGATION",
+          tenantId: tenant.tenantId,
+          errorCode: "PERSON_TARGET_OUTSIDE_PERSON_RUN",
+        }),
+      ]);
+      // No job and nothing collected; the run is failed with the reason, never left queued.
+      expect(await jobsOf(tenant.tenantId, stale)).toEqual([]);
+      const run = await db.withTenant(tenant.tenantId, ({ repos }) => repos.runs.findById(stale));
+      expect(run).toMatchObject({
+        status: "FAILED",
+        personBearing: false,
+        plan: {
+          error: {
+            code: "PERSON_TARGET_OUTSIDE_PERSON_RUN",
+            message: expect.stringMatching(/nothing was collected/) as string,
+          },
+        },
+      });
+      expect(await evidenceIdsOf(tenant.tenantId)).toEqual(evidenceBefore);
+    } finally {
+      await letters.close();
+      await engine.close();
+    }
+  });
+});

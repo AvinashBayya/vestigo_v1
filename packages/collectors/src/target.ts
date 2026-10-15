@@ -73,6 +73,12 @@ function normalise(type: TargetType, value: string): string | null {
       const name = value.replace(/\s+/g, " ");
       return name.length <= 300 ? name : null;
     }
+    case "TOPIC": {
+      // Free text, kept as typed (a hashtag keeps its #, a phrase its quotes),
+      // with its spacing made single.
+      const topic = value.replace(/\s+/g, " ");
+      return topic.length <= 300 ? topic : null;
+    }
     case "URL":
       return url(value);
     case "FILE":

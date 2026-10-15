@@ -7,7 +7,7 @@ import { tenantRegistration, type CollectorRuntime } from "@repo/collectors";
 import { AppError, EmptyTargetError, type TenantId } from "@repo/core";
 import { jobIdempotencyKey } from "./jobs/policy.ts";
 import { planRun, type RunPlan } from "./planner.ts";
-import type { Database } from "@repo/db";
+import { PersonTargetOutsidePersonRunError, type Database } from "@repo/db";
 
 export class RunNotReadyError extends AppError {
   readonly code = "RUN_NOT_READY";
@@ -50,9 +50,39 @@ export class RunCoordinator {
   /**
    * Plans the run once. A replayed planning step finds the plan recorded and
    * returns the same jobs; nothing is planned or created twice. A run with
-   * nothing to dispatch is FAILED at once, with the plan saying why.
+   * nothing to dispatch is FAILED at once, with the plan saying why. So is a
+   * run whose job the database refuses as a person target outside a
+   * person-bearing run, and that refusal is thrown on.
    */
   async plan(tenantId: TenantId, runId: string): Promise<PlannedRun> {
+    try {
+      return await this.#plan(tenantId, runId);
+    } catch (error) {
+      if (!(error instanceof PersonTargetOutsidePersonRunError)) throw error;
+      // The database refused a job on a person target type (a TOPIC) because
+      // the run was not recorded as person-bearing when it was created: a run
+      // queued before that record existed. Nothing was created or collected.
+      // The run is failed with the reason, in a transaction of its own (the
+      // planning one rolled back), and the error goes on: retrying changes
+      // nothing, so the planning job is dead-lettered with its code.
+      await this.#db.withTenant(tenantId, async ({ repos }) => {
+        const run = await repos.runs.lock(runId);
+        if (run === null || run.plan !== null) return;
+        const now = this.#clock();
+        await repos.runs.setPlan(runId, {
+          error: {
+            code: error.code,
+            message:
+              "The run plans a job on a target that is person data whatever collects it, but it was not recorded as resting on person data when it was created, so the job was refused and nothing was collected. Start a new run.",
+          },
+        });
+        await repos.runs.transition(runId, { status: "FAILED", startedAt: now, finishedAt: now });
+      });
+      throw error;
+    }
+  }
+
+  async #plan(tenantId: TenantId, runId: string): Promise<PlannedRun> {
     return this.#db.withTenant(tenantId, async ({ repos }) => {
       const run = await repos.runs.lock(runId);
       if (run === null) throw new RunNotReadyError();

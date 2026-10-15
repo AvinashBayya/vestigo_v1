@@ -29,6 +29,13 @@ export {
   type VettingStatus,
 } from "./entitlements.ts";
 export { personGate, type PersonLock } from "./person-gate.ts";
+export {
+  decideTargetAccess,
+  PERSON_TARGET_TYPES,
+  plannedTargetTypes,
+  runRestsOnPersonTarget,
+  targetRestsOnPersonData,
+} from "./person-target.ts";
 export { generateApiKey, hashApiKeySecret, parseApiKey, secretMatches } from "./api-keys/codec.ts";
 export type { GeneratedApiKey, ParsedApiKey } from "./api-keys/codec.ts";
 export { capApiKeyPermissions, grantableApiKeyScope } from "./api-keys/scope.ts";

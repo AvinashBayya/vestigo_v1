@@ -180,6 +180,22 @@ export class CaseAnalysisOutOfOrderError extends AppError {
 }
 
 /**
+ * A job on a person target type (a TOPIC) in a run not recorded as
+ * person-bearing (SQLSTATE PTT01, migration 0026). The person-data probe reads
+ * the run's record, so the database refuses the job rather than let what it
+ * would collect fall outside the person gate. Permanent: retrying changes
+ * nothing.
+ */
+export class PersonTargetOutsidePersonRunError extends AppError {
+  readonly code = "PERSON_TARGET_OUTSIDE_PERSON_RUN";
+
+  constructor(message: string) {
+    super(message);
+    this.name = "PersonTargetOutsidePersonRunError";
+  }
+}
+
+/**
  * A write in a snapshot transaction (REPEATABLE READ) conflicted with a
  * concurrent commit (SQLSTATE 40001). Nothing was written; the whole
  * transaction can be run again from the start.
@@ -372,6 +388,8 @@ export function translateDatabaseError(error: unknown): Error {
       return new CaseAnalysisRecordedOnceError(message);
     case "CAN02":
       return new CaseAnalysisOutOfOrderError(message);
+    case "PTT01":
+      return new PersonTargetOutsidePersonRunError(message);
     default:
       // Data exceptions (class 22) can echo the offending input value.
       return sqlState?.startsWith("22")

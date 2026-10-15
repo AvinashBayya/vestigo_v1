@@ -226,6 +226,8 @@ function targetEntity(drafts: Drafts, target: ExtractorInput["target"]): string 
       return drafts.entity("ORGANIZATION", null, target.value);
     case "FILE":
       throw new NotImplementedError("fusion.file-target", "no collector reads FILE targets yet");
+    case "TOPIC":
+      throw new NotImplementedError("fusion.topic-target", "no collector reads TOPIC targets yet");
   }
 }
 

@@ -916,4 +916,58 @@ describe("the run view", () => {
       `/runs/${RUN_ID}/overview`,
     );
   });
+
+  it("says an alternate reading the run did not plan was not run, never lists it as if it ran (Day 1)", async () => {
+    const stream = progressStream();
+    fakeApi([stream.response]);
+    renderRun();
+    stream.send(
+      "run",
+      run({
+        plan: {
+          input: "[two words]",
+          requestedType: null,
+          detected: { primaryType: "ORGANIZATION", alternateTypes: ["TOPIC"] },
+          targets: [{ type: "ORGANIZATION", value: "[two words]" }],
+          jobs: [],
+          excluded: [],
+          notPlanned: [
+            {
+              type: "TOPIC",
+              reason: "NOT_PLANNED_UNLESS_CHOSEN",
+              message: "[why it was not planned]",
+            },
+          ],
+        },
+      }),
+    );
+    expect(
+      await screen.findByText("alternates: topic (not run unless chosen)", { exact: false }),
+    ).toBeTruthy();
+    expect(screen.getByText("Detected: organisation")).toBeTruthy();
+  });
+
+  it("lists an alternate plainly when the plan records none left out (plans before Day 1)", async () => {
+    const stream = progressStream();
+    fakeApi([stream.response]);
+    renderRun();
+    stream.send(
+      "run",
+      run({
+        plan: {
+          input: "octocat",
+          requestedType: null,
+          detected: { primaryType: "USERNAME", alternateTypes: ["ORGANIZATION"] },
+          targets: [
+            { type: "USERNAME", value: "octocat" },
+            { type: "ORGANIZATION", value: "octocat" },
+          ],
+          jobs: [],
+          excluded: [],
+        },
+      }),
+    );
+    expect(await screen.findByText("alternates: organisation", { exact: false })).toBeTruthy();
+    expect(screen.queryByText("not run unless chosen", { exact: false })).toBeNull();
+  });
 });

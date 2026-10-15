@@ -19,6 +19,7 @@ export const TYPE_LABEL: Readonly<Record<TargetType, string>> = {
   ORGANIZATION: "Organisation",
   URL: "URL",
   FILE: "File",
+  TOPIC: "Topic",
 };
 
 /** Registered but not enabled for this deployment (§3 Held). */

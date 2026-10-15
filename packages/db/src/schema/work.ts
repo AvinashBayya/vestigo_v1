@@ -1,7 +1,10 @@
+import { PERSON_TARGET_TYPES } from "@repo/access";
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -65,6 +68,18 @@ export const runs = pgTable(
      * planned or excluded, each with its reason. Null until planned.
      */
     plan: jsonb("plan"),
+    /**
+     * The run rests on person data by its target alone, whatever collects it:
+     * it plans a person target type (a TOPIC, PERSON_TARGET_TYPES in
+     * @repo/access). Set once, when the run is created, by the runs repository
+     * from the investigation's target and the requested type; the application
+     * role may not change it (no UPDATE grant), and a job on a person target
+     * type is refused unless its run carries it (migration 0026). Read by the
+     * person-data probe: the run, and everything collected in it, is person data.
+     * False for every run created before TOPIC existed; one of those still
+     * queued that then plans a TOPIC job has the job refused and is failed.
+     */
+    personBearing: boolean("person_bearing").notNull().default(false),
   },
   (t) => [
     primaryKey({ name: "runs_pk", columns: [t.tenantId, t.id] }),
@@ -86,6 +101,14 @@ export const runs = pgTable(
     check(
       "runs_finished_after_started",
       sql`${t.finishedAt} is null or ${t.startedAt} is null or ${t.finishedAt} >= ${t.startedAt}`,
+    ),
+    // A run whose chosen type is a person target type is person-bearing. Compared
+    // as text: a new enum value cannot be used in the transaction that adds it.
+    check(
+      "runs_person_target_recorded",
+      sql`${t.personBearing} or ${t.requestedTargetType} is null or ${t.requestedTargetType}::text not in (${sql.raw(
+        PERSON_TARGET_TYPES.map((type) => `'${type}'`).join(", "),
+      )})`,
     ),
   ],
 );
@@ -149,6 +172,9 @@ export const jobs = pgTable(
       foreignColumns: [collectorsRegistry.tenantId, collectorsRegistry.collectorId],
     }),
     unique("jobs_idempotency_key").on(t.tenantId, t.idempotencyKey),
+    // A run's jobs, by key: the person-data probe's run check reads a run's
+    // jobs through it, as does listing a run's jobs.
+    index("jobs_run_idx").on(t.tenantId, t.runId),
     check("jobs_attempts_non_negative", sql`${t.attempts} >= 0`),
     check("jobs_idempotency_key_not_blank", sql`length(btrim(${t.idempotencyKey})) > 0`),
     check(

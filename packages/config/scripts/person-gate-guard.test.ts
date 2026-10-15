@@ -38,7 +38,16 @@ const EQ = "=" + "==";
 const NE = "!" + "==";
 const DECIDE = "decide" + "DisciplineAccess";
 const DECIDE_MODULE = "decide" + "ModuleAccess";
+const DECIDE_TARGET = "decide" + "TargetAccess";
 const LOOKUP = "DISCIPLINE" + "_MODULE";
+const T = '"' + "TOP" + 'IC"';
+const SQL_T = "'" + "TOP" + "IC'";
+const TARGET_HELPER = "targetRests" + "OnPersonData";
+const RUN_HELPER = "runRests" + "OnPersonTarget";
+const PB = "person" + "Bearing";
+const PB_SQL = "person" + "_bearing";
+const TEMPLATE = "$" + "{";
+const LIST = "PERSON_TARGET" + "_TYPES";
 
 const root = findRepoRoot(process.cwd());
 const tempDirs: string[] = [];
@@ -73,6 +82,52 @@ describe("the guard recognises a copy of the gate", () => {
     ["person-discipline-comparison", `.where(inArray(registry.${D}, [${P}]))`],
     ["person-module-comparison", `if (module ${EQ} ${M}) locked = true;`],
     ["person-module-comparison", `if (${M} ${NE} decision.module) return;`],
+    // Day 1: a target type compared with the person target type is the same decision.
+    ["person-access-decision", `const allowed = ${DECIDE_TARGET}(tenant, target.type).allowed;`],
+    ["person-target-comparison", `if (target.type ${EQ} ${T}) locked = true;`],
+    ["person-target-comparison", `if (${T} ${NE} run.requestedTargetType) return;`],
+    ["person-target-comparison", `  where j.target_type = ${SQL_T}`],
+    ["person-target-comparison", `  and r.requested_target_type::text not in (${SQL_T})`],
+    ["person-target-comparison", `.where(eq(jobs.targetType, ${T}))`],
+    // Any case, a quoted identifier, a drizzle template, anywhere in a list, a membership test.
+    ["person-target-comparison", `  IF NEW.target_type::text IN (${SQL_T}) THEN`],
+    ["person-target-comparison", `  where "jobs"."target_type" = ${SQL_T}`],
+    ["person-target-comparison", `  where ${TEMPLATE}jobs.targetType} = ${SQL_T}`],
+    ["person-target-comparison", `  and target_type in ('DOMAIN', ${SQL_T})`],
+    ["person-target-comparison", `.where(inArray(jobs.targetType, ["DOMAIN", ${T}]))`],
+    ["person-target-comparison", `if ([${T}].includes(target.type)) locked = true;`],
+    ["person-target-comparison", `if (new Set([${T}]).has(type)) locked = true;`],
+    ["person-target-comparison", `if (types.includes(${T})) locked = true;`],
+    // In SQL by the value: reversed, wrapped, in ANY, in a CASE.
+    ["person-target-comparison", `  where ${SQL_T} = j.target_type`],
+    [
+      "person-target-comparison",
+      `  where coalesce(r.requested_target_type, j.target_type) = ${SQL_T}`,
+    ],
+    ["person-target-comparison", `  where cast(j.target_type as text) = ${SQL_T}`],
+    ["person-target-comparison", `  and j.target_type = any(array[${SQL_T}])`],
+    ["person-target-comparison", `  case j.target_type when ${SQL_T} then 1 end`],
+    // The list itself, used as a value: an inline copy of the helpers.
+    ["person-target-list", `const locked = ${LIST}.includes(run.requestedTargetType);`],
+    ["person-target-list", `.where(inArray(jobs.targetType, [...${LIST}]))`],
+    ["person-target-list", `const types = new Set(${LIST});`],
+    // The shared helpers, called outside their home.
+    ["person-target-decision", `if (${TARGET_HELPER}(run.requestedTargetType)) throw forbidden();`],
+    ["person-target-decision", `const bearing = ${RUN_HELPER}(investigation.target, null);`],
+    // A decision on a run's person-bearing record outside the probe.
+    ["person-run-record", `if (run.${PB} && tenant.plan ${EQ} "TECHINT") throw forbidden();`],
+    ["person-run-record", `if (!run.${PB}) return rows;`],
+    ["person-run-record", `  where r.${PB_SQL}`],
+    ["person-run-record", `  and r.${PB_SQL} = true`],
+    ["person-run-record", `.where(eq(runs.${PB}, true))`],
+    ["person-run-record", `  where ${TEMPLATE}runs.${PB}}`],
+    ["person-run-record", `const locked = runs.some((run) => run.${PB});`],
+    ["person-run-record", `if (run?.${PB}) throw forbidden();`],
+    ["person-run-record", `if (${PB}) throw forbidden();`],
+    ["person-run-record", `.where(and(eq(runs.tenantId, tenantId), runs.${PB}))`],
+    ["person-run-record", `.where(and(this.owned(runs, runId), not(runs.${PB})))`],
+    ["person-run-record", `  where (r.${PB_SQL})`],
+    ["person-run-record", `  where coalesce(r.${PB_SQL}, false)`],
   ])("flags %s: %s", (check, line) => {
     expect(scanForGateCopies("apps/api/src/routes/copy.ts", line)).toEqual([
       { check, file: "apps/api/src/routes/copy.ts", line: 1, text: line.trim() },
@@ -91,6 +146,29 @@ describe("the guard recognises a copy of the gate", () => {
     // Importing or listing the names decides nothing.
     `import { ${DECIDE} } from "@repo/access";`,
     `    "${DECIDE}",`,
+    // Naming, listing, switching on or assigning the target type decides nothing.
+    `    return { primaryType: ${T}, alternateTypes: [] };`,
+    `  targetTypes: ["DOMAIN", ${T}],`,
+    `    case ${T}:`,
+    `const chosen = ${T};`,
+    `  update public.jobs set target_type = ${SQL_T} where id = $1`,
+    `import { ${TARGET_HELPER}, ${RUN_HELPER} } from "@repo/access";`,
+    // Naming, setting or expecting the run's record decides nothing.
+    `    expect(stored).toMatchObject({ ${PB}: true });`,
+    `      ${PB},`,
+    `      ${PB}: run.${PB},`,
+    `    expect(run.${PB}).toBe(true);`,
+    `  update public.runs set ${PB_SQL} = false where id = $1`,
+    `  insert into public.runs (tenant_id, investigation_id, status, ${PB_SQL})`,
+    // Setting values in a SET list of several columns decides nothing either.
+    `  update public.runs set status = 'SUCCEEDED', ${PB_SQL} = true where id = $1`,
+    `  update public.jobs set status = 'QUEUED', target_type = ${SQL_T} where id = $1`,
+    // Importing, re-exporting or naming the list decides nothing.
+    `import { ${LIST}, ${TARGET_HELPER} } from "@repo/access";`,
+    `export { ${LIST} } from "./person-target.ts";`,
+    `    "${LIST}",`,
+    ` * person data whatever collects it (${LIST}, @repo/access).`,
+    `  // the probe reads (${LIST}) through the record`,
   ])("does not flag what is not a decision: %s", (line) => {
     expect(scanForGateCopies("apps/api/src/routes/fine.ts", line)).toEqual([]);
   });
@@ -121,6 +199,31 @@ describe("the guard recognises a copy of the gate", () => {
       expect(scanForGateCopies(elsewhere, decision), elsewhere).toHaveLength(1);
       expect(scanForGateCopies(elsewhere, sqlCheck), elsewhere).toHaveLength(1);
     }
+  });
+
+  it("allows the files that write the run's record their one piece, and nothing else", () => {
+    const recording = `const ${PB} = ${RUN_HELPER}(investigation.target, requestedTargetType);`;
+    const recordCheck = `  sql\`${TEMPLATE}t.${PB}} or ${TEMPLATE}t.requestedTargetType} is null\`,`;
+    const discipline = `and (cr.collector_id is null or cr.${D} = ${SQL_P})`;
+    // The runs repository records the run's person target when it creates the run.
+    expect(scanForGateCopies("packages/db/src/repositories/work.ts", recording)).toEqual([]);
+    // The schema declares the column and its check, the check built from the list.
+    expect(scanForGateCopies("packages/db/src/schema/work.ts", recordCheck)).toEqual([]);
+    const fromList = `      ${LIST}.map((type) => \`'\${type}'\`).join(", "),`;
+    expect(scanForGateCopies("packages/db/src/schema/work.ts", fromList)).toEqual([]);
+    // The database test checks the database's rules against the list, type by type.
+    const oracle = `const isPersonTargetType = (type: TargetType) => ${LIST}.includes(type);`;
+    expect(scanForGateCopies("packages/db/test/person-target.test.ts", oracle)).toEqual([]);
+    expect(scanForGateCopies("packages/db/test/exploration.test.ts", oracle)).toHaveLength(1);
+    expect(scanForGateCopies("packages/db/src/repositories/work.ts", fromList)).toHaveLength(1);
+    // Neither is a home for any other piece, nor for the other's.
+    expect(scanForGateCopies("packages/db/src/repositories/work.ts", discipline)).toHaveLength(1);
+    expect(scanForGateCopies("packages/db/src/repositories/work.ts", recordCheck)).toHaveLength(1);
+    expect(scanForGateCopies("packages/db/src/schema/work.ts", recording)).toHaveLength(1);
+    expect(scanForGateCopies("packages/db/src/schema/work.ts", discipline)).toHaveLength(1);
+    // Anywhere else, both are copies.
+    expect(scanForGateCopies("apps/api/src/routes/runs.ts", recording)).toHaveLength(1);
+    expect(scanForGateCopies("apps/api/src/routes/runs.ts", recordCheck)).toHaveLength(1);
   });
 
   it("scans every workspace, as the fabrication check does, and skips build output", () => {
@@ -154,6 +257,11 @@ describe("the repository holds no copy of the person-data gate (RELEASE-BLOCKING
 
   it("every home exists, so a moved file cannot quietly widen the allowance", () => {
     for (const home of GATE_HOMES) expect(existsSync(join(root, home)), home).toBe(true);
+    for (const check of GATE_COPY_CHECKS) {
+      for (const file of check.alsoAllowedIn ?? []) {
+        expect(existsSync(join(root, file)), `${check.name}: ${file}`).toBe(true);
+      }
+    }
   });
 
   it("the shared gate is where the guard says it is, and decides with @repo/access", () => {
@@ -205,6 +313,12 @@ describe("every route meets the shared gate or says why not (RELEASE-BLOCKING)",
     ]) {
       expect(entities[route], route).toBe("shared-gate");
     }
+  });
+
+  it("starting a run is gated: a TOPIC run is refused before it exists (Day 1, D-M1)", () => {
+    expect(
+      ROUTE_GATING["apps/api/src/routes/runs.ts"]?.["POST /api/v1/investigations/:id/runs"],
+    ).toBe("shared-gate");
   });
 
   it("the case analysis routes are exactly three, each gated (R1-b)", () => {

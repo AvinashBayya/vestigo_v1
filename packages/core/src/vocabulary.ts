@@ -106,7 +106,13 @@ export type CollectionMode = (typeof COLLECTION_MODES)[number];
 export const COMMERCIAL_USE_VERDICTS = ["PERMITTED", "BLOCKED", "UNVERIFIED"] as const;
 export type CommercialUseVerdict = (typeof COMMERCIAL_USE_VERDICTS)[number];
 
-/** What a collector can be pointed at. Named like the matching entity kinds. */
+/**
+ * What a collector can be pointed at. Named like the matching entity kinds,
+ * except TOPIC (Track M D-M1): a free-text subject, a phrase or a hashtag,
+ * which has no entity kind. A topic may name a person, so a run on one is
+ * person data whatever collects it (PERSON_TARGET_TYPES, @repo/access).
+ * Additive only, appended: the order is read (a case analysis sorts by it).
+ */
 export const TARGET_TYPES = [
   "DOMAIN",
   "IP_ADDRESS",
@@ -116,6 +122,7 @@ export const TARGET_TYPES = [
   "ORGANIZATION",
   "URL",
   "FILE",
+  "TOPIC",
 ] as const;
 export type TargetType = (typeof TARGET_TYPES)[number];
 

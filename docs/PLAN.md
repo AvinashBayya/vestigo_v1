@@ -3821,3 +3821,189 @@ Against the last record:
 committed `.gitignore` rule `data/` matches its folder. A fresh clone or worktree therefore cannot
 build the collectors. It was copied in by hand for this work. The `.gitignore` files were left
 alone, as ruled.
+
+## Track M Day 1: TOPIC, person data whatever collects it (2026-10-15)
+
+**The owner's instruction** (2026-10-15), which rules D-M1 (`docs/monitoring/MONITORING-PLAN.md`
+§9):
+- Add a TOPIC target type to the vocabulary and to target detection. Keep ambiguity as
+  alternates; never guess it away.
+- A run whose target is TOPIC is person-bearing at the run level, whichever collectors it uses,
+  and the run records it so the gate can read it.
+- The shared person gate treats any TOPIC run as person data, and refuses a whole read with 403
+  and the Locked block. Planning a TOPIC run for an unentitled tenant is refused up front, as a
+  person collector is.
+- Fail closed on the target type, with no name detector. The person-gate guard covers TOPIC runs.
+- The GDELT and RSS collectors, the monitoring page and the scheduler are later days.
+
+**Pre-flight.**
+- The outstanding R1 work was committed first (2c79c84), on the owner's instruction.
+  - Its pipeline ran in a clean worktree with the R1 changes applied: 54 of 54 tasks, nothing
+    cached, 2,067 tests; the fabrication check clean on 495 files.
+  - In the main working tree the format check fails on the untracked `.claude/` folder, and the
+    person-gate guard finds the gate's pieces in the copies under `.claude/worktrees/`. Neither
+    is repository code, which is why pipelines are recorded in a clean worktree.
+- The D-35 branch (`d35-probe`, c84f5a8) is already an ancestor of `main`: nothing to merge. Its
+  worktree, `D:/vestigo-d35`, is clean and was left in place.
+- The D-38 branch (`d38-statement-cancelled`, 5d1a417) is unmerged and was left parked.
+
+**Built.**
+- **Vocabulary and detection** (`packages/core`):
+  - TOPIC is appended to `TARGET_TYPES`. Appending keeps every existing type's position, which
+    a case analysis sorts by.
+  - A hashtag (`#` and one word; letters, combining marks, digits or underscores, so Indic
+    hashtags count) or a phrase in quotes is TOPIC.
+  - Other words with spaces are ORGANIZATION first, with TOPIC as an alternate.
+  - Bare words, short or long, are unchanged.
+- **The rule** (`packages/access/src/person-target.ts`):
+  - `PERSON_TARGET_TYPES = ["TOPIC"]`.
+  - `plannedTargetTypes`: a person target type is planned only when it was chosen or detected
+    first, never as an alternate, so an ordinary search never becomes person data unasked.
+  - `runRestsOnPersonTarget`: the run plans a person target type.
+  - `decideTargetAccess`: a person target type needs the person module's plan and approved
+    vetting, whatever the collector's discipline.
+- **Collection**:
+  - The runtime's admission refuses a TOPIC target with MODULE_NOT_IN_PLAN or
+    VETTING_NOT_APPROVED, after the discipline check.
+  - The planner plans `plannedTargetTypes`, and records the detected alternates it did not plan
+    in a new `notPlanned` list, each with its reason (`NOT_PLANNED_UNLESS_CHOSEN`).
+  - `parseTarget` takes a TOPIC as typed, with its spacing made single, up to 300 characters.
+  - Fusion refuses a TOPIC target as not implemented: no collector reads one yet.
+- **The run's record** (`packages/db`, migrations 0025 and 0026):
+  - `runs.person_bearing` is set by `RunsRepository.create` from the investigation's own target
+    and the requested type, never from the caller. A run on an investigation the tenant does not
+    hold fails on its foreign key, whatever type was chosen.
+  - The application role has no UPDATE grant on it.
+  - A check refuses a run that chose a person target type without it.
+  - A trigger on jobs refuses a job on a person target type in a run without it (SQLSTATE
+    PTT01, translated to `PersonTargetOutsidePersonRunError`).
+    - The coordinator then FAILS the run, with that code in its plan, in a transaction of its
+      own. The planning job dead-letters at once: no retry changes it.
+    - Only a run queued before migration 0025 can reach this.
+  - New index: `jobs (tenant_id, run_id)`, for the probe's run check.
+- **The probe** (`ExplorationRepository.touchesPersonData`):
+  - A person-bearing run is person data before it has any job.
+  - Everything such a run collected is person evidence, from any collector. That covers its
+    evidence, claims, entities, case pins, case scopes and neighbourhoods.
+  - The person-evidence check of D-35 is unchanged, so the plan measured there stands.
+  - A separate check reaches a person-bearing run's data from the claims or evidence ids the read
+    names, by key, through evidence and job to run.
+  - No sublink inside an OR grows with a run's jobs, and no evidence beyond what the read names is
+    read.
+- **The API**:
+  - `POST /api/v1/investigations/:id/runs` creates the run, then calls `requirePersonAccess` on
+    it before anything is queued.
+  - Refused, the request's transaction rolls back: no run, nothing queued, and the audit row
+    names no run.
+  - `ROUTE_GATING` now classifies the route `shared-gate`.
+  - The run plan's schema gains the optional `notPlanned` list. The estimate carries it too.
+  - The estimates route's description says how TOPIC is refused.
+- **The guard** (`packages/config/scripts/person-gate-guard.ts`) flags, outside the gate's
+  homes:
+  - a `decideTargetAccess` call;
+  - a target type compared with TOPIC:
+    - in code: either way round, a membership test, a query builder;
+    - in SQL, by the value: either way round, wrapped, in an IN or ANY list, or a CASE;
+  - a call of `targetRestsOnPersonData` or `runRestsOnPersonTarget`;
+  - the list `PERSON_TARGET_TYPES` used as a value;
+  - a decision on `person_bearing` or `personBearing`: a condition, a predicate, optional
+    chaining, a comparison, a drizzle combinator or template, an SQL keyword with or without a
+    bracket.
+
+  It does not flag naming a value, setting it in a SET list of any length, or a comment line.
+  A new `alsoAllowedIn` field allows, each for a stated reason, one piece and nothing else in:
+  - the runs repository;
+  - the schema;
+  - the database test that keeps the database's rules in step with the list.
+- **Web**: the TOPIC labels. The run header marks an alternate that was not planned as "(not run
+  unless chosen)".
+
+**Review.**
+- An adversarial review ran: five reviewers with different lenses, each finding put to two
+  skeptics. It returned 10 findings: 3 upheld by both skeptics, 6 split, 1 refuted.
+- The refuted finding, a test registering a collector twice, had already been fixed.
+- **Upheld, fixed:**
+  - The probe's first form (`ev.job_id in (...)` inside an OR) would stop hashing once a tenant
+    held about 210,000 jobs in person-bearing runs. It is now joins.
+  - The guard had no check for decisions on the run's record. It now has one.
+  - The 0025 comment wrongly said no queued run could plan a TOPIC, and PTT01 had no typed
+    error. Both are fixed: the comment is true, and the error is typed and unretried.
+- **Split, fixed:**
+  - The guard missed the helpers, `.includes()`, uppercase SQL, quoted identifiers and list
+    positions, and wrongly matched an SQL assignment.
+  - A multi-word run showed "alternates: topic" with no record that TOPIC was not planned.
+- **Split, not changed:**
+  - The CHECK is added validating, not NOT VALID. 0018 and 0023 do the same. Validating proves
+    every existing row passes.
+  - A hashtag or a quoted phrase is TOPIC with no ORGANIZATION alternate, as D-M1 specifies.
+    See the open items.
+- **A second round** reviewed those fixes, with three lenses and two skeptics each. It returned
+  11 findings: 7 upheld, 2 split, 2 refuted. All nine upheld or split were fixed:
+  - The fixed probe's new arm read the tenant's whole evidence by job, with no index. The
+    person-evidence check is back to D-35's form, and the run's data is reached by key from
+    what the read names. The partial index the probe no longer used was dropped.
+  - A TOPIC run on an investigation the tenant does not hold failed on the record's check, not
+    its foreign key.
+  - The guard let through an inline copy of the list, and plain predicate, optional-chaining
+    and drizzle-combinator forms. It flagged a multi-column SET list and prose naming the list.
+    Its SQL comparison now matches by the value. Its look back runs only after an operator, so
+    the repository scan stays near one second.
+  - The estimate did not say what it would leave out.
+  - A long single word wrongly gained a TOPIC alternate.
+  - A run refused with PTT01 stayed QUEUED with no reason.
+
+**Found while running the pipeline, and fixed.** `CasePinsRepository.listForCase` and `list`
+ordered by `created_at` alone.
+- Pins made in one transaction share their time, so two reads could list them in different
+  orders, and a page could repeat or skip one.
+- The person-gate lifecycle test's "suspended: reads that rest on no person data are unchanged,
+  byte for byte" failed once on it: a clean case's two pins swapped.
+- The id now breaks the tie. A regression test pins five items in one transaction; it fails on
+  the old ordering.
+
+**Shown failing on the code before the change** (each piece removed, the tests run, the file
+restored byte for byte; the probe's case was run again on the final code):
+- **Without the gate call in the run start:** a TECHINT tenant's TOPIC start answered 202, not
+  403, and the three refusal tests failed.
+- **With the probe as before:** a TOPIC run that used only a news collector read 200 for a TECHINT
+  tenant. The database probe test and the API read test failed.
+- **Without the TOPIC admission check:** a news collector collected on a topic for a TECHINT
+  tenant. The runtime test failed, and so did two planner tests.
+
+**Pipeline** (`pnpm turbo lint typecheck test --force`, in a clean worktree with exactly this
+change applied):
+- 54 of 54 tasks, nothing cached, 2,163 tests (96 more than the R1 baseline's 2,067);
+- the fabrication check is clean on 499 files, and the export check passes (181 symbols).
+
+| Package | Tests | Package | Tests |
+|---|---|---|---|
+| core | 33 | osint-engine | 172 |
+| access | 67 | worker | 4 |
+| config | 265 | api | 235 |
+| case-engine | 73 | ui | 95 |
+| collectors | 484 | web | 179 |
+| llm | 130 | integrations | 122 |
+| db | 304 | | |
+
+An earlier full run failed once on the lifecycle test above, before its fix. A run in the main
+tree, just after Docker restarted, timed out in three API setup hooks; they passed when run
+again.
+
+**Open for the owner.**
+- **Detection of a hashtag or a quoted phrase.** As D-M1 specifies, it is TOPIC alone. A quoted
+  organisation name, such as `"[an organisation]"`, therefore no longer runs as an organisation
+  unless its quotes are removed or the type is chosen. Wikidata ran on such input before. The
+  alternative is to keep ORGANIZATION as an alternate. The run would still be person-bearing,
+  but the estimate would show Wikidata planned while starting the run is refused, for a tenant
+  without person access.
+- **Monitoring is person investigation.** Every TOPIC run needs the person plan and approved
+  vetting, so every monitoring customer, a newsroom included, needs vetting. Narrowing that is
+  a separate ruling.
+- **The investigation record.** It keeps the analyst's typed target, which may be a name. It is
+  readable as before: it is the analyst's own input (`ROUTE_GATING`, `investigations.ts`).
+- **The estimate for a tenant without person access.** It lists a collector that takes topics
+  as refused, MODULE_NOT_IN_PLAN or VETTING_NOT_APPROVED, once one exists (Day 2). Starting the
+  run is refused whole.
+
+**Noted.** `apps/worker/data/content-store/` holds a local run's stored payloads. It is untracked,
+not ignored, and not committed.

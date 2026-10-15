@@ -36,7 +36,7 @@
 import { FlowProducer, Queue, UnrecoverableError, Worker, type Job as BullJob } from "bullmq";
 import { AppError, parseTenantId, type TenantId } from "@repo/core";
 import type { CollectorRegistry } from "@repo/collectors";
-import type { Database } from "@repo/db";
+import { PersonTargetOutsidePersonRunError, type Database } from "@repo/db";
 import { z } from "zod";
 import type { RunFusion } from "../fusion/fuse.ts";
 import { RunNotReadyError, type RunCoordinator } from "../runs.ts";
@@ -730,6 +730,12 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
           // The API enqueues the run in the transaction that creates it, so
           // the planning job can arrive first: retry soon, until it commits.
           if (error instanceof RunNotReadyError) throw new JobRetryError(250, error.code);
+          // A TOPIC job in a run not recorded as person-bearing: the database
+          // refuses it (0026), and no retry changes that. Dead-lettered at once
+          // with its code; nothing was collected.
+          if (error instanceof PersonTargetOutsidePersonRunError) {
+            throw new UnrecoverableError(error.code);
+          }
           throw error;
         }
         if (planned.jobs.length > 0) {

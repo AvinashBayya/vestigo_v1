@@ -154,7 +154,7 @@ const fake = (
   sourceId: string,
   declared: {
     readonly targetTypes: TargetType[];
-    readonly discipline: "TECHINT" | "PERSON";
+    readonly discipline: "TECHINT" | "MEDIAINT" | "PERSON";
     readonly mode: "PASSIVE_API" | "ACTIVE";
   },
 ) =>
@@ -278,6 +278,94 @@ describe("planning a run", () => {
         scopeFor: () => Promise.resolve(null),
       }),
     ).rejects.toBeInstanceOf(EmptyTargetError);
+  });
+});
+
+describe("planning a TOPIC: person data whatever collects it (RELEASE-BLOCKING)", () => {
+  // A news collector, not a person one, that takes an organisation's name or a topic.
+  const newsRuntime = new CollectorRuntime({
+    registry: new CollectorRegistry({
+      sources: [source("open", "PERMITTED")],
+      collectors: [
+        fake("fake.news", "open", {
+          ...PASSIVE_DOMAIN,
+          discipline: "MEDIAINT",
+          targetTypes: ["ORGANIZATION", "TOPIC"],
+        }),
+      ],
+    }),
+    allowUnverifiedSources: false,
+    network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
+  });
+  const plan = (
+    input: string,
+    requestedType: TargetType | null,
+    entitlement: {
+      readonly plan: "TECHINT" | "TECHINT_AND_PERSON";
+      readonly vettingStatus: "NOT_SUBMITTED" | "APPROVED" | "SUSPENDED";
+    },
+  ) =>
+    planRun(newsRuntime, {
+      input,
+      requestedType,
+      entitlement,
+      scopeFor: () => Promise.resolve(null),
+    });
+  const ENTITLED = { plan: "TECHINT_AND_PERSON", vettingStatus: "APPROVED" } as const;
+  const SUSPENDED = { plan: "TECHINT_AND_PERSON", vettingStatus: "SUSPENDED" } as const;
+
+  it("refuses a chosen TOPIC without the plan or the vetting, as it refuses a PERSON collector", async () => {
+    for (const [entitlement, reason] of [
+      [TECHINT, "MODULE_NOT_IN_PLAN"],
+      [SUSPENDED, "VETTING_NOT_APPROVED"],
+    ] as const) {
+      const refused = await plan("[a subject]", "TOPIC", entitlement);
+      expect(refused.jobs).toEqual([]);
+      expect(refused.excluded).toEqual([
+        {
+          collectorId: "fake.news",
+          targetType: "TOPIC",
+          reason,
+          message: expect.stringMatching(/TOPIC target may name a person/) as string,
+        },
+      ]);
+    }
+    expect((await plan("[a subject]", "TOPIC", ENTITLED)).jobs).toEqual([
+      { collectorId: "fake.news", target: { type: "TOPIC", value: "[a subject]" } },
+    ]);
+  });
+
+  it("plans a TOPIC detected first (a hashtag) only for an entitled tenant", async () => {
+    const refused = await plan("#elections", null, TECHINT);
+    expect(refused.detected).toEqual({ primaryType: "TOPIC", alternateTypes: [] });
+    expect(refused.jobs).toEqual([]);
+    expect(refused.excluded.map((row) => row.reason)).toEqual(["MODULE_NOT_IN_PLAN"]);
+    expect((await plan("#elections", null, ENTITLED)).jobs).toEqual([
+      { collectorId: "fake.news", target: { type: "TOPIC", value: "#elections" } },
+    ]);
+  });
+
+  it("never plans a TOPIC that detection offers only as an alternate, even for an entitled tenant", async () => {
+    for (const entitlement of [TECHINT, ENTITLED]) {
+      const planned = await plan("[two words]", null, entitlement);
+      // Detection reports the alternate; the plan considers only the organisation's name.
+      expect(planned.detected).toEqual({ primaryType: "ORGANIZATION", alternateTypes: ["TOPIC"] });
+      expect(planned.targets).toEqual([{ type: "ORGANIZATION", value: "[two words]" }]);
+      expect(planned.jobs).toEqual([
+        { collectorId: "fake.news", target: { type: "ORGANIZATION", value: "[two words]" } },
+      ]);
+      // And the plan says so: what it left out, and why, never silently.
+      expect(planned.notPlanned).toEqual([
+        {
+          type: "TOPIC",
+          reason: "NOT_PLANNED_UNLESS_CHOSEN",
+          message: expect.stringMatching(/^Not planned unless chosen: .*person data/) as string,
+        },
+      ]);
+    }
+    // A chosen or detected-first TOPIC leaves nothing out.
+    expect((await plan("[a subject]", "TOPIC", ENTITLED)).notPlanned).toEqual([]);
+    expect((await plan("#elections", null, ENTITLED)).notPlanned).toEqual([]);
   });
 });
 
