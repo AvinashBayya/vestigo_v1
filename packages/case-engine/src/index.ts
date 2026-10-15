@@ -19,6 +19,7 @@ export {
 export { displayValue } from "./analysis/display-value.ts";
 export {
   byCodeUnit,
+  CANNOT_RUN,
   CASE_INPUT_PROBLEMS,
   CaseInputError,
   isIsoInstant,
@@ -29,6 +30,7 @@ export {
   type CaseInput,
   type CaseInputIssue,
   type CaseInputProblem,
+  type CannotRun,
   type CaseJob,
   type CaseRegistryCollector,
   type CaseRelationship,
@@ -66,6 +68,7 @@ export {
   CASE_BREAKDOWN_CAVEATS,
   caseBreakdown,
   DISCIPLINE_METRICS,
+  DISCIPLINE_NOT_MEASURED,
   DISCIPLINE_STATUSES,
   METRIC_NOT_BUILT,
   type CaseBreakdown,

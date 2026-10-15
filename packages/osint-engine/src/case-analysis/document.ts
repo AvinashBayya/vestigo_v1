@@ -12,6 +12,7 @@ import {
   CASE_COVERAGE_CAVEATS,
   CASE_COVERAGE_STATES,
   CASE_PARTIAL_REASONS,
+  DISCIPLINE_NOT_MEASURED,
   DISCIPLINE_STATUSES,
   METRIC_NOT_BUILT,
   REGISTRATIONS,
@@ -31,7 +32,13 @@ import {
 } from "@repo/core";
 import { z } from "zod";
 
-/** The format of the stored document; a change to its shape is a new version. */
+/**
+ * The format of the stored document; a change to its shape is a new version.
+ * A value added to one of its code lists is not: every stored document still
+ * parses (ENGINE_VERSION 5 added BLOCKED and NOT_IMPLEMENTED that way). Every
+ * read re-parses a stored document with this schema, so a value is never
+ * removed or renamed.
+ */
 export const CASE_ANALYSIS_FORMAT_VERSION = 1;
 
 /** What a stored case analysis holds: case-engine's three documents for one input. */
@@ -153,7 +160,7 @@ const CollectorRecords = z.object({
   relationships: Counted,
   runs: z.array(CollectorRun),
 });
-const [REGISTERED, HELD, NOT_REGISTERED] = REGISTRATIONS;
+const [REGISTERED, HELD, NOT_REGISTERED, BLOCKED, NOT_IMPLEMENTED] = REGISTRATIONS;
 
 const CaseCollectorsSchema = z.object({
   kind: z.literal("CASE_COLLECTORS"),
@@ -161,7 +168,7 @@ const CaseCollectorsSchema = z.object({
   collectors: z.array(
     z.union([
       CollectorRecords.extend({
-        registration: z.enum([REGISTERED, NOT_REGISTERED]),
+        registration: z.enum([REGISTERED, NOT_REGISTERED, BLOCKED, NOT_IMPLEMENTED]),
         heldReason: z.null(),
       }),
       CollectorRecords.extend({ registration: z.literal(HELD), heldReason: z.string() }),
@@ -173,10 +180,7 @@ const CollectorRef = z.object({ collectorId: z.string(), sourceLabel: z.string()
 const CollectorRuns = CollectorRef.extend({ runs: z.array(CollectorRun) });
 const notMeasured = <Reason extends z.ZodType<string>>(reason: Reason) =>
   z.object({ count: z.null(), ids: z.null(), reason });
-const DisciplineCount = z.union([
-  Counted,
-  notMeasured(z.enum(["NO_COLLECTOR_BUILT", "ONLY_HELD_COLLECTORS", "LOCKED"])),
-]);
+const DisciplineCount = z.union([Counted, notMeasured(z.enum(DISCIPLINE_NOT_MEASURED))]);
 // Every metric name is a key of METRIC_NOT_BUILT (it satisfies a record over them).
 const METRIC_NAMES = Object.keys(METRIC_NOT_BUILT) as DisciplineMetricName[];
 

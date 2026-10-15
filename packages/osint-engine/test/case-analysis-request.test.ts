@@ -17,12 +17,16 @@ import { Queue, type Job } from "bullmq";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { parseTenantId } from "@repo/core";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import {
+  analysisRecord,
   CaseAnalysisQueue,
   CaseAnalysisRequestConflictError,
   CaseArchivedError,
   CaseTooLargeError,
+  currentInput,
   QueueUnavailableError,
+  readView,
   REPEATING_FAILURES,
   requestCaseAnalysis,
   requestedView,
@@ -283,5 +287,47 @@ describe("requesting a case analysis (RELEASE-BLOCKING)", () => {
       [1, "FAILED"],
       [2, "PENDING"],
     ]);
+  });
+});
+
+describe("reading an analysis an earlier engine version stored (RELEASE-BLOCKING)", () => {
+  it("reads a document ENGINE_VERSION 4 stored as STALE, with its document, never failing", async () => {
+    // Written by ENGINE_VERSION 4's own code (a546de9) and stored as the job
+    // stores it. A read re-parses it with today's schema: a value it holds that
+    // today's schema refused would make every read of it fail.
+    const stored = JSON.parse(
+      readFileSync(new URL("./fixtures/case-analysis-engine-v4.json", import.meta.url), "utf8"),
+    ) as { readonly document: { readonly inputHash: string }; readonly wording: unknown };
+    const fixture = await createCaseFixture(db, "request-stored-v4");
+    const view = await db.withTenant(fixture.tenantId, async (context) => {
+      const { analysis } = await context.repos.caseAnalyses.findOrCreate({
+        caseId: fixture.caseId,
+        inputHash: stored.document.inputHash,
+        engineVersion: 4,
+        requestedByUserId: null,
+        requestedAt: AT,
+        basis: { evidenceIds: [fixture.evidenceId], runIds: [fixture.runId] },
+      });
+      await context.repos.caseAnalysisEvents.request({
+        analysisId: analysis.id,
+        attempt: 1,
+        requestedByUserId: null,
+        at: AT,
+      });
+      await context.repos.caseAnalysisEvents.complete({
+        analysisId: analysis.id,
+        attempt: 1,
+        document: stored.document,
+        wording: stored.wording,
+        at: AT,
+      });
+      const { inputHash } = await currentInput(context, fixture.caseId, FIXTURE_COLLECTORS);
+      return readView(fixture.caseId, inputHash, await analysisRecord(context, analysis));
+    });
+    expect(view.state).toBe("STALE");
+    expect(view.analysis).toMatchObject({
+      status: "COMPLETE",
+      document: { engineVersion: 4, formatVersion: 1 },
+    });
   });
 });

@@ -32,6 +32,7 @@ import {
 import { ENGINE_VERSION } from "../version.ts";
 import {
   byCodeUnit,
+  CANNOT_RUN,
   checkCaseInput,
   type CaseClaim,
   type CaseEvidence,
@@ -103,13 +104,30 @@ export interface CaseCollectorRun {
   readonly detail: string | null;
 }
 
-/** REGISTERED: in the registry. HELD: built, held off the platform. NOT_REGISTERED: neither. */
-export const REGISTRATIONS = ["REGISTERED", "HELD", "NOT_REGISTERED"] as const;
+/**
+ * Where a collector stands:
+ *   REGISTERED       in the registry, and not listed as BLOCKED or
+ *                    NOT_IMPLEMENTED (an UNVERIFIED one runs only where the
+ *                    deployment allows unverified sources);
+ *   HELD             built, held off the platform, not in the registry;
+ *   NOT_REGISTERED   not in the registry, and not held;
+ *   BLOCKED          in the registry, but its source's licence verdict is BLOCKED;
+ *   NOT_IMPLEMENTED  in the registry, with no implementation to run.
+ * A BLOCKED or NOT_IMPLEMENTED collector keeps its registry label and
+ * discipline, and is never counted as one that could have run.
+ */
+export const REGISTRATIONS = ["REGISTERED", "HELD", "NOT_REGISTERED", ...CANNOT_RUN] as const;
 export type Registration = (typeof REGISTRATIONS)[number];
 
-/** Whether a collector is registered, held (and why), or neither. */
+/**
+ * Whether a collector is registered, registered but unable to run (BLOCKED or
+ * NOT_IMPLEMENTED), held (and why), or none of these.
+ */
 export type CollectorRegistration =
-  | { readonly registration: "REGISTERED" | "NOT_REGISTERED"; readonly heldReason: null }
+  | {
+      readonly registration: Exclude<Registration, "HELD">;
+      readonly heldReason: null;
+    }
   | { readonly registration: "HELD"; readonly heldReason: string };
 
 export type CaseCollector = CollectorRegistration & CaseCollectorRecords;
@@ -441,7 +459,10 @@ export function caseView(input: CaseInput): CaseView | EmptyCase {
     const claims = claimsOf(collectorId);
     const registration: CollectorRegistration =
       registered !== undefined
-        ? { registration: "REGISTERED", heldReason: null }
+        ? {
+            registration: registered.cannotRun === null ? "REGISTERED" : registered.cannotRun,
+            heldReason: null,
+          }
         : heldEntry !== undefined
           ? { registration: "HELD", heldReason: heldEntry.reason }
           : { registration: "NOT_REGISTERED", heldReason: null };
@@ -488,7 +509,10 @@ export interface CaseCollectors {
   readonly kind: "CASE_COLLECTORS";
   readonly engineVersion: number;
   readonly caseId: string;
-  /** Every collector registered, held, or found anywhere in the case, by id. */
+  /**
+   * Every collector the registry lists (BLOCKED and NOT_IMPLEMENTED ones
+   * included), every held one, and any other found anywhere in the case, by id.
+   */
   readonly collectors: readonly CaseCollector[];
 }
 

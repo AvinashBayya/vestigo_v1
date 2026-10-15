@@ -27,9 +27,27 @@ import type {
   CoveragePlan,
 } from "./run-coverage.ts";
 
-/** A registered collector: its registry label, collection mode and single discipline. */
+/**
+ * Why a registered collector never runs, as the registry lists it: its
+ * source's licence verdict is BLOCKED, or it has no implementation.
+ */
+export const CANNOT_RUN = ["BLOCKED", "NOT_IMPLEMENTED"] as const;
+export type CannotRun = (typeof CANNOT_RUN)[number];
+
+/**
+ * A registered collector: its registry label, collection mode and single
+ * discipline, and whether the registry lists it as unable to run. One that is
+ * still listed, under its label and discipline, and is never counted as a
+ * collector that could have run (owner ruling, 2026-10-13).
+ */
 export interface CaseRegistryCollector extends CoverageCollector {
   readonly discipline: CollectorDiscipline;
+  /**
+   * Why it never runs (BLOCKED, NOT_IMPLEMENTED); null when the registry lists
+   * neither. A deployment can still refuse an UNVERIFIED one; the run's plan
+   * records that.
+   */
+  readonly cannotRun: CannotRun | null;
 }
 
 /** A collector built but held off the platform, with what it declares and why it is held. */

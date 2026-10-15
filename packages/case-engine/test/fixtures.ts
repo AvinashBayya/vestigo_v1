@@ -12,6 +12,8 @@
  *     apply; phone is locked (vetting not approved).
  *   ev5 (dns) and ev6 (a collector no longer registered) have no recorded job.
  *   GEOINT has no collector; "late" was registered after both runs.
+ * Every registry entry here can run; the tests for one that cannot (BLOCKED,
+ * NOT_IMPLEMENTED) add their own.
  */
 import { expect } from "vitest";
 import type {
@@ -33,16 +35,30 @@ export function must<T>(value: T | undefined, what: string): T {
   return value;
 }
 
+/** A registry entry labelled "[fake <id>]"; it can run unless `cannotRun` says why not. */
+export const registered = (
+  collectorId: string,
+  collectionMode: CaseRegistryCollector["collectionMode"],
+  discipline: CaseRegistryCollector["discipline"],
+  cannotRun: CaseRegistryCollector["cannotRun"] = null,
+): CaseRegistryCollector => ({
+  id: collectorId,
+  label: `[fake ${collectorId}]`,
+  collectionMode,
+  discipline,
+  cannotRun,
+});
+
 export const REGISTRY: readonly CaseRegistryCollector[] = [
-  { id: "dns", label: "[fake dns]", collectionMode: "PASSIVE_API", discipline: "TECHINT" },
-  { id: "crt", label: "[fake crt]", collectionMode: "PASSIVE_DATASET", discipline: "TECHINT" },
-  { id: "rdap", label: "[fake rdap]", collectionMode: "PASSIVE_API", discipline: "TECHINT" },
-  { id: "active", label: "[fake active]", collectionMode: "ACTIVE", discipline: "TECHINT" },
-  { id: "late", label: "[fake late]", collectionMode: "PASSIVE_API", discipline: "TECHINT" },
-  { id: "gh", label: "[fake gh]", collectionMode: "PASSIVE_API", discipline: "SOCMINT" },
-  { id: "wd", label: "[fake wd]", collectionMode: "PASSIVE_API", discipline: "SOCMINT" },
-  { id: "wayback", label: "[fake wayback]", collectionMode: "PASSIVE_API", discipline: "MEDIAINT" },
-  { id: "phone", label: "[fake phone]", collectionMode: "LOCAL_ANALYSIS", discipline: "PERSON" },
+  registered("dns", "PASSIVE_API", "TECHINT"),
+  registered("crt", "PASSIVE_DATASET", "TECHINT"),
+  registered("rdap", "PASSIVE_API", "TECHINT"),
+  registered("active", "ACTIVE", "TECHINT"),
+  registered("late", "PASSIVE_API", "TECHINT"),
+  registered("gh", "PASSIVE_API", "SOCMINT"),
+  registered("wd", "PASSIVE_API", "SOCMINT"),
+  registered("wayback", "PASSIVE_API", "MEDIAINT"),
+  registered("phone", "LOCAL_ANALYSIS", "PERSON"),
 ];
 
 export const HELD: readonly CaseHeldCollector[] = [

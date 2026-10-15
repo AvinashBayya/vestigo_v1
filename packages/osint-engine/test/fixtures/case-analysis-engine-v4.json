@@ -1,0 +1,1137 @@
+{
+  "document": {
+    "formatVersion": 1,
+    "engineVersion": 4,
+    "caseId": "00000000-0000-4000-8000-000000000001",
+    "inputHash": "sha256:ee731663887592e7837b272b3123f9dffb15230023f2ebf7dbe475e19afb73bc",
+    "basis": {
+      "evidenceIds": [
+        "00000000-0000-4000-8000-000000000010",
+        "00000000-0000-4000-8000-000000000011"
+      ],
+      "runIds": ["00000000-0000-4000-8000-000000000002"]
+    },
+    "coverage": {
+      "kind": "CASE_COVERAGE",
+      "engineVersion": 4,
+      "caseId": "00000000-0000-4000-8000-000000000001",
+      "partial": true,
+      "partialBecause": ["EVIDENCE_WITH_NO_RECORDED_JOB"],
+      "partialRuns": {
+        "count": 0,
+        "ids": []
+      },
+      "runs": [
+        {
+          "runId": "00000000-0000-4000-8000-000000000002",
+          "investigation": {
+            "id": "00000000-0000-4000-8000-000000000050",
+            "title": "[Investigation]"
+          },
+          "startedAt": "2026-10-03T10:00:00.000Z",
+          "finishedAt": "2026-10-03T10:02:00.000Z",
+          "coverage": {
+            "runStatus": "SUCCEEDED",
+            "partial": false,
+            "headline": "COMPLETE RUN: all 1 planned collector finished (1 found something, 0 found nothing). 2 further collectors were excluded or held and did not run.",
+            "entries": [
+              {
+                "collectorId": "fx.dns",
+                "sourceLabel": "[fixture dns]",
+                "targetType": "DOMAIN",
+                "attempts": 1,
+                "evidenceCount": 1,
+                "state": "COLLECTED",
+                "reasonCode": null,
+                "detail": null
+              },
+              {
+                "collectorId": "fx.phone",
+                "sourceLabel": "[fixture phone]",
+                "state": "EXCLUDED",
+                "targetType": "DOMAIN",
+                "reasonCode": "MODULE_NOT_IN_PLAN",
+                "detail": "[fixture] This collector's module is not in the tenant's plan.",
+                "evidenceCount": 0,
+                "attempts": null
+              },
+              {
+                "collectorId": "fx.news",
+                "sourceLabel": "[fixture news]",
+                "state": "HELD",
+                "targetType": "DOMAIN",
+                "reasonCode": "COLLECTOR_HELD",
+                "detail": "[fixture] Held until [condition].",
+                "evidenceCount": 0,
+                "attempts": null
+              }
+            ],
+            "notApplicable": [
+              {
+                "collectorId": "fx.gh",
+                "sourceLabel": "[fixture gh]"
+              }
+            ],
+            "caveats": [
+              "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+              "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+              "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+              "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+              "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+              "Sources can change after collection. Each source shows when it was collected."
+            ]
+          },
+          "jobs": [
+            {
+              "jobId": "00000000-0000-4000-8000-000000000003",
+              "collectorId": "fx.dns",
+              "sourceLabel": "[fixture dns]",
+              "state": "COLLECTED",
+              "collected": {
+                "count": 1,
+                "ids": ["00000000-0000-4000-8000-000000000010"]
+              },
+              "inCase": {
+                "count": 1,
+                "ids": ["00000000-0000-4000-8000-000000000010"]
+              },
+              "notInCase": {
+                "count": 0,
+                "ids": []
+              }
+            }
+          ],
+          "evidenceInCase": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          }
+        }
+      ],
+      "evidence": {
+        "count": 2,
+        "ids": ["00000000-0000-4000-8000-000000000010", "00000000-0000-4000-8000-000000000011"]
+      },
+      "evidenceWithNoRecordedJob": {
+        "evidence": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000011"]
+        },
+        "byCollector": [
+          {
+            "collectorId": "fx.gone",
+            "sourceLabel": "fx.gone (not in the current registry)",
+            "evidence": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000011"]
+            }
+          }
+        ]
+      },
+      "collectedAt": {
+        "earliest": "2026-10-02T09:00:00.000Z",
+        "latest": "2026-10-03T10:01:00.000Z",
+        "reason": null,
+        "recorded": {
+          "count": 2,
+          "ids": ["00000000-0000-4000-8000-000000000010", "00000000-0000-4000-8000-000000000011"]
+        },
+        "notRecorded": {
+          "count": 0,
+          "ids": []
+        }
+      },
+      "observedAt": {
+        "earliest": "2026-10-01T00:00:00.000Z",
+        "latest": "2026-10-01T00:00:00.000Z",
+        "reason": null,
+        "recorded": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000011"]
+        },
+        "notRecorded": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000010"]
+        }
+      },
+      "caveats": ["NO_NEW_COLLECTION"]
+    },
+    "collectors": {
+      "kind": "CASE_COLLECTORS",
+      "engineVersion": 4,
+      "caseId": "00000000-0000-4000-8000-000000000001",
+      "collectors": [
+        {
+          "collectorId": "fx.dns",
+          "sourceLabel": "[fixture dns]",
+          "registration": "REGISTERED",
+          "heldReason": null,
+          "discipline": "TECHINT",
+          "evidence": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000010"]
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 2,
+            "ids": ["00000000-0000-4000-8000-000000000020", "00000000-0000-4000-8000-000000000021"]
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000020"]
+            },
+            "DERIVED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000021"]
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000030"]
+          },
+          "relationships": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000040"]
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": "00000000-0000-4000-8000-000000000003",
+              "state": "COLLECTED",
+              "reasonCode": null,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "collectorId": "fx.gh",
+          "sourceLabel": "[fixture gh]",
+          "registration": "REGISTERED",
+          "heldReason": null,
+          "discipline": "SOCMINT",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "NOT_APPLICABLE",
+              "reasonCode": "TARGET_TYPE_NOT_ACCEPTED",
+              "detail": "[fixture] It accepts USERNAME; the target is DOMAIN."
+            }
+          ]
+        },
+        {
+          "collectorId": "fx.gone",
+          "sourceLabel": "fx.gone (not in the current registry)",
+          "registration": "NOT_REGISTERED",
+          "heldReason": null,
+          "discipline": null,
+          "evidence": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000011"]
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000011"]
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000011"]
+          },
+          "claims": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000022"]
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000022"]
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000031"]
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": []
+        },
+        {
+          "collectorId": "fx.news",
+          "sourceLabel": "[fixture news]",
+          "registration": "HELD",
+          "heldReason": "[fixture] Held until [condition].",
+          "discipline": "MEDIAINT",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "HELD",
+              "reasonCode": "COLLECTOR_HELD",
+              "detail": "[fixture] Held until [condition]."
+            }
+          ]
+        },
+        {
+          "collectorId": "fx.phone",
+          "sourceLabel": "[fixture phone]",
+          "registration": "REGISTERED",
+          "heldReason": null,
+          "discipline": "PERSON",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "EXCLUDED",
+              "reasonCode": "MODULE_NOT_IN_PLAN",
+              "detail": "[fixture] This collector's module is not in the tenant's plan."
+            }
+          ]
+        }
+      ]
+    },
+    "breakdown": {
+      "kind": "CASE_BREAKDOWN",
+      "engineVersion": 4,
+      "caseId": "00000000-0000-4000-8000-000000000001",
+      "sections": [
+        {
+          "discipline": "TECHINT",
+          "status": "PRESENT",
+          "evidence": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          },
+          "claims": {
+            "count": 2,
+            "ids": ["00000000-0000-4000-8000-000000000020", "00000000-0000-4000-8000-000000000021"]
+          },
+          "entities": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000030"]
+          },
+          "relationships": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000040"]
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000010"]
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000020"]
+            },
+            "DERIVED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000021"]
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "metrics": [
+            {
+              "metric": "CONTRADICTIONS",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "CONTRADICTION_DETECTION_NOT_BUILT"
+              }
+            }
+          ],
+          "collectors": {
+            "registered": [
+              {
+                "collectorId": "fx.dns",
+                "sourceLabel": "[fixture dns]"
+              }
+            ],
+            "ran": [
+              {
+                "collectorId": "fx.dns",
+                "sourceLabel": "[fixture dns]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": "00000000-0000-4000-8000-000000000003",
+                    "state": "COLLECTED",
+                    "reasonCode": null,
+                    "detail": null
+                  }
+                ]
+              }
+            ],
+            "foundSomething": [
+              {
+                "collectorId": "fx.dns",
+                "sourceLabel": "[fixture dns]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": "00000000-0000-4000-8000-000000000003",
+                    "state": "COLLECTED",
+                    "reasonCode": null,
+                    "detail": null
+                  }
+                ]
+              }
+            ],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [],
+            "notApplicable": [],
+            "held": [],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "SOCMINT",
+          "status": "ZERO",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "metrics": [],
+          "collectors": {
+            "registered": [
+              {
+                "collectorId": "fx.gh",
+                "sourceLabel": "[fixture gh]"
+              }
+            ],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [],
+            "notApplicable": [
+              {
+                "collectorId": "fx.gh",
+                "sourceLabel": "[fixture gh]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": null,
+                    "state": "NOT_APPLICABLE",
+                    "reasonCode": "TARGET_TYPE_NOT_ACCEPTED",
+                    "detail": "[fixture] It accepts USERNAME; the target is DOMAIN."
+                  }
+                ]
+              }
+            ],
+            "held": [],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "MEDIAINT",
+          "status": "HELD",
+          "evidence": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "claims": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "entities": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "relationships": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "evidenceByStrength": null,
+          "claimsByStrength": null,
+          "metrics": [
+            {
+              "metric": "MEDIA_CLAIMS",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "MEDIA_CLAIM_EXTRACTION_NOT_BUILT"
+              }
+            },
+            {
+              "metric": "MEDIA_CONFLICTS",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "MEDIA_CLAIM_EXTRACTION_NOT_BUILT"
+              }
+            }
+          ],
+          "collectors": {
+            "registered": [],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [],
+            "notApplicable": [],
+            "held": [
+              {
+                "collectorId": "fx.news",
+                "sourceLabel": "[fixture news]",
+                "reason": "[fixture] Held until [condition]."
+              }
+            ],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "GEOINT",
+          "status": "NOT_BUILT",
+          "evidence": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "claims": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "entities": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "relationships": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "evidenceByStrength": null,
+          "claimsByStrength": null,
+          "metrics": [
+            {
+              "metric": "LOCATION_HYPOTHESES",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "LOCATION_HYPOTHESES_NOT_BUILT"
+              }
+            }
+          ],
+          "collectors": {
+            "registered": [],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [],
+            "notApplicable": [],
+            "held": [],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "PERSON",
+          "status": "LOCKED",
+          "evidence": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "claims": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "entities": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "relationships": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "evidenceByStrength": null,
+          "claimsByStrength": null,
+          "metrics": [],
+          "collectors": {
+            "registered": [
+              {
+                "collectorId": "fx.phone",
+                "sourceLabel": "[fixture phone]"
+              }
+            ],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [
+              {
+                "collectorId": "fx.phone",
+                "sourceLabel": "[fixture phone]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": null,
+                    "state": "EXCLUDED",
+                    "reasonCode": "MODULE_NOT_IN_PLAN",
+                    "detail": "[fixture] This collector's module is not in the tenant's plan."
+                  }
+                ]
+              }
+            ],
+            "excluded": [],
+            "notApplicable": [],
+            "held": [],
+            "notInAnyRun": []
+          }
+        }
+      ],
+      "notRegistered": {
+        "collectors": [
+          {
+            "collectorId": "fx.gone",
+            "sourceLabel": "fx.gone (not in the current registry)"
+          }
+        ],
+        "evidence": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000011"]
+        },
+        "claims": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000022"]
+        },
+        "entities": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000031"]
+        },
+        "relationships": {
+          "count": 0,
+          "ids": []
+        }
+      },
+      "totals": {
+        "evidence": {
+          "count": 2,
+          "ids": ["00000000-0000-4000-8000-000000000010", "00000000-0000-4000-8000-000000000011"]
+        },
+        "claims": {
+          "count": 3,
+          "ids": [
+            "00000000-0000-4000-8000-000000000020",
+            "00000000-0000-4000-8000-000000000021",
+            "00000000-0000-4000-8000-000000000022"
+          ]
+        },
+        "entities": {
+          "count": 2,
+          "ids": ["00000000-0000-4000-8000-000000000030", "00000000-0000-4000-8000-000000000031"]
+        },
+        "relationships": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000040"]
+        },
+        "evidenceByStrength": {
+          "OBSERVED": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000011"]
+          },
+          "REPORTED": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          },
+          "DERIVED": {
+            "count": 0,
+            "ids": []
+          },
+          "CORRELATED": {
+            "count": 0,
+            "ids": []
+          },
+          "INFERRED": {
+            "count": 0,
+            "ids": []
+          },
+          "HYPOTHESIS": {
+            "count": 0,
+            "ids": []
+          }
+        },
+        "claimsByStrength": {
+          "OBSERVED": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000022"]
+          },
+          "REPORTED": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000020"]
+          },
+          "DERIVED": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000021"]
+          },
+          "CORRELATED": {
+            "count": 0,
+            "ids": []
+          },
+          "INFERRED": {
+            "count": 0,
+            "ids": []
+          },
+          "HYPOTHESIS": {
+            "count": 0,
+            "ids": []
+          }
+        }
+      },
+      "entitiesWithNoClaim": {
+        "count": 0,
+        "ids": []
+      },
+      "relationshipsWithNoClaim": {
+        "count": 0,
+        "ids": []
+      },
+      "caveats": [
+        "COUNTS_ARE_NOT_COVERAGE",
+        "DISCIPLINE_FROM_REGISTRY",
+        "ENTITY_AND_RELATIONSHIP_COUNTS_OVERLAP",
+        "UNMEASURED_IS_NOT_ZERO"
+      ]
+    }
+  },
+  "wording": {
+    "coverageCaveats": {
+      "NO_NEW_COLLECTION": "This coverage was built from records already stored for this case. It reports only what earlier runs collected; no new collection was done to produce it."
+    },
+    "breakdownCaveats": {
+      "COUNTS_ARE_NOT_COVERAGE": "These are counts of stored records, not an assessment of coverage. A high count is not evidence of thorough collection.",
+      "DISCIPLINE_FROM_REGISTRY": "Each collector's discipline comes from its registry entry, never from its name or its output.",
+      "ENTITY_AND_RELATIONSHIP_COUNTS_OVERLAP": "Each collector has one discipline, so evidence and claims split cleanly by discipline. An entity or relationship is counted under every discipline whose evidence its claims cite. Those figures overlap and do not add up to the case total.",
+      "UNMEASURED_IS_NOT_ZERO": "A figure shown as absent could not be measured: no collector is built for that discipline, its only collectors are held, its collectors were locked, or the figure is not built yet. Absent is not zero; zero means the case was checked and holds none."
+    },
+    "breakdownHeadline": {
+      "present": "{disciplines} present · {evidence} evidence, {entities} entities, {relationships} relationships in this case.",
+      "onlyUnregistered": "{evidence} evidence records are held, all from collectors no longer registered.",
+      "noDiscipline": "No discipline in this case holds any stored record. {evidence} evidence records total."
+    }
+  }
+}

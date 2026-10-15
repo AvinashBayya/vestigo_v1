@@ -301,6 +301,16 @@ describe("the case input hash (RELEASE-BLOCKING)", () => {
         ...i,
         registry: replaceFirst(i.registry, (e) => ({ ...e, discipline: "SOCMINT" })),
       })),
+      // A source's licence verdict turning BLOCKED, or a collector losing its
+      // implementation, changes what the analysis says (owner ruling, 2026-10-13).
+      "a registry entry's licence turning BLOCKED": withInput((i) => ({
+        ...i,
+        registry: replaceFirst(i.registry, (e) => ({ ...e, cannotRun: "BLOCKED" })),
+      })),
+      "a registry entry losing its implementation": withInput((i) => ({
+        ...i,
+        registry: replaceFirst(i.registry, (e) => ({ ...e, cannotRun: "NOT_IMPLEMENTED" })),
+      })),
       "a held collector": withInput((i) => ({ ...i, held: [] })),
       "a held collector's reason": withInput((i) => ({
         ...i,

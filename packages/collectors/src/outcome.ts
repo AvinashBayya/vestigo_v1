@@ -1,12 +1,15 @@
-import type { LockReason } from "@repo/core";
+import type { LockReason, UnrunnableReason } from "@repo/core";
 import type { EvidenceItem } from "./contract.ts";
 import type { Captured } from "./fetcher/capture.ts";
 
-/** Why a collector was not run. Each is decided before the collector's code is reached. */
+/**
+ * Why a collector was not run. Each is decided before the collector's code is
+ * reached. LICENCE_BLOCKED and NOT_IMPLEMENTED are core's UNRUNNABLE_REASONS:
+ * the collector cannot run for anyone.
+ */
 export type RefusalReason =
-  | "LICENCE_BLOCKED"
+  | UnrunnableReason
   | "UNVERIFIED_SOURCE_NOT_ALLOWED"
-  | "NOT_IMPLEMENTED"
   | "TARGET_TYPE_NOT_ACCEPTED"
   | LockReason
   | "SCOPE_AUTHORISATION_REQUIRED";

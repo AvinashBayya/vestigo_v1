@@ -15,7 +15,10 @@ export interface CaseAnalysisCollectors {
 
 /**
  * Every registered collector (BLOCKED and not implemented ones included, as the
- * registry lists them) and every held one, as plain data.
+ * registry lists them, each saying it cannot run) and every held one, as plain
+ * data. A collector that cannot run stays in the list, so a run that records it
+ * is labelled from the registry, never "not in the current registry" (owner
+ * ruling, 2026-10-13).
  */
 export function caseAnalysisCollectors(
   registry: CollectorRegistry,
@@ -27,6 +30,10 @@ export function caseAnalysisCollectors(
       label: entry.label,
       collectionMode: entry.collectionMode,
       discipline: entry.discipline,
+      cannotRun:
+        entry.availability === "BLOCKED" || entry.availability === "NOT_IMPLEMENTED"
+          ? entry.availability
+          : null,
     })),
     held: held.map((entry) => ({
       id: entry.collector.declaration.id,

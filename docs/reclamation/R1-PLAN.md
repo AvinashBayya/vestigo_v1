@@ -105,7 +105,10 @@ On the items raised after those rulings were carried out (2026-10-13):
 - **BLOCKED and NOT_IMPLEMENTED registry entries:** listed with their name and discipline, but
   not counted as collectors that could run. The changed coverage wording for the BLOCKED case
   goes to the owner before it is committed, and the false "(not in the current registry)"
-  statement stays out. Not yet committed.
+  statement stays out. Committed 2026-10-15, on the owner's instruction to commit the
+  outstanding R1 work before Track M Day 1 (ENGINE_VERSION 5; pipeline 54 of 54, 2,067 tests,
+  in a clean worktree). The changed `UNMEASURED_IS_NOT_ZERO` wording is quoted in that day's
+  report for the owner's review. D-39 and D-40 remain open.
 - **D-35 and D-36: fixed properly, in their own commit, before R1-c.**
   - No depth cap as a stopgap.
   - The walk is decided with the check, so the graph read and the person check walk the same
@@ -220,8 +223,9 @@ replaces and from the closest existing module here; confidence in each estimate 
     finished, excluded, held), plus a "collected but not pinned" state, collection dates across
     runs, and the caveat that no new collection was done;
   - **discipline breakdown**: counts of evidence, claims and entities per discipline and per
-    collector, from the registry's single discipline per collector; a discipline with no
-    registered collector is "Not built" with its reason, never 0;
+    collector, from the registry's single discipline per collector; a discipline none of whose
+    collectors could have collected is null with its reason, never 0 (not built, held,
+    blocked or locked);
   - the shared per-collector view that R1-c and R1-d read;
   - the coverage functions moved from `assemble.ts` (D-1).
 - **Modules** (from the inventory; the appendix lists all 27): `case-report.ts`
@@ -272,7 +276,9 @@ record, with commits and test counts, is in `docs/PLAN.md`, under "R1-b".*
   - **The input hash** is SHA-256 over a canonical form, and covers everything the analysis
     reads (ruled; a superset of the list first planned here):
     - every field of case-engine's input: the records, the contributing runs with their plans
-      and jobs, the registry's labels and disciplines, and the held collectors;
+      and jobs, each registry entry's label, collection mode, discipline and whether it can run
+      (BLOCKED, NOT_IMPLEMENTED), and the held collectors; so a source turning BLOCKED makes
+      every stored analysis read STALE;
     - the active merge ids reachable from the case;
     - the engine version and the wording.
   - **Repositories** live in `packages/db` under tenant context, listed in `REPOSITORY_TABLES`.
@@ -874,6 +880,36 @@ later, from a defect.
 *Recommended:* turn Postgres's cancellation (SQLSTATE 57014) into a typed error, answered 503
 with its own code, as `QUEUE_UNAVAILABLE` is.
 *Alternative:* leave it as 500. Cost: a timeout reads as a defect.
+
+**D-39. A collector the deployment refuses still counts as able to run** (raised by ruling 2's
+critic pass, 2026-10-14). The case engine counts a collector as REGISTERED unless the registry
+lists it as BLOCKED or NOT_IMPLEMENTED. An UNVERIFIED source runs only where the deployment
+allows unverified sources, and production refuses them unless it is configured to: today that
+is 8 of the 10 platform collectors. In such a deployment a discipline whose collectors are all
+UNVERIFIED reads ZERO, a measured zero, though none of them could run. The web app's collectors
+screen already shows them as Held there. The same holds for any place excluded for a reason that
+is neither a lock nor one of `UNRUNNABLE_REASONS` (R1-a's open asymmetry).
+
+*Recommended:* pass the deployment's setting (`allowsUnverifiedSources`) into
+`caseAnalysisCollectors` from the API and the worker, map an UNVERIFIED collector to a value that
+cannot run where it is false, and leave `UNVERIFIED_SOURCE_NOT_ALLOWED` places out of the lock
+judgement. The setting then enters the input hash, so changing it makes earlier analyses STALE.
+*Alternative:* keep it. Cost: in production most disciplines read 0 where nothing could run.
+
+**D-40. A held collector's place keeps its discipline from LOCKED** (raised by the same pass;
+the behaviour dates from R1-a). A held collector that applies to a run's target appears there as
+HELD, which is not a lock, so a discipline whose other collectors were all locked reads ZERO.
+Ruling 2's reasoning, that a collector which cannot run is never counted as one that could,
+applies to it as much as to a BLOCKED one, but the ruling named only BLOCKED and NOT_IMPLEMENTED.
+
+*Recommended:* leave a held collector's places without a job out of the lock judgement too, as
+those of a BLOCKED or NOT_IMPLEMENTED collector now are.
+*Alternative:* keep it. Cost: a locked discipline with a held collector reads a measured zero.
+
+**Noted for R1-e, not a decision.** `docs/DESIGN-SYSTEM.md` §3 has no word for a collector
+blocked by its licence, and the run view shows a LICENCE_BLOCKED or NOT_IMPLEMENTED exclusion as
+Held (`apps/web/src/search/plan.ts`). Before R1-e renders the case documents, §3 must say how a
+BLOCKED or NOT_IMPLEMENTED registration and a BLOCKED discipline are shown.
 
 **Noted, not a decision.** The brief refers to "the 11 non-negotiable rules" in CLAUDE.md. No
 document numbers eleven rules: CLAUDE.md has sections 1 to 10 plus three unnumbered ones (product

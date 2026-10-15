@@ -11,7 +11,7 @@ describe("CASE_WORDING", () => {
     });
   });
 
-  it("states the breakdown caveats as approved, locked among the causes of an absent figure", () => {
+  it("states the breakdown caveats as approved, locked and blocked among the causes of an absent figure", () => {
     expect(CASE_WORDING.breakdownCaveats).toEqual({
       COUNTS_ARE_NOT_COVERAGE:
         "These are counts of stored records, not an assessment of coverage. A high count is not evidence of thorough collection.",
@@ -20,7 +20,7 @@ describe("CASE_WORDING", () => {
       ENTITY_AND_RELATIONSHIP_COUNTS_OVERLAP:
         "Each collector has one discipline, so evidence and claims split cleanly by discipline. An entity or relationship is counted under every discipline whose evidence its claims cite. Those figures overlap and do not add up to the case total.",
       UNMEASURED_IS_NOT_ZERO:
-        "A figure shown as absent could not be measured: no collector is built for that discipline, its only collectors are held, its collectors were locked, or the figure is not built yet. Absent is not zero; zero means the case was checked and holds none.",
+        "A figure shown as absent could not be measured: no collector of that discipline could run (none is built, or each is held, blocked by its source's licence, or not yet implemented), every one of its collectors that could run was locked, or the figure is not built yet. Absent is not zero; zero means the case was checked and holds none.",
     });
   });
 

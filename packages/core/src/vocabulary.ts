@@ -53,6 +53,21 @@ export type MergeSignal = (typeof MERGE_SIGNALS)[number];
 export const LOCK_REASONS = ["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"] as const;
 export type LockReason = (typeof LOCK_REASONS)[number];
 
+/**
+ * Why a collector could not run at all, for any tenant or target: its
+ * source's licence verdict is BLOCKED, or it has no implementation. The
+ * runtime refuses it with one of these codes when it reaches that check, and
+ * a run's plan records the code as the exclusion's reason. A plan records
+ * another reason for such a collector when an earlier check decides first:
+ * TARGET_TYPE_NOT_ACCEPTED when it does not take the run's target type, or
+ * UNVERIFIED_SOURCE_NOT_ALLOWED for one with no implementation on an
+ * unverified source where those are refused. So a reason from this list says
+ * the collector could not run; another reason does not say that it could.
+ * Additive only.
+ */
+export const UNRUNNABLE_REASONS = ["LICENCE_BLOCKED", "NOT_IMPLEMENTED"] as const;
+export type UnrunnableReason = (typeof UNRUNNABLE_REASONS)[number];
+
 /** Who made a decision: a person, or an automated rule. */
 export const DECISION_ACTOR_KINDS = ["USER", "RULE"] as const;
 export type DecisionActorKind = (typeof DECISION_ACTOR_KINDS)[number];

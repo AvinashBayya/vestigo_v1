@@ -6,11 +6,22 @@
  * finish, was locked or excluded by the plan, was held, or did not apply.
  *
  * Each collector has the one discipline its registry entry states (a held
- * collector, the one it declares). In three cases nothing could have been
- * collected, so the counts are null with the reason, never 0: no collector is
- * built for the discipline (NOT_BUILT); its only collectors are held and none
- * completed a job in the case's runs (HELD); or every collector of it that the
- * case's runs name was locked by the plan or vetting in each of them (LOCKED). The previous codebase's further
+ * collector, the one it declares). Where nothing in the case's runs could
+ * have collected for a discipline, its counts are null with the reason, never
+ * 0:
+ *   - NOT_BUILT: no collector is built for it (the registry lists none, or
+ *     only NOT_IMPLEMENTED ones, and none is held);
+ *   - HELD: none of its collectors may run or completed a job in the case's
+ *     runs, and one is held off the platform;
+ *   - BLOCKED: the same, except that none is held and one is listed as
+ *     BLOCKED (its source's licence verdict);
+ *   - LOCKED: at every place the case's runs name one of its collectors, it
+ *     was locked by the plan or vetting, leaving out the places where it
+ *     could not run at all (see the LOCKED status).
+ * A collector the registry lists as BLOCKED or NOT_IMPLEMENTED is listed with
+ * its label and discipline and never counted as one that could have run
+ * (owner ruling, 2026-10-13): only a job it completed in the case's runs makes
+ * its discipline's zero measured. The previous codebase's further
  * per-discipline figures (contradictions, media claims and conflicts, location
  * hypotheses) are listed as not built, null with the input each needs.
  *
@@ -31,6 +42,7 @@ import {
   COLLECTOR_DISCIPLINES,
   fillWording,
   LOCK_REASONS,
+  UNRUNNABLE_REASONS,
   type CollectorDiscipline,
 } from "@repo/core";
 import { ENGINE_VERSION } from "../version.ts";
@@ -50,23 +62,54 @@ import {
 export const DISCIPLINE_STATUSES = [
   /** The case holds evidence from this discipline's collectors. */
   "PRESENT",
-  /** Collectors are registered for it and the case holds nothing of theirs: a measured zero. */
+  /**
+   * The case holds nothing of its collectors, and one of them is registered
+   * and not listed as BLOCKED or NOT_IMPLEMENTED, or completed a job in the
+   * case's runs: a measured zero.
+   */
   "ZERO",
-  /** Its only collectors are held off the platform, and the case holds nothing of theirs. */
+  /**
+   * The case holds nothing of its collectors; none of them may run (any the
+   * registry lists is BLOCKED or NOT_IMPLEMENTED) or completed a job in the
+   * case's runs, and one is held off the platform.
+   */
   "HELD",
   /**
-   * The case holds nothing of its collectors, and every one of them that the
-   * case's runs name was locked there: the tenant's plan or vetting did not
-   * allow its module (excluded at planning, or refused at dispatch).
+   * The case holds nothing of its collectors, and at every place the case's
+   * runs name one of them, it was locked there: the tenant's plan or vetting
+   * did not allow its module (excluded at planning, or refused at dispatch).
+   * The places where a collector could not run at all are left out: one a
+   * run recorded as LICENCE_BLOCKED or NOT_IMPLEMENTED, and every place
+   * without a job of a collector the registry lists as BLOCKED or
+   * NOT_IMPLEMENTED.
    */
   "LOCKED",
-  /** No collector is built for it. */
+  /**
+   * No collector is built for it: the registry lists none for it, or only
+   * NOT_IMPLEMENTED ones, and none is held. The case holds nothing of them.
+   */
   "NOT_BUILT",
+  /**
+   * The case holds nothing of its collectors; none of them may run or
+   * completed a job in the case's runs, none is held, and one is listed as
+   * BLOCKED: its source's licence verdict (any other is NOT_IMPLEMENTED).
+   */
+  "BLOCKED",
 ] as const;
 export type DisciplineStatus = (typeof DISCIPLINE_STATUSES)[number];
 
-/** Why a discipline's counts are null. */
-export type DisciplineNotMeasured = "NO_COLLECTOR_BUILT" | "ONLY_HELD_COLLECTORS" | "LOCKED";
+/**
+ * Why a discipline's counts are null: NO_COLLECTOR_BUILT for NOT_BUILT,
+ * ONLY_HELD_COLLECTORS for HELD, LOCKED for LOCKED, ONLY_BLOCKED_COLLECTORS for
+ * BLOCKED. Additive only: a stored analysis keeps the codes it was made with.
+ */
+export const DISCIPLINE_NOT_MEASURED = [
+  "NO_COLLECTOR_BUILT",
+  "ONLY_HELD_COLLECTORS",
+  "LOCKED",
+  "ONLY_BLOCKED_COLLECTORS",
+] as const;
+export type DisciplineNotMeasured = (typeof DISCIPLINE_NOT_MEASURED)[number];
 
 /** A count, or null with the reason it could not be measured. */
 export type DisciplineCount = Counted | NotMeasured<DisciplineNotMeasured>;
@@ -121,6 +164,15 @@ export type CaseBreakdownCaveat = (typeof CASE_BREAKDOWN_CAVEATS)[number];
  */
 const isLockReason = (code: string): boolean => (LOCK_REASONS as readonly string[]).includes(code);
 
+/**
+ * Whether a recorded reason says the collector could not run at all, for any
+ * tenant: core's UNRUNNABLE_REASONS (its source BLOCKED, or no
+ * implementation), as a run's plan recorded them for an exclusion, or a job
+ * for a refusal at dispatch.
+ */
+const isUnrunnableReason = (code: string): boolean =>
+  (UNRUNNABLE_REASONS as readonly string[]).includes(code);
+
 export interface CollectorRef {
   readonly collectorId: string;
   readonly sourceLabel: string;
@@ -141,6 +193,11 @@ export interface HeldRef extends CollectorRef {
  * one run may have found something where another failed.
  */
 export interface DisciplineCollectors {
+  /**
+   * Registered (REGISTERED): in the registry, and not listed as BLOCKED or
+   * NOT_IMPLEMENTED. One listed as either is not here: the collectors document
+   * lists it under that registration, with its label and discipline.
+   */
   readonly registered: readonly CollectorRef[];
   /** Its code ran: it found something, found nothing, or failed. */
   readonly ran: readonly CollectorRuns[];
@@ -155,7 +212,7 @@ export interface DisciplineCollectors {
   readonly excluded: readonly CollectorRuns[];
   readonly notApplicable: readonly CollectorRuns[];
   readonly held: readonly HeldRef[];
-  /** Registered, and named by none of the case's runs: registered since, or in a run whose plan was not recorded. */
+  /** Registered (as above), and named by none of the case's runs: registered since, or in a run whose plan was not recorded. */
   readonly notInAnyRun: readonly CollectorRef[];
 }
 
@@ -180,7 +237,10 @@ export interface CaseBreakdown {
   readonly caseId: string;
   /** One per discipline, in core's order. */
   readonly sections: readonly DisciplineSection[];
-  /** Collectors in the case that are neither registered nor held, so have no discipline. */
+  /**
+   * Collectors in the case that the registry does not list (in any
+   * registration) and that are not held, so they have no discipline.
+   */
   readonly notRegistered: {
     readonly collectors: readonly CollectorRef[];
     readonly evidence: Counted;
@@ -238,13 +298,19 @@ function section(
   all: readonly CaseCollector[],
 ): DisciplineSection {
   const collectors = all.filter((collector) => collector.discipline === discipline);
+  // Only collectors the registry does not list as BLOCKED or NOT_IMPLEMENTED
+  // count as registered here (owner ruling, 2026-10-13). One listed as either
+  // cannot collect now, so being listed does not make the discipline's zero
+  // measured; only a job it completed in the case's runs does (below).
   const registered = collectors.filter((collector) => collector.registration === "REGISTERED");
+  const blocked = collectors.some((collector) => collector.registration === "BLOCKED");
   const held = collectors.flatMap((collector) =>
     collector.registration === "HELD" ? [{ ...ref(collector), reason: collector.heldReason }] : [],
   );
   const evidence = union(collectors, (collector) => collector.evidence);
-  // A held collector whose job completed in one of the case's runs could have
-  // collected: its zero is measured. A refused, failed or unfinished job could not.
+  // A collector whose job completed in one of the case's runs collected then,
+  // so its zero is measured, whether or not it may run now (held, or listed as
+  // BLOCKED or NOT_IMPLEMENTED). A refused, failed or unfinished job did not.
   const completedInCase = collectors.some((collector) =>
     collector.runs.some(
       (run) =>
@@ -258,19 +324,41 @@ function section(
     (run.state === "EXCLUDED" || run.state === "REFUSED") &&
     run.reasonCode !== null &&
     isLockReason(run.reasonCode);
-  // Every place the case's runs name one of its collectors, that collector was locked.
-  const named = collectors.flatMap((collector) => collector.runs);
+  const cannotRunNow = (collector: CaseCollector): boolean =>
+    collector.registration === "BLOCKED" || collector.registration === "NOT_IMPLEMENTED";
+  // A place where a collector could not run at all says nothing about a lock:
+  // one a run recorded as LICENCE_BLOCKED or NOT_IMPLEMENTED, whatever the
+  // collector is now; and any place without a job of a collector the registry
+  // lists as BLOCKED or NOT_IMPLEMENTED, because the planner records such a
+  // collector as not applicable, or with a refusal checked earlier (an
+  // unverified source), before it reaches those reasons.
+  const couldRun = (collector: CaseCollector, run: CaseCollectorRun): boolean =>
+    !(
+      ((run.state === "EXCLUDED" || run.state === "REFUSED") &&
+        run.reasonCode !== null &&
+        isUnrunnableReason(run.reasonCode)) ||
+      (run.jobId === null && cannotRunNow(collector))
+    );
+  // At every place the case's runs name one of its collectors where it could run, it was locked.
+  const named = collectors.flatMap((collector) =>
+    collector.runs.filter((run) => couldRun(collector, run)),
+  );
   const allLocked = named.length > 0 && named.every(isLock);
+  // NOT_BUILT is what is left: no evidence, no lock, nothing that may run or
+  // completed a job, nothing held or listed as BLOCKED. That is a discipline
+  // with no collector at all, or only NOT_IMPLEMENTED ones.
   const status: DisciplineStatus =
-    registered.length === 0 && held.length === 0
-      ? "NOT_BUILT"
-      : evidence.count > 0
-        ? "PRESENT"
-        : allLocked
-          ? "LOCKED"
-          : registered.length > 0 || completedInCase
-            ? "ZERO"
-            : "HELD";
+    evidence.count > 0
+      ? "PRESENT"
+      : allLocked
+        ? "LOCKED"
+        : registered.length > 0 || completedInCase
+          ? "ZERO"
+          : held.length > 0
+            ? "HELD"
+            : blocked
+              ? "BLOCKED"
+              : "NOT_BUILT";
   const reason: DisciplineNotMeasured | null =
     status === "NOT_BUILT"
       ? "NO_COLLECTOR_BUILT"
@@ -278,7 +366,9 @@ function section(
         ? "ONLY_HELD_COLLECTORS"
         : status === "LOCKED"
           ? "LOCKED"
-          : null;
+          : status === "BLOCKED"
+            ? "ONLY_BLOCKED_COLLECTORS"
+            : null;
   const count = (measured: Counted): DisciplineCount =>
     reason === null ? measured : { count: null, ids: null, reason };
 

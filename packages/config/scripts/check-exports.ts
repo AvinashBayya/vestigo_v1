@@ -34,6 +34,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ClaimStrength",
     "LOCK_REASONS",
     "LockReason",
+    "UNRUNNABLE_REASONS",
+    "UnrunnableReason",
     "ENTITY_KINDS",
     "NAME_ONLY_AUTOMERGE_FORBIDDEN",
     "detectTargetType",
