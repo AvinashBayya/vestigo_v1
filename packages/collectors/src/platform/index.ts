@@ -16,11 +16,12 @@ import { wikidataCollector } from "./wikidata.ts";
 /**
  * Every collector the platform ships, in listing order.
  *
- * Not registered: news (src/platform/news.ts). Its NOT_FOUND rests on GDELT's
- * `{}` meaning "no coverage", and a quoted-domain query answered `{}` live for
- * a domain that plausibly has coverage, so it may be systematically false.
- * It is held until one live FOUND for a domain phrase is recorded
- * (docs/PLAN.md, Phase 3B).
+ * news (src/platform/news.ts) was held from Phase 3B until Track M Day 2: its
+ * NOT_FOUND rested on GDELT's `{}` meaning "no coverage", which a live `{}`
+ * for a domain that plausibly has coverage put in doubt. It is registered now
+ * that it never reports NOT_FOUND (an empty answer is EMPTY_UNCONFIRMED, after
+ * a canary) and a live FOUND is recorded (test/fixtures/news/found.json,
+ * 2026-10-15; docs/PLAN.md, Track M Day 2).
  */
 export const PLATFORM_COLLECTORS: readonly Collector[] = [
   crtshCollector,
@@ -33,6 +34,7 @@ export const PLATFORM_COLLECTORS: readonly Collector[] = [
   hackernewsCollector,
   devtoCollector,
   commoncrawlCollector,
+  newsCollector,
 ];
 
 /** A collector built but held off the platform: it never runs, and reports say why. */
@@ -41,13 +43,8 @@ export interface HeldCollector {
   readonly reason: string;
 }
 
-export const HELD_PLATFORM_COLLECTORS: readonly HeldCollector[] = [
-  {
-    collector: newsCollector,
-    reason:
-      "Held off the platform until one live FOUND for a domain phrase is recorded: its NOT_FOUND may be systematically false (docs/PLAN.md, Phase 3B).",
-  },
-];
+/** None is held now; a collector built but not yet fit to run is listed here with why. */
+export const HELD_PLATFORM_COLLECTORS: readonly HeldCollector[] = [];
 
 /** The platform registry: the source catalogue and every platform collector. */
 export function createPlatformRegistry(): CollectorRegistry {

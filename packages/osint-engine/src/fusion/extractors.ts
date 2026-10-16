@@ -30,6 +30,7 @@ import {
   DNS_RESULT,
   GITHUB_RESULT,
   HACKERNEWS_RESULT,
+  NEWS_RESULT,
   RDAP_RESULT,
   reportedPart,
   WAYBACK_RESULT,
@@ -227,7 +228,8 @@ function targetEntity(drafts: Drafts, target: ExtractorInput["target"]): string 
     case "FILE":
       throw new NotImplementedError("fusion.file-target", "no collector reads FILE targets yet");
     case "TOPIC":
-      throw new NotImplementedError("fusion.topic-target", "no collector reads TOPIC targets yet");
+      // The news extractor, the one reader of a TOPIC, never asks for it (D-M2 adds the kinds).
+      throw new NotImplementedError("fusion.topic-target", "a TOPIC has no entity kind yet");
   }
 }
 
@@ -416,6 +418,20 @@ const commoncrawl: Extractor = ({ target, result }) => {
 };
 
 /**
+ * news (GDELT DOC, Track M Day 2): its result is checked, and nothing is drawn
+ * from it yet. Its evidence is stored and cited as collected; the articles
+ * become items, with their outlets and links as entities, in Track M's item
+ * extractors (docs/monitoring/MONITORING-PLAN.md §7). Until then no claim is
+ * made from an article list, and in particular no count, which could be read
+ * as a rise. It never needs the target's entity, so a TOPIC (which has no
+ * entity kind) fuses as a domain does.
+ */
+const news: Extractor = ({ result }) => {
+  NEWS_RESULT.parse(result);
+  return new Drafts().build();
+};
+
+/**
  * One extractor per platform collector. A collector without one cannot be
  * fused, and fusion refuses to mark its job fused (a test checks every
  * registered collector has one).
@@ -431,4 +447,5 @@ export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   hackernews,
   devto,
   commoncrawl,
+  news,
 };

@@ -42,6 +42,22 @@ export class InvalidTargetError extends AppError {
   }
 }
 
+/**
+ * A valid target that this collector cannot put to its upstream as it stands:
+ * GDELT DOC, for one, cannot search a topic with a quote mark inside as one
+ * phrase, since the mark would end the phrase and the rest would be read as
+ * GDELT's operators. Refused before anything is sent; permanent (CLAUDE.md §5).
+ * The message names the problem, never the target.
+ */
+export class TargetNotSearchableError extends AppError {
+  readonly code = "TARGET_NOT_SEARCHABLE";
+
+  constructor(problem: string) {
+    super(`This target cannot be searched here: ${problem}.`);
+    this.name = "TargetNotSearchableError";
+  }
+}
+
 export type DestinationRefusal =
   | "MALFORMED_URL"
   | "SCHEME_NOT_ALLOWED"

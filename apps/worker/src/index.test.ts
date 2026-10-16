@@ -75,6 +75,8 @@ describe("the worker, deployed as pools selected by queue", () => {
       // One queue per source a registered collector reads: its own bulkhead.
       expect(collecting.pool.queues).toContain(collectQueueName("crtsh"));
       expect(collecting.pool.queues).toContain(collectQueueName("hacker-news"));
+      // GDELT's own, since news was registered (Track M Day 2).
+      expect(collecting.pool.queues).toContain(collectQueueName("gdelt-doc"));
       expect(collecting.pool.queues).not.toContain("investigations");
       expect(collecting.pool.queues.every((name) => name.startsWith("collect."))).toBe(true);
     } finally {
@@ -126,11 +128,13 @@ describe("the worker, deployed as pools selected by queue", () => {
       }
       const planned = await db.withTenant(tenantId, ({ repos }) => repos.runs.findById(run.id));
       expect(planned?.status).toBe("RUNNING");
-      // Every domain collector planned; none run, because no pool here collects.
+      // Every domain collector planned, GDELT's news among them since Track M Day 2;
+      // none run, because no pool here collects.
       expect(jobs.map((job) => job.collectorId).sort()).toEqual([
         "commoncrawl",
         "crtsh",
         "dns",
+        "news",
         "rdap",
         "wayback",
       ]);

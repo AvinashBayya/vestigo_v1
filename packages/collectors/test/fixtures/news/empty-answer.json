@@ -3,7 +3,7 @@
     "kind": "recorded",
     "source": "https://api.gdeltproject.org/api/v2/doc/doc?query=%22example.com%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc",
     "recordedOn": "2026-09-28",
-    "notes": "Live GDELT DOC answer for the IANA-reserved domain example.com: 200 with an empty JSON object, which is how GDELT DOC reports no matching articles. Stored as received."
+    "notes": "Live GDELT DOC answer for the IANA-reserved domain example.com: 200 with an empty JSON object, which is what GDELT DOC sends when it returns nothing. Stored as received. GDELT's empty answers are unreliable (Track M Day 2), so this reads as unconfirmed, never as \"no coverage\" and never as zero. Renamed from not-found.json on 2026-10-15."
   },
   "request": {
     "host": "api.gdeltproject.org",

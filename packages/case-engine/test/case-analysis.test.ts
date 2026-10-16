@@ -439,7 +439,7 @@ describe("the discipline breakdown", () => {
   });
 
   it("never lists a collector as held in a run whose recorded plan ran it", () => {
-    // news is held now. In run A it ran and found ev10, not pinned.
+    // news is held in this fixture's registry now. In run A it ran and found ev10, not pinned.
     const ranThen: CaseInput = {
       ...CASE,
       registry: REGISTRY.filter((entry) => entry.id !== "wayback"),

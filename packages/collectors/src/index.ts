@@ -42,6 +42,7 @@ export {
   InvalidTargetError,
   RateLimiterUnavailableError,
   ResponseTooLargeError,
+  TargetNotSearchableError,
   UnknownCollectorError,
   UpstreamRateLimitedError,
   UpstreamRejectedError,

@@ -1474,3 +1474,120 @@ describe("a TOPIC job only ever sits in a person-bearing run (RELEASE-BLOCKING; 
     }
   });
 });
+
+// ── GDELT on a topic (Track M Day 2) ──────────────────────────────────────
+
+/** A query parameter as the news collector writes it: the phrase in quote marks. */
+const queryParameter = (phrase: string): string =>
+  new URLSearchParams({ query: `"${phrase}"` }).toString();
+
+/** GDELT's recorded empty answer (for example.com), re-pointed at a topic's search. */
+function emptyAnswerFor(phrase: string): Fixture {
+  const fixture = loadFixture("news", "empty-answer");
+  return {
+    ...fixture,
+    provenance: {
+      ...fixture.provenance,
+      notes: `${fixture.provenance.notes} Re-pointed at a topic by the Track M Day 2 pipeline test.`,
+    },
+    request: {
+      ...fixture.request,
+      path: fixture.request.path.replace(queryParameter("example.com"), queryParameter(phrase)),
+    },
+  };
+}
+
+describe("a topic run on GDELT, end to end (RELEASE-BLOCKING, Track M Day 2)", () => {
+  async function entitledTenant(tag: string) {
+    const tenant = await newTenant(tag);
+    await asOwner(
+      tenant.tenantId,
+      "update public.tenants set plan = 'TECHINT_AND_PERSON', vetting_status = 'APPROVED'",
+      [],
+    );
+    return tenant;
+  }
+
+  it("plans GDELT for a topic, keeps the live answer as its evidence, draws nothing from it, and completes", async () => {
+    const harness = await startHarness({
+      collectors: platform(["news"]),
+      fixtures: [loadFixture("news", "found")],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenant("gdelt-found");
+      const runId = await startRun(engine, tenant, "climate change", "TOPIC");
+      const run = await finishedRun(tenant.tenantId, runId);
+      // A topic is person data whatever collects it (Day 1).
+      expect(run).toMatchObject({ status: "SUCCEEDED", personBearing: true });
+      const jobs = await waitFor(
+        "the news job to be fused",
+        () => jobsOf(tenant.tenantId, runId),
+        (rows) => rows.length === 1 && rows[0]?.fusedAt !== null,
+      );
+      const [job] = jobs;
+      expect({
+        collectorId: job?.collectorId,
+        targetType: job?.targetType,
+        target: job?.target,
+        outcome: job?.outcome,
+        evidence: job?.evidenceIds?.length,
+      }).toEqual({
+        collectorId: "news",
+        targetType: "TOPIC",
+        target: "climate change",
+        outcome: "FOUND",
+        evidence: 1,
+      });
+      // Nothing is drawn from an article list yet: no entity, and nothing counted.
+      const entities = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.entities.list({ limit: 100 }),
+      );
+      expect(entities).toEqual([]);
+      expect(await evidenceIdsOf(tenant.tenantId)).toHaveLength(1);
+      expect(harness.unmatched).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 30_000);
+
+  it("ends an empty answer EMPTY_UNCONFIRMED once the canary shows GDELT is up: the run complete, nothing stored, both requests charged", async () => {
+    const phrase = "[a quiet topic]";
+    const harness = await startHarness({
+      collectors: platform(["news"]),
+      fixtures: [emptyAnswerFor(phrase), loadFixture("news", "canary-found")],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenant("gdelt-empty");
+      const runId = await startRun(engine, tenant, phrase, "TOPIC");
+      const run = await finishedRun(tenant.tenantId, runId);
+      expect(run?.status).toBe("SUCCEEDED");
+      const job = byCollector(await jobsOf(tenant.tenantId, runId), "news");
+      expect({
+        status: job.status,
+        outcome: job.outcome,
+        evidenceIds: job.evidenceIds,
+        attempts: job.attempts,
+      }).toEqual({
+        status: "SUCCEEDED",
+        outcome: "EMPTY_UNCONFIRMED",
+        evidenceIds: null,
+        attempts: 1,
+      });
+      expect(job.outcomeDetail).toContain("returned nothing for this search — unconfirmed");
+      expect(job.outcomeDetail).toContain(
+        "A passing canary means GDELT is up — not that any query found something.",
+      );
+      expect(job.outcomeDetail).not.toContain(phrase);
+      expect(await evidenceIdsOf(tenant.tenantId)).toEqual([]);
+      // The search and the canary: two requests, charged to the tenant as one attempt.
+      expect(await usageOf(tenant.tenantId)).toEqual([{ jobId: job.id, attempt: 1, quantity: 2 }]);
+      expect(harness.unmatched).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 30_000);
+});

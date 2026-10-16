@@ -465,13 +465,63 @@ const FOUND_CASES: readonly {
   },
 ];
 
+/**
+ * Extractors that check a FOUND result and draw nothing from it yet; the
+ * evidence is kept and cited. news: articles become items in Track M's item
+ * extractors, and until then no claim, and no count, is made from a list.
+ */
+const NOTHING_DRAWN_CASES: readonly {
+  readonly collectorId: string;
+  readonly target: { readonly type: TargetType; readonly value: string };
+  readonly fixtures: readonly Fixture[];
+}[] = [
+  {
+    collectorId: "news",
+    target: { type: "TOPIC", value: "climate change" },
+    fixtures: [loadFixture("news", "found")],
+  },
+  {
+    collectorId: "news",
+    target: { type: "DOMAIN", value: "example.net" },
+    fixtures: [loadFixture("news", "domain-found")],
+  },
+];
+
 describe("extractors", () => {
   it("every registered platform collector has one, and nothing else does", () => {
     expect(Object.keys(EXTRACTORS).sort()).toEqual(
       PLATFORM_COLLECTORS.map((collector) => collector.declaration.id).sort(),
     );
-    expect(FOUND_CASES.map((c) => c.collectorId).sort()).toEqual(Object.keys(EXTRACTORS).sort());
+    const cased = new Set([...FOUND_CASES, ...NOTHING_DRAWN_CASES].map((c) => c.collectorId));
+    expect([...cased].sort()).toEqual(Object.keys(EXTRACTORS).sort());
   });
+
+  it.each(NOTHING_DRAWN_CASES)(
+    "$collectorId on a $target.type: checks the result and draws nothing yet, so no entity, claim or count",
+    async (testCase) => {
+      const harness = await startHarness({
+        collectors: PLATFORM_COLLECTORS.filter((c) => c.declaration.id === testCase.collectorId),
+        fixtures: testCase.fixtures,
+      });
+      try {
+        const outcome = await harness.run(testCase.collectorId, testCase.target);
+        expect(outcome.status, JSON.stringify(outcome)).toBe("FOUND");
+        if (outcome.status !== "FOUND") return;
+        const extract = EXTRACTORS[testCase.collectorId];
+        if (extract === undefined) throw new Error("no extractor");
+        // A TOPIC has no entity kind: the extractor never asks for the target's entity.
+        expect(extract({ target: testCase.target, result: outcome.result })).toEqual({
+          entities: [],
+          relationships: [],
+          claims: [],
+        });
+        // What it is given is checked, as every extractor checks it.
+        expect(() => extract({ target: testCase.target, result: { articles: [] } })).toThrow();
+      } finally {
+        await harness.close();
+      }
+    },
+  );
 
   it.each(FOUND_CASES)(
     "$collectorId: every claim cites real evidence, names known entities, and takes its strength from its path",

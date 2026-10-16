@@ -39,7 +39,7 @@ Every item that changes a rule, a package list, a vocabulary or a schema waits f
 | Run → jobs → evidence → fusion → entities/relationships/claims | `packages/osint-engine/src/{runs,executor,fusion}`, `packages/db/src/schema/{work,evidence,entities}.ts` | **A monitor tick is a run.** Every tick creates a normal run, so collection, bulkheads, circuit breakers, retries, dead letters, metering, replay and the SSE progress stream all come for free. |
 | Collector SDK, provenance rule, source labelling, SSRF-safe fetcher, per-source rate limit | `packages/collectors/src/{contract,runtime,provenance,fetcher}` | Every new source is one collector, declared the same way. |
 | Source catalogue with licence verdicts | `packages/collectors/src/catalogue.ts` | `bluesky`, `reddit-api`, `telegram-preview`, `brave-search`, `youtube-data-api`, `gdelt-doc` are already declared. RSS and Mastodon are added. |
-| GDELT collector (built, held) | `packages/collectors/src/platform/news.ts` | Un-held in M2a with a canary (§4.2). |
+| GDELT collector (registered on Track M Day 2) | `packages/collectors/src/platform/news.ts` | Un-held for `DOMAIN` and `TOPIC` on Day 2, ahead of M2a: an empty answer is unconfirmed, after a canary that shows GDELT is up (§4.2, D-M4). |
 | `monitors` and `alerts` tables + repositories | `packages/db/src/schema/operations.ts`, `repositories/operations.ts` | Extended, not replaced (§5). |
 | Graph store and `/graph`, `/timeline` | `packages/core/src/graph.ts`, `packages/db/src/repositories/graph.ts`, `apps/api/src/routes/explore.ts` | Narratives, accounts, outlets and amplification edges appear in the existing graph. |
 | Cytoscape graph tab | `apps/web/src/workspace/graph/CytoscapeGraph.tsx` | New edge kinds render without new graph code. |
@@ -150,12 +150,14 @@ Its processors live in `packages/osint-engine/src/jobs`, as R1-b ruled for case 
 ### 4.2 The collectors
 
 Each row is one collector in `packages/collectors/src/platform/`, with fixtures under
-`test/platform/`, tests for provenance, `NOT_FOUND` versus failure, and `Retry-After`.
+`test/platform/`, tests for provenance, `NOT_FOUND` versus failure, and `Retry-After`. A source
+whose empty answers are unreliable reports one as `EMPTY_UNCONFIRMED`, never `NOT_FOUND`, and
+declares it (`emptyAnswersUnreliable`; built on Track M Day 2).
 
 | Collector id | Source (catalogue) | Targets | Credential (vault id) | Notes |
 |---|---|---|---|---|
 | `rss` | `rss-feed` (new, open-host) | `URL` | none | Feed parsed server-side; per-feed status envelope; `published_at` from the item, never the fetch time. |
-| `news` (un-held) | `gdelt-doc` | `DOMAIN`, `TOPIC` | none | Adds `query`, `since/until` (GDELT `startdatetime/enddatetime`). **The hold** ("`{}` may be systematically false") is resolved with a canary: on `{}`, the collector issues one known-positive query in the same window; if the canary is also empty the result is `UNAVAILABLE` ("GDELT answered empty to a query that is never empty"), otherwise `NOT_FOUND`. Owner approval: D-M4. |
+| `news` (un-held, Track M Day 2) | `gdelt-doc` | `DOMAIN`, `TOPIC` | none | **Built on Day 2** (`docs/PLAN.md`, Track M Day 2), as the owner ruled it, which changed this row's canary: on `{}` (or an empty list) the collector issues one search that always has articles, in the same window and the same shared limit. Articles back mean GDELT is up, and the empty answer is `EMPTY_UNCONFIRMED`, never `NOT_FOUND`: a passing canary means GDELT is up, not that any query found something. An empty canary is `UNAVAILABLE`. A full list is the newest 250 only, and no figure in the result counts coverage. `query`, `since/until` (GDELT `startdatetime/enddatetime`) wait for M1's parameters. |
 | `bluesky.search` | `bluesky` | `TOPIC` | none | `app.bsky.feed.searchPosts` with `since/until/cursor`. |
 | `bluesky.profile` | `bluesky` | `USERNAME` | none | `getProfile` + `getAuthorFeed`; account age and counts null when absent, never 0. |
 | `mastodon.tag` | `mastodon` (new, open-host: tenant's instance list) | `TOPIC` (hashtag only) | none | `api/v1/timelines/tag/:tag` with `since_id`. Full-text search is instance-local and often requires auth; stated in the result. |
@@ -257,7 +259,10 @@ content: served to the UI as data, rendered as text, never as HTML.
   credibility profile and source tier settings (`organization:update` covers settings PUTs).
 - **Module `MONITORING`** in `entitlements.ts`, included in both existing plans for now so nothing
   locks out before Phase 7 prices it. Owner approval: D-M5.
-- **Person gate.** Topic, hashtag, domain and feed monitors rest on no person data. A monitor whose
+- **Person gate.** Since D-M1 was ruled (Track M Day 1), every TOPIC is person data whatever
+  collects it, so a topic or hashtag monitor needs the person plan and approved vetting, and its
+  runs are refused whole without them; a GDELT-only topic run is too (Day 2). Domain and feed
+  monitors rest on no person data. A monitor whose
   target is an individual's account, watched continuously, is treated as person data and refused
   through the shared `personGate` (fail closed), until the owner rules otherwise (D-M6). CIB
   output names accounts; it is DERIVED from public posts in the window and carries the caveat; the
@@ -359,7 +364,7 @@ Each is specified in `docs/DESIGN-SYSTEM.md` §9 first and shown in the dev gall
 | D-M1 | Add `TOPIC` to `TARGET_TYPES` (additive; pg enum value) | **Ruled 2026-10-15 (Day 1), built:** accepted, and every TOPIC run is person data whatever collects it, failing closed on the target type with no name detector (`docs/PLAN.md`, Track M Day 1) |
 | D-M2 | Add `NARRATIVE`, `HASHTAG` entity kinds; posts/articles are items, not entities | Accept |
 | D-M3 | Open-host sources (RSS feeds, Mastodon instances) with tenant-declared hosts under the same SSRF rules | Accept, with the host recorded on evidence and no redirects off-host |
-| D-M4 | Un-hold GDELT with the canary test for a false-empty answer | Accept |
+| D-M4 | Un-hold GDELT with the canary test for a false-empty answer | **Ruled 2026-10-15 (Day 2), built:** un-held, with the owner's change to the canary: an empty answer is unconfirmed (`EMPTY_UNCONFIRMED`) whatever the canary says, and a passing canary shows only that GDELT is up (`docs/PLAN.md`, Track M Day 2) |
 | D-M5 | New `MONITORING` module, included in both plans until Phase 7 | Accept |
 | D-M6 | Continuous monitoring of an individual's account is person data: refused unless the tenant has PERSON_INVESTIGATION and vetting | Accept (fail closed); refine with an organisation-account exception later (verified via Wikidata id) |
 | D-M7 | Embedding model allowlist (Apache-2.0/MIT only) and which one to run first | `BAAI/bge-m3` (MIT, multilingual) on the vLLM profile; hosted alternative named in config |
@@ -379,7 +384,7 @@ R1-a/b. Sizes are estimates (source + tests), confidence stated.
 |---|---|---|---|---|
 | **M0** | This plan recorded; ADR amendments for D-M1..M7; licence task list to the owner | docs | high | — |
 | **M1** | `TOPIC` type + detection; collector `params`; open-host declaration; `runs.monitor_id`/window; `monitors` extension; `items` + `item_matches` tables, repositories, extractor hook; `packages/signal-engine` skeleton with purity test; `MONITORING` module and permissions | 1,200 + 1,400 | medium | D-M1, D-M2, D-M3, D-M5 |
-| **M2a** | Keyless collectors: `rss`, `news` un-held, `bluesky.search`, `bluesky.profile`, `mastodon.tag`, `mastodon.account`, `telegram.channel`; extractors; fixtures | 1,800 + 2,000 | medium | M1, D-M4 |
+| **M2a** | Keyless collectors: `rss`, `news` un-held (done ahead, on Track M Day 2), `bluesky.search`, `bluesky.profile`, `mastodon.tag`, `mastodon.account`, `telegram.channel`; extractors; fixtures | 1,800 + 2,000 | medium | M1, D-M4 |
 | **M2b** | Keyed collectors: `brave.web`, `brave.news`, `youtube.search`, `youtube.channel`, `reddit.search`; credentials UI | 1,300 + 1,400 | medium | M1, D-M8 |
 | **M3** | Scheduler, tick processor, readings, spike, alerts (in-app), `monitors`/`alerts` routes + SSE, Monitoring and Alerts screens. **"It monitors."** | 2,000 + 2,200 | medium-low | M1, M2a |
 | **M4** | Story clustering → narratives; credibility (profiles, tiers); CIB; graph edges; item/narrative pins; Narratives screen; credibility and CIB panels; outlet pivot | 2,400 + 2,600 | medium | M3 |
@@ -421,8 +426,12 @@ with M3 as the first demonstrable milestone.
 - **YouTube's default quota** (100 searches/day per key) means YouTube monitors poll hourly, not
   every 5 minutes, unless a quota increase is granted.
 - **Brave costs money per request** and requires attribution for the credit.
-- **GDELT's false-empty behaviour** is handled by the canary, which costs one extra request per
-  empty answer.
+- **GDELT's false-empty behaviour** is reported as unconfirmed, never as no coverage, and the
+  canary that tells "GDELT is up" from "GDELT is not answering" costs one extra request per empty
+  answer. GDELT is also under strain: it answered most requests from the development address on
+  2026-10-15 with 429, and asks on its blog (2026-06-30) that searches move to its ngram files
+  while its search infrastructure is migrated. Its one live answer recorded that day covered two
+  and a half hours of the three months asked for (`docs/PLAN.md`, Track M Day 2).
 - **DPDP:** items are public posts by identifiable people. Text and URLs are stored; media bytes
   never; retention applies; account monitors are person-gated. Nothing here changes CLAUDE.md §9.
 - **Scale:** per-tenant keys and tiered sourcing carry the first customers; plan quotas and

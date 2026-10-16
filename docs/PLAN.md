@@ -13,7 +13,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 0     | Audit and migration map                 | Done. Findings in [audit/](audit/): REPORT, INVENTORY (per-module KEEP / REWRITE / DROP verdicts, used as the porting map), COLLECTORS, DEPENDENCIES, QUESTIONS. |
 | 1     | Scaffold and toolchain                  | **Done, 2026-09-25.** See below.                                                                                                                         |
 | 2     | Data foundation and tenancy             | **Done, 2026-09-28.** Session A: data layer and tenant isolation. Session B: authentication, MFA, permissions, module gating, API keys, audit, credential vault. See both records below. |
-| 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
+| 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held until Track M Day 2), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
 | 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. **UI foundation:** U1-a (design system from the mockups) done 2026-10-07; U1-b (component library and the dev gallery) done and approved 2026-10-07; U1-c (every screen rebuilt from the library) done 2026-10-07, awaiting the owner's review. See the Phase 6a and 6b records below. |
@@ -743,7 +743,9 @@ news got through: GDELT answered 429, then refused connections. So `{}` may mean
 understood", and news's NOT_FOUND may be systematically false. Its found fixture is synthetic
 for the same reason. **What resolves it:** one live, recorded FOUND for a quoted-domain query.
 Then register news, replace the synthetic found fixture, and keep a recorded `{}` for a domain
-with no coverage.
+with no coverage. *Resolved in Track M Day 2 (below), on the owner's instruction: news is
+registered, an empty answer is never NOT_FOUND but unconfirmed, and the found fixture is a live
+recording, of a topic; no live FOUND for a domain phrase could be recorded.*
 
 **Verified at the checkpoint.**
 
@@ -758,7 +760,8 @@ with no coverage.
 
 ### Decisions taken in Phase 3B
 
-1. **news is held unregistered** until a live FOUND for a domain phrase is recorded.
+1. **news is held unregistered** until a live FOUND for a domain phrase is recorded. *Superseded in
+   Track M Day 2: registered on the owner's instruction (below).*
 2. **A mandatory `derived` block, not per-field strength.** It is enforced at registration and
    on every run.
 3. **libphonenumber-js is pinned exactly.** Every upgrade bumps contact.phone's version.
@@ -979,7 +982,8 @@ RUN status PARTIAL, settled; counts SUCCEEDED 3, DEAD_LETTERED 1
   - Listing across tenants belongs to the cross-tenant operator design (Phase 2A open question).
   - BullMQ's failed set is kept indefinitely, so it needs a retention policy (Phase 8).
 - **Quotas have no operator tooling;** they are set as the schema owner. Phase 7.
-- **news** still has no extractor; registering it will need one (a test enforces this).
+- ~~**news** still has no extractor; registering it will need one (a test enforces this).~~ Built in
+  Track M Day 2: it checks the result and draws nothing from it yet.
 - **The progress stream polls.** Consider a push signal at scale.
 - **Two load flakes seen:** the api server-spawn test (Phase 3B), and the web test worker start
   (this phase). Both pass alone and on rerun.
@@ -4007,3 +4011,134 @@ again.
 
 **Noted.** `apps/worker/data/content-store/` holds a local run's stored payloads. It is untracked,
 not ignored, and not committed.
+
+## Track M Day 2: GDELT un-held for a topic, behind the Day 1 gate (2026-10-15)
+
+**The owner's instruction** (2026-10-15), which rules D-M4 (`docs/monitoring/MONITORING-PLAN.md`
+§9) and changes its canary:
+- Add TOPIC to the GDELT collector, which took domains, mapping each article's language and outlet
+  country from what GDELT returns. The source label comes from the registry, never an article.
+- Un-hold GDELT, with the live FOUND recording it was held for as a fixture. Attribution travels
+  on its evidence.
+- GDELT's empty answer is "returned nothing — unconfirmed", never a confident NOT_FOUND and never
+  "0 articles". A list that reached the cap is "newest 250 only", never readable as a rise.
+- One request every five seconds, shared across tenants by the Redis limiter, proved across two
+  workers. A topic run that used only GDELT stays person data (Day 1).
+- A canary whose pass means GDELT is up, not that any query found something, and says so.
+- The RSS collector, the monitoring page and the scheduler are later days.
+
+**Pre-flight.**
+- The base is 51a7576 (Day 1), the same as `origin/main`; the tracked tree was clean.
+- The clean worktree `D:/vestigo-baseline` was reset to 51a7576; it held Day 1's change
+  uncommitted, identical but for the record's pipeline placeholder.
+- The baseline took five runs. Runs 1 to 4 each failed on a different load or pause timeout, and
+  each test passed alone: a web worker that did not start; a web lookup that timed out; a run the
+  machine slept through; database and Redis waits. Run 5, at turbo concurrency 2: 54 of 54
+  tasks, nothing cached, 2,163 tests, as Day 1; fabrication clean on 499 files; 181 symbols.
+
+**The live recording.** GDELT refused this address most of the day: 429 ("Please limit requests to
+one every 5 seconds"), from the first request, or a refused connection. Polling every ten minutes,
+one request was answered:
+- `"climate change"`, 17:27 UTC, through the collectors package's own fetcher: 200, 166 articles
+  from 150 outlet domains in 20 languages, each with all eight fields. `language` and
+  `sourcecountry` are names ("English", "United States"), not codes; `url_mobile` is blank in 140,
+  `socialimage` in 24, `sourcecountry` in 3; every `seendate` is `YYYYMMDDTHHMMSSZ`, newest first.
+- Under the 250 cap, yet its seendates run from 14:30 to 17:00 UTC that day, of the three months
+  asked for: a list under the cap is not all the coverage in the window either.
+- Stored as `test/fixtures/news/found.json`, recorded-redacted: titles become `[headline N]`, and
+  the paths of `url`, `url_mobile` and `socialimage` become placeholders (the first URL named a
+  person). Everything else is as received; GDELT's layout was rebuilt byte for byte from the
+  parsed answer before redacting, and the received body's SHA-256 is in the notes.
+- Not recorded, every attempt answered 429: the canary's own answer (`canary-found.json` is
+  synthetic and says so) and a FOUND for a domain phrase, the Phase 3B condition.
+
+**Built, in two commits.**
+1. **The ruling** (6c230e5), in a commit of its own with its golden diff, as coverage requires:
+   - EMPTY_UNCONFIRMED, appended to the job outcomes and coverage states (`packages/core`), worded
+     RETURNED NOTHING (UNCONFIRMED). A report keeps its wording, so a stored one may lack a label
+     added since: the API reads it partially, and the PDF prints the state's own name.
+   - `ctx.emptyUnconfirmed` (a 2xx this run received, a detail, network collectors only). A
+     collector declaring `emptyAnswersUnreliable` cannot return `notFound()`.
+   - Migration 0027 appends the enum value and lets a job keep its detail
+     (`jobs_detail_only_empty_answers`, compared as text, as 0025 did).
+   - The job SUCCEEDS with its detail, is never retried, and is the circuit's success.
+   - Coverage (`packages/case-engine`): its own state, counted apart in the headline ("1 returned
+     nothing — unconfirmed") with a caveat; a breakdown lists it as ran, never found nothing;
+     ENGINE_VERSION 6.
+   - Golden files rewritten with `WRITE_GOLDEN=1`, every existing row unchanged: the outcomes are
+     ordered as first written, then null, then added ones. Six rows were added; the large run
+     gained its 60 jobs, so its name, headline and caveats changed.
+   - Web: the Unconfirmed chip in the hypothesis grey (DESIGN-SYSTEM D9); its row gives the
+     collector's words, never "0 evidence records"; its own count chip; a gap on the Overview.
+2. **GDELT** (the commit after it):
+   - `news` 2.0.0 takes DOMAIN and TOPIC. A topic is one exact phrase, less one pair of outer
+     straight or curly quotes. A quote mark inside, or nothing inside the quotes, is refused before
+     anything is sent (`TARGET_NOT_SEARCHABLE`): it would end the phrase and turn the rest into
+     GDELT's operators. A hashtag is sent as typed.
+   - An empty answer runs the canary: `"government"`, the documented default list of 75, the same
+     window and the same shared limit. Articles back: EMPTY_UNCONFIRMED, its detail ending "A
+     passing canary means GDELT is up — not that any query found something." Nothing back:
+     UNAVAILABLE, GDELT is not answering searches. A refused canary is UNAVAILABLE and says so.
+   - The result states the search sent, `newest250Only`, the span of seendates it covers, and
+     `volume: { count: null, reason: NOT_MEASURED_BY_AN_ARTICLE_LIST }`; `returnedCount` and
+     `capped` are gone, so no figure in it counts coverage.
+   - Comments that called GDELT's `{}` and seendate "documented" now say recorded.
+   - Registered, appended to `PLATFORM_COLLECTORS`; `HELD_PLATFORM_COLLECTORS` is empty, exported.
+   - Fusion: a news extractor that checks the result and draws nothing yet (no entity, no claim,
+     no count), so a TOPIC fuses without an entity kind.
+
+**Review.** An adversarial review was started (five lenses, two refuting skeptics per finding) and
+did not finish: the session ended while its reviewers ran, and at the owner's request for speed it
+was not run again. The risky pieces were checked directly instead, and by the removals below.
+
+**Shown failing on the code before the change** (each piece removed, the tests run, the file
+restored byte for byte, hash checked):
+- **An empty answer as NOT_FOUND**, as before: the runtime refused it, and five honesty tests
+  failed.
+- **Without TOPIC:** 16 news tests failed, the live-recording FOUND test among them.
+- **Without the newest-250 flag:** the cap test failed.
+- **GDELT's limit at one a second:** the two-worker test failed on Redis's clock.
+- **news not registered,** as before: the API's GDELT-only topic run planned nothing, and the suite
+  failed.
+- **Without GDELT's attribution:** the evidence test failed.
+
+**Pipeline** (`pnpm turbo lint typecheck test --force --continue --concurrency=2`, in the clean
+worktree: at commit 1, then with commit 2's change mirrored into it, every file identical to the
+commit but this record's pipeline lines).
+- Commit 1 (6c230e5): 53 of 54 tasks, nothing cached, 2,180 tests (17 more than the baseline's
+  2,163); the fabrication check clean on 499 files; the export check 181 symbols. The one failure
+  was a 30-second timeout in the stream-access test (a member removed mid-stream), which this
+  change does not touch; run alone, that file passed, 7 of 7.
+- Commit 2: 52 of 54 tasks, nothing cached, 2,203 tests (40 more than the baseline); the
+  fabrication check clean on 501 files; 181 symbols. Five tests failed, none of them Day 2's, all
+  in one pause of the machine: four 30-second timeouts were reported after 363 to 370 seconds, in
+  the api and osint-engine suites at once, and a fifth test lost its database connection just
+  after. Docker ran throughout. The two suites rerun alone in the same worktree, their builds
+  cached: api 239 of 239, osint-engine 179 of 179.
+
+| Package | Tests | Package | Tests |
+|---|---|---|---|
+| core | 33 | osint-engine | 179 |
+| access | 67 | worker | 4 |
+| config | 265 | api | 239 |
+| case-engine | 77 | ui | 95 |
+| collectors | 504 | web | 183 |
+| llm | 130 | integrations | 122 |
+| db | 305 | | |
+
+**Open for the owner.**
+- **Domains.** news keeps DOMAIN, as item 1 and §4.2 read. No live FOUND for a domain phrase could
+  be recorded, and GDELT's answers covered only the newest hours, so most domain searches will be
+  unconfirmed. Every domain run, for every tenant, now spends one or two GDELT requests. In
+  production it is the one domain collector that runs, the others being unverified. One line
+  (`targetTypes`) makes it topic-only.
+- **Case engine.** The ruling touched `packages/case-engine` and its R1 code, against the Track M
+  ruling that it would not: without it, coverage reads an unconfirmed answer as NOTHING FOUND.
+- **Stored case analyses read STALE** after deploy: ENGINE_VERSION 6, and the held list changed.
+- **GDELT is under strain.** It asks (blog, 2026-06-30) that searches move to its ngram files for
+  now, and its 429 counts toward the circuit, as every collector's 429 does.
+- **D9**, the Unconfirmed chip's colour.
+- **The canary and the domain recordings** are still to be made when GDELT answers this address.
+
+**Noted.** `PROJECT-BRIEF.md`, `R1-HONESTY.md` and `R1-PLAN.md` still say news is held; they are
+dated snapshots and R1 files, left as they are.

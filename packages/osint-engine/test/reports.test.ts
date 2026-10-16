@@ -19,6 +19,7 @@ import {
   CollectorRegistry,
   CollectorRuntime,
   defineCollector,
+  HELD_PLATFORM_COLLECTORS,
   PLATFORM_COLLECTORS,
   type Collector,
   type SourceDeclaration,
@@ -501,12 +502,10 @@ describe("a report from a real Phase 4 run with one collector failing (RELEASE-B
     }
   });
 
-  it("names the held collector that would have applied, and why it did not run", () => {
-    expect(document.coverage.entries.find((entry) => entry.collectorId === "news")).toMatchObject({
-      state: "HELD",
-      reasonCode: "COLLECTOR_HELD",
-      attempts: null,
-    });
+  it("names no collector as held: news, held until Track M Day 2, is registered now", () => {
+    // The HELD state itself is held to its golden files (coverage-golden.test.ts).
+    expect(HELD_PLATFORM_COLLECTORS).toEqual([]);
+    expect(document.coverage.entries.filter((entry) => entry.state === "HELD")).toEqual([]);
   });
 
   it("labels claims from source values with the evidence's strength, and computed values DERIVED", () => {

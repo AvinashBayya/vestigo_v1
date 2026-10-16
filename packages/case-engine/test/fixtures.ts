@@ -6,7 +6,8 @@
  *     dns found ev1 and ev2 (both pinned); crt found nothing; rdap failed;
  *     wayback found ev3, which is not pinned; gh and wd do not apply;
  *     phone is locked (module not in plan); active is excluded (no scope);
- *     the held news collector applies.
+ *     the news collector, held in this fixture's registry (as the platform
+ *     held it until Track M Day 2), applies.
  *   run B, investigation two, a username, SUCCEEDED:
  *     gh found ev4 (pinned); wd found nothing; the domain collectors do not
  *     apply; phone is locked (vetting not approved).
