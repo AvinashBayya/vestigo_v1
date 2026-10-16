@@ -294,6 +294,32 @@ describe("the discipline breakdown", () => {
     expect(techint.relationships).toEqual({ count: 0, ids: [] });
   });
 
+  it("lists a collector whose source's empty answer is unconfirmed as ran, with that state, never as found nothing (Track M Day 2)", () => {
+    const unconfirmed: CaseInput = {
+      ...CASE,
+      jobs: CASE.jobs.map((job) =>
+        job.id === id("job A crt")
+          ? { ...job, outcome: "EMPTY_UNCONFIRMED", outcomeDetail: "[test] returned nothing" }
+          : job,
+      ),
+    };
+    const groups = sectionOf(breakdown(unconfirmed), "TECHINT").collectors;
+    expect(collectorIds(groups.foundNothing)).toEqual([]);
+    expect(collectorIds(groups.ran)).toEqual(["crt", "dns", "rdap"]);
+    expect(groups.ran.find((group) => group.collectorId === "crt")?.runs).toEqual([
+      {
+        runId: id("run A"),
+        jobId: id("job A crt"),
+        state: "EMPTY_UNCONFIRMED",
+        reasonCode: null,
+        detail: "[test] returned nothing",
+      },
+    ]);
+    // Read as found nothing, the same job is in that group.
+    const groupsBefore = sectionOf(breakdown(), "TECHINT").collectors;
+    expect(collectorIds(groupsBefore.foundNothing)).toEqual(["crt"]);
+  });
+
   it("groups each discipline's collectors by what they did in the case's runs", () => {
     const groups = sectionOf(breakdown(), "TECHINT").collectors;
     expect(collectorIds(groups.registered)).toEqual(["active", "crt", "dns", "late", "rdap"]);

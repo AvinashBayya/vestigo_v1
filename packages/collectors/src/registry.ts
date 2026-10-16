@@ -48,6 +48,12 @@ export interface RegistryEntry {
   readonly availabilityReason: string | null;
   /** Must accompany its data wherever shown; null when the source requires none. */
   readonly attribution: Attribution | null;
+  /**
+   * True when its upstream's empty answer may be false: an empty answer is
+   * EMPTY_UNCONFIRMED, and a not-found is refused. False: an empty answer
+   * means the upstream holds nothing.
+   */
+  readonly emptyAnswersUnreliable: boolean;
 }
 
 const CLAIM_STRENGTHS_FOR_EVIDENCE = ["OBSERVED", "REPORTED", "DERIVED"] as const;
@@ -241,6 +247,19 @@ export class CollectorRegistry {
       if (source.network !== null && d.collectionMode === "LOCAL_ANALYSIS") {
         fail(subject, "LOCAL_ANALYSIS collectors cannot use a networked source");
       }
+      // Read as data, as every field is: only `true` or nothing is a declaration.
+      const declared: unknown = d.emptyAnswersUnreliable;
+      if (declared !== undefined && declared !== true) {
+        fail(subject, "emptyAnswersUnreliable is either true or left out");
+      }
+      const emptyAnswersUnreliable = declared === true;
+      // Only an upstream answers empty; a local analysis that finds nothing knows it.
+      if (emptyAnswersUnreliable && d.collectionMode === "LOCAL_ANALYSIS") {
+        fail(
+          subject,
+          "a LOCAL_ANALYSIS collector has no upstream whose empty answers are unreliable",
+        );
+      }
 
       const { availability, reason } = availabilityOf(source, implementation !== null);
       entries.set(
@@ -261,6 +280,7 @@ export class CollectorRegistry {
           availability,
           availabilityReason: reason,
           attribution: source.attribution,
+          emptyAnswersUnreliable,
         }),
       );
       schemas.set(d.id, d.resultSchema);

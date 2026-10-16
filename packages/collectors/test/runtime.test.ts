@@ -866,6 +866,146 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
   });
 });
 
+describe("an empty answer that cannot be trusted is unconfirmed, never not found (RELEASE-BLOCKING, Track M Day 2)", () => {
+  const unreliable = (id: string, implementation: CollectorImplementation<Names>) =>
+    defineCollector(declaration(id, "one", { emptyAnswersUnreliable: true }), implementation);
+  /** Asks one.test once, then answers with whatever `answer` makes of the response. */
+  const answering =
+    (
+      path: string,
+      answer: (
+        ctx: Parameters<CollectorImplementation<Names>>[0],
+        response: sdk.CapturedResponse,
+      ) => CollectorReturn<Names>,
+    ): CollectorImplementation<Names> =>
+    async (ctx) =>
+      answer(ctx, await ctx.fetch(`http://one.test${path}`, { method: "GET", timeoutMs: 1_000 }));
+
+  it("is EMPTY_UNCONFIRMED, citing the empty response, with no result, no evidence and no zero", async () => {
+    routes.set("one.test/empty", (res) => res.end("{}"));
+    const runtime = runtimeWith([
+      unreliable(
+        "fake.unreliable",
+        answering("/empty", (ctx, response) =>
+          ctx.emptyUnconfirmed(response, "[the source answered with nothing]"),
+        ),
+      ),
+    ]);
+    const outcome = expectStatus(
+      await runtime.execute("fake.unreliable", request()),
+      "EMPTY_UNCONFIRMED",
+    );
+    expect(outcome.detail).toBe("[the source answered with nothing]");
+    expect(outcome.response.kind).toBe("NETWORK");
+    if (outcome.response.kind === "NETWORK") expect(outcome.response.text()).toBe("{}");
+    expect(Object.keys(outcome).sort()).toEqual(["collectorId", "detail", "response", "status"]);
+    expect(foundBy(outcome)).toBeNull();
+    expect(() =>
+      evidenceDrafts(runtime.registry.entry("fake.unreliable"), outcome as unknown as FoundOutcome),
+    ).toThrow(sdk.CollectorDefinitionError);
+  });
+
+  it("refuses a not-found from a collector whose upstream's empty answers are unreliable", async () => {
+    routes.set("one.test/empty", (res) => res.end("{}"));
+    const confident = unreliable(
+      "fake.confident",
+      answering("/empty", (ctx, response) => ctx.notFound(response, "[no coverage]")),
+    );
+    const outcome = expectStatus(
+      await runtimeWith([confident]).execute("fake.confident", request()),
+      "FAILED",
+    );
+    expect(outcome.error.code).toBe("COLLECTOR_CONTRACT_VIOLATION");
+    expect(outcome.error.message).toMatch(/unconfirmed, never as not found/);
+    // The same not-found from a collector whose source's empty answers are reliable stands.
+    const reliable = defineCollector(
+      declaration("fake.reliable", "one"),
+      answering("/empty", (ctx, response) => ctx.notFound(response, "[no coverage]")),
+    );
+    expectStatus(await runtimeWith([reliable]).execute("fake.reliable", request()), "NOT_FOUND");
+  });
+
+  it("cites a 2xx response this run received, and says what came back empty", async () => {
+    routes.set("one.test/error", (res) => res.writeHead(500).end("{}"));
+    routes.set("one.test/gone", (res) => res.writeHead(404).end("{}"));
+    routes.set("one.test/empty", (res) => res.end("{}"));
+    const cases: [string, CollectorImplementation<Names>][] = [
+      [
+        "a 500",
+        answering("/error", (ctx, response) => ctx.emptyUnconfirmed(response, "[nothing]")),
+      ],
+      ["a 404", answering("/gone", (ctx, response) => ctx.emptyUnconfirmed(response, "[nothing]"))],
+      [
+        "a blank detail",
+        answering("/empty", (ctx, response) => ctx.emptyUnconfirmed(response, " ")),
+      ],
+    ];
+    for (const [label, implementation] of cases) {
+      const outcome = expectStatus(
+        await runtimeWith([unreliable("fake.bad", implementation)]).execute("fake.bad", request()),
+        "FAILED",
+      );
+      expect(outcome.error.code, label).toBe("COLLECTOR_CONTRACT_VIOLATION");
+    }
+  });
+
+  it("belongs to a network collector: a local analysis can neither declare it nor give one", async () => {
+    const OFFLINE = testSource("offline", { network: null });
+    const local = (id: string, overrides: Partial<CollectorDeclaration<typeof NAMES_SCHEMA>>) => ({
+      ...declaration(id, "offline"),
+      collectionMode: "LOCAL_ANALYSIS" as const,
+      claimStrength: "DERIVED" as const,
+      ...overrides,
+    });
+    expect(
+      () =>
+        new CollectorRegistry({
+          sources: [...SOURCES, OFFLINE],
+          collectors: [
+            defineCollector(local("fake.local", { emptyAnswersUnreliable: true }), namesFrom("x")),
+          ],
+        }),
+    ).toThrow(/no upstream whose empty answers are unreliable/);
+    const analyser = defineCollector(local("fake.local", {}), (ctx) =>
+      Promise.resolve(ctx.emptyUnconfirmed(ctx.record({ names: [] }), "[nothing]")),
+    );
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({ sources: [...SOURCES, OFFLINE], collectors: [analyser] }),
+      allowUnverifiedSources: true,
+      network: testNetwork(upstream),
+    });
+    const outcome = expectStatus(await runtime.execute("fake.local", request()), "FAILED");
+    expect(outcome.error.code).toBe("COLLECTOR_CONTRACT_VIOLATION");
+  });
+
+  it("lists whether each collector's empty answers are unreliable: only one that declares it", () => {
+    const registry = new CollectorRegistry({
+      sources: SOURCES,
+      collectors: [
+        defineCollector(declaration("fake.default", "one"), namesFrom("one.test")),
+        unreliable("fake.unreliable", namesFrom("one.test")),
+      ],
+    });
+    expect(registry.entry("fake.default").emptyAnswersUnreliable).toBe(false);
+    expect(registry.entry("fake.unreliable").emptyAnswersUnreliable).toBe(true);
+    for (const odd of [false, "true", 1]) {
+      expect(
+        () =>
+          new CollectorRegistry({
+            sources: SOURCES,
+            collectors: [
+              defineCollector(
+                declaration("fake.odd", "one", { emptyAnswersUnreliable: odd as true }),
+                namesFrom("one.test"),
+              ),
+            ],
+          }),
+        String(odd),
+      ).toThrow(/either true or left out/);
+    }
+  });
+});
+
 describe("metering: every request a run sends is counted, and nothing else (Phase 4)", () => {
   const counting = () => {
     const sent: { sourceId: string; host: string }[] = [];

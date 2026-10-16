@@ -21,9 +21,15 @@
  *      without the places where a collector could not run at all: one
  *      recorded as LICENCE_BLOCKED or NOT_IMPLEMENTED, and every place
  *      without a job of a collector listed as BLOCKED or NOT_IMPLEMENTED.
+ *   6: a job that ended EMPTY_UNCONFIRMED (its source answered with
+ *      nothing, but its empty answers are unreliable) has that coverage
+ *      state, where version 5 read every finished job that found nothing as
+ *      NOTHING_FOUND. A run's headline counts it apart ("returned nothing —
+ *      unconfirmed") and its coverage states the caveat; a discipline's
+ *      breakdown lists it as ran, never as found nothing (Track M Day 2).
  *
  * It is one part of the input hash a stored analysis is keyed by (owner ruling
  * D-3). That hash is computed in R1-b's job, which holds the input it read, and
  * never here (owner ruling, 2026-10-09).
  */
-export const ENGINE_VERSION = 5;
+export const ENGINE_VERSION = 6;

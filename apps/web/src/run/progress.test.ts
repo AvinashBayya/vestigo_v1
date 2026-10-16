@@ -207,6 +207,48 @@ describe("a job's row (D7)", () => {
   });
 });
 
+describe("a job whose source's empty answer is unconfirmed (D9, Track M Day 2)", () => {
+  const unconfirmed = job({
+    status: "SUCCEEDED",
+    outcome: "EMPTY_UNCONFIRMED",
+    outcomeDetail: "[what came back empty, and why that is not nothing]",
+    attempts: 1,
+  });
+
+  it("is UNCONFIRMED, never FOUND_NOTHING, and its row gives the collector's words, never a count", () => {
+    expect(jobRowStatus(unconfirmed)).toBe("UNCONFIRMED");
+    expect(jobStatus(unconfirmed)).toBe("RAN");
+    const item = jobRowItem(unconfirmed, "MEDIAINT");
+    expect(item).toEqual({
+      id: "55555555-5555-4555-8555-555555555555",
+      label: "[Source]",
+      status: "UNCONFIRMED",
+      meta: "MEDIAINT · [what came back empty, and why that is not nothing]",
+    });
+    expect(item.meta).not.toMatch(/\b0\b|evidence record|found nothing/);
+  });
+
+  it("is counted apart in the chips and arriving now, never added to found nothing", () => {
+    const nothing = job({ id: "n", status: "SUCCEEDED", outcome: "NOT_FOUND" });
+    const statuses = [unconfirmed, nothing].map(jobRowStatus);
+    expect(countChips(statuses, 0)).toEqual([
+      { status: "FOUND_NOTHING", text: "1 found nothing" },
+      { status: "UNCONFIRMED", text: "1 returned nothing, unconfirmed" },
+    ]);
+    const rows = arrivingRows([unconfirmed, nothing]);
+    expect(rows.slice(0, 4).map((row) => [row.label, row.value])).toEqual([
+      ["Evidence records", { kind: "value", value: "0" }],
+      ["Collectors that found something", { kind: "value", value: "0" }],
+      ["Collectors that found nothing", { kind: "value", value: "1" }],
+      ["Collectors that returned nothing, unconfirmed", { kind: "value", value: "1" }],
+    ]);
+    // Without one, no row for it: an absent status is never shown as 0.
+    expect(arrivingRows([nothing]).map((row) => row.label)).not.toContain(
+      "Collectors that returned nothing, unconfirmed",
+    );
+  });
+});
+
 describe("a collector the plan left out", () => {
   const row = {
     collectorId: "[collector]",

@@ -191,6 +191,38 @@ describe("what a job recorded is written once (RELEASE-BLOCKING)", () => {
       ),
     ).rejects.toBeInstanceOf(ConstraintViolationError);
   });
+
+  it("keeps what came back empty for a not-found and for an unconfirmed empty answer, and for nothing else (Track M Day 2)", async () => {
+    for (const outcome of ["NOT_FOUND", "EMPTY_UNCONFIRMED"] as const) {
+      const done = await db.withTenant(tenant.tenantId, async ({ repos }) => {
+        const { job } = await repos.jobs.createOrFind(newJob(`detail:${outcome}`));
+        return repos.jobs.transition(job.id, {
+          status: "SUCCEEDED",
+          outcome,
+          outcomeDetail: "[what came back empty]",
+        });
+      });
+      expect([done?.outcome, done?.outcomeDetail, done?.result, done?.evidenceIds]).toEqual([
+        outcome,
+        "[what came back empty]",
+        null,
+        null,
+      ]);
+    }
+    for (const outcome of ["FOUND", "FAILED", "UNAVAILABLE"] as const) {
+      await expect(
+        db.withTenant(tenant.tenantId, async ({ repos }) => {
+          const { job } = await repos.jobs.createOrFind(newJob(`detail:refused:${outcome}`));
+          return repos.jobs.transition(job.id, {
+            status: outcome === "FOUND" ? "SUCCEEDED" : "FAILED",
+            outcome,
+            outcomeDetail: "[a detail no empty answer gave]",
+          });
+        }),
+        outcome,
+      ).rejects.toBeInstanceOf(ConstraintViolationError);
+    }
+  });
 });
 
 describe("quotas are set by operators only", () => {

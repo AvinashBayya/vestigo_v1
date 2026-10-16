@@ -5,6 +5,9 @@ import { cn } from "./cn.ts";
  * everywhere. FOUND_NOTHING (ran, and the source had nothing for the target:
  * a measured zero, not a failure) and LOCKED (access to the run was withdrawn
  * while it was open) were added in U1-b; §12 D7 records their colour.
+ * UNCONFIRMED (ran, and the source answered with nothing, but its empty
+ * answers are unreliable: never a found nothing, never zero) was added in
+ * Track M Day 2; §12 D9 records its colour.
  */
 export const COLLECTOR_STATUSES = [
   "READY",
@@ -13,6 +16,7 @@ export const COLLECTOR_STATUSES = [
   "RAN",
   "PARTIAL",
   "FOUND_NOTHING",
+  "UNCONFIRMED",
   "RUNNING",
   "QUEUED",
   "FAILED",
@@ -30,6 +34,7 @@ export const COLLECTOR_STATUS_LABEL: Readonly<Record<CollectorStatus, string>> =
   RAN: "Ran",
   PARTIAL: "Partial",
   FOUND_NOTHING: "Found nothing",
+  UNCONFIRMED: "Unconfirmed",
   RUNNING: "Running",
   QUEUED: "Queued",
   FAILED: "Failed",
@@ -62,8 +67,9 @@ const DOT: Readonly<Record<Tone, string>> = {
 };
 
 /**
- * Seven statuses share the hypothesis grey and differ by word alone: none of
- * them produced a result (§3). FOUND_NOTHING and LOCKED join them (D7).
+ * Eight statuses share the hypothesis grey and differ by word alone: none of
+ * them produced a result (§3). FOUND_NOTHING and LOCKED join them (D7), and
+ * UNCONFIRMED (D9).
  */
 const TONE: Readonly<Record<CollectorStatus, Tone>> = {
   READY: "observed",
@@ -72,6 +78,7 @@ const TONE: Readonly<Record<CollectorStatus, Tone>> = {
   RAN: "observed",
   PARTIAL: "observed",
   FOUND_NOTHING: "none",
+  UNCONFIRMED: "none",
   RUNNING: "running",
   QUEUED: "none",
   FAILED: "failed",

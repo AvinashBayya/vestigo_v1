@@ -87,7 +87,7 @@ describe("StatusChip", () => {
       </>,
     );
     expect(document.body.textContent).toBe(
-      "ReadyNeeds keyUnavailableRanPartialFound nothingRunningQueuedFailedSkippedHeldCancelledLocked",
+      "ReadyNeeds keyUnavailableRanPartialFound nothingUnconfirmedRunningQueuedFailedSkippedHeldCancelledLocked",
     );
   });
 });

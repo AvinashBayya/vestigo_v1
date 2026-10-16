@@ -9,6 +9,7 @@ export {
   coverageHeadline,
   runCoverage,
   sourceLabelOf,
+  UNCONFIRMED_CAVEAT,
   type CoverageCollector,
   type CoverageExclusion,
   type CoverageHeldCollector,

@@ -146,9 +146,18 @@ const SOURCE_FAULTS = new Set([
 
 export type CircuitVerdict = "SUCCESS" | "FAILURE" | "NEUTRAL";
 
-/** What an outcome says about its source's health. */
+/**
+ * What an outcome says about its source's health. An unconfirmed empty answer
+ * is the source answering: whether the answer is true is another matter.
+ */
 export function circuitVerdict(outcome: CollectionOutcome): CircuitVerdict {
-  if (outcome.status === "FOUND" || outcome.status === "NOT_FOUND") return "SUCCESS";
+  if (
+    outcome.status === "FOUND" ||
+    outcome.status === "NOT_FOUND" ||
+    outcome.status === "EMPTY_UNCONFIRMED"
+  ) {
+    return "SUCCESS";
+  }
   if (
     (outcome.status === "UNAVAILABLE" || outcome.status === "FAILED") &&
     SOURCE_FAULTS.has(outcome.error.code)

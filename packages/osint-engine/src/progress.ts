@@ -12,7 +12,7 @@ export interface JobProgress {
   readonly collectorId: string;
   readonly status: JobStatus;
   readonly outcome: JobOutcome | null;
-  /** What a NOT_FOUND said; null otherwise. */
+  /** What a NOT_FOUND said, or what an EMPTY_UNCONFIRMED said came back empty; null otherwise. */
   readonly outcomeDetail: string | null;
   /** Why the last attempt failed; null when it did not. */
   readonly error: { readonly code: string; readonly message: string } | null;

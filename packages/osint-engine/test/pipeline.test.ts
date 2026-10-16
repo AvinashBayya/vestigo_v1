@@ -15,6 +15,8 @@
  */
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createServer } from "node:http";
+import { connect, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -1140,6 +1142,89 @@ describe("a spent quota refuses before anything is dispatched", () => {
 });
 
 // ── Retries by cause ──────────────────────────────────────────────────────
+
+describe("an empty answer its source cannot be trusted on is recorded as such (RELEASE-BLOCKING, Track M Day 2)", () => {
+  it("completes the job EMPTY_UNCONFIRMED with the collector's words: no evidence, no retry, no zero", async () => {
+    // A local upstream that answers every request 200 with nothing in it.
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" }).end("{}");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    const unconfirmed = defineCollector(
+      {
+        id: "fake.unconfirmed",
+        version: "1.0.0",
+        displayName: "[fake unconfirmed search]",
+        discipline: "TECHINT",
+        targetTypes: ["DOMAIN"],
+        collectionMode: "PASSIVE_API",
+        source: "unconfirmed-upstream",
+        credentials: { vaultIds: [], runsWithout: true },
+        claimStrength: "REPORTED",
+        timeoutMs: 5_000,
+        resultSchema: z.object({ names: z.array(z.string()), derived: z.object({}) }),
+        emptyAnswersUnreliable: true,
+      },
+      async (ctx) => {
+        const response = await ctx.fetch("https://unconfirmed-upstream.example/search", {
+          method: "GET",
+          timeoutMs: 2_000,
+        });
+        return ctx.emptyUnconfirmed(response, "[fake: the source answered with nothing]");
+      },
+    );
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({
+        sources: [fakeSource("unconfirmed-upstream", true)],
+        collectors: [unconfirmed],
+      }),
+      allowUnverifiedSources: false,
+      network: {
+        rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) },
+        resolver: () => Promise.resolve([{ address: "1.1.1.1", family: 4 }]),
+        socketFactory: () => connect(port, "127.0.0.1"),
+      },
+    });
+    const engine = await startEngine(runtime);
+    try {
+      const tenant = await newTenant("unconfirmed");
+      const runId = await startRun(engine, tenant, "example.com");
+      const run = await finishedRun(tenant.tenantId, runId);
+      // Every job finished: the run is complete, and its coverage says what is unconfirmed.
+      expect(run?.status).toBe("SUCCEEDED");
+      const job = byCollector(await jobsOf(tenant.tenantId, runId), "fake.unconfirmed");
+      expect({
+        status: job.status,
+        outcome: job.outcome,
+        outcomeDetail: job.outcomeDetail,
+        attempts: job.attempts,
+        evidenceIds: job.evidenceIds,
+        result: job.result,
+        lastErrorCode: job.lastErrorCode,
+      }).toEqual({
+        status: "SUCCEEDED",
+        outcome: "EMPTY_UNCONFIRMED",
+        outcomeDetail: "[fake: the source answered with nothing]",
+        attempts: 1,
+        evidenceIds: null,
+        result: null,
+        lastErrorCode: null,
+      });
+      expect(await evidenceIdsOf(tenant.tenantId)).toEqual([]);
+      // The request it sent is charged once, like any other.
+      expect(await usageOf(tenant.tenantId)).toEqual([{ jobId: job.id, attempt: 1, quantity: 1 }]);
+    } finally {
+      await engine.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      });
+    }
+  }, 30_000);
+});
 
 describe("retries distinguish cause", () => {
   it("fails a refused request at once, with no retry; retries only UNAVAILABLE", async () => {

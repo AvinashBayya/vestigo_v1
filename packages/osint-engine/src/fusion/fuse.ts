@@ -13,8 +13,10 @@
  * organisation without an external identifier is always a new entity.
  *
  * The run's status tells the truth about partial completion: SUCCEEDED only
- * when every job succeeded (FOUND or NOT_FOUND), PARTIAL when some did and
- * some failed, FAILED when none did. A failed job is never smoothed away.
+ * when every job succeeded (FOUND, NOT_FOUND or EMPTY_UNCONFIRMED), PARTIAL
+ * when some did and some failed, FAILED when none did. A failed job is never
+ * smoothed away, and an unconfirmed empty answer is never read as nothing
+ * found: its coverage says so (@repo/case-engine).
  */
 import type { CollectorRegistry } from "@repo/collectors";
 import { AppError, type JobStatus, type RunStatus, type TenantId } from "@repo/core";

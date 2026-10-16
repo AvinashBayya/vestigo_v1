@@ -55,6 +55,11 @@ export const COVERAGE_STATES = [
   "EXCLUDED",
   /** Built but held off the platform, so it never runs (see its reason). */
   "HELD",
+  /**
+   * The collector ran and the source answered with nothing, but its empty
+   * answers are unreliable: unconfirmed, never a finding that it has nothing.
+   */
+  "EMPTY_UNCONFIRMED",
 ] as const;
 export type CoverageState = (typeof COVERAGE_STATES)[number];
 

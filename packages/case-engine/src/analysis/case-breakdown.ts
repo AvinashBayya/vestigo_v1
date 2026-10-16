@@ -199,7 +199,11 @@ export interface DisciplineCollectors {
    * lists it under that registration, with its label and discipline.
    */
   readonly registered: readonly CollectorRef[];
-  /** Its code ran: it found something, found nothing, or failed. */
+  /**
+   * Its code ran: it found something, found nothing, failed, or its source
+   * answered with nothing that is unconfirmed (EMPTY_UNCONFIRMED, here only,
+   * with that state on the run: never in foundNothing).
+   */
   readonly ran: readonly CollectorRuns[];
   readonly foundSomething: readonly CollectorRuns[];
   readonly foundNothing: readonly CollectorRuns[];
@@ -311,13 +315,16 @@ function section(
   // A collector whose job completed in one of the case's runs collected then,
   // so its zero is measured, whether or not it may run now (held, or listed as
   // BLOCKED or NOT_IMPLEMENTED). A refused, failed or unfinished job did not.
+  // An unconfirmed empty answer completed too: the zero is of the records the
+  // case holds, and the source's own answer is never read as zero.
   const completedInCase = collectors.some((collector) =>
     collector.runs.some(
       (run) =>
         run.jobId !== null &&
         (run.state === "COLLECTED" ||
           run.state === "COLLECTED_NOT_PINNED" ||
-          run.state === "NOTHING_FOUND"),
+          run.state === "NOTHING_FOUND" ||
+          run.state === "EMPTY_UNCONFIRMED"),
     ),
   );
   const isLock = (run: CaseCollectorRun): boolean =>
@@ -394,12 +401,14 @@ function section(
           (run.state === "COLLECTED" ||
             run.state === "COLLECTED_NOT_PINNED" ||
             run.state === "NOTHING_FOUND" ||
+            run.state === "EMPTY_UNCONFIRMED" ||
             run.state === "FAILED"),
       ),
       foundSomething: inGroup(
         collectors,
         (run) => run.state === "COLLECTED" || run.state === "COLLECTED_NOT_PINNED",
       ),
+      // Never an unconfirmed empty answer: that one is in `ran`, with its state.
       foundNothing: inGroup(collectors, (run) => run.state === "NOTHING_FOUND"),
       failed: inGroup(
         collectors,

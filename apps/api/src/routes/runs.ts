@@ -41,7 +41,10 @@ const JobView = z.object({
   status: z.enum(JOB_STATUSES),
   /** The last attempt's outcome; null before any attempt finished. */
   outcome: z.enum(JOB_OUTCOMES).nullable(),
-  /** What a NOT_FOUND said was not found; null otherwise. */
+  /**
+   * What a NOT_FOUND said was not found, or what an EMPTY_UNCONFIRMED said came
+   * back empty (its source's empty answers are unreliable); null otherwise.
+   */
   outcomeDetail: z.string().nullable(),
   /** Why the last attempt did not succeed; null when it did, or none finished. */
   error: z.object({ code: z.string(), message: z.string() }).nullable(),

@@ -331,6 +331,41 @@ describe("a report through the API, from a PARTIAL run (RELEASE-BLOCKING)", () =
     expect(hashContent(served.raw)).toBe(pdf.contentHash);
   });
 
+  it("reads, exports and renders a report generated before a coverage state existed (Track M Day 2)", async () => {
+    // A report keeps the wording it was generated with, so one generated
+    // before EMPTY_UNCONFIRMED existed has no label for it (and no entry in it).
+    const { EMPTY_UNCONFIRMED: added, ...statesBefore } = document.wording.states;
+    expect(added).toBe("RETURNED NOTHING (UNCONFIRMED)");
+    const before: ReportDocument = {
+      ...document,
+      wording: { ...document.wording, states: statesBefore },
+    };
+    const id = await api.db.withTenant(tenantId, async ({ repos }) => {
+      const report = await repos.reports.create({
+        runId,
+        includeSynthesis: false,
+        requestedByUserId: null,
+      });
+      await repos.reports.transition(report.id, {
+        status: "SUCCEEDED",
+        attempts: 1,
+        document: before,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      });
+      return report.id;
+    });
+    const read = await owner.request("GET", `/api/v1/reports/${id}`);
+    expect(read.status, read.body).toBe(200);
+    const served = ReportShape.parse(read.json()).document as ReportDocument;
+    expect(served.wording.states).toEqual(statesBefore);
+    const exported = await owner.request("GET", `/api/v1/reports/${id}/export/json`);
+    expect(exported.status).toBe(200);
+    expect(JSON.parse(exported.body)).toEqual(before);
+    expect((await owner.request("GET", `/api/v1/reports/${id}/export/pdf`)).status).toBe(202);
+    expect((await renderedPdf(owner, id)).status).toBe("READY");
+  });
+
   it("refuses a PDF that could not be rendered, saying why", async () => {
     const failed = await generatedWithoutPdf();
     await api.db.withTenant(tenantId, async ({ repos }) => {

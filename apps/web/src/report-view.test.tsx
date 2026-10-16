@@ -1061,6 +1061,46 @@ describe("the report view", () => {
     );
   });
 
+  it("an unconfirmed empty answer is listed as not collected, under its own stored word, never Found nothing's (D9, Track M Day 2)", async () => {
+    const base = documentWith(GENERATED({}));
+    const document = {
+      ...base,
+      coverage: {
+        ...base.coverage,
+        entries: [
+          ...base.coverage.entries,
+          {
+            collectorId: "[news collector]",
+            sourceLabel: "[News source]",
+            state: "EMPTY_UNCONFIRMED",
+            targetType: "DOMAIN",
+            reasonCode: null,
+            detail: "[what came back empty, and why that is not nothing]",
+            evidenceCount: 0,
+            attempts: 1,
+          },
+        ],
+      },
+      wording: {
+        ...base.wording,
+        states: { ...base.wording.states, EMPTY_UNCONFIRMED: "RETURNED NOTHING (UNCONFIRMED)" },
+      },
+    };
+    fakeApi({
+      [`GET /api/v1/reports/${REPORT_ID}`]: () =>
+        Response.json(report({ includeSynthesis: true, document })),
+    });
+    renderReport();
+    const article = await screen.findByRole("article", { name: "Report" });
+    const missed = within(article).getByRole("region", { name: WORDING.headings.notCollected });
+    const chip = within(missed).getByText("RETURNED NOTHING (UNCONFIRMED)");
+    // Grey, as every status that produced no result (D9), and with its own word.
+    expect(chip.className).toContain("bg-claim-hypothesis-fill");
+    expect(missed.textContent).toContain("[what came back empty, and why that is not nothing]");
+    const collected = within(article).getByRole("region", { name: WORDING.headings.collected });
+    expect(collected.textContent).not.toContain("[News source]");
+  });
+
   it("sets the serif only on the report's own title and prose, never on a container or the screen around it", async () => {
     fakeApi({
       [`GET /api/v1/reports/${REPORT_ID}`]: () =>

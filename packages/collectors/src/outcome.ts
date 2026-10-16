@@ -25,6 +25,9 @@ export interface OutcomeError {
  * FOUND carries a result or produces evidence:
  *   FOUND             something was found, validated, citing captured responses;
  *   NOT_FOUND         the upstream answered and has nothing for this target;
+ *   EMPTY_UNCONFIRMED the upstream answered with nothing, but its empty answers
+ *                     are unreliable: whether it holds anything is unconfirmed,
+ *                     so this is never a finding that it has nothing;
  *   FAILED            it went wrong and retrying will not help;
  *   UNAVAILABLE       it went wrong and retrying later may help;
  *   NEEDS_CREDENTIALS a required tenant credential is missing;
@@ -42,6 +45,14 @@ export type CollectionOutcome =
       readonly collectorId: string;
       readonly detail: string;
       /** The response (or, for a local analysis, the recorded analysis) that said so. */
+      readonly response: Captured;
+    }
+  | {
+      readonly status: "EMPTY_UNCONFIRMED";
+      readonly collectorId: string;
+      /** What came back empty, and why that does not show there is nothing. */
+      readonly detail: string;
+      /** The empty response this run received. */
       readonly response: Captured;
     }
   | { readonly status: "FAILED"; readonly collectorId: string; readonly error: OutcomeError }

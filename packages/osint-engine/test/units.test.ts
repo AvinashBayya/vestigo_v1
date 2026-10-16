@@ -95,6 +95,8 @@ describe("what an outcome says about its source's health", () => {
   it.each([
     ["FOUND", null, "SUCCESS"],
     ["NOT_FOUND", null, "SUCCESS"],
+    // The source answered; that its empty answer cannot be trusted says nothing of its health.
+    ["EMPTY_UNCONFIRMED", null, "SUCCESS"],
     ["UNAVAILABLE", "UPSTREAM_UNAVAILABLE", "FAILURE"],
     ["UNAVAILABLE", "UPSTREAM_TIMEOUT", "FAILURE"],
     ["UNAVAILABLE", "COLLECTOR_TIMEOUT", "FAILURE"],

@@ -158,6 +158,12 @@ export const JOB_OUTCOMES = [
   "UNAVAILABLE",
   "NEEDS_CREDENTIALS",
   "REFUSED",
+  /**
+   * The upstream answered with nothing, and its empty answers are unreliable,
+   * so whether it holds anything is unconfirmed. Never NOT_FOUND, never zero
+   * (Track M Day 2, owner ruling).
+   */
+  "EMPTY_UNCONFIRMED",
 ] as const;
 export type JobOutcome = (typeof JOB_OUTCOMES)[number];
 

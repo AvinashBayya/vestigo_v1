@@ -46,7 +46,8 @@ export function fill(template: string, values: Readonly<Record<string, string | 
 /**
  * Each coverage state as a §3 chip colour; the chip's words are always the
  * report's own. NOTHING_FOUND is a measured empty result: the Found nothing
- * family (D7), never the Ran green.
+ * family (D7), never the Ran green. EMPTY_UNCONFIRMED is its own status (D9),
+ * never Found nothing.
  */
 const STATE_CHIP: Readonly<Record<CoverageState, CollectorStatus>> = {
   COLLECTED: "RAN",
@@ -57,6 +58,7 @@ const STATE_CHIP: Readonly<Record<CoverageState, CollectorStatus>> = {
   NOT_FINISHED: "QUEUED",
   EXCLUDED: "SKIPPED",
   HELD: "HELD",
+  EMPTY_UNCONFIRMED: "UNCONFIRMED",
 };
 
 /**

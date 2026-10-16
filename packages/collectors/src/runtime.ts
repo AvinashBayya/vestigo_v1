@@ -162,7 +162,9 @@ function outcomeOfError(
  *   - a scope authorisation for the exact target, for ACTIVE collectors;
  *   - required credentials are present.
  * Then the collector runs within its budget, with a fetch bound to its source,
- * and its return must be a found()/notFound() from this very run.
+ * and its return must be a found(), notFound() or emptyUnconfirmed() from this
+ * very run. A collector whose upstream's empty answers are unreliable can never
+ * return notFound().
  */
 export class CollectorRuntime {
   readonly #registry: CollectorRegistry;
@@ -295,6 +297,8 @@ export class CollectorRuntime {
         makeReturn(run, { kind: "FOUND", result, evidence }),
       notFound: (response: Captured, detail: string) =>
         makeReturn(run, { kind: "NOT_FOUND", response, detail }),
+      emptyUnconfirmed: (response: Captured, detail: string) =>
+        makeReturn(run, { kind: "EMPTY_UNCONFIRMED", response, detail }),
       record: (output: unknown) => {
         if (entry.collectionMode !== "LOCAL_ANALYSIS") {
           throw new CollectorDefinitionError(
@@ -351,7 +355,9 @@ export class CollectorRuntime {
     const violation = (message: string) =>
       failed(entry.id, "COLLECTOR_CONTRACT_VIOLATION", message);
     if (returningRun(returned) !== run) {
-      return violation("The collector did not return found() or notFound() from its own run.");
+      return violation(
+        "The collector did not return found(), notFound() or emptyUnconfirmed() from its own run.",
+      );
     }
     const value = returned as
       | {
@@ -359,8 +365,9 @@ export class CollectorRuntime {
           readonly result: unknown;
           readonly evidence: readonly EvidenceItem[];
         }
+      | { readonly kind: "NOT_FOUND"; readonly response: Captured; readonly detail: string }
       | {
-          readonly kind: "NOT_FOUND";
+          readonly kind: "EMPTY_UNCONFIRMED";
           readonly response: Captured;
           readonly detail: string;
         };
@@ -373,7 +380,34 @@ export class CollectorRuntime {
         ? captured.kind === "LOCAL"
         : captured.kind === "NETWORK" && okStatus(captured.status));
 
+    if (value.kind === "EMPTY_UNCONFIRMED") {
+      // An unreliable empty answer is an upstream's; a local analysis has none.
+      if (local) {
+        return violation(
+          "Only a network collector's upstream can answer empty unreliably; a local analysis that found nothing reports not found.",
+        );
+      }
+      if (!citable(value.response, OK_FOR_FOUND)) {
+        return violation("An unconfirmed empty answer must cite a 2xx response this run received.");
+      }
+      if (value.detail.trim().length === 0) {
+        return violation("An unconfirmed empty answer must say what came back empty.");
+      }
+      return Object.freeze({
+        status: "EMPTY_UNCONFIRMED",
+        collectorId: entry.id,
+        detail: value.detail,
+        response: value.response,
+      });
+    }
+
     if (value.kind === "NOT_FOUND") {
+      // Its upstream's empty answers may be false, so none is "nothing there".
+      if (entry.emptyAnswersUnreliable) {
+        return violation(
+          "This collector's upstream gives unreliable empty answers, so it reports one as unconfirmed, never as not found.",
+        );
+      }
       if (!citable(value.response, OK_FOR_NOT_FOUND)) {
         return violation(
           local
