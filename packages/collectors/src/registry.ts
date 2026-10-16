@@ -7,7 +7,15 @@ import {
   type CommercialUseVerdict,
   type TargetType,
 } from "@repo/core";
+import { disciplineFitsOperatorCollector } from "@repo/access";
 import type { z } from "zod";
+import {
+  isKeyedAccessMethod,
+  OPERATOR_ID_PREFIX,
+  usableMethods,
+  type AccessMethod,
+  type DeclaredAccess,
+} from "./access.ts";
 import { implementationOf, type Collector, type CollectorImplementation } from "./contract.ts";
 import { CollectorDefinitionError, UnknownCollectorError } from "./errors.ts";
 import { declaresDerivedBlock } from "./provenance.ts";
@@ -20,11 +28,14 @@ import {
 } from "./source.ts";
 
 /**
- * Whether a collector can run, before any per-request check:
+ * A collector's licence and implementation status, from code alone:
  *   AVAILABLE        PERMITTED source, implemented;
- *   UNVERIFIED       runs only where configuration allows unverified sources;
+ *   UNVERIFIED       its source's licence is unverified, so it never runs
+ *                    (owner instruction, 2026-10-16);
  *   BLOCKED          never runs, whatever the configuration;
  *   NOT_IMPLEMENTED  listed, but there is no code to run.
+ * Whether it runs in a deployment also needs one of its access methods to be
+ * enabled there: CollectorRuntime.access says, from the two together.
  */
 export type Availability = "AVAILABLE" | "UNVERIFIED" | "BLOCKED" | "NOT_IMPLEMENTED";
 
@@ -41,6 +52,12 @@ export interface RegistryEntry {
   readonly claimStrength: "OBSERVED" | "REPORTED" | "DERIVED";
   readonly timeoutMs: number;
   readonly credentials: { readonly vaultIds: readonly string[]; readonly runsWithout: boolean };
+  /**
+   * The access methods it can use, in its source's order: open when it runs
+   * without a credential, its source's keyed method when it names vault ids.
+   * Whether each is enabled is the deployment's (CollectorRuntime.access).
+   */
+  readonly accessMethods: readonly AccessMethod[];
   readonly source: Source;
   readonly commercialUse: CommercialUseVerdict;
   readonly availability: Availability;
@@ -79,6 +96,7 @@ function deepFreezeSource(source: SourceDeclaration): Source {
   return Object.freeze({
     id: source.id,
     name: source.name,
+    access: Object.freeze<DeclaredAccess>([...source.access]),
     licence: Object.freeze({
       commercialUse: source.licence.commercialUse,
       reason: source.licence.reason,
@@ -165,6 +183,8 @@ export class CollectorRegistry {
     const implementations = new Map<string, CollectorImplementation<unknown>>();
     const schemas = new Map<string, z.ZodType>();
     const labels = new Set<string>();
+    // Which source each tenant vault id belongs to.
+    const vaultOwners = new Map<string, string>();
     for (const collector of options.collectors) {
       const d = collector.declaration;
       const subject = `collector "${d.id}"`;
@@ -206,11 +226,54 @@ export class CollectorRegistry {
           );
         }
       }
+      // The collector reaches its source only by a method the source declares.
+      if (d.credentials.runsWithout && !source.access.includes("open")) {
+        fail(
+          subject,
+          `runs without a credential, which is the open method, and source "${source.id}" does not declare it`,
+        );
+      }
+      const keyed = source.access.find(isKeyedAccessMethod);
+      if (d.credentials.vaultIds.length > 0 && keyed === undefined) {
+        fail(
+          subject,
+          `names tenant vault ids, so source "${source.id}" must declare a keyed method: official, licensed or operator`,
+        );
+      }
+      const accessMethods = usableMethods(source.access, d.credentials);
+      const operator = accessMethods.includes("operator");
+      if (operator !== d.id.startsWith(OPERATOR_ID_PREFIX)) {
+        fail(
+          subject,
+          `an id starts "${OPERATOR_ID_PREFIX}" exactly when the collector reads through the operator method`,
+        );
+      }
+      // An operator's own collector may read people whatever it says it reads:
+      // it counts as person data, fail closed (@repo/access).
+      if (operator && !disciplineFitsOperatorCollector(d.discipline)) {
+        fail(
+          subject,
+          "reads through the operator method, so it is a person collector: declare it in the person discipline",
+        );
+      }
       for (const vaultId of d.credentials.vaultIds) {
         if (!VAULT_ID.test(vaultId)) fail(subject, `vault id "${vaultId}" is malformed`);
       }
       if (new Set(d.credentials.vaultIds).size !== d.credentials.vaultIds.length) {
         fail(subject, "credentials.vaultIds has duplicates");
+      }
+      // A tenant key belongs to one source and its one keyed method. A
+      // collector on another source may not name it, so a key never reaches a
+      // source it was not set for: an attached collector naming "github", say.
+      for (const vaultId of d.credentials.vaultIds) {
+        const owner = vaultOwners.get(vaultId);
+        if (owner !== undefined && owner !== source.id) {
+          fail(
+            subject,
+            `vault id "${vaultId}" belongs to source "${owner}": a tenant key is one source's`,
+          );
+        }
+        vaultOwners.set(vaultId, source.id);
       }
       if (d.credentials.vaultIds.length === 0 && !d.credentials.runsWithout) {
         fail(subject, "a collector needing no credentials must run without them");
@@ -275,6 +338,7 @@ export class CollectorRegistry {
           claimStrength: d.claimStrength,
           timeoutMs: d.timeoutMs,
           credentials: d.credentials,
+          accessMethods: Object.freeze(accessMethods),
           source,
           commercialUse: source.licence.commercialUse,
           availability,

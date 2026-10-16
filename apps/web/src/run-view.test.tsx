@@ -55,7 +55,9 @@ function progressStream() {
 
 /** The collector list: the plan's left-out sources are in it; the test jobs' collectors are not. */
 const COLLECTORS = {
-  unverifiedSourcesAllowed: true,
+  unverifiedSourcesAllowed: false,
+  accessMethodsEnabled: ["open", "official", "licensed"],
+  sources: [],
   items: [
     {
       id: "unlicensed-source",
@@ -77,6 +79,13 @@ const COLLECTORS = {
     credentials: { vaultIds: [], runsWithout: true },
     availability: "AVAILABLE",
     availabilityReason: null,
+    sourceId: `[source of ${entry.id}]`,
+    access: {
+      methods: [{ kind: "open", enabled: true, licenceVerdict: "PERMITTED", runnable: true }],
+      runsVia: ["open"],
+      refusal: null,
+      reason: null,
+    },
   })),
 };
 

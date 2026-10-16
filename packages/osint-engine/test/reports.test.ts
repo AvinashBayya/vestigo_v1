@@ -1114,6 +1114,7 @@ describe("report generation fails honestly, never with a partial answer", () => 
 const ATTRIBUTED: SourceDeclaration = {
   id: "attributed-local",
   name: "[Attributed source]",
+  access: ["open"],
   licence: {
     commercialUse: "PERMITTED",
     reason: "[test source]",
@@ -1151,7 +1152,6 @@ describe("attribution required by a source is carried into the report (RELEASE-B
   it("lists the attribution in the document and prints it in the PDF", async () => {
     const runtime = new CollectorRuntime({
       registry: new CollectorRegistry({ sources: [ATTRIBUTED], collectors: [attributedCollector] }),
-      allowUnverifiedSources: false,
       network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
     });
     const engine = await startEngine(

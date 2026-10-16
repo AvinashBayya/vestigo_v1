@@ -24,8 +24,10 @@ import {
   type CollectionOutcome,
   type Collector,
   type DispatchRequest,
+  type AccessMethod,
   type UpstreamRateLimiter,
 } from "./index.ts";
+import { replayRecordedAnswers } from "./runtime.ts";
 
 /** The package's recorded fixtures: test/fixtures, from src/ or dist/ alike. */
 export const FIXTURES_DIR = join(import.meta.dirname, "..", "test", "fixtures");
@@ -104,11 +106,21 @@ const DROPPED_HEADERS = new Set([
   "connection",
 ]);
 
+/**
+ * A runtime over the platform catalogue whose every request is answered from
+ * `fixtures`. `allowUnverifiedSources` (default true) lets it replay recorded
+ * answers for an UNVERIFIED source, as no deployment can: an UNVERIFIED source
+ * never runs, but its collector's parsing is still tested on what its
+ * upstream once answered, and a replay never contacts the source. False
+ * refuses them as a deployment does. BLOCKED is refused either way, and so is
+ * a method `accessMethods` does not enable (the deployment default unless given).
+ */
 export async function startHarness(options: {
   readonly collectors: readonly Collector[];
   readonly fixtures: readonly Fixture[];
   readonly rateLimiter?: UpstreamRateLimiter;
   readonly allowUnverifiedSources?: boolean;
+  readonly accessMethods?: readonly AccessMethod[];
 }): Promise<Harness> {
   const byKey = new Map(options.fixtures.map((f) => [`${f.request.host}${f.request.path}`, f]));
   const requests: RecordedRequest[] = [];
@@ -136,7 +148,7 @@ export async function startHarness(options: {
   const declared = new Set(PLATFORM_SOURCES.flatMap((source) => source.network?.hosts ?? []));
   const runtime = new CollectorRuntime({
     registry: new CollectorRegistry({ sources: PLATFORM_SOURCES, collectors: options.collectors }),
-    allowUnverifiedSources: options.allowUnverifiedSources ?? true,
+    ...(options.accessMethods === undefined ? {} : { accessMethods: options.accessMethods }),
     network: {
       rateLimiter: options.rateLimiter ?? ALWAYS_ALLOW,
       resolver: (host) =>
@@ -146,6 +158,7 @@ export async function startHarness(options: {
       socketFactory: () => connect(port, "127.0.0.1"),
     },
   });
+  if (options.allowUnverifiedSources ?? true) replayRecordedAnswers(runtime);
 
   return {
     runtime,

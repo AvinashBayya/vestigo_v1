@@ -3,7 +3,7 @@
  * each package.json. Lint rules stop the imports; this stops the dependency
  * itself, so the boundary has two independent layers.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
@@ -122,4 +122,47 @@ describe("a deployed app installs what it runs (RELEASE-BLOCKING)", () => {
       expect([...missing].sort()).toEqual([]);
     });
   }
+});
+
+describe("no product path can replay an UNVERIFIED source (RELEASE-BLOCKING; access methods)", () => {
+  // The fixture harness (@repo/collectors/testing) alone holds the grant that
+  // lets a runtime replay recorded answers for an UNVERIFIED source, on its own
+  // loopback fixture server. Nothing a deployment runs may load it, so no
+  // runtime the API or a worker builds can run an UNVERIFIED source.
+  const LOADS_THE_HARNESS =
+    /(?:from\s*|import\s*\(\s*|require\s*\(\s*)["']@repo\/collectors\/testing["']/;
+
+  it("no app or package source loads @repo/collectors/testing; only tests do", () => {
+    const loading: string[] = [];
+    for (const base of ["apps", "packages"]) {
+      for (const name of readdirSync(join(root, base))) {
+        const src = join(root, base, name, "src");
+        if (!existsSync(src) || !statSync(src).isDirectory()) continue;
+        for (const file of runtimeSources(src)) {
+          if (LOADS_THE_HARNESS.test(readFileSync(file, "utf8"))) {
+            loading.push(
+              file
+                .slice(root.length + 1)
+                .split("\\")
+                .join("/"),
+            );
+          }
+        }
+      }
+    }
+    expect(loading).toEqual([]);
+  });
+
+  it("recognises the forms a load takes, so the check above cannot pass by missing one", () => {
+    for (const load of [
+      'import { startHarness } from "@repo/collectors/testing";',
+      "export * from '@repo/collectors/testing';",
+      'const harness = await import("@repo/collectors/testing");',
+    ]) {
+      expect(LOADS_THE_HARNESS.test(load), load).toBe(true);
+    }
+    expect(LOADS_THE_HARNESS.test('import { PLATFORM_SOURCES } from "@repo/collectors";')).toBe(
+      false,
+    );
+  });
 });

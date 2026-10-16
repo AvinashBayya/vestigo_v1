@@ -14,11 +14,17 @@ export interface CaseAnalysisCollectors {
 }
 
 /**
- * Every registered collector (BLOCKED and not implemented ones included, as the
- * registry lists them, each saying it cannot run) and every held one, as plain
- * data. A collector that cannot run stays in the list, so a run that records it
- * is labelled from the registry, never "not in the current registry" (owner
- * ruling, 2026-10-13).
+ * Every registered collector (BLOCKED, not implemented and UNVERIFIED ones
+ * included, as the registry lists them, each saying it cannot run) and every
+ * held one, as plain data. A collector that cannot run stays in the list, so a
+ * run that records it is labelled from the registry, never "not in the current
+ * registry" (owner ruling, 2026-10-13).
+ *
+ * From the registry alone, never a deployment's configuration: the API and the
+ * worker each build this, and it is part of every analysis's input hash, so it
+ * must come out the same in both. An UNVERIFIED source never runs anywhere
+ * (2026-10-16), so that is here; whether an access method is enabled is
+ * configuration, so it is not, and a run's plan records it instead.
  */
 export function caseAnalysisCollectors(
   registry: CollectorRegistry,
@@ -31,7 +37,9 @@ export function caseAnalysisCollectors(
       collectionMode: entry.collectionMode,
       discipline: entry.discipline,
       cannotRun:
-        entry.availability === "BLOCKED" || entry.availability === "NOT_IMPLEMENTED"
+        entry.availability === "BLOCKED" ||
+        entry.availability === "NOT_IMPLEMENTED" ||
+        entry.availability === "UNVERIFIED"
           ? entry.availability
           : null,
     })),

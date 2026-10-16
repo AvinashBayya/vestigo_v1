@@ -5,6 +5,8 @@ import { cn } from "./cn.ts";
  * A value that was never measured: an em dash, never 0, "N/A" or a blank
  * (§1). The reason is in a tooltip on hover or keyboard focus, and in the
  * accessible name, so a screen reader hears why without opening anything.
+ * `summary` opens that name: "Not measured." unless the dash stands for
+ * something known to be absent, such as no access method that can run here.
  *
  * The box is the dash's own width and the line's height, so the dash sits on
  * its column's text edge and a row keeps its pitch; the target size is an
@@ -12,10 +14,13 @@ import { cn } from "./cn.ts";
  */
 export function Unmeasured({
   reason,
+  summary = "Not measured.",
   className,
 }: {
   /** Why there is no value, in plain words. */
   readonly reason: string;
+  /** What the dash stands for, said first in its accessible name. */
+  readonly summary?: string;
   readonly className?: string | undefined;
 }) {
   return (
@@ -24,7 +29,7 @@ export function Unmeasured({
         <Tooltip.Trigger asChild>
           <button
             type="button"
-            aria-label={`Not measured. ${reason.charAt(0).toUpperCase()}${reason.slice(1)}`}
+            aria-label={`${summary} ${reason.charAt(0).toUpperCase()}${reason.slice(1)}`}
             className={cn(
               "hit-area inline-flex cursor-help items-center rounded-sm align-baseline",
               "font-sans text-ui text-ink-muted hover:bg-surface-hover",

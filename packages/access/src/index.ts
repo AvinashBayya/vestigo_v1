@@ -28,6 +28,7 @@ export {
   type TenantEntitlement,
   type VettingStatus,
 } from "./entitlements.ts";
+export { disciplineFitsOperatorCollector } from "./operator-collector.ts";
 export { personGate, type PersonLock } from "./person-gate.ts";
 export {
   decideTargetAccess,

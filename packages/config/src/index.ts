@@ -1,6 +1,13 @@
 export { PRODUCT_NAME } from "./product.ts";
 export {
-  allowsUnverifiedSources,
+  ACCESS_METHODS,
+  DEFAULT_ACCESS_METHODS,
+  isAccessMethod,
+  parseAccessMethods,
+  type AccessMethod,
+} from "./access-methods.ts";
+export {
+  enabledAccessMethods,
   envSchema,
   loadEnv,
   loadEnvSubset,

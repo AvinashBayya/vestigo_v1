@@ -2,7 +2,7 @@ import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { envSchema, type Env } from "@repo/config";
+import { envSchema, type AccessMethod, type Env } from "@repo/config";
 import { parseTenantId, type TenantId } from "@repo/core";
 import {
   createAuthStore,
@@ -84,6 +84,8 @@ export async function createTestApi(
     readonly synthesisUnavailable?: string | null;
     /** The application database's statement timeout. Defaults to the database's own default. */
     readonly statementTimeoutMs?: number;
+    /** The access methods the planner enables. Defaults to a deployment's default. */
+    readonly accessMethods?: readonly AccessMethod[];
   } = {},
 ): Promise<TestApi> {
   const quiet = () => undefined;
@@ -139,17 +141,16 @@ export async function createTestApi(
       investigations,
       replayer,
       registry,
+      // Admission only, as a deployment's planner: an UNVERIFIED source never runs.
       planner: new CollectorRuntime({
         registry,
-        // Admission only; most platform sources are UNVERIFIED, and an estimate that excludes them all shows nothing.
-        allowUnverifiedSources: true,
+        ...(options.accessMethods === undefined ? {} : { accessMethods: options.accessMethods }),
         network: {
           rateLimiter: redisUpstreamRateLimiter(
             new SlidingLogRateLimiter({ redis, keyPrefix: `test:${randomUUID()}:upstream` }),
           ),
         },
       }),
-      unverifiedSourcesAllowed: true,
       eventsPollMs: 100,
       reports,
       renders,

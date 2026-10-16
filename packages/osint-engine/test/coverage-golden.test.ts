@@ -76,6 +76,7 @@ const SAYS_EMPTY: ReadonlySet<JobOutcome | null> = new Set(["NOT_FOUND", "EMPTY_
 const SOURCE: SourceDeclaration = {
   id: "golden",
   name: "[Source golden]",
+  access: ["open"],
   licence: {
     commercialUse: "PERMITTED",
     reason: "[test]",

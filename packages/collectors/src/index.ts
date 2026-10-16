@@ -4,6 +4,22 @@
 //
 // Deliberately not exported: anything that reaches a collector's
 // implementation. The runtime is the only way to run one.
+export {
+  ACCESS_METHODS,
+  DEFAULT_ACCESS_METHODS,
+  isAccessMethod,
+  isKeyedAccessMethod,
+  KEYED_ACCESS_METHODS,
+  OPERATOR_ID_PREFIX,
+  type AccessMethod,
+  type AccessMethodEntry,
+  type CollectorAccess,
+  type DeclaredAccess,
+  type KeyedAccessMethod,
+  type Runnability,
+  type RunsVia,
+  type SourceAccess,
+} from "./access.ts";
 export { PLATFORM_SOURCES } from "./catalogue.ts";
 export {
   COMMONCRAWL_RESULT,
@@ -21,6 +37,7 @@ export {
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
   type HeldCollector,
+  type OperatorAttachment,
 } from "./platform/index.ts";
 export { DERIVED_KEY, reportedPart } from "./provenance.ts";
 export {
@@ -93,6 +110,8 @@ export {
   type ScopeClearance,
 } from "./runtime.ts";
 export {
+  FORBIDDEN_PLATFORM_DOMAINS,
+  forbiddenPlatformDomainOf,
   validateSource,
   type Attribution,
   type IsoDate,

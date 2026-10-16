@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowsUnverifiedSources, envSchema, loadEnv, loadEnvSubset } from "./env.ts";
+import { enabledAccessMethods, envSchema, loadEnv, loadEnvSubset } from "./env.ts";
 import { ConfigError } from "./errors.ts";
 
 const VALID = {
@@ -70,8 +70,8 @@ describe("loadEnv", () => {
   });
 
   it("leaves an empty optional variable undefined, never a placeholder string", () => {
-    const env = loadEnv({ ...VALID, COLLECTORS_ALLOW_UNVERIFIED: "" });
-    expect(env.COLLECTORS_ALLOW_UNVERIFIED).toBeUndefined();
+    const env = loadEnv({ ...VALID, REPORT_HANDLING_MARKING: "" });
+    expect(env.REPORT_HANDLING_MARKING).toBeUndefined();
   });
 
   it("drops collector credentials set in the environment: they come only from the tenant vault", () => {
@@ -132,27 +132,39 @@ describe("secrets in configuration", () => {
   });
 });
 
-describe("allowsUnverifiedSources", () => {
-  it.each([
-    ["development", undefined, true],
-    ["test", undefined, true],
-    ["production", undefined, false],
-    ["production", "true", true],
-    ["development", "false", false],
-    ["production", "false", false],
-  ] as const)("NODE_ENV=%s, COLLECTORS_ALLOW_UNVERIFIED=%s: %s", (nodeEnv, flag, expected) => {
-    expect(allowsUnverifiedSources({ NODE_ENV: nodeEnv, COLLECTORS_ALLOW_UNVERIFIED: flag })).toBe(
-      expected,
-    );
+describe("access methods: operator is off unless configuration names it (RELEASE-BLOCKING, acceptance a)", () => {
+  it.each(["development", "test", "production"] as const)(
+    "NODE_ENV=%s, unset: open, official and licensed, never operator",
+    (nodeEnv) => {
+      const env = loadEnv({ ...VALID, NODE_ENV: nodeEnv });
+      expect(enabledAccessMethods(env)).toEqual(["open", "official", "licensed"]);
+      expect(enabledAccessMethods(env)).not.toContain("operator");
+    },
+  );
+
+  it("reads a blank value as unset, so a copied .env.example never turns operator on", () => {
+    const env = loadEnv({ ...VALID, COLLECTORS_ACCESS_METHODS: "" });
+    expect(enabledAccessMethods(env)).toEqual(["open", "official", "licensed"]);
   });
 
-  it("reads the flag from the environment, and refuses anything but true or false", () => {
-    const env = loadEnvSubset(["NODE_ENV", "COLLECTORS_ALLOW_UNVERIFIED"], {
-      NODE_ENV: "production",
+  it("turns operator on only where the list names it, in the order given", () => {
+    const env = loadEnvSubset(["COLLECTORS_ACCESS_METHODS"], {
+      COLLECTORS_ACCESS_METHODS: "open, operator",
     });
-    expect(allowsUnverifiedSources(env)).toBe(false);
-    expect(() =>
-      loadEnvSubset(["COLLECTORS_ALLOW_UNVERIFIED"], { COLLECTORS_ALLOW_UNVERIFIED: "yes" }),
-    ).toThrow(ConfigError);
+    expect(enabledAccessMethods(env)).toEqual(["open", "operator"]);
+  });
+
+  it.each(["open,", "open,,official", "open,open", "operators", "scrape", " , "])(
+    "refuses %j, naming the variable",
+    (value) => {
+      const error = configErrorFrom({ ...VALID, COLLECTORS_ACCESS_METHODS: value });
+      expect(error.issues.map((issue) => issue.variable)).toEqual(["COLLECTORS_ACCESS_METHODS"]);
+    },
+  );
+
+  it("has no setting that lets an UNVERIFIED source run: the retired flag is dropped if set", () => {
+    expect(Object.keys(envSchema.shape)).not.toContain("COLLECTORS_ALLOW_UNVERIFIED");
+    const env = loadEnv({ ...VALID, NODE_ENV: "development", COLLECTORS_ALLOW_UNVERIFIED: "true" });
+    expect(Object.keys(env)).not.toContain("COLLECTORS_ALLOW_UNVERIFIED");
   });
 });

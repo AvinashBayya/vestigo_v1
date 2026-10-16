@@ -1,0 +1,1347 @@
+{
+  "document": {
+    "formatVersion": 1,
+    "engineVersion": 6,
+    "caseId": "00000000-0000-4000-8000-000000000001",
+    "inputHash": "sha256:7976be719f4e631c0050ea30763838b06bd39d4b40001659fe1f55677a14aaa8",
+    "basis": {
+      "evidenceIds": ["00000000-0000-4000-8000-000000000010"],
+      "runIds": ["00000000-0000-4000-8000-000000000002"]
+    },
+    "coverage": {
+      "kind": "CASE_COVERAGE",
+      "engineVersion": 6,
+      "caseId": "00000000-0000-4000-8000-000000000001",
+      "partial": false,
+      "partialBecause": [],
+      "partialRuns": {
+        "count": 0,
+        "ids": []
+      },
+      "runs": [
+        {
+          "runId": "00000000-0000-4000-8000-000000000002",
+          "investigation": {
+            "id": "00000000-0000-4000-8000-000000000040",
+            "title": "[Investigation]"
+          },
+          "startedAt": "2026-10-16T09:00:00.000Z",
+          "finishedAt": "2026-10-16T09:02:00.000Z",
+          "coverage": {
+            "runStatus": "SUCCEEDED",
+            "partial": false,
+            "headline": "COMPLETE RUN: all 2 planned collectors finished (1 found something, 0 found nothing, 1 returned nothing — unconfirmed). 5 further collectors were excluded or held and did not run.",
+            "entries": [
+              {
+                "collectorId": "fake.dns",
+                "sourceLabel": "[fake fake.dns]",
+                "targetType": "DOMAIN",
+                "attempts": 1,
+                "evidenceCount": 1,
+                "state": "COLLECTED",
+                "reasonCode": null,
+                "detail": null
+              },
+              {
+                "collectorId": "fake.unverified",
+                "sourceLabel": "[fake fake.unverified]",
+                "targetType": "DOMAIN",
+                "attempts": 1,
+                "evidenceCount": 0,
+                "state": "EMPTY_UNCONFIRMED",
+                "reasonCode": null,
+                "detail": "[fake: the source answered with nothing]"
+              },
+              {
+                "collectorId": "fake.blocked",
+                "sourceLabel": "[fake fake.blocked]",
+                "state": "EXCLUDED",
+                "targetType": "DOMAIN",
+                "reasonCode": "LICENCE_BLOCKED",
+                "detail": "[Source blocked] is blocked: [test: blocked licence]",
+                "evidenceCount": 0,
+                "attempts": null
+              },
+              {
+                "collectorId": "fake.geo-blocked",
+                "sourceLabel": "[fake fake.geo-blocked]",
+                "state": "EXCLUDED",
+                "targetType": "DOMAIN",
+                "reasonCode": "LICENCE_BLOCKED",
+                "detail": "[Source blocked] is blocked: [test: blocked licence]",
+                "evidenceCount": 0,
+                "attempts": null
+              },
+              {
+                "collectorId": "fake.pending",
+                "sourceLabel": "[fake fake.pending]",
+                "state": "EXCLUDED",
+                "targetType": "DOMAIN",
+                "reasonCode": "NOT_IMPLEMENTED",
+                "detail": "This collector has no implementation yet.",
+                "evidenceCount": 0,
+                "attempts": null
+              },
+              {
+                "collectorId": "fake.person",
+                "sourceLabel": "[fake fake.person]",
+                "state": "EXCLUDED",
+                "targetType": "DOMAIN",
+                "reasonCode": "MODULE_NOT_IN_PLAN",
+                "detail": "This collector's module is not in the tenant's plan.",
+                "evidenceCount": 0,
+                "attempts": null
+              },
+              {
+                "collectorId": "fake.held",
+                "sourceLabel": "[fake fake.held]",
+                "state": "HELD",
+                "targetType": "DOMAIN",
+                "reasonCode": "COLLECTOR_HELD",
+                "detail": "[test: held]",
+                "evidenceCount": 0,
+                "attempts": null
+              }
+            ],
+            "notApplicable": [],
+            "caveats": [
+              "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.",
+              "This is not an exhaustive survey. It covers only the collectors named here, as they answered at the times shown.",
+              "Nothing found means the source answered and held nothing for this target when asked. It is not evidence that nothing exists.",
+              "A collector that was not run, failed, or was excluded contributed nothing. The absence of a finding from it means nothing.",
+              "REPORTED claims are what the cited source stated; DERIVED claims were computed by the platform from recorded values. None has been independently verified.",
+              "Sources can change after collection. Each source shows when it was collected.",
+              "Returned nothing (unconfirmed) means the source answered with nothing, but its empty answers are unreliable. It is not a finding that the source has nothing, and not a count of zero."
+            ]
+          },
+          "jobs": [
+            {
+              "jobId": "00000000-0000-4000-8000-000000000003",
+              "collectorId": "fake.dns",
+              "sourceLabel": "[fake fake.dns]",
+              "state": "COLLECTED",
+              "collected": {
+                "count": 1,
+                "ids": ["00000000-0000-4000-8000-000000000010"]
+              },
+              "inCase": {
+                "count": 1,
+                "ids": ["00000000-0000-4000-8000-000000000010"]
+              },
+              "notInCase": {
+                "count": 0,
+                "ids": []
+              }
+            },
+            {
+              "jobId": "00000000-0000-4000-8000-000000000004",
+              "collectorId": "fake.unverified",
+              "sourceLabel": "[fake fake.unverified]",
+              "state": "EMPTY_UNCONFIRMED",
+              "collected": {
+                "count": 0,
+                "ids": []
+              },
+              "inCase": {
+                "count": 0,
+                "ids": []
+              },
+              "notInCase": {
+                "count": 0,
+                "ids": []
+              }
+            }
+          ],
+          "evidenceInCase": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          }
+        }
+      ],
+      "evidence": {
+        "count": 1,
+        "ids": ["00000000-0000-4000-8000-000000000010"]
+      },
+      "evidenceWithNoRecordedJob": {
+        "evidence": {
+          "count": 0,
+          "ids": []
+        },
+        "byCollector": []
+      },
+      "collectedAt": {
+        "earliest": "2026-10-16T09:01:00.000Z",
+        "latest": "2026-10-16T09:01:00.000Z",
+        "reason": null,
+        "recorded": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000010"]
+        },
+        "notRecorded": {
+          "count": 0,
+          "ids": []
+        }
+      },
+      "observedAt": {
+        "earliest": null,
+        "latest": null,
+        "reason": "NOT_RECORDED_ON_ANY_EVIDENCE",
+        "recorded": {
+          "count": 0,
+          "ids": []
+        },
+        "notRecorded": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000010"]
+        }
+      },
+      "caveats": ["NO_NEW_COLLECTION"]
+    },
+    "collectors": {
+      "kind": "CASE_COLLECTORS",
+      "engineVersion": 6,
+      "caseId": "00000000-0000-4000-8000-000000000001",
+      "collectors": [
+        {
+          "collectorId": "fake.blocked",
+          "sourceLabel": "[fake fake.blocked]",
+          "registration": "BLOCKED",
+          "heldReason": null,
+          "discipline": "TECHINT",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "EXCLUDED",
+              "reasonCode": "LICENCE_BLOCKED",
+              "detail": "[Source blocked] is blocked: [test: blocked licence]"
+            }
+          ]
+        },
+        {
+          "collectorId": "fake.dns",
+          "sourceLabel": "[fake fake.dns]",
+          "registration": "REGISTERED",
+          "heldReason": null,
+          "discipline": "TECHINT",
+          "evidence": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000010"]
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000030"]
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000030"]
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000020"]
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": "00000000-0000-4000-8000-000000000003",
+              "state": "COLLECTED",
+              "reasonCode": null,
+              "detail": null
+            }
+          ]
+        },
+        {
+          "collectorId": "fake.geo-blocked",
+          "sourceLabel": "[fake fake.geo-blocked]",
+          "registration": "BLOCKED",
+          "heldReason": null,
+          "discipline": "GEOINT",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "EXCLUDED",
+              "reasonCode": "LICENCE_BLOCKED",
+              "detail": "[Source blocked] is blocked: [test: blocked licence]"
+            }
+          ]
+        },
+        {
+          "collectorId": "fake.held",
+          "sourceLabel": "[fake fake.held]",
+          "registration": "HELD",
+          "heldReason": "[test: held]",
+          "discipline": "SOCMINT",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "HELD",
+              "reasonCode": "COLLECTOR_HELD",
+              "detail": "[test: held]"
+            }
+          ]
+        },
+        {
+          "collectorId": "fake.pending",
+          "sourceLabel": "[fake fake.pending]",
+          "registration": "NOT_IMPLEMENTED",
+          "heldReason": null,
+          "discipline": "TECHINT",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "EXCLUDED",
+              "reasonCode": "NOT_IMPLEMENTED",
+              "detail": "This collector has no implementation yet."
+            }
+          ]
+        },
+        {
+          "collectorId": "fake.person",
+          "sourceLabel": "[fake fake.person]",
+          "registration": "REGISTERED",
+          "heldReason": null,
+          "discipline": "PERSON",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": null,
+              "state": "EXCLUDED",
+              "reasonCode": "MODULE_NOT_IN_PLAN",
+              "detail": "This collector's module is not in the tenant's plan."
+            }
+          ]
+        },
+        {
+          "collectorId": "fake.unverified",
+          "sourceLabel": "[fake fake.unverified]",
+          "registration": "REGISTERED",
+          "heldReason": null,
+          "discipline": "TECHINT",
+          "evidence": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "evidenceWithNoRecordedJob": {
+            "count": 0,
+            "ids": []
+          },
+          "claims": {
+            "count": 0,
+            "ids": []
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 0,
+              "ids": []
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "entities": {
+            "count": 0,
+            "ids": []
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "runs": [
+            {
+              "runId": "00000000-0000-4000-8000-000000000002",
+              "jobId": "00000000-0000-4000-8000-000000000004",
+              "state": "EMPTY_UNCONFIRMED",
+              "reasonCode": null,
+              "detail": "[fake: the source answered with nothing]"
+            }
+          ]
+        }
+      ]
+    },
+    "breakdown": {
+      "kind": "CASE_BREAKDOWN",
+      "engineVersion": 6,
+      "caseId": "00000000-0000-4000-8000-000000000001",
+      "sections": [
+        {
+          "discipline": "TECHINT",
+          "status": "PRESENT",
+          "evidence": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          },
+          "claims": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000030"]
+          },
+          "entities": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000020"]
+          },
+          "relationships": {
+            "count": 0,
+            "ids": []
+          },
+          "evidenceByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000010"]
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "claimsByStrength": {
+            "OBSERVED": {
+              "count": 0,
+              "ids": []
+            },
+            "REPORTED": {
+              "count": 1,
+              "ids": ["00000000-0000-4000-8000-000000000030"]
+            },
+            "DERIVED": {
+              "count": 0,
+              "ids": []
+            },
+            "CORRELATED": {
+              "count": 0,
+              "ids": []
+            },
+            "INFERRED": {
+              "count": 0,
+              "ids": []
+            },
+            "HYPOTHESIS": {
+              "count": 0,
+              "ids": []
+            }
+          },
+          "metrics": [
+            {
+              "metric": "CONTRADICTIONS",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "CONTRADICTION_DETECTION_NOT_BUILT"
+              }
+            }
+          ],
+          "collectors": {
+            "registered": [
+              {
+                "collectorId": "fake.dns",
+                "sourceLabel": "[fake fake.dns]"
+              },
+              {
+                "collectorId": "fake.unverified",
+                "sourceLabel": "[fake fake.unverified]"
+              }
+            ],
+            "ran": [
+              {
+                "collectorId": "fake.dns",
+                "sourceLabel": "[fake fake.dns]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": "00000000-0000-4000-8000-000000000003",
+                    "state": "COLLECTED",
+                    "reasonCode": null,
+                    "detail": null
+                  }
+                ]
+              },
+              {
+                "collectorId": "fake.unverified",
+                "sourceLabel": "[fake fake.unverified]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": "00000000-0000-4000-8000-000000000004",
+                    "state": "EMPTY_UNCONFIRMED",
+                    "reasonCode": null,
+                    "detail": "[fake: the source answered with nothing]"
+                  }
+                ]
+              }
+            ],
+            "foundSomething": [
+              {
+                "collectorId": "fake.dns",
+                "sourceLabel": "[fake fake.dns]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": "00000000-0000-4000-8000-000000000003",
+                    "state": "COLLECTED",
+                    "reasonCode": null,
+                    "detail": null
+                  }
+                ]
+              }
+            ],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [
+              {
+                "collectorId": "fake.blocked",
+                "sourceLabel": "[fake fake.blocked]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": null,
+                    "state": "EXCLUDED",
+                    "reasonCode": "LICENCE_BLOCKED",
+                    "detail": "[Source blocked] is blocked: [test: blocked licence]"
+                  }
+                ]
+              },
+              {
+                "collectorId": "fake.pending",
+                "sourceLabel": "[fake fake.pending]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": null,
+                    "state": "EXCLUDED",
+                    "reasonCode": "NOT_IMPLEMENTED",
+                    "detail": "This collector has no implementation yet."
+                  }
+                ]
+              }
+            ],
+            "notApplicable": [],
+            "held": [],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "SOCMINT",
+          "status": "HELD",
+          "evidence": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "claims": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "entities": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "relationships": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_HELD_COLLECTORS"
+          },
+          "evidenceByStrength": null,
+          "claimsByStrength": null,
+          "metrics": [],
+          "collectors": {
+            "registered": [],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [],
+            "notApplicable": [],
+            "held": [
+              {
+                "collectorId": "fake.held",
+                "sourceLabel": "[fake fake.held]",
+                "reason": "[test: held]"
+              }
+            ],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "MEDIAINT",
+          "status": "NOT_BUILT",
+          "evidence": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "claims": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "entities": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "relationships": {
+            "count": null,
+            "ids": null,
+            "reason": "NO_COLLECTOR_BUILT"
+          },
+          "evidenceByStrength": null,
+          "claimsByStrength": null,
+          "metrics": [
+            {
+              "metric": "MEDIA_CLAIMS",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "MEDIA_CLAIM_EXTRACTION_NOT_BUILT"
+              }
+            },
+            {
+              "metric": "MEDIA_CONFLICTS",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "MEDIA_CLAIM_EXTRACTION_NOT_BUILT"
+              }
+            }
+          ],
+          "collectors": {
+            "registered": [],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [],
+            "notApplicable": [],
+            "held": [],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "GEOINT",
+          "status": "BLOCKED",
+          "evidence": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_BLOCKED_COLLECTORS"
+          },
+          "claims": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_BLOCKED_COLLECTORS"
+          },
+          "entities": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_BLOCKED_COLLECTORS"
+          },
+          "relationships": {
+            "count": null,
+            "ids": null,
+            "reason": "ONLY_BLOCKED_COLLECTORS"
+          },
+          "evidenceByStrength": null,
+          "claimsByStrength": null,
+          "metrics": [
+            {
+              "metric": "LOCATION_HYPOTHESES",
+              "value": {
+                "count": null,
+                "ids": null,
+                "reason": "LOCATION_HYPOTHESES_NOT_BUILT"
+              }
+            }
+          ],
+          "collectors": {
+            "registered": [],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [],
+            "excluded": [
+              {
+                "collectorId": "fake.geo-blocked",
+                "sourceLabel": "[fake fake.geo-blocked]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": null,
+                    "state": "EXCLUDED",
+                    "reasonCode": "LICENCE_BLOCKED",
+                    "detail": "[Source blocked] is blocked: [test: blocked licence]"
+                  }
+                ]
+              }
+            ],
+            "notApplicable": [],
+            "held": [],
+            "notInAnyRun": []
+          }
+        },
+        {
+          "discipline": "PERSON",
+          "status": "LOCKED",
+          "evidence": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "claims": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "entities": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "relationships": {
+            "count": null,
+            "ids": null,
+            "reason": "LOCKED"
+          },
+          "evidenceByStrength": null,
+          "claimsByStrength": null,
+          "metrics": [],
+          "collectors": {
+            "registered": [
+              {
+                "collectorId": "fake.person",
+                "sourceLabel": "[fake fake.person]"
+              }
+            ],
+            "ran": [],
+            "foundSomething": [],
+            "foundNothing": [],
+            "failed": [],
+            "notFinished": [],
+            "locked": [
+              {
+                "collectorId": "fake.person",
+                "sourceLabel": "[fake fake.person]",
+                "runs": [
+                  {
+                    "runId": "00000000-0000-4000-8000-000000000002",
+                    "jobId": null,
+                    "state": "EXCLUDED",
+                    "reasonCode": "MODULE_NOT_IN_PLAN",
+                    "detail": "This collector's module is not in the tenant's plan."
+                  }
+                ]
+              }
+            ],
+            "excluded": [],
+            "notApplicable": [],
+            "held": [],
+            "notInAnyRun": []
+          }
+        }
+      ],
+      "notRegistered": {
+        "collectors": [],
+        "evidence": {
+          "count": 0,
+          "ids": []
+        },
+        "claims": {
+          "count": 0,
+          "ids": []
+        },
+        "entities": {
+          "count": 0,
+          "ids": []
+        },
+        "relationships": {
+          "count": 0,
+          "ids": []
+        }
+      },
+      "totals": {
+        "evidence": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000010"]
+        },
+        "claims": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000030"]
+        },
+        "entities": {
+          "count": 1,
+          "ids": ["00000000-0000-4000-8000-000000000020"]
+        },
+        "relationships": {
+          "count": 0,
+          "ids": []
+        },
+        "evidenceByStrength": {
+          "OBSERVED": {
+            "count": 0,
+            "ids": []
+          },
+          "REPORTED": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000010"]
+          },
+          "DERIVED": {
+            "count": 0,
+            "ids": []
+          },
+          "CORRELATED": {
+            "count": 0,
+            "ids": []
+          },
+          "INFERRED": {
+            "count": 0,
+            "ids": []
+          },
+          "HYPOTHESIS": {
+            "count": 0,
+            "ids": []
+          }
+        },
+        "claimsByStrength": {
+          "OBSERVED": {
+            "count": 0,
+            "ids": []
+          },
+          "REPORTED": {
+            "count": 1,
+            "ids": ["00000000-0000-4000-8000-000000000030"]
+          },
+          "DERIVED": {
+            "count": 0,
+            "ids": []
+          },
+          "CORRELATED": {
+            "count": 0,
+            "ids": []
+          },
+          "INFERRED": {
+            "count": 0,
+            "ids": []
+          },
+          "HYPOTHESIS": {
+            "count": 0,
+            "ids": []
+          }
+        }
+      },
+      "entitiesWithNoClaim": {
+        "count": 0,
+        "ids": []
+      },
+      "relationshipsWithNoClaim": {
+        "count": 0,
+        "ids": []
+      },
+      "caveats": [
+        "COUNTS_ARE_NOT_COVERAGE",
+        "DISCIPLINE_FROM_REGISTRY",
+        "ENTITY_AND_RELATIONSHIP_COUNTS_OVERLAP",
+        "UNMEASURED_IS_NOT_ZERO"
+      ]
+    }
+  },
+  "wording": {
+    "coverageCaveats": {
+      "NO_NEW_COLLECTION": "This coverage was built from records already stored for this case. It reports only what earlier runs collected; no new collection was done to produce it."
+    },
+    "breakdownCaveats": {
+      "COUNTS_ARE_NOT_COVERAGE": "These are counts of stored records, not an assessment of coverage. A high count is not evidence of thorough collection.",
+      "DISCIPLINE_FROM_REGISTRY": "Each collector's discipline comes from its registry entry, never from its name or its output.",
+      "ENTITY_AND_RELATIONSHIP_COUNTS_OVERLAP": "Each collector has one discipline, so evidence and claims split cleanly by discipline. An entity or relationship is counted under every discipline whose evidence its claims cite. Those figures overlap and do not add up to the case total.",
+      "UNMEASURED_IS_NOT_ZERO": "A figure shown as absent could not be measured: no collector of that discipline could run (none is built, or each is held, blocked by its source's licence, or not yet implemented), every one of its collectors that could run was locked, or the figure is not built yet. Absent is not zero; zero means the case was checked and holds none."
+    },
+    "breakdownHeadline": {
+      "present": "{disciplines} present · {evidence} evidence, {entities} entities, {relationships} relationships in this case.",
+      "onlyUnregistered": "{evidence} evidence records are held, all from collectors no longer registered.",
+      "noDiscipline": "No discipline in this case holds any stored record. {evidence} evidence records total."
+    }
+  }
+}

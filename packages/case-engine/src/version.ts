@@ -27,9 +27,19 @@
  *      NOTHING_FOUND. A run's headline counts it apart ("returned nothing —
  *      unconfirmed") and its coverage states the caveat; a discipline's
  *      breakdown lists it as ran, never as found nothing (Track M Day 2).
+ *   7: a collector on a source whose licence is UNVERIFIED has that
+ *      registration (UNVERIFIED), since an unverified source never runs
+ *      (access methods, owner instruction 2026-10-16), and is left out of a
+ *      discipline's registered collectors, where version 6 counted it as one
+ *      that could run, so its discipline read a measured zero (D-39). A
+ *      discipline with no evidence and no lock, none of whose collectors may
+ *      run or completed a job in the case's runs, none held and one listed as
+ *      UNVERIFIED, is UNVERIFIED (new), its counts null. A run's recorded
+ *      UNVERIFIED_SOURCE_NOT_ALLOWED or ACCESS_METHOD_NOT_ENABLED is a place
+ *      where the collector could not run at all, as LICENCE_BLOCKED is.
  *
  * It is one part of the input hash a stored analysis is keyed by (owner ruling
  * D-3). That hash is computed in R1-b's job, which holds the input it read, and
  * never here (owner ruling, 2026-10-09).
  */
-export const ENGINE_VERSION = 6;
+export const ENGINE_VERSION = 7;

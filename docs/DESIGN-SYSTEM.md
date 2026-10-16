@@ -140,7 +140,7 @@ The same vocabulary everywhere a collector appears. Statuses are pills (§9, sta
 
 | Status | Meaning | Chip (ink on fill · dot) |
 |---|---|---|
-| **Ready** | Before any run: it can run in this deployment (implemented, and its licence permits it or the deployment allows unverified sources) | `claim-observed-ink` on `claim-observed-fill` · `claim-observed-mark` |
+| **Ready** | Before any run: it can run in this deployment (implemented, its licence is PERMITTED, and one of its access methods is enabled here) | `claim-observed-ink` on `claim-observed-fill` · `claim-observed-mark` |
 | **Needs key** | No tenant credential configured | `status-needs-key-ink` on `claim-inferred-fill` · `claim-inferred-mark` |
 | **Unavailable** | Registered and permitted, but it cannot run here now: a service it needs is not attached (the GPU media worker), or its source is cut off by an open circuit breaker. Say which | `claim-hypothesis-ink` on `claim-hypothesis-fill` · `claim-hypothesis-mark` |
 | **Ran** | Finished, results attached | observed, as Ready |
@@ -149,7 +149,7 @@ The same vocabulary everywhere a collector appears. Statuses are pills (§9, sta
 | **Queued** | Planned, waiting for a worker or for its next attempt (say when) | hypothesis, as Unavailable |
 | **Failed** | With the reason, the code, the attempts and the retry or dead-letter state | `status-failed-ink` on `status-failed-fill` · `status-failed-mark`; row `status-failed-tint` with `status-failed-border` |
 | **Skipped** | Policy or plan prevented the run (e.g. active scan without scope authorisation) | hypothesis |
-| **Held** | Registered but not enabled (licence unverified, or held pending verification) | hypothesis |
+| **Held** | Registered but not enabled (licence unverified or blocked, none of its access methods enabled here, or held pending verification). What it runs via reads as a dash, "None", never 0 | hypothesis |
 | **Cancelled** | Stopped before it finished; nothing more will be collected | hypothesis |
 | **Found nothing** | Ran, and the source had nothing for the target: a measured nothing, not a failure and not missing evidence (added in U1-b, D7) | hypothesis |
 | **Unconfirmed** | Ran, and the source answered with nothing, but its empty answers are unreliable (GDELT): whether it holds anything is not known. Say what came back empty; never "Found nothing", never a count of zero, and it is a gap (added in Track M Day 2, D9) | hypothesis |

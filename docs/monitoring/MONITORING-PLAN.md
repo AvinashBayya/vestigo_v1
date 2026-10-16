@@ -174,9 +174,11 @@ Display names must name every operator (`operatorsMissingFrom`) and be unique: f
 
 ### 4.3 Licence verdicts the owner must record before production
 
-Every source but GDELT is `UNVERIFIED`; in production an unverified source is refused unless
-`COLLECTORS_ALLOW_UNVERIFIED` allows it. Nothing in code can change a verdict; the owner reads the
-terms and records the verdict in `catalogue.ts` with the `audited(row, url)` reference.
+Every source but GDELT is `UNVERIFIED`, and an unverified source never runs, in any environment
+(access methods, owner instruction 2026-10-16; `COLLECTORS_ALLOW_UNVERIFIED` is retired). Nothing in
+code can change a verdict; the owner reads the terms and records the verdict in `catalogue.ts` with
+the `audited(row, url)` reference. Each source also declares its access methods (open, official,
+licensed, operator); Brave, YouTube and Reddit are `official`, their keys from the tenant's vault.
 
 | Source | Terms to read | Known constraints |
 |---|---|---|
@@ -411,8 +413,9 @@ with M3 as the first demonstrable milestone.
   a monitor over budget records why; cross-tenant isolation on every new table; the SSE stream
   closes with `locked` when access is lost.
 - **Live checkpoint for M3:** one real monitor on a current topic over GDELT + RSS + Bluesky +
-  Mastodon in development (`COLLECTORS_ALLOW_UNVERIFIED`), run for an hour; the reading, the
-  buckets and the first alert inspected against the raw evidence payloads.
+  Mastodon, run for an hour; the reading, the buckets and the first alert inspected against the
+  raw evidence payloads. Since 2026-10-16 an unverified source never runs, in development too, so
+  Bluesky and Mastodon join it only once the owner records their verdicts (§4.3).
 - **Live checkpoint for M5:** a narrative summary against the configured model, every sentence
   resolving to an item evidence id; where no model is configured, the honest "not configured".
 

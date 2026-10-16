@@ -45,6 +45,7 @@ import { coveragePlan } from "../src/reports/stored-plan.ts";
 
 const NOT_IN_REGISTRY = "(not in the current registry)";
 const V4_FIXTURE = new URL("./fixtures/case-analysis-engine-v4.json", import.meta.url);
+const V6_FIXTURE = new URL("./fixtures/case-analysis-engine-v6.json", import.meta.url);
 
 function source(
   id: string,
@@ -53,6 +54,7 @@ function source(
   return {
     id,
     name: `[Source ${id}]`,
+    access: ["open"],
     licence: {
       commercialUse,
       reason: `[test: ${commercialUse.toLowerCase()} licence]`,
@@ -125,12 +127,13 @@ const registry = new CollectorRegistry({
     implemented("fake.person-email", "blocked", "PERSON", ["EMAIL_ADDRESS"]),
     declareCollector(declaration("fake.person-pending", "unchecked", "PERSON")),
     implemented("fake.geo-blocked", "blocked", "GEOINT"),
+    // MEDIAINT's only collector reads an unverified source, which never runs.
+    implemented("fake.media-unverified", "unchecked", "MEDIAINT"),
   ],
 });
 
 const runtime = new CollectorRuntime({
   registry,
-  allowUnverifiedSources: false,
   network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
 });
 
@@ -251,13 +254,14 @@ describe("a collector that cannot run, from the registry to the stored document"
       "fake.dns": null,
       "fake.blocked": "BLOCKED",
       "fake.pending": "NOT_IMPLEMENTED",
-      // Unverified runs where a deployment allows it: the registry lets it run.
-      "fake.unverified": null,
+      // An unverified source never runs, in any deployment (2026-10-16).
+      "fake.unverified": "UNVERIFIED",
       "fake.person": null,
       "fake.person-blocked": "BLOCKED",
       "fake.person-email": "BLOCKED",
       "fake.person-pending": "NOT_IMPLEMENTED",
       "fake.geo-blocked": "BLOCKED",
+      "fake.media-unverified": "UNVERIFIED",
     });
   });
 
@@ -275,15 +279,23 @@ describe("a collector that cannot run, from the registry to the stored document"
       "fake.person-email": "TARGET_TYPE_NOT_ACCEPTED",
       "fake.person-pending": "UNVERIFIED_SOURCE_NOT_ALLOWED",
       "fake.geo-blocked": "LICENCE_BLOCKED",
+      "fake.media-unverified": "UNVERIFIED_SOURCE_NOT_ALLOWED",
     });
-    for (const collectorId of ["fake.blocked", "fake.pending", "fake.person-blocked"]) {
+    // An unverified source never runs now, so its refusal says the collector
+    // could not run, as LICENCE_BLOCKED does (2026-10-16).
+    for (const collectorId of [
+      "fake.blocked",
+      "fake.pending",
+      "fake.unverified",
+      "fake.person-blocked",
+      "fake.person-pending",
+      "fake.media-unverified",
+    ]) {
       expect(UNRUNNABLE_REASONS).toContain(reasons[collectorId]);
     }
-    // An earlier check decided these two, so their recorded reason does not
-    // say they could not run: only their registration does.
-    for (const collectorId of ["fake.person-email", "fake.person-pending"]) {
-      expect(UNRUNNABLE_REASONS).not.toContain(reasons[collectorId]);
-    }
+    // An earlier check decided this one, so its recorded reason does not say
+    // it could not run: only its registration does.
+    expect(UNRUNNABLE_REASONS).not.toContain(reasons["fake.person-email"]);
   });
 
   it("keeps its registry label in every document, and is never counted as one that could run", async () => {
@@ -318,15 +330,28 @@ describe("a collector that cannot run, from the registry to the stored document"
       "fake.person-blocked": ["BLOCKED", "PERSON", "[fake fake.person-blocked]"],
       "fake.person-email": ["BLOCKED", "PERSON", "[fake fake.person-email]"],
       "fake.person-pending": ["NOT_IMPLEMENTED", "PERSON", "[fake fake.person-pending]"],
-      "fake.unverified": ["REGISTERED", "TECHINT", "[fake fake.unverified]"],
+      "fake.unverified": ["UNVERIFIED", "TECHINT", "[fake fake.unverified]"],
+      "fake.media-unverified": ["UNVERIFIED", "MEDIAINT", "[fake fake.media-unverified]"],
     });
 
     const techint = sectionOf(documents.breakdown, "TECHINT");
     expect(techint.status).toBe("PRESENT");
-    expect(techint.collectors.registered.map((ref) => ref.collectorId)).toEqual([
-      "fake.dns",
-      "fake.unverified",
-    ]);
+    expect(techint.collectors.registered.map((ref) => ref.collectorId)).toEqual(["fake.dns"]);
+    // MEDIAINT's only collector reads an unverified source: it never runs, so
+    // nothing could have been collected, and its counts are null, never 0
+    // (access methods, acceptance c; D-39 closed for UNVERIFIED).
+    const mediaint = sectionOf(documents.breakdown, "MEDIAINT");
+    expect(mediaint.status).toBe("UNVERIFIED");
+    for (const count of [
+      mediaint.evidence,
+      mediaint.claims,
+      mediaint.entities,
+      mediaint.relationships,
+    ]) {
+      expect(count).toEqual({ count: null, ids: null, reason: "ONLY_UNVERIFIED_COLLECTORS" });
+    }
+    expect([mediaint.evidenceByStrength, mediaint.claimsByStrength]).toEqual([null, null]);
+    expect(mediaint.collectors.registered).toEqual([]);
     // The only place PERSON could run, it was locked. Its three collectors that
     // cannot run say nothing about a lock, however the plan recorded them:
     // LICENCE_BLOCKED, not applicable, or an unverified source refused.
@@ -395,6 +420,28 @@ describe("a collector that cannot run, from the registry to the stored document"
     expect(
       new Set(document.collectors.collectors.map((collector) => collector.registration)),
     ).toEqual(new Set(["REGISTERED", "HELD", "NOT_REGISTERED"]));
+  });
+
+  it("still reads a document version 6 stored, with every status, reason, registration and state it wrote", () => {
+    // Written by ENGINE_VERSION 6's own code (6bf5fe3) and stored as the job
+    // stores it, with the wording beside it, before version 7 added the
+    // UNVERIFIED registration and status: a value it holds that today's schema
+    // refused would make every read of it fail (CLAUDE.md §7: additive only).
+    const stored = z
+      .object({ document: z.record(z.string(), z.unknown()), wording: z.unknown() })
+      .parse(JSON.parse(readFileSync(V6_FIXTURE, "utf8")));
+    const document = CaseAnalysisDocumentSchema.parse(stored.document);
+    expect(document.engineVersion).toBe(6);
+    expect(CaseWordingSchema.safeParse(stored.wording).error).toBeUndefined();
+    if (document.breakdown.kind !== "CASE_BREAKDOWN") return expect.fail("[test] a breakdown");
+    if (document.collectors.kind !== "CASE_COLLECTORS") return expect.fail("[test] collectors");
+    expect(new Set(document.breakdown.sections.map((section) => section.status))).toEqual(
+      new Set(["PRESENT", "HELD", "NOT_BUILT", "BLOCKED", "LOCKED"]),
+    );
+    expect(
+      new Set(document.collectors.collectors.map((collector) => collector.registration)),
+    ).toEqual(new Set(["REGISTERED", "HELD", "BLOCKED", "NOT_IMPLEMENTED"]));
+    expect(JSON.stringify(document.coverage)).toContain('"EMPTY_UNCONFIRMED"');
   });
 
   it("is labelled from the registry in the run report's coverage too", async () => {

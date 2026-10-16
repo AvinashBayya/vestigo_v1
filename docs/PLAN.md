@@ -4142,3 +4142,171 @@ commit but this record's pipeline lines).
 
 **Noted.** `PROJECT-BRIEF.md`, `R1-HONESTY.md` and `R1-PLAN.md` still say news is held; they are
 dated snapshots and R1 files, left as they are.
+
+## Access methods: a licence-gated registry, GDELT the first open source (2026-10-16)
+
+**The owner's instruction** (2026-10-16):
+- Every source declares one or more access methods and a licence verdict. The methods are open (a
+  free public API), official (a keyed API), licensed (a data vendor's account) and operator
+  (operator-supplied credentials, off by default).
+- A source runs only via an enabled method whose verdict is PERMITTED. The operator method stays
+  off unless configuration enables it. No credentialed scraping code, only the interface an
+  operator would attach their own collector to.
+- A source with no runnable method yields "—" or null, never 0. Tenant isolation and the Day 1
+  person gate hold.
+- GDELT's news collector is the first open source, PERMITTED and enabled, not rewritten, its Day 2
+  behaviour intact.
+- Acceptance: (a) operator is off by default; (b) a BLOCKED or UNVERIFIED source never runs; (c) a
+  source with no runnable method renders "—", not 0; (d) GDELT's Day 2 tests pass unchanged.
+
+**How it was read** (stated here so the owner can correct it):
+- **(b) is absolute in the product.** No runtime the API or a worker builds runs an UNVERIFIED
+  source, in any environment. `COLLECTORS_ALLOW_UNVERIFIED` and `allowsUnverifiedSources` are
+  retired, and the variable is dropped if set, as every retired variable is. This supersedes the
+  Phase 3A allowance (unset: on in development and test). The offline fixture harness may still
+  replay recorded answers for an UNVERIFIED collector. Its network is a loopback fixture server
+  and a placeholder resolver, so a replay never contacts the source. The grant is package-internal
+  (`replayRecordedAnswers`, lint-fenced to `src/testing.ts`), and a new RELEASE-BLOCKING check
+  fails if any app or package source loads `@repo/collectors/testing`. Without replay, about 240
+  tests of eight shipped collectors, the cross-tenant API checkpoints among them, would have had
+  to go.
+- **"The operator supplies the key" means the tenant's administrator, through the tenant's vault.**
+  No platform-level collector credential exists (the Phase 3A tenant-keys-only ruling; an env file
+  is plaintext on disk, CLAUDE.md §9). The deployment's configuration only switches methods on.
+- **A licensed vendor, or an operator's own collector, is a source of its own**, with its own id,
+  label, verdict and hosts (CLAUDE.md, source labelling). The verdict stays one per source, shared
+  by every method (Phase 3A decision 2): different terms for another way in are another source.
+- **"Enabled in config"** is `COLLECTORS_ACCESS_METHODS`, a comma-separated list. Unset, it is
+  open, official and licensed, never operator. Verdicts stay code.
+- **"First" open source** is a fact of this change's history, not something a test can measure.
+  wikidata and libphonenumber declare open in the same change.
+
+**What changed.**
+- **config:** `ACCESS_METHODS`, `DEFAULT_ACCESS_METHODS`, `COLLECTORS_ACCESS_METHODS` and
+  `enabledAccessMethods`; `.env.example` regenerated.
+- **collectors:**
+  - `SourceDeclaration.access` is required, and every catalogue source declares its methods
+    from what the audit records of a key, token or paid account. Open or official: github,
+    jina-reader, bluesky. Official: ucdp, reliefweb, hibp, reddit-api, brave-search,
+    youtube-data-api. Licensed: kpler. Open: the rest, gdelt-doc first.
+  - Validation allows at most one keyed method. Operator stands alone, needs a network, and is
+    exactly the sources and collectors whose ids start `operator.`.
+  - No source may declare an Instagram, Facebook or X host: a backstop for §3, not the rule
+    itself.
+  - The registry checks that a collector's credentials fit its source's methods, and lists the
+    methods each collector can use. A tenant vault id belongs to one source: a collector on
+    another source may not name it, so an attached collector cannot be handed, say, the
+    tenant's GitHub key. An operator collector must be declared PERSON: it may read
+    people whatever it says, so it is person data, fail closed (`@repo/access`
+    `disciplineFitsOperatorCollector`).
+  - The runtime's `access()` and `sources()` decide, in order: licence (BLOCKED, then
+    UNVERIFIED), an enabled method, an implementation. Then the unchanged discipline, Day 1
+    TOPIC and scope checks run. It hands a collector only the credentials of a keyed method
+    enabled here. `createPlatformRegistry({ operatorAttachments })` is the attach interface, and
+    the product attaches none.
+- **core:** `UNRUNNABLE_REASONS` gains `UNVERIFIED_SOURCE_NOT_ALLOWED` and
+  `ACCESS_METHOD_NOT_ENABLED`.
+- **osint-engine:** the executor reads from the vault only the vault ids `access()` allows.
+  `caseAnalysisCollectors` marks an UNVERIFIED collector as unable to run, from the registry
+  alone, so the API and the worker agree and configuration stays out of the input hash. The
+  stored-document schema names registrations by value.
+- **case-engine (D-39, for UNVERIFIED):** registration and discipline status UNVERIFIED, counts
+  null with `ONLY_UNVERIFIED_COLLECTORS`, and ENGINE_VERSION 7.
+- **api:** GET /api/v1/collectors gives each collector its `sourceId` and `access`, with
+  `runsVia` null and a refusal and reason when nothing runs. The list gains
+  `accessMethodsEnabled` and every catalogue source. `unverifiedSourcesAllowed` stays, always
+  false, so clients do not break. The estimate's vault ids are the ones a run would read.
+- **worker:** reads `COLLECTORS_ACCESS_METHODS`.
+- **web:** readiness is the API's `access`, failing closed. Each health-card row says what it
+  runs via, or a dash ("None. No access method can run here."). `ACCESS_METHOD_NOT_ENABLED` reads
+  Held. `Unmeasured` takes an optional summary for a dash that stands for a known absence.
+
+**Acceptance tests.**
+- **(a) Operator is off by default:**
+  - the config, in every NODE_ENV (`env.test.ts`, `env-example.test.ts`);
+  - the runtime, where an attached operator collector is refused, its code unrun and its account
+    unread, until operator is named, and stays person-gated once it is (`runtime.test.ts`);
+  - a deployment's runtime and the platform registry (`platform/access-methods.test.ts`);
+  - the attach interface's refusals, in the same file.
+- **(b) BLOCKED and UNVERIFIED never run:** by default and with every method enabled, the
+  environment loaded as a deployment loads it (loadEnv drops the retired flag; the runtime takes
+  nothing else from the environment, NODE_ENV included). Checked in the runtime, for every
+  platform collector, and end to end with no request, no evidence, and no read of the key the
+  tenant holds for it (`collection.test.ts`). A deployment's DOMAIN plan is news alone. The
+  BLOCKED test now runs on the most permissive path left: the replay grant with all four
+  methods.
+- **(c) Null and a reason, never 0:** in the runtime and on the platform; through the API
+  (`collectors.test.ts`); in the web health card, a dash named "None.", no zero, and a collector
+  the API did not decide held (`search.test.tsx`). In the case breakdown, a discipline whose
+  only collector is UNVERIFIED reads null (`case-analysis.test.ts`,
+  `case-analysis-collectors.test.ts`). A stored ENGINE_VERSION 6 document, written by 6bf5fe3's
+  own code, still reads.
+- **(d) GDELT's Day 2 tests are unchanged and pass:** `news.test.ts`, `gdelt-limit.test.ts`,
+  `gdelt-topic-runs.test.ts` and `platform-registry.test.ts` are byte-identical to 6bf5fe3. In
+  `pipeline.test.ts`, only its own fake source gained `access: ["open"]` and five retired-option
+  lines went; its GDELT tests are untouched. New: gdelt-doc declares exactly open, PERMITTED and
+  enabled; news runs via open and sends no credential; turning open off turns GDELT off, and
+  says so.
+- **Credentials and configuration:** GitHub's collector is handed the tenant's key only while
+  official is enabled (`platform/access-methods.test.ts`); an attachment naming another source's
+  key is refused; a worker started with open switched off plans no GDELT job and records
+  `ACCESS_METHOD_NOT_ENABLED` (`apps/worker/src/index.test.ts`); the estimate's vault ids follow
+  the enabled methods (`apps/api/test/estimate-access.test.ts`); every unrunnable reason reads
+  Held in the web (`search/plan.test.ts`).
+- **Changed on purpose:**
+  - The worker's DOMAIN plan, which Day 2 extended with news, is now news alone.
+  - The case-analysis collectors test now reads UNVERIFIED as unable to run.
+  - The collection and runtime tests that ran an UNVERIFIED source "where allowed" became the
+    (b) tests.
+
+**Pipeline.** (`pnpm turbo lint typecheck test --force --continue --concurrency=2`, in the clean
+worktree at 6bf5fe3 with this change mirrored into it, every file identical to the commit but this
+record's pipeline line): 54 of 54 tasks, nothing cached, 2,259 tests (56 more than Day 2's
+2,203); the fabrication check clean on 508 files; the export check 195 symbols. An earlier run of
+the same change, before the review's fixes, lost four tests to one pause of the machine (30-second
+timeouts reported after up to 786 seconds); those suites rerun alone passed.
+
+| Package | Tests | Package | Tests |
+|---|---|---|---|
+| core | 33 | osint-engine | 181 |
+| access | 69 | worker | 5 |
+| config | 273 | api | 241 |
+| case-engine | 81 | ui | 96 |
+| collectors | 537 | web | 186 |
+| llm | 130 | integrations | 122 |
+| db | 305 | | |
+
+**Open for the owner.**
+- **Production and development now run the same three collectors:** wikidata, contact.phone and
+  news. A USERNAME target plans nothing anywhere. The M3 live checkpoint waits for Bluesky's and
+  Mastodon's verdicts. Recording verdicts is owner work.
+- **The operator attach interface** runs attached code in the worker's process, with what that
+  process can reach. It needs the same review as platform code. Host, verdict and person rules
+  are backstops, not a sandbox. Open questions:
+  - whose account an operator method uses;
+  - whether enabling it should be a per-tenant, audited record rather than a deployment
+    setting;
+  - fusion: no extractor exists for an attached collector, so a FOUND job from one would fail
+    fusion with a typed error.
+- **The case engine** was touched again (ENGINE_VERSION 7), so stored analyses read STALE after
+  deploy.
+- **Owner-reviewed wording, not changed:** `UNMEASURED_IS_NOT_ZERO` lists the causes as "none is
+  built, or each is held, blocked by its source's licence, or not yet implemented". Proposed:
+  "none is built, or each is held, blocked by its source's licence, waiting for its source's
+  licence to be checked, or not yet implemented".
+- **What D-39 leaves:** a collector whose only methods are switched off by configuration still
+  reads REGISTERED in case analysis. Its runs record `ACCESS_METHOD_NOT_ENABLED`, which the lock
+  judgement leaves out. No platform collector is affected under the default.
+- **Stored report coverage** still carries `evidenceCount: 0` for excluded and held entries.
+  Neither the web nor the PDF renders it. Making it null is a core type change with a migration
+  plan.
+- **The database's guard stays at BLOCKED.** UNVERIFIED rows stay enabled, because the offline
+  replay writes their evidence, so the runtime is what refuses them.
+- **Removing `unverifiedSourcesAllowed`** from the API is a breaking change, left for a version
+  bump.
+- **`platform-registry.test.ts`'s title** still says "UNVERIFIED only where allowed". It is kept
+  byte-identical for (d), and its assertion (availability) still holds.
+
+**Noted.** `R1-PLAN.md` (D-39 open) and `PROJECT-BRIEF.md` are R1 files and a dated snapshot, left
+as they are. In the main tree, the untracked `.claude/` worktrees trip the person-gate guard. The
+clean worktree has none.

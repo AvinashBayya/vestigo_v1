@@ -128,6 +128,7 @@ function source(
   return {
     id,
     name: `[Source ${id}]`,
+    access: ["open"],
     licence: {
       commercialUse,
       reason: "[test]",
@@ -200,7 +201,6 @@ const runtime = new CollectorRuntime({
       fake("fake.active", "open", { ...PASSIVE_DOMAIN, mode: "ACTIVE" }),
     ],
   }),
-  allowUnverifiedSources: false,
   network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
 });
 
@@ -296,7 +296,6 @@ describe("planning a TOPIC: person data whatever collects it (RELEASE-BLOCKING)"
         }),
       ],
     }),
-    allowUnverifiedSources: false,
     network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
   });
   const plan = (

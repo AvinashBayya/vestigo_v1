@@ -4,15 +4,12 @@ import type { Captured } from "./fetcher/capture.ts";
 
 /**
  * Why a collector was not run. Each is decided before the collector's code is
- * reached. LICENCE_BLOCKED and NOT_IMPLEMENTED are core's UNRUNNABLE_REASONS:
- * the collector cannot run for anyone.
+ * reached. Core's UNRUNNABLE_REASONS (LICENCE_BLOCKED, NOT_IMPLEMENTED,
+ * UNVERIFIED_SOURCE_NOT_ALLOWED, ACCESS_METHOD_NOT_ENABLED) say the collector
+ * cannot run here for anyone; the others are about this target or tenant.
  */
 export type RefusalReason =
-  | UnrunnableReason
-  | "UNVERIFIED_SOURCE_NOT_ALLOWED"
-  | "TARGET_TYPE_NOT_ACCEPTED"
-  | LockReason
-  | "SCOPE_AUTHORISATION_REQUIRED";
+  UnrunnableReason | "TARGET_TYPE_NOT_ACCEPTED" | LockReason | "SCOPE_AUTHORISATION_REQUIRED";
 
 /** A machine-readable code and a message with no target value, credential or URL path. */
 export interface OutcomeError {

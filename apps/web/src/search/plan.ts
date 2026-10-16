@@ -27,6 +27,8 @@ const HELD_REASONS = new Set([
   "LICENCE_BLOCKED",
   "UNVERIFIED_SOURCE_NOT_ALLOWED",
   "NOT_IMPLEMENTED",
+  // None of its access methods is enabled here (access methods, 2026-10-16).
+  "ACCESS_METHOD_NOT_ENABLED",
 ]);
 /** Policy or plan prevents it (§3 Skipped). */
 const SKIPPED_REASONS = new Set([
@@ -76,7 +78,7 @@ export function creditsText(credits: number): string {
  */
 export function acceptedTypes(list: CollectorList): TargetType[] {
   const taken = new Set<string>(
-    list.items.filter((item) => runsHere(item, list)).flatMap((item) => item.targetTypes),
+    list.items.filter((item) => runsHere(item)).flatMap((item) => item.targetTypes),
   );
   return (Object.keys(TYPE_LABEL) as TargetType[]).filter(
     (type) => type !== "FILE" && taken.has(type),

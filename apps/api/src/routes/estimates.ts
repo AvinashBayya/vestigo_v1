@@ -135,14 +135,16 @@ export const estimateRoutes =
               : { type: target.type, value: target.value, invalid: null },
           ),
           collectors: plan.jobs.map((job) => {
-            const entry = registry.entry(job.collectorId);
+            // The vault ids a keyed method enabled here would read, and whether
+            // it runs without them (its open method is enabled).
+            const access = planner.access(job.collectorId);
             return {
               collectorId: job.collectorId,
               sourceLabel: labelOf(job.collectorId),
               targetType: job.target.type,
               credentials: {
-                vaultIds: [...entry.credentials.vaultIds],
-                runsWithout: entry.credentials.runsWithout,
+                vaultIds: [...access.vaultIds],
+                runsWithout: access.runsVia !== null && access.runsVia.includes("open"),
               },
               estimatedCredits: null,
               estimatedCreditsReason: NO_COST_REASON,

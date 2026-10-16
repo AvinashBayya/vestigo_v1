@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEFAULT_ACCESS_METHODS, parseAccessMethods, type AccessMethod } from "./access-methods.ts";
 import { ConfigError, type ConfigIssue } from "./errors.ts";
 import { ALLOWED_MODEL_IDS, LLM_PROFILES, STRUCTURED_OUTPUT_MODES } from "./llm.ts";
 
@@ -104,10 +105,21 @@ export const envSchema = z.object({
       examples: ["./data/content-store"],
     }),
 
-  COLLECTORS_ALLOW_UNVERIFIED: z.enum(["true", "false"]).optional().meta({
-    description:
-      "Whether collectors whose source licence is UNVERIFIED may run. BLOCKED sources never run. Unset: allowed in development and test, refused in production.",
-  }),
+  // COLLECTORS_ALLOW_UNVERIFIED was retired on 2026-10-16: an UNVERIFIED
+  // source never runs, in any environment, so nothing here can allow one.
+  // Like every retired variable, it is dropped if it is still set.
+  COLLECTORS_ACCESS_METHODS: z
+    .string()
+    .min(1)
+    .refine((value) => parseAccessMethods(value) !== null, {
+      message:
+        "expected distinct access methods, comma-separated, from: open, official, licensed, operator",
+    })
+    .default(DEFAULT_ACCESS_METHODS.join(","))
+    .meta({
+      description:
+        "The access methods collectors may use here, comma-separated: open, official, licensed, operator. The operator method (an operator's own attached collector) runs only where this names it. Set the same value on the API and every worker. A source still runs only if its licence verdict is PERMITTED.",
+    }),
 
   // ── Jobs and workers (Phase 4) ──
   QUEUE_PREFIX: z
@@ -269,18 +281,21 @@ export type Env = z.infer<typeof envSchema>;
 export type EnvSource = Readonly<Record<string, string | undefined>>;
 
 /**
- * Whether collectors whose source licence is UNVERIFIED may run here. An
- * explicit COLLECTORS_ALLOW_UNVERIFIED decides; unset, they run in development
- * and test and are refused in production. BLOCKED sources never run, whatever
- * this says.
+ * The access methods collectors may use in this deployment, in the order
+ * configured. Unset, they are open, official and licensed: never operator,
+ * in any environment. Whatever this says, a source runs only if its licence
+ * verdict is PERMITTED; BLOCKED and UNVERIFIED sources never run.
  */
-export function allowsUnverifiedSources(
-  env: Pick<Env, "NODE_ENV" | "COLLECTORS_ALLOW_UNVERIFIED">,
-): boolean {
-  if (env.COLLECTORS_ALLOW_UNVERIFIED !== undefined) {
-    return env.COLLECTORS_ALLOW_UNVERIFIED === "true";
+export function enabledAccessMethods(
+  env: Pick<Env, "COLLECTORS_ACCESS_METHODS">,
+): readonly AccessMethod[] {
+  const methods = parseAccessMethods(env.COLLECTORS_ACCESS_METHODS);
+  if (methods === null) {
+    throw new ConfigError([
+      { variable: "COLLECTORS_ACCESS_METHODS", problem: "is not a list of access methods" },
+    ]);
   }
-  return env.NODE_ENV !== "production";
+  return Object.freeze(methods);
 }
 
 /**

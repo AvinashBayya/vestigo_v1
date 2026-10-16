@@ -4,7 +4,7 @@
  * logic lives in @repo/osint-engine and the packages under it.
  */
 import {
-  allowsUnverifiedSources,
+  enabledAccessMethods,
   PRODUCT_NAME,
   resolveContentStoreDir,
   resolveLlmConfiguration,
@@ -53,7 +53,8 @@ export const WORKER_ENV = [
   "VAULT_MASTER_KEY",
   "VAULT_MASTER_KEY_ID",
   "CONTENT_STORE_DIR",
-  "COLLECTORS_ALLOW_UNVERIFIED",
+  // The access methods collectors may use here; the same value as the API.
+  "COLLECTORS_ACCESS_METHODS",
   "QUEUE_PREFIX",
   "WORKER_QUEUES",
   "COLLECT_CONCURRENCY",
@@ -121,7 +122,8 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
 
   const runtime = new CollectorRuntime({
     registry: createPlatformRegistry(),
-    allowUnverifiedSources: allowsUnverifiedSources(env),
+    // An UNVERIFIED source never runs; operator only where this names it.
+    accessMethods: enabledAccessMethods(env),
     network: {
       rateLimiter: redisUpstreamRateLimiter(
         new SlidingLogRateLimiter({ redis, keyPrefix: `${env.QUEUE_PREFIX}:upstream` }),

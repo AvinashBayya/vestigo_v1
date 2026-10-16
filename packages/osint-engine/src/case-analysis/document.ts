@@ -160,7 +160,15 @@ const CollectorRecords = z.object({
   relationships: Counted,
   runs: z.array(CollectorRun),
 });
-const [REGISTERED, HELD, NOT_REGISTERED, BLOCKED, NOT_IMPLEMENTED] = REGISTRATIONS;
+// Every registration but HELD, which alone carries a reason: named by value,
+// never by position, so a value added to REGISTRATIONS is read here too.
+const NOT_HELD = REGISTRATIONS.filter(
+  (registration): registration is Exclude<(typeof REGISTRATIONS)[number], "HELD"> =>
+    registration !== "HELD",
+);
+const [FIRST_NOT_HELD, ...OTHERS_NOT_HELD] = NOT_HELD;
+// An invariant of the vocabulary, checked once when the module loads.
+if (FIRST_NOT_HELD === undefined) throw new TypeError("REGISTRATIONS lists nothing but HELD");
 
 const CaseCollectorsSchema = z.object({
   kind: z.literal("CASE_COLLECTORS"),
@@ -168,10 +176,10 @@ const CaseCollectorsSchema = z.object({
   collectors: z.array(
     z.union([
       CollectorRecords.extend({
-        registration: z.enum([REGISTERED, NOT_REGISTERED, BLOCKED, NOT_IMPLEMENTED]),
+        registration: z.enum([FIRST_NOT_HELD, ...OTHERS_NOT_HELD]),
         heldReason: z.null(),
       }),
-      CollectorRecords.extend({ registration: z.literal(HELD), heldReason: z.string() }),
+      CollectorRecords.extend({ registration: z.literal("HELD"), heldReason: z.string() }),
     ]),
   ),
 }) satisfies z.ZodType<CaseCollectors>;

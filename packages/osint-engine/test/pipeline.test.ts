@@ -684,6 +684,7 @@ function fakeSource(id: string, network: boolean): SourceDeclaration {
   return {
     id,
     name: `[Source ${id}]`,
+    access: ["open"],
     licence: {
       commercialUse: "PERMITTED",
       reason: "[test source]",
@@ -758,7 +759,6 @@ describe("a hung collector does not stall other queues (RELEASE-BLOCKING)", () =
         sources: [fakeSource("slow-upstream", true), fakeSource("fast-local", false)],
         collectors: [hungCollector, fastCollector],
       }),
-      allowUnverifiedSources: false,
       network: {
         rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) },
         resolver: () => Promise.resolve([{ address: "1.1.1.1", family: 4 }]),
@@ -877,7 +877,6 @@ describe("a hung or failing case analysis holds only its own slots (RELEASE-BLOC
         sources: [fakeSource("fast-local", false)],
         collectors: [fastCollector],
       }),
-      allowUnverifiedSources: false,
       network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
     });
     const engine = await startEngine(runtime, {
@@ -1012,7 +1011,6 @@ describe("a case analysis whose last attempt cannot be failed is still dead-lett
     });
     const runtime = new CollectorRuntime({
       registry: new CollectorRegistry({ sources: [], collectors: [] }),
-      allowUnverifiedSources: false,
       network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
     });
     const engine = await startEngine(runtime, { caseAnalyses: { processor, concurrency: 1 } });
@@ -1179,7 +1177,6 @@ describe("an empty answer its source cannot be trusted on is recorded as such (R
         sources: [fakeSource("unconfirmed-upstream", true)],
         collectors: [unconfirmed],
       }),
-      allowUnverifiedSources: false,
       network: {
         rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) },
         resolver: () => Promise.resolve([{ address: "1.1.1.1", family: 4 }]),
@@ -1396,7 +1393,6 @@ describe("a TOPIC job only ever sits in a person-bearing run (RELEASE-BLOCKING; 
         sources: [fakeSource("topic-local", false)],
         collectors: [topicCollector],
       }),
-      allowUnverifiedSources: false,
       network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
     });
     const engine = await startEngine(runtime, {

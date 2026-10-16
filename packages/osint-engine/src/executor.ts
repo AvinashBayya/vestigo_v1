@@ -144,10 +144,16 @@ export class CollectionExecutor {
       };
       const rejection = this.#runtime.admit(entry.id, admission);
       if (rejection !== null) return { rejected: rejection };
-      const credentials = await this.#credentials.resolve(ctx, entry.credentials.vaultIds, {
-        collectorId: entry.id,
-        requestId: request.requestId,
-      });
+      // Only a keyed access method enabled here reads the vault: a credential
+      // for a method that is not is never revealed, nor audited as read.
+      const credentials = await this.#credentials.resolve(
+        ctx,
+        this.#runtime.access(entry.id).vaultIds,
+        {
+          collectorId: entry.id,
+          requestId: request.requestId,
+        },
+      );
       return { rejected: null, admission, credentials };
     });
     if (admitted.rejected !== null) return admitted.rejected;

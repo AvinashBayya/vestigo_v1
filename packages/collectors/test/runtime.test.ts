@@ -2,7 +2,13 @@
  * RELEASE-BLOCKING. The collector frame's guarantees, with fake in-memory
  * collectors (test code only) against a real HTTP server on loopback:
  *   - a BLOCKED collector cannot be executed by any path;
- *   - UNVERIFIED sources are refused where configuration does not allow them;
+ *   - a BLOCKED or UNVERIFIED source never runs, in any environment and any
+ *     access configuration (access methods, 2026-10-16, acceptance b);
+ *   - a source runs only via an access method enabled here; the operator
+ *     method is off unless the deployment names it (acceptance a), and a
+ *     collector is handed no credential of a method that is not enabled;
+ *   - something that cannot run says so with null, never 0 or an empty list
+ *     (acceptance c);
  *   - a collector cannot set, override or influence its source label, and two
  *     collectors on different upstreams produce distinguishable evidence;
  *   - collectors sharing an upstream share its rate limit;
@@ -10,10 +16,11 @@
  *     so does a TOPIC target, whatever the collector's discipline;
  *   - a failure never becomes FOUND, an empty result, or evidence.
  */
-import { allowsUnverifiedSources } from "@repo/config";
+import { ACCESS_METHODS, enabledAccessMethods, loadEnv } from "@repo/config";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { registryInternals } from "../src/registry.ts";
+import { replayRecordedAnswers } from "../src/runtime.ts";
 import * as sdk from "../src/index.ts";
 import {
   CollectorRegistry,
@@ -27,6 +34,7 @@ import {
   type Collector,
   type CollectorDeclaration,
   type CollectorImplementation,
+  type AccessMethod,
   type CollectorReturn,
   type FoundOutcome,
   type SourceDeclaration,
@@ -73,7 +81,8 @@ const UNVERIFIED_SOURCE = testSource("unverified", {
   licence: { commercialUse: "UNVERIFIED", reason: "[terms not checked]", check: null },
 });
 const SOURCES: SourceDeclaration[] = [
-  testSource("one"),
+  // Open, or with a tenant key for more, like GitHub's API.
+  testSource("one", { access: ["open", "official"] }),
   testSource("two"),
   BLOCKED_SOURCE,
   UNVERIFIED_SOURCE,
@@ -117,13 +126,22 @@ function namesFrom(
   };
 }
 
+/**
+ * A runtime as a deployment builds one, unless `replay` gives it the fixture
+ * harness's grant to replay UNVERIFIED sources (the most permissive path that
+ * exists). `accessMethods` defaults as a deployment's does.
+ */
 function runtimeWith(
   collectors: Collector[],
-  options: { allowUnverifiedSources?: boolean; rateLimiter?: MemoryRateLimiter } = {},
+  options: {
+    accessMethods?: readonly AccessMethod[];
+    replay?: boolean;
+    rateLimiter?: MemoryRateLimiter;
+  } = {},
 ): CollectorRuntime {
-  return new CollectorRuntime({
+  const runtime = new CollectorRuntime({
     registry: new CollectorRegistry({ sources: SOURCES, collectors }),
-    allowUnverifiedSources: options.allowUnverifiedSources ?? true,
+    ...(options.accessMethods === undefined ? {} : { accessMethods: options.accessMethods }),
     network: testNetwork(upstream, {
       answers: {
         "one.test": ["1.1.1.1"],
@@ -134,6 +152,8 @@ function runtimeWith(
       ...(options.rateLimiter === undefined ? {} : { rateLimiter: options.rateLimiter }),
     }),
   });
+  if (options.replay === true) replayRecordedAnswers(runtime);
+  return runtime;
 }
 
 const DOMAIN = parseTarget("DOMAIN", "example.com");
@@ -162,7 +182,8 @@ describe("a BLOCKED collector cannot be executed by any path (RELEASE-BLOCKING)"
 
   it("is refused by the runtime, however the request is dressed up, and its code never runs", async () => {
     routes.set("blocked.test/names?q=example.com", (res) => res.end('["leaked"]'));
-    const runtime = runtimeWith([blocked], { allowUnverifiedSources: true });
+    // The most permissive runtime there is: the harness's replay grant, every method enabled.
+    const runtime = runtimeWith([blocked], { replay: true, accessMethods: ACCESS_METHODS });
     const outcome = expectStatus(await runtime.execute("fake.blocked", request()), "REFUSED");
     expect(outcome.reason).toBe("LICENCE_BLOCKED");
     expect(outcome.message).toContain("[non-commercial licence]");
@@ -188,6 +209,7 @@ describe("a BLOCKED collector cannot be executed by any path (RELEASE-BLOCKING)"
       "registryInternals",
       "makeReturn",
       "capturedPayload",
+      "replayRecordedAnswers",
     ]) {
       expect(Object.keys(sdk)).not.toContain(internal);
     }
@@ -211,40 +233,315 @@ describe("a BLOCKED collector cannot be executed by any path (RELEASE-BLOCKING)"
   });
 });
 
-describe("UNVERIFIED sources follow configuration (RELEASE-BLOCKING)", () => {
+/** What a deployment must set; the rest is left to the defaults. */
+const DEPLOYMENT_ENV = {
+  DATABASE_URL: "postgres://app_runtime:app_runtime@127.0.0.1:5432/app",
+  DATABASE_AUTH_URL: "postgres://app_auth:app_auth@127.0.0.1:5432/app",
+  REDIS_URL: "redis://127.0.0.1:6379",
+  AUTH_SECRET: "x".repeat(32),
+  AUTH_BASE_URL: "http://127.0.0.1:3000",
+  WEB_ORIGIN: "http://localhost:5173",
+  VAULT_MASTER_KEY: "[test master key]",
+  VAULT_MASTER_KEY_ID: "test-1",
+};
+
+describe("a BLOCKED or UNVERIFIED source never runs (RELEASE-BLOCKING; access methods, acceptance b)", () => {
+  const calls = { count: 0 };
   const unverified = defineCollector(
     declaration("fake.unverified", "unverified"),
-    namesFrom("unverified.test"),
+    namesFrom("unverified.test", calls),
+  );
+  const blocked = defineCollector(
+    declaration("fake.blocked-too", "blocked"),
+    namesFrom("blocked.test", calls),
   );
 
-  it("is refused when the production flag is set, and runs where it is allowed", async () => {
+  it.each(["development", "test", "production"] as const)(
+    "NODE_ENV=%s: refused however the deployment is configured, the retired flag included, and its code never runs",
+    async (nodeEnv) => {
+      routes.set("unverified.test/names?q=example.com", (res) => res.end('["a"]'));
+      routes.set("blocked.test/names?q=example.com", (res) => res.end('["a"]'));
+      for (const methods of [undefined, "open,official,licensed,operator"]) {
+        // Loaded as the API and the worker load theirs, the retired flag set:
+        // loadEnv drops it, and the runtime takes nothing else from the
+        // environment, NODE_ENV included.
+        const env = loadEnv({
+          ...DEPLOYMENT_ENV,
+          NODE_ENV: nodeEnv,
+          COLLECTORS_ALLOW_UNVERIFIED: "true",
+          COLLECTORS_ACCESS_METHODS: methods,
+        });
+        expect(Object.keys(env)).not.toContain("COLLECTORS_ALLOW_UNVERIFIED");
+        const runtime = runtimeWith([unverified, blocked], {
+          accessMethods: enabledAccessMethods(env),
+        });
+        for (const [id, reason] of [
+          ["fake.unverified", "UNVERIFIED_SOURCE_NOT_ALLOWED"],
+          ["fake.blocked-too", "LICENCE_BLOCKED"],
+        ] as const) {
+          expect(runtime.access(id)).toMatchObject({ runsVia: null, refusal: reason });
+          expect(runtime.admit(id, request())).toMatchObject({ status: "REFUSED", reason });
+          expect(expectStatus(await runtime.execute(id, request()), "REFUSED").reason).toBe(reason);
+        }
+      }
+      expect(calls.count).toBe(0);
+      expect(upstream.requests).toEqual([]);
+    },
+  );
+
+  it("says why, in words a reader can act on", () => {
+    expect(runtimeWith([unverified]).access("fake.unverified").reason).toBe(
+      "[Test source unverified]'s licence is unverified, and an unverified source never runs: its terms must be checked and a verdict recorded first.",
+    );
+  });
+
+  it("offers a deployment no way to ask for one: the runtime takes no such option", async () => {
     routes.set("unverified.test/names?q=example.com", (res) => res.end('["a"]'));
-    const production = allowsUnverifiedSources({
-      NODE_ENV: "production",
-      COLLECTORS_ALLOW_UNVERIFIED: undefined,
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({ sources: SOURCES, collectors: [unverified] }),
+      // @ts-expect-error: retired on 2026-10-16, an UNVERIFIED source never runs, so there is no allowance to give
+      allowUnverifiedSources: true,
+      network: testNetwork(upstream, { answers: { "unverified.test": ["1.1.1.1"] } }),
     });
-    expect(production).toBe(false);
+    expect(
+      expectStatus(await runtime.execute("fake.unverified", request()), "REFUSED").reason,
+    ).toBe("UNVERIFIED_SOURCE_NOT_ALLOWED");
+    expect(calls.count).toBe(0);
+    expect(upstream.requests).toEqual([]);
+  });
+
+  it("is replayed only by the fixture harness's grant, so a collector's parsing is still tested offline", async () => {
+    routes.set("unverified.test/names?q=example.com", (res) => res.end('["a"]'));
+    const replayed = defineCollector(
+      declaration("fake.unverified", "unverified"),
+      namesFrom("unverified.test"),
+    );
+    const runtime = runtimeWith([replayed], { replay: true });
+    expect(runtime.access("fake.unverified").runsVia).toEqual(["open"]);
+    expectStatus(await runtime.execute("fake.unverified", request()), "FOUND");
+  });
+});
+
+describe("a source runs only via an access method enabled here (RELEASE-BLOCKING; access methods)", () => {
+  /** An operator's own source and collector: test code only, as the product ships none. */
+  const OPERATOR_SOURCE = testSource("operator.own", { access: ["operator"] });
+  const seen: (string | null)[] = [];
+  const calls = { count: 0 };
+  const own = defineCollector(
+    declaration("operator.fake", "operator.own", {
+      discipline: "PERSON",
+      credentials: { vaultIds: ["own-account"], runsWithout: false },
+    }),
+    async (ctx) => {
+      calls.count += 1;
+      const key = ctx.credentials.get("own-account");
+      seen.push(key === null ? null : key.expose());
+      const response = await ctx.fetch(`http://operator.own.test/names?q=${ctx.target.value}`, {
+        method: "GET",
+        timeoutMs: 1_000,
+      });
+      const names = z.array(z.string()).parse(response.json());
+      return ctx.found({ names, derived: {} }, [{ response, observedAt: null }]);
+    },
+  );
+  const ownAccount = new Map([["own-account", { expose: () => "[operator account]" }]]);
+  const operatorRuntime = (accessMethods?: readonly AccessMethod[]) =>
+    new CollectorRuntime({
+      registry: new CollectorRegistry({
+        sources: [...SOURCES, OPERATOR_SOURCE],
+        collectors: [own],
+      }),
+      ...(accessMethods === undefined ? {} : { accessMethods }),
+      network: testNetwork(upstream, { answers: { "operator.own.test": ["1.1.1.1"] } }),
+    });
+
+  it("keeps the operator method off unless the deployment names it, its code unrun and its account unread (acceptance a)", async () => {
+    routes.set("operator.own.test/names?q=example.com", (res) => res.end('["a"]'));
+    const byDefault = operatorRuntime();
+    expect(byDefault.accessMethods).toEqual(["open", "official", "licensed"]);
+    expect(byDefault.access("operator.fake")).toEqual({
+      methods: [{ kind: "operator", enabled: false, licenceVerdict: "PERMITTED", runnable: false }],
+      vaultIds: [],
+      runsVia: null,
+      refusal: "ACCESS_METHOD_NOT_ENABLED",
+      reason: "Its only access method, operator, is not enabled in this deployment.",
+    });
     const refused = expectStatus(
-      await runtimeWith([unverified], { allowUnverifiedSources: production }).execute(
-        "fake.unverified",
-        request(),
-      ),
+      await byDefault.execute("operator.fake", request({ credentials: ownAccount })),
       "REFUSED",
     );
-    expect(refused.reason).toBe("UNVERIFIED_SOURCE_NOT_ALLOWED");
-    expect(upstream.requests).toEqual([]);
+    expect(refused.reason).toBe("ACCESS_METHOD_NOT_ENABLED");
+    expect([calls.count, seen, upstream.requests]).toEqual([0, [], []]);
 
-    const development = allowsUnverifiedSources({
-      NODE_ENV: "development",
-      COLLECTORS_ALLOW_UNVERIFIED: undefined,
+    const named = operatorRuntime(["open", "operator"]);
+    expect(named.access("operator.fake")).toMatchObject({
+      runsVia: ["operator"],
+      vaultIds: ["own-account"],
     });
     expectStatus(
-      await runtimeWith([unverified], { allowUnverifiedSources: development }).execute(
-        "fake.unverified",
-        request(),
-      ),
+      await named.execute("operator.fake", request({ credentials: ownAccount })),
       "FOUND",
     );
+    expect(seen).toEqual(["[operator account]"]);
+  });
+
+  it("still gates it as person data once enabled: it needs the person module and approved vetting", () => {
+    const named = operatorRuntime(["open", "operator"]);
+    const unvetted = { plan: "TECHINT_AND_PERSON", vettingStatus: "PENDING" } as const;
+    expect(
+      named.admit("operator.fake", request({ entitlement: unvetted, credentials: ownAccount })),
+    ).toMatchObject({ reason: "VETTING_NOT_APPROVED" });
+    expect(
+      named.admit("operator.fake", {
+        ...request(),
+        entitlement: { plan: "TECHINT", vettingStatus: "APPROVED" },
+      }),
+    ).toMatchObject({ reason: "MODULE_NOT_IN_PLAN" });
+  });
+
+  it("hands a key only to an enabled keyed method: with official off, an optional-key collector runs open, handed nothing", async () => {
+    routes.set("one.test/names?q=example.com", (res) => res.end('["a"]'));
+    const keys: (string | null)[] = [];
+    const optional = defineCollector(
+      declaration("fake.optional", "one", {
+        credentials: { vaultIds: ["one-key"], runsWithout: true },
+      }),
+      async (ctx) => {
+        const key = ctx.credentials.get("one-key");
+        keys.push(key === null ? null : key.expose());
+        return namesFrom("one.test")(ctx);
+      },
+    );
+    const handed = new Map([["one-key", { expose: () => "[tenant key]" }]]);
+    const openOnly = runtimeWith([optional], { accessMethods: ["open"] });
+    expect(openOnly.access("fake.optional")).toMatchObject({ runsVia: ["open"], vaultIds: [] });
+    expectStatus(
+      await openOnly.execute("fake.optional", request({ credentials: handed })),
+      "FOUND",
+    );
+    const both = runtimeWith([optional]);
+    expect(both.access("fake.optional")).toMatchObject({
+      runsVia: ["open", "official"],
+      vaultIds: ["one-key"],
+    });
+    expectStatus(await both.execute("fake.optional", request({ credentials: handed })), "FOUND");
+    expect(keys).toEqual([null, "[tenant key]"]);
+  });
+
+  it("refuses a collector whose only method is off, and one that needs a key it was not handed", async () => {
+    const keyed = defineCollector(
+      declaration("fake.keyed", "one", {
+        credentials: { vaultIds: ["one-key"], runsWithout: false },
+      }),
+      namesFrom("one.test"),
+    );
+    expect(
+      expectStatus(
+        await runtimeWith([keyed], { accessMethods: ["open"] }).execute("fake.keyed", request()),
+        "REFUSED",
+      ).reason,
+    ).toBe("ACCESS_METHOD_NOT_ENABLED");
+    expect(
+      expectStatus(await runtimeWith([keyed]).execute("fake.keyed", request()), "NEEDS_CREDENTIALS")
+        .missing,
+    ).toEqual(["one-key"]);
+    expect(upstream.requests).toEqual([]);
+  });
+
+  it("refuses at registration a source without a method, and a collector its source's methods do not fit", () => {
+    const register = (sources: SourceDeclaration[], collectors: Collector[]) => () =>
+      new CollectorRegistry({ sources, collectors });
+    const noMethods = { ...testSource("none"), access: [] } as unknown as SourceDeclaration;
+    expect(register([noMethods], [])).toThrow(/at least one access method/);
+    expect(register([testSource("twice", { access: ["official", "licensed"] })], [])).toThrow(
+      /more than one keyed method/,
+    );
+    expect(register([testSource("operator.shared", { access: ["open", "operator"] })], [])).toThrow(
+      /stands alone/,
+    );
+    expect(register([testSource("unprefixed", { access: ["operator"] })], [])).toThrow(
+      /exactly when the source is reached through the operator method/,
+    );
+    const keyedOnOpen = defineCollector(
+      declaration("fake.keyed-open", "two", {
+        credentials: { vaultIds: ["two-key"], runsWithout: false },
+      }),
+      namesFrom("two.test"),
+    );
+    expect(register([testSource("two")], [keyedOnOpen])).toThrow(/must declare a keyed method/);
+    const openOnKeyed = defineCollector(declaration("fake.open-keyed", "keyed"), namesFrom("x"));
+    expect(register([testSource("keyed", { access: ["official"] })], [openOnKeyed])).toThrow(
+      /does not declare it/,
+    );
+    const technical = defineCollector(
+      declaration("operator.fake-technical", "operator.own", {
+        credentials: { vaultIds: ["own-account"], runsWithout: false },
+      }),
+      namesFrom("operator.own.test"),
+    );
+    expect(register([OPERATOR_SOURCE], [technical])).toThrow(/person collector/);
+  });
+
+  it("refuses a source on Instagram, Facebook or X by any method, a backstop for CLAUDE.md §3", () => {
+    for (const host of ["www.instagram.com", "graph.facebook.com", "api.x.com", "twitter.com"]) {
+      const network = {
+        protocol: "https" as const,
+        hosts: [host],
+        rateLimit: {
+          requests: 1,
+          intervalSeconds: 1,
+          basis: "SELF_IMPOSED" as const,
+          note: "[test]",
+        },
+        operators: [{ name: "fake", hosts: [host] }],
+      };
+      for (const source of [
+        testSource("social", { network }),
+        testSource("operator.social", { access: ["operator"], network }),
+      ]) {
+        expect(() => new CollectorRegistry({ sources: [source], collectors: [] })).toThrow(
+          /never collected from/,
+        );
+      }
+    }
+  });
+});
+
+describe("what cannot run says so with null, never 0 or an empty list (RELEASE-BLOCKING; access methods, acceptance c)", () => {
+  it("gives every source and collector that cannot run a null runsVia and a reason, and every one that can a method", () => {
+    const runtime = runtimeWith(
+      [
+        defineCollector(declaration("fake.unverified", "unverified"), namesFrom("unverified.test")),
+        defineCollector(declaration("fake.blocked", "blocked"), namesFrom("blocked.test")),
+        defineCollector(
+          declaration("fake.keyed", "one", {
+            credentials: { vaultIds: ["one-key"], runsWithout: false },
+          }),
+          namesFrom("one.test"),
+        ),
+        defineCollector(declaration("fake.ok", "two"), namesFrom("two.test")),
+      ],
+      { accessMethods: ["open"] },
+    );
+    const sources = new Map(runtime.sources().map((source) => [source.id, source]));
+    for (const id of ["unverified", "blocked"]) {
+      const source = sources.get(id);
+      expect(source?.enabled).toBe(false);
+      expect(source?.runsVia).toBeNull();
+      expect(source?.reason?.trim().length).toBeGreaterThan(0);
+    }
+    expect(sources.get("two")).toMatchObject({ enabled: true, runsVia: ["open"], reason: null });
+    for (const id of ["fake.unverified", "fake.blocked", "fake.keyed"]) {
+      const access = runtime.access(id);
+      expect(access.runsVia, id).toBeNull();
+      expect(access.refusal, id).not.toBeNull();
+      expect(access.reason?.trim().length, id).toBeGreaterThan(0);
+    }
+    expect(runtime.access("fake.ok").runsVia).toEqual(["open"]);
+    // Nothing a reader could count: no empty list, no zero, anywhere in what is said.
+    const said = JSON.stringify([...sources.values(), runtime.access("fake.keyed")]);
+    expect(said).not.toContain('"runsVia":[]');
+    expect(said).not.toMatch(/:0[,}]/);
   });
 });
 
@@ -385,7 +682,6 @@ describe("collectors sharing an upstream share its rate limit (RELEASE-BLOCKING)
           defineCollector(declaration("fake.other", "two"), namesFrom("two.test")),
         ],
       }),
-      allowUnverifiedSources: true,
       network: testNetwork(upstream, {
         rateLimiter: new MemoryRateLimiter(),
         answers: { "one.test": ["1.1.1.1"], "two.test": ["1.1.1.1"] },
@@ -556,7 +852,6 @@ describe("local analysis cites its own recorded analysis (RELEASE-BLOCKING)", ()
   const localRuntime = (collectors: Collector[]) =>
     new CollectorRuntime({
       registry: new CollectorRegistry({ sources: [...SOURCES, OFFLINE], collectors }),
-      allowUnverifiedSources: true,
       network: testNetwork(upstream),
     });
 
@@ -625,7 +920,6 @@ describe("a failure never becomes a result (RELEASE-BLOCKING)", () => {
         sources: SOURCES,
         collectors: [collectorThat("fake.down", namesFrom("one.test"))],
       }),
-      allowUnverifiedSources: true,
       network: testNetwork(closed, { answers: { "one.test": ["1.1.1.1"] } }),
     });
     expect(
@@ -971,7 +1265,6 @@ describe("an empty answer that cannot be trusted is unconfirmed, never not found
     );
     const runtime = new CollectorRuntime({
       registry: new CollectorRegistry({ sources: [...SOURCES, OFFLINE], collectors: [analyser] }),
-      allowUnverifiedSources: true,
       network: testNetwork(upstream),
     });
     const outcome = expectStatus(await runtime.execute("fake.local", request()), "FAILED");
@@ -1063,7 +1356,6 @@ describe("metering: every request a run sends is counted, and nothing else (Phas
     });
     const runtime = new CollectorRuntime({
       registry: new CollectorRegistry({ sources: [strict], collectors: [twice] }),
-      allowUnverifiedSources: true,
       network: testNetwork(upstream, {
         rateLimiter: new MemoryRateLimiter(),
         answers: { "one.test": ["1.1.1.1"] },

@@ -66,6 +66,12 @@ describe("Unmeasured", () => {
     expect((await screen.findByRole("tooltip")).textContent).toBe("[why there is no value]");
   });
 
+  it("says what a dash for something known to be absent stands for, never 'Not measured' (access methods)", () => {
+    render(<Unmeasured summary="None." reason="no access method can run here" />);
+    const dash = screen.getByRole("button", { name: "None. No access method can run here" });
+    expect(dash.textContent).toBe("—");
+  });
+
   it("keeps its target size as an overlay, so the dash keeps its column's edge and the row its pitch", () => {
     render(<Unmeasured reason="[why there is no value]" className="justify-end" />);
     const dash = screen.getByRole("button", { name: /^Not measured\./ });

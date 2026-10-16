@@ -361,7 +361,13 @@ export const DEFAULTS: Record<string, Handler> = {
   "GET /api/v1/session": () => Response.json(session),
   "GET /api/v1/me": () =>
     Response.json(me(["run:read", "evidence:read", "case:read", "case:write"])),
-  "GET /api/v1/collectors": () => Response.json({ unverifiedSourcesAllowed: true, items: [] }),
+  "GET /api/v1/collectors": () =>
+    Response.json({
+      unverifiedSourcesAllowed: false,
+      accessMethodsEnabled: ["open", "official", "licensed"],
+      sources: [],
+      items: [],
+    }),
   [`GET /api/v1/runs/${RUN_ID}`]: () => Response.json(RUN),
   "GET /api/v1/timeline": () => Response.json(TIMELINE),
   "GET /api/v1/entities": () => Response.json(ENTITIES),

@@ -25,7 +25,13 @@ type Handler = (body: Record<string, unknown>, request: Request) => Response | P
 /** What the dashboard's panels read when a test does not say otherwise: nothing yet. */
 const PANEL_DEFAULTS: Record<string, Handler> = {
   "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
-  "GET /api/v1/collectors": () => Response.json({ unverifiedSourcesAllowed: true, items: [] }),
+  "GET /api/v1/collectors": () =>
+    Response.json({
+      unverifiedSourcesAllowed: false,
+      accessMethodsEnabled: ["open", "official", "licensed"],
+      sources: [],
+      items: [],
+    }),
 };
 
 /** Answers by method and path; anything unexpected fails loudly as a 404 problem. */
@@ -177,6 +183,7 @@ describe("the search dashboard", () => {
       availability: string,
       availabilityReason: string | null,
       targetTypes: string[],
+      refusal: string | null = null,
     ) => ({
       id,
       version: "1.0.0",
@@ -188,6 +195,26 @@ describe("the search dashboard", () => {
       credentials: { vaultIds: [], runsWithout: true },
       availability,
       availabilityReason,
+      sourceId: `[source of ${id}]`,
+      // As the API states it: null when it cannot run here, with why.
+      access:
+        refusal === null
+          ? {
+              methods: [
+                { kind: "open", enabled: true, licenceVerdict: "PERMITTED", runnable: true },
+              ],
+              runsVia: ["open"],
+              refusal: null,
+              reason: null,
+            }
+          : {
+              methods: [
+                { kind: "open", enabled: true, licenceVerdict: availability, runnable: false },
+              ],
+              runsVia: null,
+              refusal,
+              reason: availabilityReason,
+            },
     });
     fakeApi({
       "GET /api/v1/session": () => Response.json(session),
@@ -205,12 +232,26 @@ describe("the search dashboard", () => {
       "GET /api/v1/collectors": () =>
         Response.json({
           unverifiedSourcesAllowed: false,
+          accessMethodsEnabled: ["open", "official", "licensed"],
+          sources: [],
           items: [
             collector("ok", "[Permitted source]", "AVAILABLE", null, ["DOMAIN"]),
-            collector("unverified", "[Unverified source]", "UNVERIFIED", "[licence reason]", [
-              "USERNAME",
-            ]),
-            collector("blocked", "[Blocked source]", "BLOCKED", "[why it is blocked]", ["URL"]),
+            collector(
+              "unverified",
+              "[Unverified source]",
+              "UNVERIFIED",
+              "[its licence is unverified, so it never runs]",
+              ["USERNAME"],
+              "UNVERIFIED_SOURCE_NOT_ALLOWED",
+            ),
+            collector(
+              "blocked",
+              "[Blocked source]",
+              "BLOCKED",
+              "[why it is blocked]",
+              ["URL"],
+              "LICENCE_BLOCKED",
+            ),
           ],
         }),
     });
@@ -235,12 +276,12 @@ describe("the search dashboard", () => {
     expect(cases?.textContent).toContain("0 pinned · created");
 
     const rowOf = (label: string) => screen.getByText(label).closest("li")?.textContent;
-    expect(rowOf("[Permitted source]")).toBe("[Permitted source]Ready");
-    // This deployment does not allow unverified sources, so that one is held, and says so.
+    expect(rowOf("[Permitted source]")).toBe("[Permitted source]Runs via open accessReady");
+    // An unverified source never runs, so that one is held, and says why, as the API does.
     expect(rowOf("[Unverified source]")).toBe(
-      "[Unverified source]Its licence is unverified, and this deployment does not allow unverified sources.Held",
+      "[Unverified source][its licence is unverified, so it never runs]Runs via —Held",
     );
-    expect(rowOf("[Blocked source]")).toBe("[Blocked source][why it is blocked]Held");
+    expect(rowOf("[Blocked source]")).toBe("[Blocked source][why it is blocked]Runs via —Held");
     // The held ones sit behind a disclosure that states how many there are; none is dropped.
     const held = screen.getByText("2 held: not enabled here").closest("details");
     expect(held?.textContent).toContain("[Unverified source]");
@@ -289,6 +330,76 @@ describe("the search dashboard", () => {
     expect(requests("POST", "/api/v1/estimates")).toHaveLength(1);
   });
 
+  it("shows a dash, never 0, for what a collector that cannot run runs via, and holds one the API did not say can run (acceptance c)", async () => {
+    const base = {
+      version: "1.0.0",
+      discipline: "TECHINT",
+      targetTypes: ["DOMAIN"],
+      collectionMode: "PASSIVE_API",
+      claimStrength: "REPORTED",
+      credentials: { vaultIds: [], runsWithout: true },
+      sourceId: "[a source]",
+    };
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(session),
+      "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
+      "GET /api/v1/collectors": () =>
+        Response.json({
+          unverifiedSourcesAllowed: false,
+          accessMethodsEnabled: ["open", "official", "licensed"],
+          sources: [],
+          items: [
+            {
+              ...base,
+              id: "no-method",
+              label: "[No method enabled]",
+              availability: "AVAILABLE",
+              availabilityReason: null,
+              access: {
+                methods: [
+                  {
+                    kind: "operator",
+                    enabled: false,
+                    licenceVerdict: "PERMITTED",
+                    runnable: false,
+                  },
+                ],
+                runsVia: null,
+                refusal: "ACCESS_METHOD_NOT_ENABLED",
+                reason: "[its only access method is not enabled]",
+              },
+            },
+            // An answer that leaves the decision out: held, never Ready.
+            {
+              ...base,
+              id: "unsaid",
+              label: "[Unsaid]",
+              availability: "AVAILABLE",
+              availabilityReason: null,
+            },
+          ],
+        }),
+    });
+    renderHome();
+    const health = await screen.findByRole("region", { name: "Collector health" });
+    await within(health).findByText("[No method enabled]");
+    expect(within(health).getByText("[No method enabled]").closest("li")?.textContent).toBe(
+      "[No method enabled][its only access method is not enabled]Runs via —Held",
+    );
+    expect(within(health).getByText("[Unsaid]").closest("li")?.textContent).toBe(
+      "[Unsaid]The server did not say that it can run here, so it is held.Runs via —Held",
+    );
+    // The dash says what it stands for, and that nothing can run: never a number.
+    const dashes = within(health).getAllByRole("button", {
+      name: "None. No access method can run here.",
+    });
+    expect(dashes.map((dash) => dash.textContent)).toEqual(["—", "—"]);
+    // The one number is a measured count of collectors held; no zero anywhere.
+    expect(health.textContent).toContain("2 held: not enabled here");
+    expect(health.textContent.replace("2 held: not enabled here", "")).not.toMatch(/\d/);
+    expect(health.textContent).toContain("None of them can run in this deployment.");
+  });
+
   it("says a note every collector row shares once, not on each row", async () => {
     const unverified = (id: string, label: string) => ({
       id,
@@ -301,6 +412,13 @@ describe("the search dashboard", () => {
       credentials: { vaultIds: [], runsWithout: true },
       availability: "UNVERIFIED",
       availabilityReason: "[licence reason]",
+      sourceId: "[unverified source]",
+      access: {
+        methods: [{ kind: "open", enabled: true, licenceVerdict: "UNVERIFIED", runnable: false }],
+        runsVia: null,
+        refusal: "UNVERIFIED_SOURCE_NOT_ALLOWED",
+        reason: "[its licence is unverified, so it never runs]",
+      },
     });
     fakeApi({
       "GET /api/v1/session": () => Response.json(session),
@@ -308,21 +426,22 @@ describe("the search dashboard", () => {
       "GET /api/v1/collectors": () =>
         Response.json({
           unverifiedSourcesAllowed: false,
+          accessMethodsEnabled: ["open", "official", "licensed"],
+          sources: [],
           items: [unverified("a", "[Source A]"), unverified("b", "[Source B]")],
         }),
     });
     renderHome();
     const health = await screen.findByRole("region", { name: "Collector health" });
     await within(health).findByText("[Source A]");
-    const note =
-      "Its licence is unverified, and this deployment does not allow unverified sources.";
+    const note = "[its licence is unverified, so it never runs]";
     expect(within(health).getAllByText(note)).toHaveLength(1);
-    // Each row is its label and its status only; the note sits above them.
+    // Each row is its label, what it runs via and its status; the note sits above them.
     expect(within(health).getByText("[Source A]").closest("li")?.textContent).toBe(
-      "[Source A]Held",
+      "[Source A]Runs via —Held",
     );
     expect(within(health).getByText("[Source B]").closest("li")?.textContent).toBe(
-      "[Source B]Held",
+      "[Source B]Runs via —Held",
     );
   });
 
