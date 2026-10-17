@@ -4310,3 +4310,193 @@ timeouts reported after up to 786 seconds); those suites rerun alone passed.
 **Noted.** `R1-PLAN.md` (D-39 open) and `PROJECT-BRIEF.md` are R1 files and a dated snapshot, left
 as they are. In the main tree, the untracked `.claude/` worktrees trip the person-gate guard. The
 clean worktree has none.
+
+## Monitoring collectors: RSS, Reddit and Bluesky on the open method (2026-10-17)
+
+**The owner's instruction** (2026-10-17):
+- Build RSS, Reddit and Bluesky collectors on the access-method seam, each item in the news
+  collector's shape, with the registry's label, claim strengths (OBSERVED for the item's
+  existence, REPORTED for what it says), a published date that is null when the source gives
+  none, and a region when known.
+- RSS: World Monitor's direct-publisher feeds, without Google News, plus six to eight named
+  Indian outlets, each verified live.
+- Reddit: the public JSON endpoint at one request a second, or an OAuth app if configured.
+  Bluesky: the public `searchPosts`.
+- An empty or failed fetch is EMPTY_UNCONFIRMED, never 0. TOPIC runs stay person-gated.
+
+**The owner's rulings, the same day**, on four conflicts raised before building:
+- **Held:** the sources have no recorded verdict, so they are built UNVERIFIED and tested on
+  recorded answers; none runs until the owner records its terms.
+- **Collectors only:** there is no watch, trends or brief stage in Vestigo (slices M1, M3, M5 of
+  `docs/monitoring/MONITORING-PLAN.md`), so items reach stored evidence, as GDELT's do.
+- **The feed list as leads only:** World Monitor's list is AGPL-3.0. No file is copied. Each
+  publisher's own feed URL is verified and declared under a source of its own.
+- **Additive fields:** items keep the news shape and add `published` and, derived, `publishedAt`
+  and `region`. GDELT keeps its own shape.
+
+**What was found, live.**
+- **Bluesky:** the public AppView answered an unauthenticated `searchPosts` with 403
+  (recorded). Keyless Bluesky search does not exist today.
+- **Reddit:** www.reddit.com answered this address's unauthenticated search with its 403 block
+  page (recorded). Neither refusal was worked around (CLAUDE.md §3).
+- **RSS:** 179 URLs were fetched once each: 167 from World Monitor's list and twelve Indian
+  candidates. `test/snapshots/rss-feed-verification.json` records what happened to every one:
+  - 153 kept, from 132 publishers;
+  - 15 failed the check and were skipped (HTTP 403, 404, 429, not a feed, a reset
+    connection), three of them Indian candidates: ThePrint (403), The Wire (not a feed) and
+    Deccan Herald (404);
+  - 10 Google News URLs, written out by hand rather than through `gn()`, left out whatever
+    they answered (8 had parsed);
+  - a ninth Indian outlet that passed, Business Standard, left out to stay within eight.
+- **Language is not a region:** The Hindu's feed states en-US and The Times of India's en-GB.
+  So `region` comes only from a country the feed list records, never from a language tag.
+  It is IN for twelve publishers:
+  - seven publishers for the eight added outlets (The Times of India and The Economic Times
+    share indiatimes.com);
+  - five from World Monitor's list: NDTV, The Hindu, Inc42, Aaj Tak and Amar Ujala.
+
+**What changed.**
+- **collectors:**
+  - `rss.<domain>`: one collector per publishing domain, each on its own UNVERIFIED source
+    with its own limit (one request every two seconds).
+    - **Matching:** for a topic, it keeps the items whose title or summary contains the phrase
+      as whole words, case-insensitively, the title and the summary each on its own. A
+      letter, mark or digit on either side continues a word, in any script, so "AI" is not
+      found in "said". Typographic apostrophes and dashes match their plain forms, and HTML's
+      named entities are decoded first, so "Côte d’Ivoire" and "M&amp;uuml;nchen" are found.
+    - **No link:** an item that mentions the topic but gives no link cannot be cited. It is
+      counted (`itemsMentioningWithoutLink`), and an answer with only such items says so.
+  - `bluesky.search` reads the public AppView, or bsky.social with the tenant's app password
+    (vault id `bluesky`). There it signs in, searches, and closes the session
+    (`deleteSession`) whatever the search answered, or if it could not be sent. A close that
+    fails, or cannot be sent, is UNAVAILABLE and says the session may still be open. A post's
+    web link is built from the DID in its URI, never from its author's handle.
+  - `reddit.search` reads the public JSON endpoint, or oauth.reddit.com with the tenant's OAuth
+    app (vault id `reddit-api`), at Reddit's one request a second. `reddit-api` now declares
+    open and official.
+  - A page that names another page (Bluesky's `cursor`, Reddit's `after`) is marked
+    newest-only, as a full page is.
+  - **The RSS and Atom reader** uses no XML library and no DTD, and fetches nothing. It returns
+    each value as the feed's text has it, for the provenance check, and decoded under
+    `derived`.
+    - It reads, and decodes text, in one forward pass, so a hostile body costs time in
+      proportion to its length. An item that never closes is a typed failure.
+    - An Atom entry takes its alternate link, or its first link without a rel, and never
+      reads the `<source>` it was copied from as its own. An RSS item with no `<link>` takes
+      its guid when that is a permalink URL.
+    - A video's `media:content` is never the item's image; its poster thumbnail is.
+  - **Dates** are read field by field, in the two forms feeds use: RFC 822/2822 (RSS) and
+    RFC 3339 (Atom, Bluesky). A date with no time zone, no year, a day the month does not
+    have, an order that could be day-first or month-first, or a weekday that is not the
+    date's, is null, never a lenient parser's guess or this server's reading. A two-digit
+    year is read by RFC 2822's rule only when the weekday confirms it (CISA's feed writes
+    them). On the 7,052 dated items of the live check, this reads every date as before.
+  - `CredentialMalformedError`, for a vault credential not in the form a collector needs.
+- **osint-engine:** extractors that check each result and draw nothing yet, as news does.
+
+**Departures from the instruction, stated.**
+- **A failed fetch is a typed failure, not EMPTY_UNCONFIRMED.** CLAUDE.md §1 says a collector
+  that fails returns a typed error, and the runtime refuses an unconfirmed answer that cites
+  no 2xx response. A 429 or 5xx is UNAVAILABLE and retried; a 403 is FAILED,
+  UPSTREAM_REFUSED. Neither is ever 0. A 2xx with nothing on the topic is EMPTY_UNCONFIRMED.
+- **The source label is not in the item.** A collector cannot state a label (CLAUDE.md, source
+  labelling). Every evidence row takes it from the registry through its collector id. The
+  pipeline test checks that each row's collector is its own job's.
+- **Real items exist for RSS only.** Bluesky's and Reddit's found answers are synthetic in
+  their documented shapes until an app password or an OAuth app lets one be recorded.
+- **The user agent is the platform's** (`Vestigo-collector/1.0`). A collector cannot set its
+  own, and Reddit asks for one naming a contact.
+
+**Acceptance tests.**
+- **(a) Items reach stored evidence:** a topic run through the engine
+  (`pipeline.test.ts`) stores a real BBC item, a Bluesky post and a Reddit post, one
+  evidence row each, with nothing drawn. Each row is its own job's collector's, and BBC's
+  cites the World feed, where the item was.
+- **(b) Empty is unconfirmed, failure is typed, never 0:**
+  - an RSS topic with no matching item, and an empty Bluesky or Reddit page, are
+    EMPTY_UNCONFIRMED, and a run of one completes with nothing stored;
+  - a feed answering 503, 403 or a page that is not a feed, and the recorded Bluesky and
+    Reddit 403s, are typed failures;
+  - one unreadable feed of a publisher fails its whole job, never a quiet partial: the last
+    of BBC's seven, after an earlier one matched, and a middle one refusing.
+- **(c) No invented date:** BBC Hindi's recorded second item has no `<pubDate>`, and its
+  `publishedAt` is null; so are a Bluesky post with no `createdAt`, a Reddit post with no
+  `created_utc`, a date with no time zone, dates such as "17-Oct-2026", whose year could
+  pass for an offset, and dates a lenient parser would complete (no year, 31 February, a
+  wrong weekday). One item's malformed date is null on that item alone: the run keeps the
+  others.
+- **(d) The Day 1 gate:** each collector refuses a topic without the person module or approved
+  vetting, and the planner leaves all three out of a topic run for such a tenant.
+- **The feed list:** a test checks it is exactly the feeds the live check kept, with no Google
+  News and eight Indian outlets added. It checks that the snapshot accounts for all 179 URLs,
+  and that each publisher's country is the one the snapshot records for its feeds.
+
+**The adversarial review, the same day.** It confirmed 17 findings, 14 distinct issues, all
+fixed. Each fix has a test that fails when it is reverted (the Verge fixtures' since the
+second review); eleven were checked by putting the defect back.
+- **Dates:** a zoneless date ending in a dash and a year ("17-Oct-2026") read as having an
+  offset, giving this server's midnight.
+- **Matching:**
+  - the phrase was a raw substring of the title and summary joined, so "AI" was found in
+    "said", and across the two fields;
+  - matching items with no link were dropped silently, and the empty answer then said that
+    nothing mentioned the topic.
+- **The reader:** its item scan was quadratic on items that never close, blocking the worker.
+- **Bluesky:**
+  - its web link used the author's handle, which can be "handle.invalid" or change;
+  - each signed-in run left its session open on the tenant's account.
+- **Paging:** Bluesky's cursor and Reddit's `after` were ignored, so a partial page read as
+  complete.
+- **Data:**
+  - Aaj Tak and Amar Ujala had no country, and the test pinned that gap;
+  - the record's figures did not add up, with every left-out URL missing from the snapshot;
+  - the Verge fixtures kept their Atom category terms, a person's name among them.
+- **Tests:**
+  - the partial-failure test failed the first feed, so it could not catch a quiet partial;
+  - the Atom link choice was untested;
+  - the acceptance (a) label check compared the registry with a copy of itself.
+
+**A second review, of those fixes, the same day.** Four reviewers, each checked by a skeptic,
+confirmed 14 findings, 12 distinct issues, all fixed. Each fix has a test that fails when it is
+reverted; all eleven code fixes were checked by putting the defect back.
+- **The reader:**
+  - its tag strip was still quadratic, so matching, not parsing, could block the worker;
+  - a video's `media:content` was stored as the item's image;
+  - `&constructor;` decoded to a function's source text, which a topic could then match;
+  - most named entities stayed encoded, so "M&amp;uuml;nchen" did not match "München";
+  - an Atom entry's `<source>` could give the entry its title, link and date.
+- **Matching:** curly apostrophes did not match straight ones.
+- **Dates:**
+  - `Date.parse` filled in missing years and days, rolled 31 February into March and
+    guessed month-first;
+  - a five-digit year failed the whole run's result, losing every item.
+- **Bluesky:** a close that could not be sent left the session open without saying so, and
+  the test for the close ran no path that needed it.
+- **Claims:** the schema still said no mentioning item is dropped, the monitoring plan still
+  called Reddit official only, and the first review's "each fix has a test" was not yet true
+  for the Verge fixtures.
+
+**Pipeline.** In a clean worktree holding only this change, `pnpm turbo lint typecheck test --force`
+ran 54 of 54 tasks green, lint and typecheck clean, 2,318 tests: collectors 590, db 305,
+config 273, api 241, osint-engine 187, web 186, llm 130, integrations 122, ui 96, case-engine
+81, access 69, core 33, worker 5.
+
+**Open for the owner.**
+- **Verdicts:** 134 sources wait on the owner reading the terms: Bluesky's, Reddit's Data API
+  terms (D-M8), and each of the 132 publishers'. Until then none runs.
+- **Keys to record real answers:** a Bluesky app password and a Reddit OAuth app, held as tenant
+  credentials, would let their found answers be recorded and the synthetic fixtures replaced.
+- **Scale:** each source gets its own collect queue, so a collect pool now opens 134 more queues,
+  idle while the sources are UNVERIFIED. Opening queues only for sources that can run is a
+  separate change.
+- **The health card** lists the 134 among the held collectors.
+- **Feeds change:** a publisher can move or drop a feed. Its collector then fails, typed, until
+  the list is checked again.
+- **Bluesky sessions:** a signed-in run opens and closes its own session. Bluesky limits
+  sign-ins per account, so a tenant watching many topics would need one session kept between
+  runs, outside the collector. Not built; latent while Bluesky is held.
+- **One feed to look at closely:** `rss.trumpstruth-org` is a third party's feed of one
+  person's posts on a social platform. Whether reading it is within that platform's terms
+  (CLAUDE.md §3) belongs in its verdict.
+
+**Noted.** Docker Desktop was not running this morning; it was started for the tests.

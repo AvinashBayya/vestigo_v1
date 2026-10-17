@@ -156,9 +156,9 @@ declares it (`emptyAnswersUnreliable`; built on Track M Day 2).
 
 | Collector id | Source (catalogue) | Targets | Credential (vault id) | Notes |
 |---|---|---|---|---|
-| `rss` | `rss-feed` (new, open-host) | `URL` | none | Feed parsed server-side; per-feed status envelope; `published_at` from the item, never the fetch time. |
+| `rss.<domain>` (**built 2026-10-17**, held) | one source per publishing domain (`rss.<domain>`, 132, UNVERIFIED) | `TOPIC` | none | **Built** (`docs/PLAN.md`, monitoring collectors): the owner's platform list of 153 verified feeds (World Monitor's direct-publisher feeds as leads, no Google News, eight Indian outlets added) instead of tenant-declared open hosts, which still wait on D-M3. Items in the news shape; `published` as given, `publishedAt` null without a date or a zone. Nothing on the topic is EMPTY_UNCONFIRMED; an unreadable feed fails the job. |
 | `news` (un-held, Track M Day 2) | `gdelt-doc` | `DOMAIN`, `TOPIC` | none | **Built on Day 2** (`docs/PLAN.md`, Track M Day 2), as the owner ruled it, which changed this row's canary: on `{}` (or an empty list) the collector issues one search that always has articles, in the same window and the same shared limit. Articles back mean GDELT is up, and the empty answer is `EMPTY_UNCONFIRMED`, never `NOT_FOUND`: a passing canary means GDELT is up, not that any query found something. An empty canary is `UNAVAILABLE`. A full list is the newest 250 only, and no figure in the result counts coverage. `query`, `since/until` (GDELT `startdatetime/enddatetime`) wait for M1's parameters. |
-| `bluesky.search` | `bluesky` | `TOPIC` | none | `app.bsky.feed.searchPosts` with `since/until/cursor`. |
+| `bluesky.search` (**built 2026-10-17**, held) | `bluesky` | `TOPIC` | `bluesky` (account app password), optional | **Built:** `app.bsky.feed.searchPosts`, sort latest, 100. The public AppView refused an unauthenticated search with 403 (recorded 2026-10-17), so without a key it reports that refusal; with the tenant's app password it searches through bsky.social and closes its session after. `since/until/cursor` wait for M1's parameters; a page with a cursor is marked newest-only. |
 | `bluesky.profile` | `bluesky` | `USERNAME` | none | `getProfile` + `getAuthorFeed`; account age and counts null when absent, never 0. |
 | `mastodon.tag` | `mastodon` (new, open-host: tenant's instance list) | `TOPIC` (hashtag only) | none | `api/v1/timelines/tag/:tag` with `since_id`. Full-text search is instance-local and often requires auth; stated in the result. |
 | `mastodon.account` | `mastodon` | `USERNAME` (`@user@instance`) | none | `lookup` + `statuses`. |
@@ -167,7 +167,7 @@ declares it (`emptyAnswersUnreliable`; built on Track M Day 2).
 | `brave.news` | `brave-search` | `TOPIC`, `DOMAIN` | `brave-search` | `/res/v1/news/search`. |
 | `youtube.search` | `youtube-data-api` | `TOPIC` | `youtube-data-api` | `search.list` (`publishedAfter`), then `videos.list` for statistics. 100 quota units per search. |
 | `youtube.channel` | `youtube-data-api` | `USERNAME`, `URL` | `youtube-data-api` | `channels.list` + uploads playlist. |
-| `reddit.search` | `reddit-api` | `TOPIC`, `USERNAME` (`r/`, `u/`) | `reddit-api` (client id + secret) | OAuth client-credentials; `oauth.reddit.com/search`. Built last (M2b), may end BLOCKED (§8). |
+| `reddit.search` (**built 2026-10-17**, held) | `reddit-api` (open or official) | `TOPIC` | `reddit-api` (client id + secret), optional | **Built on the owner's instruction**, ahead of M2b: the public JSON endpoint, which answered this address with Reddit's 403 block page (recorded 2026-10-17), or the tenant's OAuth app, client-credentials, `oauth.reddit.com/search`. One request a second. Still ships only with a recorded verdict (D-M8); may end BLOCKED. |
 
 Display names must name every operator (`operatorsMissingFrom`) and be unique: for example
 "Bluesky post search (Bluesky public API)", "Brave news search (Brave Search API)".
@@ -178,7 +178,8 @@ Every source but GDELT is `UNVERIFIED`, and an unverified source never runs, in 
 (access methods, owner instruction 2026-10-16; `COLLECTORS_ALLOW_UNVERIFIED` is retired). Nothing in
 code can change a verdict; the owner reads the terms and records the verdict in `catalogue.ts` with
 the `audited(row, url)` reference. Each source also declares its access methods (open, official,
-licensed, operator); Brave, YouTube and Reddit are `official`, their keys from the tenant's vault.
+licensed, operator); Brave and YouTube are `official`, their keys from the tenant's vault. Reddit is
+open (its public JSON endpoint) or official (the tenant's OAuth app, from the vault).
 
 | Source | Terms to read | Known constraints |
 |---|---|---|
@@ -188,7 +189,7 @@ licensed, operator); Brave, YouTube and Reddit are `official`, their keys from t
 | `reddit-api` | `https://redditinc.com/policies/data-api-terms` (catalogue row 7) | Commercial use needs approval; the terms restrict surveillance-type use. Highest risk; may end BLOCKED |
 | `youtube-data-api` | YouTube API Services Terms of Service and Developer Policies | Default 10,000 units/day per project; search costs 100 units; data retention and display rules |
 | `brave-search` | `https://brave.com/search/api/` (catalogue row 15) and its terms | Metered billing; a monthly credit tied to public attribution |
-| `rss-feed` | Per publisher | Feeds are published for syndication; the tenant attests when adding one |
+| `rss.<domain>` (132) | Per publisher | Feeds are published for syndication; each publisher's terms are read before its source runs. The list is in `packages/collectors/src/data/rss-feeds.ts` |
 
 ### 4.4 Quotas at scale
 

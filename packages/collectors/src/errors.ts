@@ -186,3 +186,17 @@ export class UpstreamResponseError extends AppError {
     this.name = "UpstreamResponseError";
   }
 }
+
+/**
+ * A tenant credential is not in the form its collector needs (a key in the
+ * vault for another use, a typo). Permanent until the tenant replaces it; its
+ * value is never repeated.
+ */
+export class CredentialMalformedError extends AppError {
+  readonly code = "CREDENTIAL_MALFORMED";
+
+  constructor(vaultId: string, expected: string) {
+    super(`The tenant's "${vaultId}" credential is not ${expected}.`);
+    this.name = "CredentialMalformedError";
+  }
+}

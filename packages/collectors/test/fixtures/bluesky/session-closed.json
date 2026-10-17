@@ -1,0 +1,17 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://docs.bsky.app/docs/api/com-atproto-server-delete-session",
+    "notes": "Synthetic: com.atproto.server.deleteSession's documented answer, 200 with no body. No live answer could be recorded: no account app password is held here, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "bsky.social",
+    "path": "/xrpc/com.atproto.server.deleteSession"
+  },
+  "response": {
+    "status": 200,
+    "headers": {},
+    "body": ""
+  }
+}

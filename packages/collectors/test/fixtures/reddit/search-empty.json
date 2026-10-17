@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://www.reddit.com/dev/api/#GET_search",
+    "notes": "Synthetic: the search listing with no posts. No live answer could be recorded: www.reddit.com answered an unauthenticated search from this address with its 403 block page on 2026-10-17 (public-search-403.json), and no OAuth app is held here, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "oauth.reddit.com",
+    "path": "/search?q=%22%5Ba+topic+no+post+mentions%5D%22&sort=new&limit=100&type=link&raw_json=1"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"kind\":\"Listing\",\"data\":{\"after\":null,\"dist\":0,\"children\":[],\"before\":null}}"
+  }
+}

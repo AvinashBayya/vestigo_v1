@@ -30,10 +30,14 @@ export {
   DNS_RESULT,
   GITHUB_RESULT,
   HACKERNEWS_RESULT,
+  BLUESKY_SEARCH_RESULT,
   HELD_PLATFORM_COLLECTORS,
   NEWS_RESULT,
   PLATFORM_COLLECTORS,
   RDAP_RESULT,
+  REDDIT_SEARCH_RESULT,
+  RSS_COLLECTORS,
+  RSS_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
   type HeldCollector,
@@ -54,6 +58,7 @@ export {
 } from "./contract.ts";
 export {
   CollectorDefinitionError,
+  CredentialMalformedError,
   DestinationRefusedError,
   FetchOptionsError,
   InvalidTargetError,

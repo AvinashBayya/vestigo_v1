@@ -59,6 +59,7 @@ import {
   InvestigationQueue,
   JobNotReplayableError,
   JobReplayer,
+  planRun,
   readCaseAnalysisInput,
   ReportGenerator,
   ReportQueue,
@@ -1586,4 +1587,180 @@ describe("a topic run on GDELT, end to end (RELEASE-BLOCKING, Track M Day 2)", (
       await harness.close();
     }
   }, 30_000);
+});
+
+// ── Monitoring collectors on a topic (2026-10-17) ─────────────────────────
+
+/** A search answer recorded for one topic, re-pointed at another's query. */
+function searchFor(fixture: Fixture, from: string, to: string): Fixture {
+  const query = (phrase: string) => new URLSearchParams({ q: `"${phrase}"` }).toString();
+  return {
+    ...fixture,
+    provenance: {
+      ...fixture.provenance,
+      notes: `${fixture.provenance.notes} Re-pointed at another topic by the monitoring pipeline test.`,
+    },
+    request: { ...fixture.request, path: fixture.request.path.replace(query(from), query(to)) },
+  };
+}
+
+/** Every recorded feed of BBC's publisher entry (test/fixtures/rss). */
+const BBC_FEEDS = [
+  "bbci-co-uk-hindi",
+  "bbci-co-uk-news-world-africa",
+  "bbci-co-uk-news-world-asia",
+  "bbci-co-uk-news-world-latin_america",
+  "bbci-co-uk-news-world-middle_east",
+  "bbci-co-uk-news-world",
+  "bbci-co-uk-persian",
+].map((name) => loadFixture("rss", name));
+
+describe("a topic run on the monitoring collectors, end to end (RELEASE-BLOCKING, 2026-10-17)", () => {
+  const MONITORING = ["rss.bbci-co-uk", "bluesky.search", "reddit.search"];
+  // A phrase in one of BBC World's recorded items (its titles are placeholders).
+  const PHRASE = "[news-world headline 2]";
+
+  async function entitledTenantWithKeys(tag: string) {
+    const tenant = await newTenant(tag);
+    await asOwner(
+      tenant.tenantId,
+      "update public.tenants set plan = 'TECHINT_AND_PERSON', vetting_status = 'APPROVED'",
+      [],
+    );
+    await db.withTenant(tenant.tenantId, async (ctx) => {
+      await vault.store(ctx, {
+        provider: "bluesky",
+        label: "[Bluesky account]",
+        secret: JSON.stringify({
+          identifier: "[account].bsky.social",
+          appPassword: "[app password]",
+        }),
+      });
+      await vault.store(ctx, {
+        provider: "reddit-api",
+        label: "[Reddit app]",
+        secret: JSON.stringify({ clientId: "[client id]", clientSecret: "[client secret]" }),
+      });
+    });
+    return tenant;
+  }
+
+  it("stores real feed items, and Bluesky and Reddit posts, as evidence under each one's registry label (acceptance a)", async () => {
+    const harness = await startHarness({
+      collectors: platform(MONITORING),
+      fixtures: [
+        ...BBC_FEEDS,
+        loadFixture("bluesky", "session"),
+        searchFor(loadFixture("bluesky", "search-found"), "climate change", PHRASE),
+        loadFixture("bluesky", "session-closed"),
+        loadFixture("reddit", "token"),
+        searchFor(loadFixture("reddit", "search-found"), "climate change", PHRASE),
+      ],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenantWithKeys("monitoring-found");
+      const runId = await startRun(engine, tenant, PHRASE, "TOPIC");
+      const run = await finishedRun(tenant.tenantId, runId);
+      expect(run).toMatchObject({ status: "SUCCEEDED", personBearing: true });
+      const jobs = await waitFor(
+        "the three monitoring jobs to be fused",
+        () => jobsOf(tenant.tenantId, runId),
+        (rows) => rows.length === 3 && rows.every((row) => row.fusedAt !== null),
+      );
+      expect(
+        Object.fromEntries(
+          jobs.map((job) => [job.collectorId, [job.outcome, job.evidenceIds?.length]]),
+        ),
+      ).toEqual({
+        // BBC: one feed held the item, so one response is its evidence.
+        "rss.bbci-co-uk": ["FOUND", 1],
+        "bluesky.search": ["FOUND", 1],
+        "reddit.search": ["FOUND", 1],
+      });
+      // Each stored row is its own job's: the collector that fetched it, and the
+      // response the items came from (BBC's: the World feed, where the item was).
+      const evidence = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.evidence.list({ limit: 100 }),
+      );
+      expect(evidence).toHaveLength(3);
+      const jobById = new Map(jobs.map((job) => [job.id, job]));
+      for (const row of evidence) {
+        const job = row.jobId === null ? undefined : jobById.get(row.jobId);
+        expect(job?.evidenceIds, row.collectorId).toContain(row.id);
+        expect(row.collectorId).toBe(job?.collectorId);
+        expect(row.claimStrength).toBe("OBSERVED");
+      }
+      expect(evidence.find((row) => row.collectorId === "rss.bbci-co-uk")?.sourceUrl).toBe(
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+      );
+      // Each label is the registry's, never anything the source or collector said.
+      for (const collectorId of MONITORING) {
+        const row = await db.withTenant(tenant.tenantId, ({ repos }) =>
+          repos.collectorsRegistry.find(collectorId),
+        );
+        expect(row?.sourceLabel).toBe(harness.runtime.registry.entry(collectorId).label);
+      }
+      // Nothing is drawn from an item list yet: no entity, and nothing counted.
+      const entities = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.entities.list({ limit: 100 }),
+      );
+      expect(entities).toEqual([]);
+      expect(harness.unmatched).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 60_000);
+
+  it("ends a feed with nothing on the topic EMPTY_UNCONFIRMED: the run complete, nothing stored, never 0 (acceptance b)", async () => {
+    const harness = await startHarness({
+      collectors: platform(["rss.thehindu-com"]),
+      fixtures: [loadFixture("rss", "thehindu-com-feeder-default")],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenantWithKeys("monitoring-empty");
+      const runId = await startRun(engine, tenant, "[a quiet topic]", "TOPIC");
+      expect(await finishedRun(tenant.tenantId, runId)).toMatchObject({ status: "SUCCEEDED" });
+      const [job] = await jobsOf(tenant.tenantId, runId);
+      // No evidence is written for an unconfirmed empty answer.
+      expect([job?.status, job?.outcome, job?.evidenceIds]).toEqual([
+        "SUCCEEDED",
+        "EMPTY_UNCONFIRMED",
+        null,
+      ]);
+      expect(job?.outcomeDetail).toContain("unconfirmed");
+      expect(await evidenceIdsOf(tenant.tenantId)).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 30_000);
+
+  it("leaves every monitoring collector out of a topic run for a tenant without the person module or vetting (Day 1, acceptance d)", async () => {
+    const harness = await startHarness({ collectors: platform(MONITORING), fixtures: [] });
+    try {
+      for (const [entitlement, reason] of [
+        [{ plan: "TECHINT", vettingStatus: "APPROVED" }, "MODULE_NOT_IN_PLAN"],
+        [{ plan: "TECHINT_AND_PERSON", vettingStatus: "PENDING" }, "VETTING_NOT_APPROVED"],
+      ] as const) {
+        const plan = await planRun(harness.runtime, {
+          input: PHRASE,
+          requestedType: "TOPIC",
+          entitlement,
+          scopeFor: () => Promise.resolve(null),
+        });
+        expect(plan.jobs).toEqual([]);
+        expect(
+          Object.fromEntries(
+            plan.excluded.map((exclusion) => [exclusion.collectorId, exclusion.reason]),
+          ),
+        ).toEqual(Object.fromEntries(MONITORING.map((id) => [id, reason])));
+      }
+      expect(harness.requests).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
 });

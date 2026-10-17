@@ -27,6 +27,7 @@ import {
   type OperatorAttachment,
   type SourceDeclaration,
 } from "../../src/index.ts";
+import { RSS_PUBLISHERS } from "../../src/data/rss-feeds.ts";
 import { ENTITLED } from "../support.ts";
 import { loadFixture, startHarness } from "./harness.ts";
 
@@ -89,7 +90,7 @@ describe("every platform source declares how it is reached", () => {
       reliefweb: ["official"],
       hibp: ["official"],
       bluesky: ["open", "official"],
-      "reddit-api": ["official"],
+      "reddit-api": ["open", "official"],
       "jina-reader": ["open", "official"],
       "brave-search": ["official"],
       "github-api": ["open", "official"],
@@ -130,16 +131,22 @@ describe("a BLOCKED or UNVERIFIED platform source never runs (RELEASE-BLOCKING, 
         const runtime = deploymentRuntime(nodeEnv, methods);
         const entries = runtime.registry.list();
         const notPermitted = entries.filter((entry) => entry.commercialUse !== "PERMITTED");
-        expect(notPermitted.map((entry) => entry.id).sort()).toEqual([
-          "commoncrawl",
-          "crtsh",
-          "devto",
-          "dns",
-          "github",
-          "hackernews",
-          "rdap",
-          "wayback",
-        ]);
+        // Phase 3B's eight, and every monitoring collector of 2026-10-17.
+        expect(notPermitted.map((entry) => entry.id).sort()).toEqual(
+          [
+            "commoncrawl",
+            "crtsh",
+            "devto",
+            "dns",
+            "github",
+            "hackernews",
+            "rdap",
+            "wayback",
+            "bluesky.search",
+            "reddit.search",
+            ...RSS_PUBLISHERS.map((publisher) => publisher.id),
+          ].sort(),
+        );
         for (const entry of notPermitted) {
           const refusal =
             entry.commercialUse === "BLOCKED" ? "LICENCE_BLOCKED" : "UNVERIFIED_SOURCE_NOT_ALLOWED";

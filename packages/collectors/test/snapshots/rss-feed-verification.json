@@ -1,0 +1,2217 @@
+{
+  "checkedAt": "2026-10-17T02:32:14.201Z",
+  "userAgent": "Vestigo-collector/1.0",
+  "rule": "kept if HTTP 200 within redirects, parsed as RSS or Atom, with at least one item that has a title and a link",
+  "leadsFrom": "World Monitor server/worldmonitor/news/v1/_feeds.ts (AGPL-3.0), direct-publisher entries only, as leads; Google News left out",
+  "indianOutletsAdded": [
+    "The Indian Express",
+    "Hindustan Times",
+    "The Times of India",
+    "The Economic Times",
+    "Mint",
+    "Scroll.in",
+    "India Today",
+    "News18"
+  ],
+  "country": "IN for an Indian outlet: the eight added, the ninth left out, and World Monitor's Indian leads (NDTV, NDTV India, The Hindu, Inc42, Aaj Tak, Amar Ujala); else null. Never read from a feed's language tag.",
+  "counts": {
+    "fetched": 179,
+    "kept": 153,
+    "failed": 15,
+    "excluded": 11
+  },
+  "kept": [
+    {
+      "name": "24.hu",
+      "url": "https://24.hu/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "24.hu"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "hu"
+    },
+    {
+      "name": "444.hu",
+      "url": "https://444.hu/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "444.hu"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "hu-HU"
+    },
+    {
+      "name": "Axios",
+      "url": "https://api.axios.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "api.axios.com"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "en-us"
+    },
+    {
+      "name": "Balkan Insight",
+      "url": "https://balkaninsight.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "balkaninsight.com"
+      ],
+      "kind": "rss",
+      "items": 90,
+      "dated": 90,
+      "language": "en-US"
+    },
+    {
+      "name": "Bitcoin Magazine",
+      "url": "https://bitcoinmagazine.com/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "bitcoinmagazine.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Changelog",
+      "url": "https://changelog.com/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "changelog.com"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en-us"
+    },
+    {
+      "name": "Cointelegraph",
+      "url": "https://cointelegraph.com/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "cointelegraph.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en"
+    },
+    {
+      "name": "Conservation Optimism",
+      "url": "https://conservationoptimism.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "conservationoptimism.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Correctiv",
+      "url": "https://correctiv.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "correctiv.org"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "de"
+    },
+    {
+      "name": "CryptoSlate",
+      "url": "https://cryptoslate.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "cryptoslate.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Decrypt",
+      "url": "https://decrypt.co/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "decrypt.co"
+      ],
+      "kind": "rss",
+      "items": 37,
+      "dated": 37,
+      "language": "en"
+    },
+    {
+      "name": "Dev.to",
+      "url": "https://dev.to/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "dev.to"
+      ],
+      "kind": "rss",
+      "items": 12,
+      "dated": 12,
+      "language": "en"
+    },
+    {
+      "name": "DFRLab",
+      "url": "https://dfrlab.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "dfrlab.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "The Economic Times",
+      "url": "https://economictimes.indiatimes.com/rssfeedstopstories.cms",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "economictimes.indiatimes.com"
+      ],
+      "kind": "rss",
+      "items": 52,
+      "dated": 52,
+      "language": "en-gb"
+    },
+    {
+      "name": "ArXiv AI",
+      "url": "https://export.arxiv.org/rss/cs.AI",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "export.arxiv.org"
+      ],
+      "kind": "rss",
+      "items": 453,
+      "dated": 453,
+      "language": "en-us"
+    },
+    {
+      "name": "InfoQ",
+      "url": "https://feed.infoq.com/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feed.infoq.com"
+      ],
+      "kind": "rss",
+      "items": 15,
+      "dated": 15,
+      "language": null
+    },
+    {
+      "name": "ABC News",
+      "url": "https://feeds.abcnews.com/abcnews/topstories",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.abcnews.com",
+        "abcnews.go.com",
+        "abcnews.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": null
+    },
+    {
+      "name": "Ars Technica",
+      "url": "https://feeds.arstechnica.com/arstechnica/technology-lab",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.arstechnica.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-US"
+    },
+    {
+      "name": "BBC Hindi",
+      "url": "https://feeds.bbci.co.uk/hindi/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.bbci.co.uk"
+      ],
+      "kind": "rss",
+      "items": 35,
+      "dated": 34,
+      "language": "hi"
+    },
+    {
+      "name": "BBC Africa",
+      "url": "https://feeds.bbci.co.uk/news/world/africa/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.bbci.co.uk"
+      ],
+      "kind": "rss",
+      "items": 32,
+      "dated": 32,
+      "language": "en-gb"
+    },
+    {
+      "name": "BBC Asia",
+      "url": "https://feeds.bbci.co.uk/news/world/asia/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.bbci.co.uk"
+      ],
+      "kind": "rss",
+      "items": 18,
+      "dated": 18,
+      "language": "en-gb"
+    },
+    {
+      "name": "BBC Latin America",
+      "url": "https://feeds.bbci.co.uk/news/world/latin_america/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.bbci.co.uk"
+      ],
+      "kind": "rss",
+      "items": 17,
+      "dated": 17,
+      "language": "en-gb"
+    },
+    {
+      "name": "BBC Middle East",
+      "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.bbci.co.uk"
+      ],
+      "kind": "rss",
+      "items": 35,
+      "dated": 35,
+      "language": "en-gb"
+    },
+    {
+      "name": "BBC World",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.bbci.co.uk"
+      ],
+      "kind": "rss",
+      "items": 33,
+      "dated": 33,
+      "language": "en-gb"
+    },
+    {
+      "name": "BBC Persian",
+      "url": "https://feeds.bbci.co.uk/persian/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.bbci.co.uk"
+      ],
+      "kind": "rss",
+      "items": 29,
+      "dated": 27,
+      "language": "fa"
+    },
+    {
+      "name": "Wall Street Journal",
+      "url": "https://feeds.content.dowjones.io/public/rss/RSSUSnews",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.content.dowjones.io"
+      ],
+      "kind": "rss",
+      "items": 40,
+      "dated": 40,
+      "language": "en-us"
+    },
+    {
+      "name": "NDTV India",
+      "url": "https://feeds.feedburner.com/ndtvkhabar-latest",
+      "origin": "world-monitor-lead",
+      "country": "IN",
+      "hosts": [
+        "feeds.feedburner.com"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "hi"
+    },
+    {
+      "name": "NDTV",
+      "url": "https://feeds.feedburner.com/ndtvnews-top-stories",
+      "origin": "world-monitor-lead",
+      "country": "IN",
+      "hosts": [
+        "feeds.feedburner.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en"
+    },
+    {
+      "name": "Scroll.in",
+      "url": "https://feeds.feedburner.com/ScrollinArticles.rss",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "feeds.feedburner.com"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "en"
+    },
+    {
+      "name": "NBC News",
+      "url": "https://feeds.nbcnews.com/nbcnews/public/news",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.nbcnews.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": "en-US"
+    },
+    {
+      "name": "NOS Nieuws",
+      "url": "https://feeds.nos.nl/nosnieuwsalgemeen",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.nos.nl"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "nl"
+    },
+    {
+      "name": "NPR News",
+      "url": "https://feeds.npr.org/1001/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "feeds.npr.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en"
+    },
+    {
+      "name": "Foreign Policy",
+      "url": "https://foreignpolicy.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "foreignpolicy.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": "en-US"
+    },
+    {
+      "name": "gCaptain",
+      "url": "https://gcaptain.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "gcaptain.com"
+      ],
+      "kind": "rss",
+      "items": 12,
+      "dated": 12,
+      "language": "en-US"
+    },
+    {
+      "name": "GitHub Blog",
+      "url": "https://github.blog/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "github.blog"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "GITOC",
+      "url": "https://globalinitiative.net/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "globalinitiative.net"
+      ],
+      "kind": "rss",
+      "items": 12,
+      "dated": 12,
+      "language": "en-US"
+    },
+    {
+      "name": "Hacker News",
+      "url": "https://hnrss.org/frontpage",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "hnrss.org"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": null
+    },
+    {
+      "name": "Show HN",
+      "url": "https://hnrss.org/show",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "hnrss.org"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": null
+    },
+    {
+      "name": "Human Progress",
+      "url": "https://humanprogress.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "humanprogress.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "HVG",
+      "url": "https://hvg.hu/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "hvg.hu"
+      ],
+      "kind": "rss",
+      "items": 60,
+      "dated": 60,
+      "language": "hu-HU"
+    },
+    {
+      "name": "Inc42 (India)",
+      "url": "https://inc42.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": "IN",
+      "hosts": [
+        "inc42.com"
+      ],
+      "kind": "rss",
+      "items": 24,
+      "dated": 24,
+      "language": "en"
+    },
+    {
+      "name": "Index.hu",
+      "url": "https://index.hu/24ora/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "index.hu"
+      ],
+      "kind": "rss",
+      "items": 51,
+      "dated": 51,
+      "language": "hu-HU"
+    },
+    {
+      "name": "The Indian Express",
+      "url": "https://indianexpress.com/feed/",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "indianexpress.com"
+      ],
+      "kind": "rss",
+      "items": 200,
+      "dated": 200,
+      "language": "en-US"
+    },
+    {
+      "name": "InSight Crime",
+      "url": "https://insightcrime.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "insightcrime.org"
+      ],
+      "kind": "rss",
+      "items": 11,
+      "dated": 11,
+      "language": "en-US"
+    },
+    {
+      "name": "Krebs Security",
+      "url": "https://krebsonsecurity.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "krebsonsecurity.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Lobsters",
+      "url": "https://lobste.rs/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "lobste.rs"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": null
+    },
+    {
+      "name": "N1 Croatia",
+      "url": "https://n1info.hr/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "n1info.hr"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": null
+    },
+    {
+      "name": "Crunchbase News",
+      "url": "https://news.crunchbase.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "news.crunchbase.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Mongabay",
+      "url": "https://news.mongabay.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "news.mongabay.com"
+      ],
+      "kind": "rss",
+      "items": 32,
+      "dated": 32,
+      "language": "en-US"
+    },
+    {
+      "name": "UN News",
+      "url": "https://news.un.org/feed/subscribe/en/news/all/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "news.un.org"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en"
+    },
+    {
+      "name": "YC News",
+      "url": "https://news.ycombinator.com/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "news.ycombinator.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": null
+    },
+    {
+      "name": "OilPrice.com",
+      "url": "https://oilprice.com/rss/main",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "oilprice.com"
+      ],
+      "kind": "rss",
+      "items": 15,
+      "dated": 15,
+      "language": null
+    },
+    {
+      "name": "Portfolio.hu",
+      "url": "https://portfolio.hu/rss/all.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "portfolio.hu",
+        "www.portfolio.hu"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "hu-HU"
+    },
+    {
+      "name": "Reasons to be Cheerful",
+      "url": "https://reasonstobecheerful.world/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "reasonstobecheerful.world"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "First Round Review",
+      "url": "https://review.firstround.com/articles/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "review.firstround.com",
+        "review.firstround.com"
+      ],
+      "kind": "rss",
+      "items": 15,
+      "dated": 15,
+      "language": null
+    },
+    {
+      "name": "DW News",
+      "url": "https://rss.dw.com/xml/rss-en-all",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "rss.dw.com"
+      ],
+      "kind": "rss",
+      "items": 136,
+      "dated": 136,
+      "language": "en"
+    },
+    {
+      "name": "Politico",
+      "url": "https://rss.politico.com/politics-news.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "rss.politico.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en-us"
+    },
+    {
+      "name": "Politico Tech",
+      "url": "https://rss.politico.com/technology.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "rss.politico.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en-us"
+    },
+    {
+      "name": "Seeking Alpha",
+      "url": "https://seekingalpha.com/market_currents.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "seekingalpha.com"
+      ],
+      "kind": "rss",
+      "items": 7,
+      "dated": 7,
+      "language": null
+    },
+    {
+      "name": "Sifted (Europe)",
+      "url": "https://sifted.eu/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "sifted.eu"
+      ],
+      "kind": "rss",
+      "items": 24,
+      "dated": 24,
+      "language": "en-US"
+    },
+    {
+      "name": "Singularity Hub",
+      "url": "https://singularityhub.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "singularityhub.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Stratechery",
+      "url": "https://stratechery.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "stratechery.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Task & Purpose",
+      "url": "https://taskandpurpose.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "taskandpurpose.com"
+      ],
+      "kind": "rss",
+      "items": 33,
+      "dated": 33,
+      "language": "en-US"
+    },
+    {
+      "name": "Tech.eu",
+      "url": "https://tech.eu/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "tech.eu"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en"
+    },
+    {
+      "name": "TechCabal (Africa)",
+      "url": "https://techcabal.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "techcabal.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "TechCrunch Startups",
+      "url": "https://techcrunch.com/category/startups/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "techcrunch.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-US"
+    },
+    {
+      "name": "TechCrunch",
+      "url": "https://techcrunch.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "techcrunch.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-US"
+    },
+    {
+      "name": "TechCrunch Layoffs",
+      "url": "https://techcrunch.com/tag/layoffs/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "techcrunch.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-US"
+    },
+    {
+      "name": "Telex",
+      "url": "https://telex.hu/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "telex.hu"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": null
+    },
+    {
+      "name": "The Defiant",
+      "url": "https://thedefiant.io/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "thedefiant.io",
+        "thedefiant.io"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "en"
+    },
+    {
+      "name": "The Diplomat",
+      "url": "https://thediplomat.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "thediplomat.com"
+      ],
+      "kind": "rss",
+      "items": 96,
+      "dated": 96,
+      "language": "en-US"
+    },
+    {
+      "name": "The Hill",
+      "url": "https://thehill.com/news/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "thehill.com",
+        "thehill.com"
+      ],
+      "kind": "rss",
+      "items": 15,
+      "dated": 15,
+      "language": "en-US"
+    },
+    {
+      "name": "The New Stack",
+      "url": "https://thenewstack.io/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "thenewstack.io"
+      ],
+      "kind": "rss",
+      "items": 26,
+      "dated": 26,
+      "language": "en-US"
+    },
+    {
+      "name": "The Sentry",
+      "url": "https://thesentry.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "thesentry.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "The Times of India",
+      "url": "https://timesofindia.indiatimes.com/rssfeedstopstories.cms",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "timesofindia.indiatimes.com"
+      ],
+      "kind": "rss",
+      "items": 44,
+      "dated": 44,
+      "language": "en-gb"
+    },
+    {
+      "name": "Trump - Truth Social",
+      "url": "https://trumpstruth.org/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "trumpstruth.org",
+        "www.trumpstruth.org"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "en-US"
+    },
+    {
+      "name": "Unchained",
+      "url": "https://unchainedcrypto.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "unchainedcrypto.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "VSquare",
+      "url": "https://vsquare.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "vsquare.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "War on the Rocks",
+      "url": "https://warontherocks.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "warontherocks.com"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "en-US"
+    },
+    {
+      "name": "a16z Blog",
+      "url": "https://www.a16z.news/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.a16z.news"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en"
+    },
+    {
+      "name": "Aaj Tak",
+      "url": "https://www.aajtak.in/rssfeeds/?id=home",
+      "origin": "world-monitor-lead",
+      "country": "IN",
+      "hosts": [
+        "www.aajtak.in"
+      ],
+      "kind": "rss",
+      "items": 145,
+      "dated": 145,
+      "language": null
+    },
+    {
+      "name": "Africanews",
+      "url": "https://www.africanews.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.africanews.com"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": null
+    },
+    {
+      "name": "Al Jazeera",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.aljazeera.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": "en"
+    },
+    {
+      "name": "Amar Ujala",
+      "url": "https://www.amarujala.com/rss/national.xml",
+      "origin": "world-monitor-lead",
+      "country": "IN",
+      "hosts": [
+        "www.amarujala.com"
+      ],
+      "kind": "rss",
+      "items": 40,
+      "dated": 40,
+      "language": "hi"
+    },
+    {
+      "name": "ANSA",
+      "url": "https://www.ansa.it/sito/ansait_rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.ansa.it"
+      ],
+      "kind": "rss",
+      "items": 28,
+      "dated": 28,
+      "language": null
+    },
+    {
+      "name": "ATV",
+      "url": "https://www.atv.hu/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.atv.hu",
+        "www.atv.hu"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "hu"
+    },
+    {
+      "name": "CBS News",
+      "url": "https://www.cbsnews.com/latest/rss/main",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.cbsnews.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": null
+    },
+    {
+      "name": "CNA",
+      "url": "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.channelnewsasia.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": null
+    },
+    {
+      "name": "CISA",
+      "url": "https://www.cisa.gov/cybersecurity-advisories/all.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.cisa.gov"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en"
+    },
+    {
+      "name": "Clarín",
+      "url": "https://www.clarin.com/rss/lo-ultimo/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.clarin.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "es"
+    },
+    {
+      "name": "CNBC",
+      "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.cnbc.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en-us"
+    },
+    {
+      "name": "CNBC Tech",
+      "url": "https://www.cnbc.com/id/19854910/device/rss/rss.html",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.cnbc.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en-us"
+    },
+    {
+      "name": "CoinDesk",
+      "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.coindesk.com",
+        "www.coindesk.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": "en-US"
+    },
+    {
+      "name": "CrisisWatch",
+      "url": "https://www.crisisgroup.org/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.crisisgroup.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en"
+    },
+    {
+      "name": "CSIS",
+      "url": "https://www.csis.org/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.csis.org"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en"
+    },
+    {
+      "name": "Dark Reading",
+      "url": "https://www.darkreading.com/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.darkreading.com"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en"
+    },
+    {
+      "name": "Defense News",
+      "url": "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.defensenews.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": "en"
+    },
+    {
+      "name": "Defense One",
+      "url": "https://www.defenseone.com/rss/all/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.defenseone.com"
+      ],
+      "kind": "rss",
+      "items": 21,
+      "dated": 21,
+      "language": "en-us"
+    },
+    {
+      "name": "El Universo",
+      "url": "https://www.eluniverso.com/arc/outboundfeeds/rss/category/noticias/?outputType=xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.eluniverso.com"
+      ],
+      "kind": "rss",
+      "items": 17,
+      "dated": 17,
+      "language": "es"
+    },
+    {
+      "name": "EuroNews",
+      "url": "https://www.euronews.com/rss?format=xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.euronews.com"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en"
+    },
+    {
+      "name": "FAO News",
+      "url": "https://www.fao.org/feeds/fao-newsroom-rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.fao.org"
+      ],
+      "kind": "rss",
+      "items": 24,
+      "dated": 24,
+      "language": null
+    },
+    {
+      "name": "Federal Reserve",
+      "url": "https://www.federalreserve.gov/feeds/press_all.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.federalreserve.gov"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en"
+    },
+    {
+      "name": "Foreign Affairs",
+      "url": "https://www.foreignaffairs.com/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.foreignaffairs.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en"
+    },
+    {
+      "name": "France 24",
+      "url": "https://www.france24.com/en/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.france24.com"
+      ],
+      "kind": "rss",
+      "items": 24,
+      "dated": 24,
+      "language": "en"
+    },
+    {
+      "name": "Financial Times",
+      "url": "https://www.ft.com/rss/home",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.ft.com",
+        "www.ft.com"
+      ],
+      "kind": "rss",
+      "items": 12,
+      "dated": 12,
+      "language": "en"
+    },
+    {
+      "name": "GNN Health",
+      "url": "https://www.goodnewsnetwork.org/category/news/health/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.goodnewsnetwork.org"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en-US"
+    },
+    {
+      "name": "GNN Heroes",
+      "url": "https://www.goodnewsnetwork.org/category/news/inspiring/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.goodnewsnetwork.org"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en-US"
+    },
+    {
+      "name": "Good News Network",
+      "url": "https://www.goodnewsnetwork.org/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.goodnewsnetwork.org"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en-US"
+    },
+    {
+      "name": "Hindustan Times",
+      "url": "https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "www.hindustantimes.com"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "en-US"
+    },
+    {
+      "name": "IAEA",
+      "url": "https://www.iaea.org/feeds/topnews",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.iaea.org"
+      ],
+      "kind": "rss",
+      "items": 15,
+      "dated": 15,
+      "language": "en"
+    },
+    {
+      "name": "India Today",
+      "url": "https://www.indiatoday.in/rss/home",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "www.indiatoday.in"
+      ],
+      "kind": "rss",
+      "items": 133,
+      "dated": 133,
+      "language": null
+    },
+    {
+      "name": "Infobae Americas",
+      "url": "https://www.infobae.com/arc/outboundfeeds/rss/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.infobae.com"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "es"
+    },
+    {
+      "name": "Jeune Afrique",
+      "url": "https://www.jeuneafrique.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.jeuneafrique.com"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "fr"
+    },
+    {
+      "name": "Jutarnji list",
+      "url": "https://www.jutarnji.hr/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.jutarnji.hr"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": null
+    },
+    {
+      "name": "Le Monde",
+      "url": "https://www.lemonde.fr/en/rss/une.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.lemonde.fr"
+      ],
+      "kind": "rss",
+      "items": 14,
+      "dated": 14,
+      "language": "en"
+    },
+    {
+      "name": "Lighthouse Reports",
+      "url": "https://www.lighthousereports.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.lighthousereports.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Mint",
+      "url": "https://www.livemint.com/rss/news",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "www.livemint.com"
+      ],
+      "kind": "rss",
+      "items": 35,
+      "dated": 35,
+      "language": null
+    },
+    {
+      "name": "Military Times",
+      "url": "https://www.militarytimes.com/arc/outboundfeeds/rss/?outputType=xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.militarytimes.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": "en"
+    },
+    {
+      "name": "Mining Technology",
+      "url": "https://www.mining-technology.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.mining-technology.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Nature News",
+      "url": "https://www.nature.com/nature.rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.nature.com"
+      ],
+      "kind": "rss",
+      "items": 75,
+      "dated": 75,
+      "language": null
+    },
+    {
+      "name": "News18",
+      "url": "https://www.news18.com/rss/india.xml",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "hosts": [
+        "www.news18.com",
+        "www.news18.com"
+      ],
+      "kind": "rss",
+      "items": 200,
+      "dated": 200,
+      "language": "en"
+    },
+    {
+      "name": "OCCRP",
+      "url": "https://www.occrp.org/en/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.occrp.org"
+      ],
+      "kind": "rss",
+      "items": 60,
+      "dated": 60,
+      "language": "en"
+    },
+    {
+      "name": "Oman Observer",
+      "url": "https://www.omanobserver.om/rssFeed/1",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.omanobserver.om"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": null
+    },
+    {
+      "name": "Optimist Daily",
+      "url": "https://www.optimistdaily.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.optimistdaily.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Oryx OSINT",
+      "url": "https://www.oryxspioenkop.com/feeds/posts/default?alt=rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.oryxspioenkop.com"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": null
+    },
+    {
+      "name": "PBS NewsHour",
+      "url": "https://www.pbs.org/newshour/feeds/rss/headlines",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.pbs.org"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-US"
+    },
+    {
+      "name": "Positive.News",
+      "url": "https://www.positive.news/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.positive.news"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Premium Times",
+      "url": "https://www.premiumtimesng.com/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.premiumtimesng.com"
+      ],
+      "kind": "rss",
+      "items": 15,
+      "dated": 15,
+      "language": "en-GB"
+    },
+    {
+      "name": "Product Hunt",
+      "url": "https://www.producthunt.com/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.producthunt.com"
+      ],
+      "kind": "atom",
+      "items": 50,
+      "dated": 50,
+      "language": "en-US"
+    },
+    {
+      "name": "Rigzone",
+      "url": "https://www.rigzone.com/news/rss/rigzone_latest.aspx",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.rigzone.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-US"
+    },
+    {
+      "name": "ScienceDaily",
+      "url": "https://www.sciencedaily.com/rss/all.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.sciencedaily.com"
+      ],
+      "kind": "rss",
+      "items": 60,
+      "dated": 60,
+      "language": "en-us"
+    },
+    {
+      "name": "SEC",
+      "url": "https://www.sec.gov/news/pressreleases.rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.sec.gov"
+      ],
+      "kind": "rss",
+      "items": 25,
+      "dated": 25,
+      "language": "en"
+    },
+    {
+      "name": "SemiAnalysis",
+      "url": "https://www.semianalysis.com/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.semianalysis.com",
+        "semianalysis.com",
+        "semianalysis.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Sequoia Blog",
+      "url": "https://www.sequoiacap.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.sequoiacap.com",
+        "sequoiacap.com",
+        "sequoiacap.com",
+        "framerusercontent.com"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en-US"
+    },
+    {
+      "name": "Shareable",
+      "url": "https://www.shareable.net/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.shareable.net"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "SVT Nyheter",
+      "url": "https://www.svt.se/nyheter/rss.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.svt.se",
+        "www.svt.se"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "sv"
+    },
+    {
+      "name": "Tagesschau",
+      "url": "https://www.tagesschau.de/xml/rss2/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.tagesschau.de",
+        "www.tagesschau.de",
+        "www.tagesschau.de"
+      ],
+      "kind": "rss",
+      "items": 40,
+      "dated": 40,
+      "language": "de"
+    },
+    {
+      "name": "MIT Tech Review",
+      "url": "https://www.technologyreview.com/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.technologyreview.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "MIT Tech Review",
+      "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.technologyreview.com"
+      ],
+      "kind": "rss",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "Guardian Americas",
+      "url": "https://www.theguardian.com/world/americas/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.theguardian.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-gb"
+    },
+    {
+      "name": "Guardian ME",
+      "url": "https://www.theguardian.com/world/middleeast/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.theguardian.com"
+      ],
+      "kind": "rss",
+      "items": 20,
+      "dated": 20,
+      "language": "en-gb"
+    },
+    {
+      "name": "Guardian World",
+      "url": "https://www.theguardian.com/world/rss",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.theguardian.com"
+      ],
+      "kind": "rss",
+      "items": 45,
+      "dated": 45,
+      "language": "en-gb"
+    },
+    {
+      "name": "The Hindu",
+      "url": "https://www.thehindu.com/feeder/default.rss",
+      "origin": "world-monitor-lead",
+      "country": "IN",
+      "hosts": [
+        "www.thehindu.com"
+      ],
+      "kind": "rss",
+      "items": 60,
+      "dated": 60,
+      "language": "en-US"
+    },
+    {
+      "name": "The National",
+      "url": "https://www.thenationalnews.com/arc/outboundfeeds/rss/?outputType=xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.thenationalnews.com"
+      ],
+      "kind": "rss",
+      "items": 100,
+      "dated": 100,
+      "language": "en"
+    },
+    {
+      "name": "The Verge AI",
+      "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.theverge.com"
+      ],
+      "kind": "atom",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "The Verge",
+      "url": "https://www.theverge.com/rss/index.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.theverge.com"
+      ],
+      "kind": "atom",
+      "items": 10,
+      "dated": 10,
+      "language": "en-US"
+    },
+    {
+      "name": "The War Zone",
+      "url": "https://www.twz.com/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.twz.com"
+      ],
+      "kind": "rss",
+      "items": 42,
+      "dated": 42,
+      "language": "en-US"
+    },
+    {
+      "name": "Pentagon",
+      "url": "https://www.war.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.war.gov"
+      ],
+      "kind": "rss",
+      "items": 500,
+      "dated": 500,
+      "language": "en-us"
+    },
+    {
+      "name": "White House",
+      "url": "https://www.whitehouse.gov/briefings-statements/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.whitehouse.gov"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en-US"
+    },
+    {
+      "name": "White House Actions",
+      "url": "https://www.whitehouse.gov/presidential-actions/feed/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.whitehouse.gov"
+      ],
+      "kind": "rss",
+      "items": 30,
+      "dated": 30,
+      "language": "en-US"
+    },
+    {
+      "name": "WHO",
+      "url": "https://www.who.int/rss-feeds/news-english.xml",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.who.int"
+      ],
+      "kind": "rss",
+      "items": 201,
+      "dated": 201,
+      "language": null
+    },
+    {
+      "name": "Y Combinator Blog",
+      "url": "https://www.ycombinator.com/blog/rss/",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.ycombinator.com"
+      ],
+      "kind": "rss",
+      "items": 15,
+      "dated": 15,
+      "language": null
+    },
+    {
+      "name": "Yes! Magazine",
+      "url": "https://www.yesmagazine.org/feed",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "hosts": [
+        "www.yesmagazine.org"
+      ],
+      "kind": "rss",
+      "items": 50,
+      "dated": 50,
+      "language": "en-US"
+    }
+  ],
+  "failed": [
+    {
+      "name": "News24",
+      "url": "https://feeds.news24.com/articles/news24/TopStories/rss",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 403"
+    },
+    {
+      "name": "Yahoo Finance",
+      "url": "https://finance.yahoo.com/news/rssindex",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 404"
+    },
+    {
+      "name": "Yahoo Finance",
+      "url": "https://finance.yahoo.com/rss/topstories",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 404"
+    },
+    {
+      "name": "ThePrint",
+      "url": "https://theprint.in/feed/",
+      "origin": "indian-outlet-candidate",
+      "why": "HTTP 403"
+    },
+    {
+      "name": "The Wire",
+      "url": "https://thewire.in/rss",
+      "origin": "indian-outlet-candidate",
+      "why": "not RSS or Atom"
+    },
+    {
+      "name": "VentureBeat AI",
+      "url": "https://venturebeat.com/category/ai/feed/",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 429"
+    },
+    {
+      "name": "VentureBeat",
+      "url": "https://venturebeat.com/feed/",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 429"
+    },
+    {
+      "name": "Atlantic Council",
+      "url": "https://www.atlanticcouncil.org/feed/",
+      "origin": "world-monitor-lead",
+      "why": "fetch: ECONNRESET"
+    },
+    {
+      "name": "Australian Mining",
+      "url": "https://www.australianmining.com.au/feed/",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 403"
+    },
+    {
+      "name": "Deccan Herald",
+      "url": "https://www.deccanherald.com/rss-feed/news",
+      "origin": "indian-outlet-candidate",
+      "why": "HTTP 404"
+    },
+    {
+      "name": "EU Startups",
+      "url": "https://www.eu-startups.com/feed/",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 403"
+    },
+    {
+      "name": "Index.hr",
+      "url": "https://www.index.hr/rss",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 403"
+    },
+    {
+      "name": "Mining.com",
+      "url": "https://www.mining.com/feed/",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 403"
+    },
+    {
+      "name": "Primicias",
+      "url": "https://www.primicias.ec/feed/",
+      "origin": "world-monitor-lead",
+      "why": "not RSS or Atom"
+    },
+    {
+      "name": "Tech in Asia",
+      "url": "https://www.techinasia.com/feed",
+      "origin": "world-monitor-lead",
+      "why": "HTTP 403"
+    }
+  ],
+  "excluded": [
+    {
+      "name": "DeFi News",
+      "url": "https://news.google.com/rss/search?q=(DeFi+OR+\"decentralized+finance\")+when:3d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "NFT News",
+      "url": "https://news.google.com/rss/search?q=(NFT+OR+\"non-fungible\")+when:3d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "Stablecoin Policy",
+      "url": "https://news.google.com/rss/search?q=(stablecoin+regulation+OR+\"stablecoin+bill\")+when:7d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "Bloomberg Crypto",
+      "url": "https://news.google.com/rss/search?q=bloomberg+crypto+when:1d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "Reuters Crypto",
+      "url": "https://news.google.com/rss/search?q=reuters+crypto+when:1d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "DL News",
+      "url": "https://news.google.com/rss/search?q=site:dlnews.com+when:3d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": false,
+      "why": "no item with a title and link"
+    },
+    {
+      "name": "Messari",
+      "url": "https://news.google.com/rss/search?q=site:messari.io+when:3d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "USNI News",
+      "url": "https://news.google.com/rss/search?q=site:news.usni.org+when:3d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "The Block",
+      "url": "https://news.google.com/rss/search?q=site:theblock.co+when:1d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": true
+    },
+    {
+      "name": "Wu Blockchain",
+      "url": "https://news.google.com/rss/search?q=site:wublockchain.com+when:7d&hl=en-US&gl=US&ceid=US:en",
+      "origin": "world-monitor-lead",
+      "country": null,
+      "reason": "GOOGLE_NEWS_BLOCKED",
+      "verified": false,
+      "why": "no item with a title and link"
+    },
+    {
+      "name": "Business Standard",
+      "url": "https://www.business-standard.com/rss/home_page_top_stories.rss",
+      "origin": "indian-outlet-candidate",
+      "country": "IN",
+      "reason": "NINTH_INDIAN_OUTLET",
+      "verified": true
+    }
+  ]
+}

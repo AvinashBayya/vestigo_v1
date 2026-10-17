@@ -22,6 +22,7 @@
  *     is the order the collector cited its responses in.
  */
 import {
+  BLUESKY_SEARCH_RESULT,
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
   CRTSH_RESULT,
@@ -32,7 +33,10 @@ import {
   HACKERNEWS_RESULT,
   NEWS_RESULT,
   RDAP_RESULT,
+  REDDIT_SEARCH_RESULT,
   reportedPart,
+  RSS_COLLECTORS,
+  RSS_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
 } from "@repo/collectors";
@@ -432,6 +436,22 @@ const news: Extractor = ({ result }) => {
 };
 
 /**
+ * The monitoring collectors (2026-10-17: Bluesky and Reddit search, and one
+ * RSS collector per publisher): each result is checked, and nothing is drawn
+ * from it yet, as from news. Their items become items, with their authors,
+ * outlets and links as entities, in Track M's item extractors
+ * (docs/monitoring/MONITORING-PLAN.md §7); until then no claim is made from an
+ * item list, and in particular no count. Every RSS collector shares one.
+ */
+const checkedOnly =
+  (schema: { parse(value: unknown): unknown }): Extractor =>
+  ({ result }) => {
+    schema.parse(result);
+    return new Drafts().build();
+  };
+const rss = checkedOnly(RSS_RESULT);
+
+/**
  * One extractor per platform collector. A collector without one cannot be
  * fused, and fusion refuses to mark its job fused (a test checks every
  * registered collector has one).
@@ -448,4 +468,7 @@ export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   devto,
   commoncrawl,
   news,
+  "bluesky.search": checkedOnly(BLUESKY_SEARCH_RESULT),
+  "reddit.search": checkedOnly(REDDIT_SEARCH_RESULT),
+  ...Object.fromEntries(RSS_COLLECTORS.map((collector) => [collector.declaration.id, rss])),
 };

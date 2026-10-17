@@ -484,6 +484,22 @@ const NOTHING_DRAWN_CASES: readonly {
     target: { type: "DOMAIN", value: "example.net" },
     fixtures: [loadFixture("news", "domain-found")],
   },
+  // The monitoring collectors (2026-10-17), on their recorded answers.
+  {
+    collectorId: "rss.thehindu-com",
+    target: { type: "TOPIC", value: "[feeder-default headline 1]" },
+    fixtures: [loadFixture("rss", "thehindu-com-feeder-default")],
+  },
+  {
+    collectorId: "bluesky.search",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [loadFixture("bluesky", "public-search-found")],
+  },
+  {
+    collectorId: "reddit.search",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [loadFixture("reddit", "public-search-found")],
+  },
 ];
 
 describe("extractors", () => {
@@ -492,6 +508,15 @@ describe("extractors", () => {
       PLATFORM_COLLECTORS.map((collector) => collector.declaration.id).sort(),
     );
     const cased = new Set([...FOUND_CASES, ...NOTHING_DRAWN_CASES].map((c) => c.collectorId));
+    // Every RSS collector shares one extractor, so one publisher's case covers them all.
+    const rss = EXTRACTORS["rss.thehindu-com"];
+    expect(rss).toBeDefined();
+    for (const [id, extract] of Object.entries(EXTRACTORS)) {
+      if (id.startsWith("rss.")) {
+        expect(extract, id).toBe(rss);
+        cased.add(id);
+      }
+    }
     expect([...cased].sort()).toEqual(Object.keys(EXTRACTORS).sort());
   });
 

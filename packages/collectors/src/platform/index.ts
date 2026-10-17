@@ -10,8 +10,11 @@ import { devtoCollector } from "./devto.ts";
 import { dnsCollector } from "./dns.ts";
 import { githubCollector } from "./github.ts";
 import { hackernewsCollector } from "./hackernews.ts";
+import { blueskySearchCollector } from "./bluesky.ts";
 import { newsCollector } from "./news.ts";
 import { rdapCollector } from "./rdap.ts";
+import { redditSearchCollector } from "./reddit.ts";
+import { RSS_COLLECTORS } from "./rss.ts";
 import { waybackCollector } from "./wayback.ts";
 import { wikidataCollector } from "./wikidata.ts";
 
@@ -37,6 +40,11 @@ export const PLATFORM_COLLECTORS: readonly Collector[] = [
   devtoCollector,
   commoncrawlCollector,
   newsCollector,
+  // Monitoring, open method (2026-10-17): every one UNVERIFIED, so none runs
+  // until the owner records its source's terms.
+  blueskySearchCollector,
+  redditSearchCollector,
+  ...RSS_COLLECTORS,
 ];
 
 /** A collector built but held off the platform: it never runs, and reports say why. */
@@ -125,6 +133,9 @@ export { DNS_RESULT } from "./dns.ts";
 export { GITHUB_RESULT } from "./github.ts";
 export { HACKERNEWS_RESULT } from "./hackernews.ts";
 export { NEWS_RESULT } from "./news.ts";
+export { BLUESKY_SEARCH_RESULT } from "./bluesky.ts";
+export { REDDIT_SEARCH_RESULT } from "./reddit.ts";
+export { RSS_COLLECTORS, RSS_RESULT } from "./rss.ts";
 export { RDAP_RESULT } from "./rdap.ts";
 export { WAYBACK_RESULT } from "./wayback.ts";
 export { WIKIDATA_RESULT } from "./wikidata.ts";

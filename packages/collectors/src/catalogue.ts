@@ -1,5 +1,6 @@
 import type { DeclaredAccess } from "./access.ts";
 import { RDAP_REGISTRY_HOSTS } from "./data/rdap-registry-hosts.ts";
+import { RSS_PUBLISHERS, type RssPublisher } from "./data/rss-feeds.ts";
 import type {
   LicenceCheck,
   SourceDeclaration,
@@ -92,6 +93,38 @@ function https(
     hosts: operators.flatMap((entry) => entry.hosts),
     rateLimit,
     operators,
+  };
+}
+
+/** Each publisher's feeds: our own politeness limit, one request every two seconds. */
+const RSS_RATE_LIMIT: SourceRateLimit = {
+  requests: 1,
+  intervalSeconds: 2,
+  basis: "SELF_IMPOSED",
+  note: "No published limit has been checked for this publisher's feeds; one request every two seconds until one is.",
+};
+
+/**
+ * A publisher's RSS feeds (src/data/rss-feeds.ts): reached openly, its terms
+ * unchecked, so UNVERIFIED, never run until the owner records them. A
+ * publisher's feeds are published for syndication; whether that allows a
+ * commercial product to read them is what the owner reads.
+ */
+function rssSource(publisher: RssPublisher): SourceDeclaration {
+  return {
+    id: publisher.id,
+    name: `${publisher.publisher} RSS feeds`,
+    access: OPEN,
+    licence: {
+      commercialUse: "UNVERIFIED",
+      reason: "The publisher's terms for its feeds have not been checked.",
+      check: null,
+    },
+    network: https(
+      publisher.operators.map((entry) => operator(entry.name, entry.hosts)),
+      RSS_RATE_LIMIT,
+    ),
+    attribution: null,
   };
 }
 
@@ -479,7 +512,9 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "reddit-api",
     name: "Reddit Data API",
-    access: OFFICIAL,
+    // Its public JSON endpoint without a key (rows 7 and 20), or a tenant's
+    // OAuth app; one provider, one set of terms (the Data API terms).
+    access: OPEN_OR_OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -791,4 +826,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     network: null,
     attribution: null,
   },
+
+  // ── RSS: one source per publishing domain, every one UNVERIFIED ────────
+  ...RSS_PUBLISHERS.map(rssSource),
 ];
