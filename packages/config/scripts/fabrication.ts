@@ -48,8 +48,10 @@ export const FABRICATION_CHECKS: readonly FabricationCheck[] = [
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
 /**
- * Directories never scanned: third-party code, build output, caches, and the
- * read-only legacy reference tree (gitignored, never shipped). Generated code
+ * Directories never scanned: third-party code, build output, caches, the
+ * read-only legacy reference tree (gitignored, never shipped), and `.claude`
+ * (local agent tooling — skills and transient workflow worktrees, which hold
+ * copies of the source tree and are never production code). Generated code
  * that ships (the web API client) IS scanned.
  */
 const EXCLUDED_DIRECTORIES = new Set([
@@ -58,6 +60,7 @@ const EXCLUDED_DIRECTORIES = new Set([
   "coverage",
   ".turbo",
   ".git",
+  ".claude",
   "legacy",
 ]);
 

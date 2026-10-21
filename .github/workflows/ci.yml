@@ -1,0 +1,53 @@
+name: CI
+
+# Minimal verification for every push to main and every pull request: the same
+# build, lint, type-check and test the repository runs locally, including the
+# release-blocking gates (fabrication-check, check-exports, the person-gate
+# guard and the cross-tenant isolation tests, which run as part of `test`).
+#
+# No production secrets are needed: the two runtime secrets are generated fresh
+# per run, and every test uses recorded fixtures or mocks — no live external
+# API (GDELT, an LLM provider) is called here.
+#
+# Development is Windows-first; CI runs on Linux so Postgres (pgvector) and
+# Redis can run as Docker services. The tests are platform-agnostic Node.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # pnpm comes from package.json "packageManager" (pnpm@12.6.0), pinned.
+      - name: Enable pnpm via Corepack
+        run: corepack enable
+
+      - name: Install dependencies (reproducible, from the lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # The same services, roles and bootstrap the suite uses locally
+      # (infra/postgres/init creates app_owner/app_runtime/app_auth and installs
+      # pgvector into template1, so each suite's test database inherits it).
+      - name: Start Postgres (pgvector) and Redis
+        run: docker compose up -d --wait postgres redis
+
+      - name: Build, lint, type-check and test
+        run: |
+          export AUTH_SECRET="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))")"
+          export VAULT_MASTER_KEY="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))")"
+          pnpm turbo build lint typecheck test

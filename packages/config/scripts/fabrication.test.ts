@@ -65,7 +65,7 @@ describe("scanSource", () => {
 });
 
 describe("scanRepository", () => {
-  it("scans apps and packages but skips node_modules, dist and legacy", () => {
+  it("scans apps and packages but skips node_modules, dist, legacy and .claude", () => {
     const bad = `export const n = x ${OR} 0;\n`;
     const root = makeRepo({
       "apps/api/src/ok.ts": "export const ok = 1;\n",
@@ -73,6 +73,9 @@ describe("scanRepository", () => {
       "node_modules/dep/index.js": bad,
       "packages/core/dist/index.js": bad,
       "legacy/src/old.ts": bad,
+      // Local agent tooling and transient workflow worktrees hold copies of the
+      // source tree; they are never production code and are not scanned.
+      ".claude/worktrees/wf/packages/core/src/copy.ts": bad,
     });
     const result = scanRepository(root);
     expect(result.filesScanned).toBe(2);
