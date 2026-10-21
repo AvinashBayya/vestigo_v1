@@ -81,6 +81,19 @@ export interface CaseClaim {
   readonly relationshipId: string | null;
   /** As recorded on the claim. */
   readonly strength: ClaimStrength;
+  /**
+   * The attribute the claim is about, as recorded (`attribute` on the claim
+   * row). Optional and additive: present only when the caller supplies it, so
+   * an input that omits it is unchanged (the hash never gains a field it did
+   * not have). Contradiction review reads it when present (./case-contradictions.ts).
+   */
+  readonly attribute?: string;
+  /**
+   * The value asserted, as recorded (`value`, jsonb). `null` is a stated null;
+   * absent (`undefined`) means the value was not supplied to this analysis.
+   * Contradiction review considers only claims that carry a non-null value.
+   */
+  readonly value?: unknown;
 }
 
 export interface CaseEntity {

@@ -86,3 +86,10 @@ export {
   type HeldRef,
   type MetricNotBuilt,
 } from "./analysis/case-breakdown.ts";
+export {
+  caseContradictions,
+  CONTRADICTION_CAVEAT,
+  type CaseContradictions,
+  type Contradiction,
+  type ContradictionPosition,
+} from "./analysis/case-contradictions.ts";
