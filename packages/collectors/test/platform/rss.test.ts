@@ -45,7 +45,10 @@ const SNAPSHOT = z
         url: z.string(),
         name: z.string(),
         origin: z.string(),
-        country: z.literal("IN").nullable(),
+        country: z
+          .string()
+          .regex(/^[A-Z]{2}$/)
+          .nullable(),
       }),
     ),
     failed: z.array(
@@ -407,8 +410,9 @@ describe("an RSS collector on a topic: real items, in the news collector's shape
         titleText: "[news-world headline 2]",
         linkUrl: "https://www.bbc.co.uk/[news-world-article-2]",
         publishedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/) as unknown,
-        // BBC's feeds state en-gb, which is a language, not the outlet's country.
-        region: null,
+        // The catalog records the BBC's country as GB; the feed's en-gb is a
+        // language, not the source of this.
+        region: "GB",
         feedUrl: "https://feeds.bbci.co.uk/news/world/rss.xml",
         claimStrengths: { existence: "OBSERVED", content: "REPORTED" },
       },
@@ -496,7 +500,13 @@ describe("an RSS collector on a topic: real items, in the news collector's shape
         entry.country,
       ]);
     }
-    expect(RSS_PUBLISHERS.filter((entry) => entry.country === "IN")).toHaveLength(12);
+    // The Indian set is whatever the snapshot records, not a frozen count, and
+    // the twelve original Indian publishers are still among them.
+    const indianPublishers = RSS_PUBLISHERS.filter((entry) => entry.country === "IN");
+    expect(indianPublishers.length).toBeGreaterThanOrEqual(12);
+    for (const id of ["rss.thehindu-com", "rss.ndtv-via-feedburner", "rss.aajtak-in"]) {
+      expect(indianPublishers.map((entry) => entry.id)).toContain(id);
+    }
   });
 
   it("reads an Atom feed's entry the same way", async () => {

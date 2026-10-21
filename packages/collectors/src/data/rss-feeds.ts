@@ -1,25 +1,78 @@
 /**
  * News outlets' RSS and Atom feeds, one entry per publishing domain (one
  * provider, one set of terms; a publisher whose feeds FeedBurner serves is
- * named as the owner's list names it). Generated from the live check recorded
+ * named as the owner's list names it). Generated from the live checks recorded
  * in test/snapshots/rss-feed-verification.json, which accounts for every URL
  * fetched; a test checks this list, and each publisher's country, against it.
  *
- * Where they come from (owner instruction, 2026-10-17): the direct-publisher
- * feeds in World Monitor's feed list (AGPL-3.0), used only as leads, with no
- * file copied, and its Google News feeds left out (that source is BLOCKED);
- * then eight named Indian outlets. Each URL was fetched on 2026-10-17
- * and kept only if it answered 200 within its redirects and parsed as RSS or
- * Atom with at least one item that has a title and a link. Of the
- * 179 fetched: 153 kept; 15 that failed that check, skipped; 10 Google
- * News feeds left out whatever they answered; and a ninth Indian outlet that
- * passed, Business Standard, left out to stay within eight. The redirect
- * chain's hosts are declared, so the fetcher follows them and nothing else.
+ * Two lead batches, both verified live (owner instruction):
+ *   2026-10-17 — World Monitor's feed list (AGPL-3.0) as leads, no file copied,
+ *     Google News left out (that source is BLOCKED), plus eight Indian outlets.
+ *   2026-10-21 — the owner's global news catalog
+ *     (Vestigo_Global_News_Providers_and_APIs.md), its licensed wire agencies
+ *     and website-only outlets left out, Instagram/Facebook/X hosts refused.
+ * Each URL was fetched and kept only if it answered 200 within its redirects
+ * and parsed as RSS or Atom with at least one item that has a title and a link;
+ * anything else was skipped. The redirect chain's hosts are declared, so the
+ * fetcher follows them and nothing else. 217 publishers, 239 feeds.
  *
- * `country` is the publishing outlet's country where this list records one:
- * the 12 Indian publishers. Null elsewhere: a feed's language tag (The
- * Hindu states en-US) is not a country.
+ * Every source here is UNVERIFIED and never runs until the owner records the
+ * publisher's terms (see catalogue.ts). `country` is the publishing outlet's
+ * country where the catalog records one (ISO 3166-1 alpha-2); null otherwise.
+ * A feed's language tag (The Hindu states en-US) is not a country.
  */
+export const RSS_COUNTRY_CODES = [
+  "AE",
+  "AR",
+  "AU",
+  "BD",
+  "BE",
+  "BR",
+  "CA",
+  "CH",
+  "CN",
+  "CO",
+  "DE",
+  "DK",
+  "DO",
+  "ES",
+  "FI",
+  "FR",
+  "GB",
+  "HK",
+  "ID",
+  "IE",
+  "IL",
+  "IN",
+  "IR",
+  "IT",
+  "JP",
+  "KE",
+  "LV",
+  "MM",
+  "MX",
+  "NA",
+  "NG",
+  "NL",
+  "NO",
+  "NP",
+  "NZ",
+  "PH",
+  "PK",
+  "QA",
+  "RS",
+  "SA",
+  "SE",
+  "SG",
+  "TH",
+  "TR",
+  "TW",
+  "US",
+  "VN",
+  "ZA",
+] as const;
+export type CountryCode = (typeof RSS_COUNTRY_CODES)[number];
+
 export interface RssPublisher {
   /** Source and collector id. */
   readonly id: string;
@@ -29,8 +82,8 @@ export interface RssPublisher {
   readonly feeds: readonly string[];
   /** Who runs each host the feeds are fetched from, by registrable domain. */
   readonly operators: readonly { readonly name: string; readonly hosts: readonly string[] }[];
-  /** ISO 3166-1 alpha-2, where this list records the outlet's country; else null. */
-  readonly country: "IN" | null;
+  /** ISO 3166-1 alpha-2, where the catalog records the outlet's country; else null. */
+  readonly country: CountryCode | null;
 }
 
 export const RSS_PUBLISHERS: readonly RssPublisher[] = [
@@ -83,6 +136,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: "IN",
   },
   {
+    id: "rss.abc-net-au",
+    publisher: "abc.net.au",
+    feeds: ["https://www.abc.net.au/news/feed/51120/rss.xml"],
+    operators: [
+      {
+        name: "abc.net.au",
+        hosts: ["www.abc.net.au"],
+      },
+    ],
+    country: "AU",
+  },
+  {
     id: "rss.abcnews-com",
     publisher: "abcnews.com",
     feeds: ["https://feeds.abcnews.com/abcnews/topstories"],
@@ -108,7 +173,19 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.africanews.com"],
       },
     ],
-    country: null,
+    country: "FR",
+  },
+  {
+    id: "rss.al-monitor-com",
+    publisher: "al-monitor.com",
+    feeds: ["https://www.al-monitor.com/rss"],
+    operators: [
+      {
+        name: "al-monitor.com",
+        hosts: ["www.al-monitor.com"],
+      },
+    ],
+    country: "US",
   },
   {
     id: "rss.aljazeera-com",
@@ -120,7 +197,31 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.aljazeera.com"],
       },
     ],
-    country: null,
+    country: "QA",
+  },
+  {
+    id: "rss.allafrica-com",
+    publisher: "allafrica.com",
+    feeds: ["https://allafrica.com/tools/headlines/rdf/latest/headlines.rdf"],
+    operators: [
+      {
+        name: "allafrica.com",
+        hosts: ["allafrica.com"],
+      },
+    ],
+    country: "US",
+  },
+  {
+    id: "rss.altnews-in",
+    publisher: "altnews.in",
+    feeds: ["https://www.altnews.in/feed/"],
+    operators: [
+      {
+        name: "altnews.in",
+        hosts: ["www.altnews.in"],
+      },
+    ],
+    country: "IN",
   },
   {
     id: "rss.amarujala-com",
@@ -144,7 +245,31 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.ansa.it"],
       },
     ],
-    country: null,
+    country: "IT",
+  },
+  {
+    id: "rss.apublica-org",
+    publisher: "apublica.org",
+    feeds: ["https://apublica.org/feed/"],
+    operators: [
+      {
+        name: "apublica.org",
+        hosts: ["apublica.org"],
+      },
+    ],
+    country: "BR",
+  },
+  {
+    id: "rss.arabnews-com",
+    publisher: "arabnews.com",
+    feeds: ["https://www.arabnews.com/rss.xml"],
+    operators: [
+      {
+        name: "arabnews.com",
+        hosts: ["www.arabnews.com"],
+      },
+    ],
+    country: "SA",
   },
   {
     id: "rss.arstechnica-com",
@@ -204,7 +329,19 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["balkaninsight.com"],
       },
     ],
-    country: null,
+    country: "RS",
+  },
+  {
+    id: "rss.bangkokpost-com",
+    publisher: "bangkokpost.com",
+    feeds: ["https://www.bangkokpost.com/rss/data/topstories.xml"],
+    operators: [
+      {
+        name: "bangkokpost.com",
+        hosts: ["www.bangkokpost.com"],
+      },
+    ],
+    country: "TH",
   },
   {
     id: "rss.bbci-co-uk",
@@ -224,7 +361,7 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["feeds.bbci.co.uk"],
       },
     ],
-    country: null,
+    country: "GB",
   },
   {
     id: "rss.bitcoinmagazine-com",
@@ -237,6 +374,30 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.boomlive-in",
+    publisher: "boomlive.in",
+    feeds: ["https://www.boomlive.in/feed"],
+    operators: [
+      {
+        name: "boomlive.in",
+        hosts: ["www.boomlive.in"],
+      },
+    ],
+    country: "IN",
+  },
+  {
+    id: "rss.cbc-ca",
+    publisher: "cbc.ca",
+    feeds: ["https://www.cbc.ca/webfeed/rss/rss-topstories"],
+    operators: [
+      {
+        name: "cbc.ca",
+        hosts: ["www.cbc.ca"],
+      },
+    ],
+    country: "CA",
   },
   {
     id: "rss.cbsnews-com",
@@ -272,7 +433,31 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.channelnewsasia.com"],
       },
     ],
-    country: null,
+    country: "SG",
+  },
+  {
+    id: "rss.channelstv-com",
+    publisher: "channelstv.com",
+    feeds: ["https://www.channelstv.com/feed/"],
+    operators: [
+      {
+        name: "channelstv.com",
+        hosts: ["www.channelstv.com"],
+      },
+    ],
+    country: "NG",
+  },
+  {
+    id: "rss.chequeado-com",
+    publisher: "chequeado.com",
+    feeds: ["https://chequeado.com/feed/"],
+    operators: [
+      {
+        name: "chequeado.com",
+        hosts: ["chequeado.com"],
+      },
+    ],
+    country: "AR",
   },
   {
     id: "rss.cisa-gov",
@@ -296,7 +481,7 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.clarin.com"],
       },
     ],
-    country: null,
+    country: "AR",
   },
   {
     id: "rss.cnbc-com",
@@ -336,6 +521,30 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.com-ar",
+    publisher: "com.ar",
+    feeds: ["https://www.lanacion.com.ar/arc/outboundfeeds/rss/"],
+    operators: [
+      {
+        name: "com.ar",
+        hosts: ["www.lanacion.com.ar"],
+      },
+    ],
+    country: "AR",
+  },
+  {
+    id: "rss.com-na",
+    publisher: "com.na",
+    feeds: ["https://www.namibian.com.na/feed/"],
+    operators: [
+      {
+        name: "com.na",
+        hosts: ["www.namibian.com.na"],
+      },
+    ],
+    country: "NA",
   },
   {
     id: "rss.conservationoptimism-org",
@@ -410,6 +619,30 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.dailysabah-com",
+    publisher: "dailysabah.com",
+    feeds: ["https://www.dailysabah.com/rssFeed/home"],
+    operators: [
+      {
+        name: "dailysabah.com",
+        hosts: ["www.dailysabah.com"],
+      },
+    ],
+    country: "TR",
+  },
+  {
+    id: "rss.dailytrust-com",
+    publisher: "dailytrust.com",
+    feeds: ["https://dailytrust.com/feed/"],
+    operators: [
+      {
+        name: "dailytrust.com",
+        hosts: ["dailytrust.com"],
+      },
+    ],
+    country: "NG",
+  },
+  {
     id: "rss.darkreading-com",
     publisher: "darkreading.com",
     feeds: ["https://www.darkreading.com/rss.xml"],
@@ -420,6 +653,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.dawn-com",
+    publisher: "dawn.com",
+    feeds: ["https://www.dawn.com/feeds/home"],
+    operators: [
+      {
+        name: "dawn.com",
+        hosts: ["www.dawn.com"],
+      },
+    ],
+    country: "PK",
   },
   {
     id: "rss.decrypt-co",
@@ -482,6 +727,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.diariolibre-com",
+    publisher: "diariolibre.com",
+    feeds: ["https://www.diariolibre.com/rss/portada.xml"],
+    operators: [
+      {
+        name: "diariolibre.com",
+        hosts: ["www.diariolibre.com"],
+      },
+    ],
+    country: "DO",
+  },
+  {
     id: "rss.dowjones-io",
     publisher: "dowjones.io",
     feeds: ["https://feeds.content.dowjones.io/public/rss/RSSUSnews"],
@@ -494,6 +751,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.dr-dk",
+    publisher: "dr.dk",
+    feeds: ["https://www.dr.dk/nyheder/service/feeds/allenyheder"],
+    operators: [
+      {
+        name: "dr.dk",
+        hosts: ["www.dr.dk"],
+      },
+    ],
+    country: "DK",
+  },
+  {
     id: "rss.dw-com",
     publisher: "dw.com",
     feeds: ["https://rss.dw.com/xml/rss-en-all"],
@@ -503,7 +772,55 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["rss.dw.com"],
       },
     ],
-    country: null,
+    country: "DE",
+  },
+  {
+    id: "rss.ebc-com-br",
+    publisher: "ebc.com.br",
+    feeds: ["https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"],
+    operators: [
+      {
+        name: "ebc.com.br",
+        hosts: ["agenciabrasil.ebc.com.br"],
+      },
+    ],
+    country: "BR",
+  },
+  {
+    id: "rss.eldiario-es",
+    publisher: "eldiario.es",
+    feeds: ["https://www.eldiario.es/rss/"],
+    operators: [
+      {
+        name: "eldiario.es",
+        hosts: ["www.eldiario.es"],
+      },
+    ],
+    country: "ES",
+  },
+  {
+    id: "rss.elpais-com",
+    publisher: "elpais.com",
+    feeds: ["https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/portada"],
+    operators: [
+      {
+        name: "elpais.com",
+        hosts: ["feeds.elpais.com"],
+      },
+    ],
+    country: "ES",
+  },
+  {
+    id: "rss.eltiempo-com",
+    publisher: "eltiempo.com",
+    feeds: ["https://www.eltiempo.com/rss/mundo.xml"],
+    operators: [
+      {
+        name: "eltiempo.com",
+        hosts: ["www.eltiempo.com"],
+      },
+    ],
+    country: "CO",
   },
   {
     id: "rss.eluniverso-com",
@@ -520,14 +837,38 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
   {
     id: "rss.euronews-com",
     publisher: "euronews.com",
-    feeds: ["https://www.euronews.com/rss?format=xml"],
+    feeds: ["https://www.euronews.com/rss", "https://www.euronews.com/rss?format=xml"],
     operators: [
       {
         name: "euronews.com",
         hosts: ["www.euronews.com"],
       },
     ],
-    country: null,
+    country: "FR",
+  },
+  {
+    id: "rss.factcheck-org",
+    publisher: "factcheck.org",
+    feeds: ["https://www.factcheck.org/feed/"],
+    operators: [
+      {
+        name: "factcheck.org",
+        hosts: ["www.factcheck.org"],
+      },
+    ],
+    country: "US",
+  },
+  {
+    id: "rss.factly-in",
+    publisher: "factly.in",
+    feeds: ["https://factly.in/feed/"],
+    operators: [
+      {
+        name: "factly.in",
+        hosts: ["factly.in"],
+      },
+    ],
+    country: "IN",
   },
   {
     id: "rss.fao-org",
@@ -611,7 +952,19 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.ft.com"],
       },
     ],
-    country: null,
+    country: "GB",
+  },
+  {
+    id: "rss.fullfact-org",
+    publisher: "fullfact.org",
+    feeds: ["https://fullfact.org/feed/all/"],
+    operators: [
+      {
+        name: "fullfact.org",
+        hosts: ["fullfact.org"],
+      },
+    ],
+    country: "GB",
   },
   {
     id: "rss.gcaptain-com",
@@ -624,6 +977,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.geo-tv",
+    publisher: "geo.tv",
+    feeds: ["https://www.geo.tv/rss/1/1"],
+    operators: [
+      {
+        name: "geo.tv",
+        hosts: ["www.geo.tv"],
+      },
+    ],
+    country: "PK",
   },
   {
     id: "rss.github-blog",
@@ -648,6 +1013,30 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.globalnews-ca",
+    publisher: "globalnews.ca",
+    feeds: ["https://globalnews.ca/feed/"],
+    operators: [
+      {
+        name: "globalnews.ca",
+        hosts: ["globalnews.ca"],
+      },
+    ],
+    country: "CA",
+  },
+  {
+    id: "rss.globaltimes-cn",
+    publisher: "globaltimes.cn",
+    feeds: ["https://www.globaltimes.cn/rss/outbrain.xml"],
+    operators: [
+      {
+        name: "globaltimes.cn",
+        hosts: ["www.globaltimes.cn"],
+      },
+    ],
+    country: "CN",
   },
   {
     id: "rss.goodnewsnetwork-org",
@@ -688,6 +1077,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.hongkongfp-com",
+    publisher: "hongkongfp.com",
+    feeds: ["https://hongkongfp.com/feed/"],
+    operators: [
+      {
+        name: "hongkongfp.com",
+        hosts: ["hongkongfp.com"],
+      },
+    ],
+    country: "HK",
   },
   {
     id: "rss.humanprogress-org",
@@ -736,6 +1137,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: "IN",
+  },
+  {
+    id: "rss.independent-co-uk",
+    publisher: "independent.co.uk",
+    feeds: ["https://www.independent.co.uk/news/world/rss"],
+    operators: [
+      {
+        name: "independent.co.uk",
+        hosts: ["www.independent.co.uk"],
+      },
+    ],
+    country: "GB",
   },
   {
     id: "rss.index-hu",
@@ -813,6 +1226,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.inquirer-net",
+    publisher: "inquirer.net",
+    feeds: ["https://www.inquirer.net/feed/"],
+    operators: [
+      {
+        name: "inquirer.net",
+        hosts: ["www.inquirer.net"],
+      },
+    ],
+    country: "PH",
+  },
+  {
     id: "rss.insightcrime-org",
     publisher: "insightcrime.org",
     feeds: ["https://insightcrime.org/feed/"],
@@ -823,6 +1248,42 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.irishtimes-com",
+    publisher: "irishtimes.com",
+    feeds: ["https://www.irishtimes.com/arc/outboundfeeds/rss/"],
+    operators: [
+      {
+        name: "irishtimes.com",
+        hosts: ["www.irishtimes.com"],
+      },
+    ],
+    country: "IE",
+  },
+  {
+    id: "rss.irrawaddy-com",
+    publisher: "irrawaddy.com",
+    feeds: ["https://www.irrawaddy.com/feed"],
+    operators: [
+      {
+        name: "irrawaddy.com",
+        hosts: ["www.irrawaddy.com"],
+      },
+    ],
+    country: "MM",
+  },
+  {
+    id: "rss.japantimes-co-jp",
+    publisher: "japantimes.co.jp",
+    feeds: ["https://www.japantimes.co.jp/feed/"],
+    operators: [
+      {
+        name: "japantimes.co.jp",
+        hosts: ["www.japantimes.co.jp"],
+      },
+    ],
+    country: "JP",
   },
   {
     id: "rss.jeuneafrique-com",
@@ -837,6 +1298,30 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.jornada-com-mx",
+    publisher: "jornada.com.mx",
+    feeds: ["https://www.jornada.com.mx/rss/edicion.xml"],
+    operators: [
+      {
+        name: "jornada.com.mx",
+        hosts: ["www.jornada.com.mx"],
+      },
+    ],
+    country: "MX",
+  },
+  {
+    id: "rss.jpost-com",
+    publisher: "jpost.com",
+    feeds: ["https://www.jpost.com/rss/rssfeedsheadlines.aspx"],
+    operators: [
+      {
+        name: "jpost.com",
+        hosts: ["www.jpost.com"],
+      },
+    ],
+    country: "IL",
+  },
+  {
     id: "rss.jutarnji-hr",
     publisher: "jutarnji.hr",
     feeds: ["https://www.jutarnji.hr/feed"],
@@ -847,6 +1332,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.kathmandupost-com",
+    publisher: "kathmandupost.com",
+    feeds: ["https://kathmandupost.com/rss"],
+    operators: [
+      {
+        name: "kathmandupost.com",
+        hosts: ["kathmandupost.com"],
+      },
+    ],
+    country: "NP",
   },
   {
     id: "rss.krebsonsecurity-com",
@@ -861,6 +1358,42 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.lasillavacia-com",
+    publisher: "lasillavacia.com",
+    feeds: ["https://www.lasillavacia.com/feed/"],
+    operators: [
+      {
+        name: "lasillavacia.com",
+        hosts: ["www.lasillavacia.com"],
+      },
+    ],
+    country: "CO",
+  },
+  {
+    id: "rss.latimes-com",
+    publisher: "latimes.com",
+    feeds: ["https://www.latimes.com/world-nation/rss2.0.xml"],
+    operators: [
+      {
+        name: "latimes.com",
+        hosts: ["www.latimes.com"],
+      },
+    ],
+    country: "US",
+  },
+  {
+    id: "rss.lefigaro-fr",
+    publisher: "lefigaro.fr",
+    feeds: ["https://www.lefigaro.fr/rss/figaro_actualites.xml"],
+    operators: [
+      {
+        name: "lefigaro.fr",
+        hosts: ["www.lefigaro.fr"],
+      },
+    ],
+    country: "FR",
+  },
+  {
     id: "rss.lemonde-fr",
     publisher: "lemonde.fr",
     feeds: ["https://www.lemonde.fr/en/rss/une.xml"],
@@ -870,7 +1403,7 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.lemonde.fr"],
       },
     ],
-    country: null,
+    country: "FR",
   },
   {
     id: "rss.lighthousereports-com",
@@ -907,6 +1440,42 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.mediapart-fr",
+    publisher: "mediapart.fr",
+    feeds: ["https://www.mediapart.fr/articles/feed"],
+    operators: [
+      {
+        name: "mediapart.fr",
+        hosts: ["www.mediapart.fr"],
+      },
+    ],
+    country: "FR",
+  },
+  {
+    id: "rss.meduza-io",
+    publisher: "meduza.io",
+    feeds: ["https://meduza.io/rss/en/all"],
+    operators: [
+      {
+        name: "meduza.io",
+        hosts: ["meduza.io"],
+      },
+    ],
+    country: "LV",
+  },
+  {
+    id: "rss.middleeasteye-net",
+    publisher: "middleeasteye.net",
+    feeds: ["https://www.middleeasteye.net/rss"],
+    operators: [
+      {
+        name: "middleeasteye.net",
+        hosts: ["www.middleeasteye.net"],
+      },
+    ],
+    country: "GB",
   },
   {
     id: "rss.militarytimes-com",
@@ -996,6 +1565,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: "IN",
   },
   {
+    id: "rss.newarab-com",
+    publisher: "newarab.com",
+    feeds: ["https://www.newarab.com/rss"],
+    operators: [
+      {
+        name: "newarab.com",
+        hosts: ["www.newarab.com"],
+      },
+    ],
+    country: "GB",
+  },
+  {
     id: "rss.news18-com",
     publisher: "news18.com",
     feeds: ["https://www.news18.com/rss/india.xml"],
@@ -1003,6 +1584,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       {
         name: "news18.com",
         hosts: ["www.news18.com"],
+      },
+    ],
+    country: "IN",
+  },
+  {
+    id: "rss.newslaundry-com",
+    publisher: "newslaundry.com",
+    feeds: ["https://www.newslaundry.com/stories.rss"],
+    operators: [
+      {
+        name: "newslaundry.com",
+        hosts: ["www.newslaundry.com"],
       },
     ],
     country: "IN",
@@ -1017,7 +1610,7 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["feeds.nos.nl"],
       },
     ],
-    country: null,
+    country: "NL",
   },
   {
     id: "rss.npr-org",
@@ -1030,6 +1623,54 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.nrc-nl",
+    publisher: "nrc.nl",
+    feeds: ["https://www.nrc.nl/rss/"],
+    operators: [
+      {
+        name: "nrc.nl",
+        hosts: ["www.nrc.nl"],
+      },
+    ],
+    country: "NL",
+  },
+  {
+    id: "rss.nrk-no",
+    publisher: "nrk.no",
+    feeds: ["https://www.nrk.no/toppsaker.rss"],
+    operators: [
+      {
+        name: "nrk.no",
+        hosts: ["www.nrk.no"],
+      },
+    ],
+    country: "NO",
+  },
+  {
+    id: "rss.nytimes-com",
+    publisher: "nytimes.com",
+    feeds: ["https://rss.nytimes.com/services/xml/rss/nyt/World.xml"],
+    operators: [
+      {
+        name: "nytimes.com",
+        hosts: ["rss.nytimes.com"],
+      },
+    ],
+    country: "US",
+  },
+  {
+    id: "rss.nzz-ch",
+    publisher: "nzz.ch",
+    feeds: ["https://www.nzz.ch/recent.rss"],
+    operators: [
+      {
+        name: "nzz.ch",
+        hosts: ["www.nzz.ch"],
+      },
+    ],
+    country: "CH",
   },
   {
     id: "rss.occrp-org",
@@ -1152,7 +1793,7 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.premiumtimesng.com"],
       },
     ],
-    country: null,
+    country: "NG",
   },
   {
     id: "rss.producthunt-com",
@@ -1167,6 +1808,54 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.propublica-org",
+    publisher: "propublica.org",
+    feeds: ["https://www.propublica.org/feeds/propublica/main"],
+    operators: [
+      {
+        name: "propublica.org",
+        hosts: ["www.propublica.org"],
+      },
+    ],
+    country: "US",
+  },
+  {
+    id: "rss.prothomalo-com",
+    publisher: "prothomalo.com",
+    feeds: ["https://en.prothomalo.com/feed/"],
+    operators: [
+      {
+        name: "prothomalo.com",
+        hosts: ["en.prothomalo.com"],
+      },
+    ],
+    country: "BD",
+  },
+  {
+    id: "rss.punchng-com",
+    publisher: "punchng.com",
+    feeds: ["https://punchng.com/feed/"],
+    operators: [
+      {
+        name: "punchng.com",
+        hosts: ["punchng.com", "rss.punchng.com"],
+      },
+    ],
+    country: "NG",
+  },
+  {
+    id: "rss.rappler-com",
+    publisher: "rappler.com",
+    feeds: ["https://www.rappler.com/feed/"],
+    operators: [
+      {
+        name: "rappler.com",
+        hosts: ["www.rappler.com"],
+      },
+    ],
+    country: "PH",
+  },
+  {
     id: "rss.reasonstobecheerful-world",
     publisher: "reasonstobecheerful.world",
     feeds: ["https://reasonstobecheerful.world/feed/"],
@@ -1177,6 +1866,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.repubblica-it",
+    publisher: "repubblica.it",
+    feeds: ["https://www.repubblica.it/rss/homepage/rss2.0.xml"],
+    operators: [
+      {
+        name: "repubblica.it",
+        hosts: ["www.repubblica.it"],
+      },
+    ],
+    country: "IT",
   },
   {
     id: "rss.rigzone-com",
@@ -1191,6 +1892,66 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.rnz-co-nz",
+    publisher: "rnz.co.nz",
+    feeds: ["https://www.rnz.co.nz/rss/world.xml"],
+    operators: [
+      {
+        name: "rnz.co.nz",
+        hosts: ["www.rnz.co.nz"],
+      },
+    ],
+    country: "NZ",
+  },
+  {
+    id: "rss.rte-ie",
+    publisher: "rte.ie",
+    feeds: ["https://www.rte.ie/feeds/rss/?index=/news/"],
+    operators: [
+      {
+        name: "rte.ie",
+        hosts: ["www.rte.ie"],
+      },
+    ],
+    country: "IE",
+  },
+  {
+    id: "rss.rtve-es",
+    publisher: "rtve.es",
+    feeds: ["https://api2.rtve.es/rss/temas_noticias.xml"],
+    operators: [
+      {
+        name: "rtve.es",
+        hosts: ["api2.rtve.es"],
+      },
+    ],
+    country: "ES",
+  },
+  {
+    id: "rss.sabcnews-com",
+    publisher: "sabcnews.com",
+    feeds: ["https://www.sabcnews.com/sabcnews/feed/"],
+    operators: [
+      {
+        name: "sabcnews.com",
+        hosts: ["www.sabcnews.com"],
+      },
+    ],
+    country: "ZA",
+  },
+  {
+    id: "rss.sbs-com-au",
+    publisher: "sbs.com.au",
+    feeds: ["https://www.sbs.com.au/news/topic/latest/feed"],
+    operators: [
+      {
+        name: "sbs.com.au",
+        hosts: ["www.sbs.com.au"],
+      },
+    ],
+    country: "AU",
+  },
+  {
     id: "rss.sciencedaily-com",
     publisher: "sciencedaily.com",
     feeds: ["https://www.sciencedaily.com/rss/all.xml"],
@@ -1201,6 +1962,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.scmp-com",
+    publisher: "scmp.com",
+    feeds: ["https://www.scmp.com/rss/91/feed"],
+    operators: [
+      {
+        name: "scmp.com",
+        hosts: ["www.scmp.com"],
+      },
+    ],
+    country: "HK",
   },
   {
     id: "rss.scroll-in-via-feedburner",
@@ -1303,6 +2076,90 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.sixthtone-com",
+    publisher: "sixthtone.com",
+    feeds: ["https://www.sixthtone.com/rss"],
+    operators: [
+      {
+        name: "sixthtone.com",
+        hosts: ["api.sixthtone.com", "www.sixthtone.com"],
+      },
+    ],
+    country: "CN",
+  },
+  {
+    id: "rss.smh-com-au",
+    publisher: "smh.com.au",
+    feeds: ["https://www.smh.com.au/rss/feed.xml"],
+    operators: [
+      {
+        name: "smh.com.au",
+        hosts: ["www.smh.com.au"],
+      },
+    ],
+    country: "AU",
+  },
+  {
+    id: "rss.snopes-com",
+    publisher: "snopes.com",
+    feeds: ["https://www.snopes.com/feed/"],
+    operators: [
+      {
+        name: "snopes.com",
+        hosts: ["www.snopes.com"],
+      },
+    ],
+    country: "US",
+  },
+  {
+    id: "rss.spiegel-de",
+    publisher: "spiegel.de",
+    feeds: ["https://www.spiegel.de/international/index.rss"],
+    operators: [
+      {
+        name: "spiegel.de",
+        hosts: ["www.spiegel.de"],
+      },
+    ],
+    country: "DE",
+  },
+  {
+    id: "rss.srf-ch",
+    publisher: "srf.ch",
+    feeds: ["https://www.srf.ch/news/bnf/rss/1646"],
+    operators: [
+      {
+        name: "srf.ch",
+        hosts: ["www.srf.ch"],
+      },
+    ],
+    country: "CH",
+  },
+  {
+    id: "rss.standardmedia-co-ke",
+    publisher: "standardmedia.co.ke",
+    feeds: ["https://www.standardmedia.co.ke/rss/headlines.php"],
+    operators: [
+      {
+        name: "standardmedia.co.ke",
+        hosts: ["www.standardmedia.co.ke"],
+      },
+    ],
+    country: "KE",
+  },
+  {
+    id: "rss.straitstimes-com",
+    publisher: "straitstimes.com",
+    feeds: ["https://www.straitstimes.com/news/world/rss.xml"],
+    operators: [
+      {
+        name: "straitstimes.com",
+        hosts: ["www.straitstimes.com"],
+      },
+    ],
+    country: "SG",
+  },
+  {
     id: "rss.stratechery-com",
     publisher: "stratechery.com",
     feeds: ["https://stratechery.com/feed/"],
@@ -1315,6 +2172,30 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.stuff-co-nz",
+    publisher: "stuff.co.nz",
+    feeds: ["https://www.stuff.co.nz/rss"],
+    operators: [
+      {
+        name: "stuff.co.nz",
+        hosts: ["www.stuff.co.nz"],
+      },
+    ],
+    country: "NZ",
+  },
+  {
+    id: "rss.sueddeutsche-de",
+    publisher: "sueddeutsche.de",
+    feeds: ["https://rss.sueddeutsche.de/rss/Topthemen"],
+    operators: [
+      {
+        name: "sueddeutsche.de",
+        hosts: ["rss.sueddeutsche.de"],
+      },
+    ],
+    country: "DE",
+  },
+  {
     id: "rss.svt-se",
     publisher: "svt.se",
     feeds: ["https://www.svt.se/nyheter/rss.xml"],
@@ -1324,7 +2205,7 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.svt.se"],
       },
     ],
-    country: null,
+    country: "SE",
   },
   {
     id: "rss.tagesschau-de",
@@ -1336,7 +2217,19 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.tagesschau.de"],
       },
     ],
-    country: null,
+    country: "DE",
+  },
+  {
+    id: "rss.taipeitimes-com",
+    publisher: "taipeitimes.com",
+    feeds: ["https://www.taipeitimes.com/xml/index.rss"],
+    operators: [
+      {
+        name: "taipeitimes.com",
+        hosts: ["www.taipeitimes.com"],
+      },
+    ],
+    country: "TW",
   },
   {
     id: "rss.taskandpurpose-com",
@@ -1406,6 +2299,30 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.tehrantimes-com",
+    publisher: "tehrantimes.com",
+    feeds: ["https://www.tehrantimes.com/rss"],
+    operators: [
+      {
+        name: "tehrantimes.com",
+        hosts: ["www.tehrantimes.com"],
+      },
+    ],
+    country: "IR",
+  },
+  {
+    id: "rss.telegraph-co-uk",
+    publisher: "telegraph.co.uk",
+    feeds: ["https://www.telegraph.co.uk/news/rss.xml"],
+    operators: [
+      {
+        name: "telegraph.co.uk",
+        hosts: ["www.telegraph.co.uk"],
+      },
+    ],
+    country: "GB",
+  },
+  {
     id: "rss.telex-hu",
     publisher: "telex.hu",
     feeds: ["https://telex.hu/rss"],
@@ -1416,6 +2333,54 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.tempo-co",
+    publisher: "tempo.co",
+    feeds: ["https://rss.tempo.co/nasional"],
+    operators: [
+      {
+        name: "tempo.co",
+        hosts: ["rss.tempo.co"],
+      },
+    ],
+    country: "ID",
+  },
+  {
+    id: "rss.theafricareport-com",
+    publisher: "theafricareport.com",
+    feeds: ["https://www.theafricareport.com/feed/"],
+    operators: [
+      {
+        name: "theafricareport.com",
+        hosts: ["www.theafricareport.com"],
+      },
+    ],
+    country: "FR",
+  },
+  {
+    id: "rss.theage-com-au",
+    publisher: "theage.com.au",
+    feeds: ["https://www.theage.com.au/rss/feed.xml"],
+    operators: [
+      {
+        name: "theage.com.au",
+        hosts: ["www.theage.com.au"],
+      },
+    ],
+    country: "AU",
+  },
+  {
+    id: "rss.thedailystar-net",
+    publisher: "thedailystar.net",
+    feeds: ["https://www.thedailystar.net/rss.xml"],
+    operators: [
+      {
+        name: "thedailystar.net",
+        hosts: ["www.thedailystar.net"],
+      },
+    ],
+    country: "BD",
   },
   {
     id: "rss.thedefiant-io",
@@ -1442,6 +2407,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
     country: null,
   },
   {
+    id: "rss.theglobeandmail-com",
+    publisher: "theglobeandmail.com",
+    feeds: ["https://www.theglobeandmail.com/arc/outboundfeeds/rss/category/world/"],
+    operators: [
+      {
+        name: "theglobeandmail.com",
+        hosts: ["www.theglobeandmail.com"],
+      },
+    ],
+    country: "CA",
+  },
+  {
     id: "rss.theguardian-com",
     publisher: "theguardian.com",
     feeds: [
@@ -1455,7 +2432,7 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.theguardian.com"],
       },
     ],
-    country: null,
+    country: "GB",
   },
   {
     id: "rss.thehill-com",
@@ -1491,7 +2468,31 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
         hosts: ["www.thenationalnews.com"],
       },
     ],
-    country: null,
+    country: "AE",
+  },
+  {
+    id: "rss.thenews-com-pk",
+    publisher: "thenews.com.pk",
+    feeds: ["https://www.thenews.com.pk/rss/1/1"],
+    operators: [
+      {
+        name: "thenews.com.pk",
+        hosts: ["www.thenews.com.pk"],
+      },
+    ],
+    country: "PK",
+  },
+  {
+    id: "rss.thenewsminute-com",
+    publisher: "thenewsminute.com",
+    feeds: ["https://www.thenewsminute.com/feed"],
+    operators: [
+      {
+        name: "thenewsminute.com",
+        hosts: ["www.thenewsminute.com"],
+      },
+    ],
+    country: "IN",
   },
   {
     id: "rss.thenewstack-io",
@@ -1504,6 +2505,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.thequint-com",
+    publisher: "thequint.com",
+    feeds: ["https://www.thequint.com/stories.rss"],
+    operators: [
+      {
+        name: "thequint.com",
+        hosts: ["www.thequint.com"],
+      },
+    ],
+    country: "IN",
   },
   {
     id: "rss.thesentry-org",
@@ -1531,6 +2544,18 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.timesofisrael-com",
+    publisher: "timesofisrael.com",
+    feeds: ["https://www.timesofisrael.com/feed/"],
+    operators: [
+      {
+        name: "timesofisrael.com",
+        hosts: ["www.timesofisrael.com"],
+      },
+    ],
+    country: "IL",
   },
   {
     id: "rss.trumpstruth-org",
@@ -1579,6 +2604,42 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.vnexpress-net",
+    publisher: "vnexpress.net",
+    feeds: ["https://e.vnexpress.net/rss/news.rss"],
+    operators: [
+      {
+        name: "vnexpress.net",
+        hosts: ["e.vnexpress.net"],
+      },
+    ],
+    country: "VN",
+  },
+  {
+    id: "rss.voanews-com",
+    publisher: "voanews.com",
+    feeds: ["https://www.voanews.com/api/epiqq"],
+    operators: [
+      {
+        name: "voanews.com",
+        hosts: ["www.voanews.com"],
+      },
+    ],
+    country: "US",
+  },
+  {
+    id: "rss.vrt-be",
+    publisher: "vrt.be",
+    feeds: ["https://www.vrt.be/vrtnws/nl.rss.articles.xml"],
+    operators: [
+      {
+        name: "vrt.be",
+        hosts: ["www.vrt.be"],
+      },
+    ],
+    country: "BE",
   },
   {
     id: "rss.vsquare-org",
@@ -1666,5 +2727,17 @@ export const RSS_PUBLISHERS: readonly RssPublisher[] = [
       },
     ],
     country: null,
+  },
+  {
+    id: "rss.yle-fi",
+    publisher: "yle.fi",
+    feeds: ["https://feeds.yle.fi/uutiset/v1/majorHeadlines/YLE_UUTISET.rss"],
+    operators: [
+      {
+        name: "yle.fi",
+        hosts: ["feeds.yle.fi", "yle.fi"],
+      },
+    ],
+    country: "FI",
   },
 ];

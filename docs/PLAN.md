@@ -4500,3 +4500,60 @@ config 273, api 241, osint-engine 187, web 186, llm 130, integrations 122, ui 96
   (CLAUDE.md §3) belongs in its verdict.
 
 **Noted.** Docker Desktop was not running this morning; it was started for the tests.
+
+## Global RSS/Atom publishers from the owner's news catalog (2026-10-21)
+
+**The owner's instruction.** The owner added `Vestigo_Global_News_Providers_and_APIs.md`, a
+research catalog of ~250 news providers, and asked to add all of them and to build "fallback
+ones for uninterrupted retrieval." Two rules shaped what is deliverable, and the owner chose the
+scope around them (this session):
+
+- **Scope: RSS feeds first.** Nothing runs until the owner records a licence verdict, so
+  everything added here is held `UNVERIFIED`, exactly like the existing RSS publishers.
+- **Fallback: both the honest kinds.** Silent substitution (one source's data under another's
+  label) cannot be built — it is structurally impossible here (CLAUDE.md source labelling). The
+  parallel-independent-sources model already gives "uninterrupted": the planner runs every
+  TOPIC source as its own job, each with its own rate limit, bulkhead and circuit breaker, and a
+  rate limit retries with backoff without opening the circuit (`policy.ts`). More verified
+  publishers is itself more resilient coverage. Multiple-keys-per-API is deferred to the
+  news-API round (no keyed news source exists yet to use it); its one seam is
+  `packages/osint-engine/src/credentials.ts`.
+- **Skipped:** licensed wire agencies (Reuters, AP, AFP, Bloomberg, Factiva, LexisNexis,
+  Meltwater, Xinhua, TASS, Anadolu, EFE, DPA, Kyodo, Yonhap, Bernama, PTI, ANI, Antara) and
+  website-only outlets — no feed, API or contract to use yet. Instagram/Facebook/X refused.
+
+**What changed.** The catalog's publishers were turned into candidate feed URLs (the explicit
+ones it lists, plus conventional paths), fetched live on 2026-10-21, and kept only where a URL
+answered 200 within its redirects and parsed as RSS or Atom with a titled, linked item. 86 feeds
+verified, adding **85 new publishers** (one more feed merged into the existing euronews entry);
+`RSS_PUBLISHERS` grows from 132 to **217**, each a held `UNVERIFIED` source + collector + queue
+through the existing batch path (no change to `catalogue.ts`). The 2026-10-17 baseline is
+untouched but for country enrichment.
+
+- **`country` widened** from `"IN" | null` to an ISO 3166-1 alpha-2 set (`RSS_COUNTRY_CODES`,
+  generated), tagged from the catalog's own country grouping — recorded data, never a guess, and
+  never from a language tag. 48 countries now; the article `region` schema widened to match.
+- **Snapshot** (`test/snapshots/rss-feed-verification.json`) now records two live batches and
+  accounts for every one of the 328 URLs fetched across both (239 kept, 78 failed with a reason,
+  11 excluded). The stale "153 kept" header is corrected while regenerating.
+
+**Departures / honesty.**
+- **Not "all ~250."** Many catalog publishers are website-only or 403 automated fetches; the
+  change adds the ones that genuinely resolve and parse, and the snapshot records why each other
+  was skipped. The count is what verified, not what was hoped.
+- **Still held.** No source here is PERMITTED; none runs until the owner reads its terms. 217 RSS
+  sources wait on per-publisher verdicts.
+
+**Acceptance.** The RSS, registry, access-method and extractor-coverage suites derive their
+expected lists from `RSS_PUBLISHERS`, so the new publishers flow through them; collectors 590,
+osint-engine units 53. The region test checks each publisher's country against the snapshot feed
+by feed. Guards: no new PERMITTED source, no Google News or Instagram/Facebook/X host, every feed
+host declared under an operator (enforced by the registry build).
+
+**Open for the owner.**
+- **Verdicts:** 217 RSS publishers now wait on the owner reading each one's terms; until then
+  none runs. The licence reading pack is the next step.
+- **Scale:** the worker now derives 217 idle collect queues; opening queues only for runnable
+  sources remains a separate change.
+- **The news-search APIs** (GDELT Cloud, NewsAPI, The News API, World News API, Currents,
+  Mediastack, NYT, Guardian) and multiple-keys-per-API are the next round, not this one.

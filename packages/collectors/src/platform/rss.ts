@@ -11,7 +11,7 @@
  */
 import { z } from "zod";
 import { defineCollector, type Collector, type EvidenceItem } from "../contract.ts";
-import { RSS_PUBLISHERS, type RssPublisher } from "../data/rss-feeds.ts";
+import { RSS_COUNTRY_CODES, RSS_PUBLISHERS, type RssPublisher } from "../data/rss-feeds.ts";
 import { UpstreamRejectedError, UpstreamResponseError } from "../errors.ts";
 import type { CapturedResponse } from "../fetcher/capture.ts";
 import { parseFeed, readableText, type FeedItem } from "./feed.ts";
@@ -65,8 +65,8 @@ const RSS_ARTICLE = z
          * or one without a time zone: never the time of this collection.
          */
         publishedAt: z.iso.datetime().nullable(),
-        /** The outlet's country where the feed list records one (src/data/rss-feeds.ts); else null. */
-        region: z.literal("IN").nullable(),
+        /** The outlet's country (ISO 3166-1 alpha-2) where the feed list records one (src/data/rss-feeds.ts); else null. */
+        region: z.enum(RSS_COUNTRY_CODES).nullable(),
         /** The feed it came from. */
         feedUrl: z.url(),
         claimStrengths: ITEM_CLAIM_STRENGTHS,
