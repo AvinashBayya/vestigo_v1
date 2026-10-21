@@ -197,15 +197,18 @@ describe("a TOPIC run on GDELT alone, through the API (RELEASE-BLOCKING, Track M
     const read = await owner.request("GET", `/api/v1/evidence/${evidenceId}`);
     expect(read.status).toBe(200);
     const evidence = EvidenceShape.parse(read.json());
-    expect(evidence).toEqual({
+    // The label, attribution, link and strength come from the registry, never
+    // from an article (CLAUDE.md source labelling).
+    expect(evidence).toMatchObject({
       collectorId: "news",
       sourceLabel: "GDELT news coverage",
       attribution: { text: "Source: The GDELT Project", url: "https://www.gdeltproject.org/" },
       strength: "REPORTED",
       runId,
-      // Nothing is drawn from an article list yet, so no claim cites it.
-      claimCount: 0,
     });
+    // The articles are now drawn into the graph (their URLs and outlets, with
+    // their fields), so claims cite this one GDELT response.
+    expect(evidence.claimCount).toBeGreaterThan(0);
     const run = RunShape.parse((await owner.request("GET", `/api/v1/runs/${runId}`)).json());
     expect(run.jobs[0]?.sourceLabel).toBe("GDELT news coverage");
   });

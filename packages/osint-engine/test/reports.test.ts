@@ -53,6 +53,7 @@ import {
 } from "@repo/llm";
 import type { Redis } from "ioredis";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -729,6 +730,51 @@ describe("report generation fails honestly, never with a partial answer", () => 
     db.withTenant(tenant.tenantId, ({ repos }) =>
       repos.reports.create({ runId, includeSynthesis: synthesis, requestedByUserId: null }),
     );
+
+  it("refuses a report on a person-bearing run the tenant may not access, reading nothing (RELEASE-BLOCKING, D-34)", async () => {
+    // A fresh run for this tenant, settled like the others, then made person
+    // data as a TOPIC run is — the gate is on the run itself, not its
+    // collectors. The shared non-person run is left untouched.
+    const personRunId = await runToSettled(engine, tenant.tenantId, tenant.userId, "example.com");
+    const owner = new pg.Client({ connectionString: TEST_ENGINE.databaseOwnerUrl });
+    await owner.connect();
+    try {
+      await owner.query("begin");
+      await owner.query("select set_config('app.tenant_id', $1, true)", [tenant.tenantId]);
+      await owner.query("update public.runs set person_bearing = true where id = $1", [
+        personRunId,
+      ]);
+      await owner.query("commit");
+    } catch (error) {
+      await owner.query("rollback");
+      throw error;
+    } finally {
+      await owner.end();
+    }
+    // Even a deterministic report (no synthesis) reads the run's claims, so the
+    // gate must refuse it: the default tenant has neither the person module nor
+    // approved vetting. The model is never reached.
+    const report = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.reports.create({
+        runId: personRunId,
+        includeSynthesis: false,
+        requestedByUserId: null,
+      }),
+    );
+    const disposition = await generatorWith(new ScriptedProvider([])).process(
+      tenant.tenantId,
+      report.id,
+      { finalAttempt: true },
+    );
+    expect(disposition).toMatchObject({ kind: "COMPLETED", status: "FAILED" });
+    if (disposition.kind !== "COMPLETED") throw new Error("expected COMPLETED");
+    expect(["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"]).toContain(disposition.errorCode);
+    const row = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.reports.findById(report.id),
+    );
+    expect(row).toMatchObject({ status: "FAILED", document: null });
+    expect(["MODULE_NOT_IN_PLAN", "VETTING_NOT_APPROVED"]).toContain(row?.errorCode);
+  }, 90_000);
 
   it("fails the report when the model's answer is uncited twice, keeping no document, and meters both calls", async () => {
     const report = await newReport(true);

@@ -19,6 +19,7 @@
  * retried with backoff; a rejected answer, a refused request, a run that is
  * not settled or a spent quota fail the report at once, with the reason.
  */
+import { personGate } from "@repo/access";
 import type { CollectorRegistry } from "@repo/collectors";
 import { AppError, type ReportDocument, type ReportSynthesis, type TenantId } from "@repo/core";
 import type { Database, Report } from "@repo/db";
@@ -134,19 +135,46 @@ export class ReportGenerator {
       if (claimed.quota !== null) {
         throw new ReportQuotaError(claimed.quota.unit, claimed.quota.period);
       }
-      const assembled = await db.withTenant(tenantId, ({ repos }) =>
-        assembleReport(
-          repos,
-          this.#options.registry,
-          {
-            reportId,
-            runId: report.runId,
-            generatedAt,
-            handlingMarking: claimed.marking,
-            producedBy: this.#options.producedBy,
-          },
-          this.#options.limits ?? DEFAULT_ASSEMBLY_LIMITS,
-        ),
+      const assembled = await db.withTenant(
+        tenantId,
+        async ({ repos, reads }) => {
+          // Re-check the person gate before the run's claims are read, on the
+          // same snapshot as the read (D-28, D-32), as the case-analysis job and
+          // the SSE stream do. A report is a read of stored data (CLAUDE.md §9),
+          // so after the request-time check at POST /reports a tenant whose plan
+          // or vetting no longer allows the run's person data is refused here,
+          // and the report fails with the gate's code — nothing is assembled or
+          // sent to a model (closes D-34).
+          const tenant = await repos.tenants.current();
+          if (tenant === null) {
+            throw new ReportAccessError(
+              "TENANT_NOT_PROVISIONED",
+              "The tenant has no row; no report was generated.",
+            );
+          }
+          const lock = await personGate(tenant, () =>
+            reads.exploration.restsOnPersonData({ runJobs: report.runId }),
+          );
+          if (lock !== null) {
+            throw new ReportAccessError(
+              lock.reason,
+              "The run rests on person-investigation data this organisation cannot currently access; no report was generated.",
+            );
+          }
+          return assembleReport(
+            repos,
+            this.#options.registry,
+            {
+              reportId,
+              runId: report.runId,
+              generatedAt,
+              handlingMarking: claimed.marking,
+              producedBy: this.#options.producedBy,
+            },
+            this.#options.limits ?? DEFAULT_ASSEMBLY_LIMITS,
+          );
+        },
+        { snapshot: true },
       );
       const synthesis = await this.#synthesis(tenantId, report, assembled, meter, generatedAt);
       outcome = { document: { ...assembled.document, synthesis } };
@@ -254,6 +282,22 @@ export class ReportQuotaError extends AppError {
   }
 }
 
+/**
+ * The person gate refused the run's data at generation time (its code a
+ * LockReason: MODULE_NOT_IN_PLAN or VETTING_NOT_APPROVED), or the tenant row is
+ * gone (TENANT_NOT_PROVISIONED). The report fails with that code; nothing is
+ * assembled, read into a document or sent to a model.
+ */
+export class ReportAccessError extends AppError {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "ReportAccessError";
+    this.code = code;
+  }
+}
+
 /** Failures that end, or retry, a report rather than crash its delivery. */
 const REPORT_FAILURES = [
   LlmNotConfiguredError,
@@ -264,6 +308,7 @@ const REPORT_FAILURES = [
   ReportRunNotSettledError,
   ReportRunNotFoundError,
   ReportQuotaError,
+  ReportAccessError,
   SynthesisReferenceError,
 ] as const;
 

@@ -422,17 +422,51 @@ const commoncrawl: Extractor = ({ target, result }) => {
 };
 
 /**
- * news (GDELT DOC, Track M Day 2): its result is checked, and nothing is drawn
- * from it yet. Its evidence is stored and cited as collected; the articles
- * become items, with their outlets and links as entities, in Track M's item
- * extractors (docs/monitoring/MONITORING-PLAN.md §7). Until then no claim is
- * made from an article list, and in particular no count, which could be read
- * as a rise. It never needs the target's entity, so a TOPIC (which has no
- * entity kind) fuses as a domain does.
+ * news (GDELT DOC): each article becomes a URL entity and its outlet a DOMAIN
+ * entity, the article `published_by` that outlet. The article's own fields are
+ * REPORTED claims on its URL entity; the seen-time GDELT gives, parsed to ISO,
+ * is DERIVED (the collector's computation, named `seen_by_gdelt_at`, never
+ * `published_at`: GDELT's seendate is when GDELT saw the article, not when it
+ * was published — news.ts).
+ *
+ * What is deliberately NOT drawn, so nothing is fabricated or mislabelled:
+ *   - No entity from a title or a country. A headline can name a person, and a
+ *     person or organisation is never resolved by a name (./identifiers.ts);
+ *     GDELT's `outletCountry` is where the OUTLET is, never an event location
+ *     (news.ts), so it stays a claim, never a LOCATION entity.
+ *   - No edge between two entities merely because they share an article: the
+ *     only edge is the one the article states, its publishing outlet.
+ *   - No count: an article list is not a measure of coverage (news.ts), so no
+ *     claim counts the articles, and none can be read as a rise.
+ *
+ * A TOPIC has no entity kind, so the topic itself is not an entity and the
+ * extractor never asks for the target's; a DOMAIN run's searched domain appears
+ * only where GDELT reports it as an outlet. One evidence row backs every claim:
+ * GDELT's single search response (index 0).
  */
 const news: Extractor = ({ result }) => {
-  NEWS_RESULT.parse(result);
-  return new Drafts().build();
+  const r = NEWS_RESULT.parse(result);
+  const d = new Drafts();
+  r.articles.forEach((article, i) => {
+    const at: ResultPath = ["articles", i];
+    const url = d.entity("URL", normaliseUrl(article.url), article.url);
+    d.claim(url, "news_title", [...at, "title"], 0);
+    d.claim(url, "news_language", [...at, "language"], 0);
+    d.claim(url, "news_outlet_country", [...at, "outletCountry"], 0);
+    d.claim(url, "news_seendate", [...at, "seendate"], 0);
+    d.claim(url, "news_seen_by_gdelt_at", [...at, "derived", "seenByGdeltAt"], 0);
+    d.claim(url, "news_mobile_url", [...at, "mobileUrl"], 0);
+    d.claim(url, "news_social_image_url", [...at, "socialImageUrl"], 0);
+    if (article.outletDomain !== null) {
+      const outlet = d.entity(
+        "DOMAIN",
+        normaliseDomain(article.outletDomain),
+        article.outletDomain,
+      );
+      d.relate(url, outlet, "published_by", 0, [...at, "outletDomain"]);
+    }
+  });
+  return d.build();
 };
 
 /**

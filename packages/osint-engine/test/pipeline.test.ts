@@ -1505,7 +1505,7 @@ describe("a topic run on GDELT, end to end (RELEASE-BLOCKING, Track M Day 2)", (
     return tenant;
   }
 
-  it("plans GDELT for a topic, keeps the live answer as its evidence, draws nothing from it, and completes", async () => {
+  it("plans GDELT for a topic, keeps the live answer as its evidence, and draws its articles into the graph", async () => {
     const harness = await startHarness({
       collectors: platform(["news"]),
       fixtures: [loadFixture("news", "found")],
@@ -1536,12 +1536,27 @@ describe("a topic run on GDELT, end to end (RELEASE-BLOCKING, Track M Day 2)", (
         outcome: "FOUND",
         evidence: 1,
       });
-      // Nothing is drawn from an article list yet: no entity, and nothing counted.
-      const entities = await db.withTenant(tenant.tenantId, ({ repos }) =>
-        repos.entities.list({ limit: 100 }),
+      // Each article is drawn as a URL entity, its outlet a DOMAIN, the article
+      // published_by that outlet — every claim citing the one GDELT response.
+      const { entities, relationships, claims } = await db.withTenant(
+        tenant.tenantId,
+        async ({ repos }) => ({
+          entities: await repos.entities.list({ limit: 1000 }),
+          relationships: await repos.entityRelationships.list({ limit: 1000 }),
+          claims: await repos.claims.list({ limit: 1000 }),
+        }),
       );
-      expect(entities).toEqual([]);
-      expect(await evidenceIdsOf(tenant.tenantId)).toHaveLength(1);
+      expect(entities.some((e) => e.kind === "URL")).toBe(true);
+      expect(entities.some((e) => e.kind === "DOMAIN")).toBe(true);
+      // A headline or an outlet country is never turned into a named entity.
+      expect(entities.some((e) => e.kind === "PERSON" || e.kind === "ORGANIZATION")).toBe(false);
+      expect(relationships.length).toBeGreaterThan(0);
+      expect(new Set(relationships.map((r) => r.kind))).toEqual(new Set(["published_by"]));
+      const evidenceIds = await evidenceIdsOf(tenant.tenantId);
+      expect(evidenceIds).toHaveLength(1);
+      expect(claims.length).toBeGreaterThan(0);
+      for (const claim of claims) expect(evidenceIds).toContain(claim.evidenceId);
+      expect(new Set(claims.map((c) => c.strength))).toEqual(new Set(["REPORTED", "DERIVED"]));
       expect(harness.unmatched).toEqual([]);
     } finally {
       await engine.close();

@@ -462,18 +462,9 @@ const FOUND_CASES: readonly {
     target: { type: "DOMAIN", value: "iana.org" },
     fixtures: [loadFixture("commoncrawl", "collinfo"), loadFixture("commoncrawl", "cdx-iana")],
   },
-];
-
-/**
- * Extractors that check a FOUND result and draw nothing from it yet; the
- * evidence is kept and cited. news: articles become items in Track M's item
- * extractors, and until then no claim, and no count, is made from a list.
- */
-const NOTHING_DRAWN_CASES: readonly {
-  readonly collectorId: string;
-  readonly target: { readonly type: TargetType; readonly value: string };
-  readonly fixtures: readonly Fixture[];
-}[] = [
+  // GDELT news: each article is a URL entity published_by its outlet DOMAIN,
+  // the article's fields its claims. Both a TOPIC and a DOMAIN search draw this
+  // way; a DOMAIN search's own domain appears only as an outlet GDELT reports.
   {
     collectorId: "news",
     target: { type: "TOPIC", value: "climate change" },
@@ -484,6 +475,19 @@ const NOTHING_DRAWN_CASES: readonly {
     target: { type: "DOMAIN", value: "example.net" },
     fixtures: [loadFixture("news", "domain-found")],
   },
+];
+
+/**
+ * Extractors that check a FOUND result and draw nothing from it yet; the
+ * evidence is kept and cited. The monitoring collectors' items become items in
+ * Track M's item extractors (docs/monitoring/MONITORING-PLAN.md §7), and until
+ * then no claim, and no count, is made from a list.
+ */
+const NOTHING_DRAWN_CASES: readonly {
+  readonly collectorId: string;
+  readonly target: { readonly type: TargetType; readonly value: string };
+  readonly fixtures: readonly Fixture[];
+}[] = [
   // The monitoring collectors (2026-10-17), on their recorded answers.
   {
     collectorId: "rss.thehindu-com",
@@ -518,6 +522,85 @@ describe("extractors", () => {
       }
     }
     expect([...cased].sort()).toEqual(Object.keys(EXTRACTORS).sort());
+  });
+
+  it("news: each article is a URL entity published_by its outlet, with its fields as claims and no invented entity", () => {
+    const result = {
+      articles: [
+        {
+          url: "https://a.example/story-1",
+          mobileUrl: null,
+          title: "[headline one]",
+          seendate: "20261015T143000Z",
+          outletDomain: "a.example",
+          language: "English",
+          outletCountry: "United States",
+          socialImageUrl: null,
+          derived: { seenByGdeltAt: "2026-10-15T14:30:00.000Z" },
+        },
+        {
+          // Same outlet (different case), a second article: one DOMAIN entity,
+          // and a title/date/country that are absent assert nothing.
+          url: "https://a.example/story-2",
+          mobileUrl: null,
+          title: null,
+          seendate: null,
+          outletDomain: "A.Example",
+          language: "English",
+          outletCountry: null,
+          socialImageUrl: null,
+          derived: { seenByGdeltAt: null },
+        },
+      ],
+      derived: {
+        search: { query: '"x"', timespan: "3months", sort: "datedesc", maxRecords: 250 },
+        newest250Only: false,
+        seenSpan: { newest: "2026-10-15T14:30:00.000Z", oldest: "2026-10-15T14:30:00.000Z" },
+        volume: { count: null, reason: "NOT_MEASURED_BY_AN_ARTICLE_LIST" },
+      },
+    };
+    const extract = EXTRACTORS["news"];
+    if (extract === undefined) throw new Error("no news extractor");
+    const { entities, relationships, claims } = extract({
+      target: { type: "TOPIC", value: "x" },
+      result,
+    });
+    // One URL entity per article; one DOMAIN outlet, deduped across case.
+    expect(entities.filter((e) => e.kind === "URL").map((e) => e.identifier)).toEqual([
+      "https://a.example/story-1",
+      "https://a.example/story-2",
+    ]);
+    const domains = entities.filter((e) => e.kind === "DOMAIN");
+    expect(domains).toHaveLength(1);
+    expect(domains[0]?.identifier).toBe("a.example");
+    // A headline or a country is never turned into a named entity.
+    expect(entities.some((e) => e.kind === "PERSON" || e.kind === "ORGANIZATION")).toBe(false);
+    expect(entities.some((e) => e.kind === "LOCATION")).toBe(false);
+    // The only edges are each article to its own outlet: no article-to-article edge.
+    expect(relationships.map((r) => r.kind)).toEqual(["published_by", "published_by"]);
+    expect(new Set(relationships.map((r) => r.to))).toEqual(new Set([domains[0]?.key]));
+    // Reported fields keep the source strength; the parsed seen-time is DERIVED;
+    // a null field makes no claim.
+    const resolved = resolveClaims(claims, result, "REPORTED");
+    const title = resolved.find((c) => c.attribute === "news_title");
+    expect(title?.value).toBe("[headline one]");
+    expect(title?.strength).toBe("REPORTED");
+    expect(resolved.filter((c) => c.attribute === "news_title")).toHaveLength(1);
+    const seen = resolved.find((c) => c.attribute === "news_seen_by_gdelt_at");
+    expect(seen?.value).toBe("2026-10-15T14:30:00.000Z");
+    expect(seen?.strength).toBe("DERIVED");
+    // Exactly the article's own fields and the outlet edge are claimed: a null
+    // field drops (mobileUrl and socialImageUrl here), and nothing counts the list.
+    expect(new Set(resolved.map((c) => c.attribute))).toEqual(
+      new Set([
+        "news_title",
+        "news_language",
+        "news_outlet_country",
+        "news_seendate",
+        "news_seen_by_gdelt_at",
+        "published_by",
+      ]),
+    );
   });
 
   it.each(NOTHING_DRAWN_CASES)(
