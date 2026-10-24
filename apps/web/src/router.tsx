@@ -12,20 +12,17 @@ import {
 import { z } from "zod";
 import { AuthFrame } from "./components/AuthFrame.tsx";
 import { ProblemNotice } from "./components/ProblemNotice.tsx";
-import { CasesScreen } from "./screens/Cases.tsx";
-import { EnrolScreen } from "./screens/Enrol.tsx";
-import { HomeScreen } from "./screens/Home.tsx";
-import { MembersScreen } from "./screens/Members.tsx";
-import { RunScreen } from "./screens/Run.tsx";
-import { SettingsScreen } from "./screens/Settings.tsx";
-import { SignInScreen } from "./screens/SignIn.tsx";
-import { TenantScreen } from "./screens/Tenant.tsx";
-import { VerifyScreen } from "./screens/Verify.tsx";
 import { enrolmentToken, homeOf, sessionQuery } from "./session.ts";
-import { RUN_TABS, UnknownTab, Workspace, type WorkspaceTab } from "./workspace/Workspace.tsx";
 
-const isTab = (value: string): value is WorkspaceTab =>
-  (RUN_TABS as readonly string[]).includes(value);
+/*
+ * Every screen is downloaded when its route is first matched, not in the first
+ * load: lazyRouteComponent, as the gallery below. The guards, params and search
+ * validation stay here, so who may see a route is decided before its download
+ * starts, and a redirect downloads nothing. While a screen downloads, the router
+ * shows what it shows while the session is read (on a navigation, the screen
+ * being left). A download that fails reaches the errorComponent below, after
+ * one reload when the file is missing (a deploy replaced it).
+ */
 
 interface RouterContext {
   readonly queryClient: QueryClient;
@@ -78,7 +75,7 @@ const signIn = createRoute({
   path: "/sign-in",
   validateSearch: z.object({ reason: z.enum(["enrol", "signed-out"]).optional() }),
   beforeLoad: guard("/sign-in", "/enrol"),
-  component: SignInScreen,
+  component: lazyRouteComponent(() => import("./screens/SignIn.tsx"), "SignInScreen"),
 });
 
 const verify = createRoute({
@@ -86,7 +83,7 @@ const verify = createRoute({
   path: "/sign-in/verify",
   // No session exists until the challenge is answered.
   beforeLoad: guard("/sign-in"),
-  component: VerifyScreen,
+  component: lazyRouteComponent(() => import("./screens/Verify.tsx"), "VerifyScreen"),
 });
 
 const enrol = createRoute({
@@ -105,21 +102,21 @@ const enrol = createRoute({
     if (home === "/sign-in") throw redirect({ to: "/sign-in", search: { reason: "enrol" } });
     if (home !== "/enrol") throw redirect({ to: home });
   },
-  component: EnrolScreen,
+  component: lazyRouteComponent(() => import("./screens/Enrol.tsx"), "EnrolScreen"),
 });
 
 const tenant = createRoute({
   getParentRoute: () => root,
   path: "/tenant",
   beforeLoad: guard("/tenant", "/"),
-  component: TenantScreen,
+  component: lazyRouteComponent(() => import("./screens/Tenant.tsx"), "TenantScreen"),
 });
 
 const home = createRoute({
   getParentRoute: () => root,
   path: "/",
   beforeLoad: guard("/"),
-  component: HomeScreen,
+  component: lazyRouteComponent(() => import("./screens/Home.tsx"), "HomeScreen"),
 });
 
 /** A run's live progress. The id is checked by the API, which answers a malformed one plainly. */
@@ -127,10 +124,7 @@ const run = createRoute({
   getParentRoute: () => root,
   path: "/runs/$runId",
   beforeLoad: guard("/"),
-  component: function RunRoute() {
-    const { runId } = run.useParams();
-    return <RunScreen key={runId} runId={runId} />;
-  },
+  component: lazyRouteComponent(() => import("./screens/Run.tsx"), "RunRoute"),
 });
 
 /** A run's results: the workspace tabs over what the run collected. */
@@ -138,18 +132,14 @@ const runResults = createRoute({
   getParentRoute: () => root,
   path: "/runs/$runId/$tab",
   beforeLoad: guard("/"),
-  component: function RunResultsRoute() {
-    const { runId, tab } = runResults.useParams();
-    if (!isTab(tab)) return <UnknownTab scope={{ kind: "run", id: runId }} tab={tab} />;
-    return <Workspace key={runId} scope={{ kind: "run", id: runId }} tab={tab} />;
-  },
+  component: lazyRouteComponent(() => import("./workspace/Workspace.tsx"), "RunResultsRoute"),
 });
 
 const cases = createRoute({
   getParentRoute: () => root,
   path: "/cases",
   beforeLoad: guard("/"),
-  component: CasesScreen,
+  component: lazyRouteComponent(() => import("./screens/Cases.tsx"), "CasesScreen"),
 });
 
 /** The organisation's members (provisional until the admin screens land). */
@@ -157,7 +147,7 @@ const members = createRoute({
   getParentRoute: () => root,
   path: "/members",
   beforeLoad: guard("/"),
-  component: MembersScreen,
+  component: lazyRouteComponent(() => import("./screens/Members.tsx"), "MembersScreen"),
 });
 
 /** The organisation's settings (provisional until the admin screens land). */
@@ -165,7 +155,7 @@ const settings = createRoute({
   getParentRoute: () => root,
   path: "/settings",
   beforeLoad: guard("/"),
-  component: SettingsScreen,
+  component: lazyRouteComponent(() => import("./screens/Settings.tsx"), "SettingsScreen"),
 });
 
 /** A case: the same tabs over what is pinned to it, and only that. */
@@ -173,11 +163,7 @@ const caseWorkspace = createRoute({
   getParentRoute: () => root,
   path: "/cases/$caseId/$tab",
   beforeLoad: guard("/"),
-  component: function CaseRoute() {
-    const { caseId, tab } = caseWorkspace.useParams();
-    if (!isTab(tab)) return <UnknownTab scope={{ kind: "case", id: caseId }} tab={tab} />;
-    return <Workspace key={caseId} scope={{ kind: "case", id: caseId }} tab={tab} />;
-  },
+  component: lazyRouteComponent(() => import("./workspace/Workspace.tsx"), "CaseRoute"),
 });
 
 /**
@@ -217,6 +203,18 @@ export function createAppRouter(queryClient: QueryClient, history?: RouterHistor
     ...(history === undefined ? {} : { history }),
     defaultPendingMs: 0,
   });
+}
+
+/**
+ * Starts the first page's download while its guard reads the session, not
+ * after it: the router runs every guard before it asks for a chunk, so a first
+ * load would otherwise wait for the session, then for the code. A guard that
+ * redirects wastes one small download and shows nothing from it. A failed
+ * download is not handled here: the page rendering it shows the error.
+ */
+export function preloadFirstPage(router: ReturnType<typeof createAppRouter>): void {
+  const [routes] = router.getMatchedRoutes(router.state.location.pathname);
+  for (const route of routes) router.loadRouteChunk(route)?.catch(() => undefined);
 }
 
 declare module "@tanstack/react-router" {

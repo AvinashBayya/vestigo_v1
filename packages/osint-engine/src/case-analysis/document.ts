@@ -18,7 +18,10 @@ import {
   REGISTRATIONS,
   type CaseBreakdown,
   type CaseCollectors,
+  type CaseContradictions,
   type CaseCoverage,
+  type Contradiction,
+  type ContradictionPosition,
   type DisciplineMetricName,
   type EmptyCase,
 } from "@repo/case-engine";
@@ -59,6 +62,13 @@ export interface CaseAnalysisDocument {
   readonly coverage: CaseCoverage | EmptyCase;
   readonly collectors: CaseCollectors | EmptyCase;
   readonly breakdown: CaseBreakdown | EmptyCase;
+  /**
+   * The reviewable contradictions in the case's claims (ENGINE_VERSION 8).
+   * Optional and additive: a document stored before version 8 does not carry
+   * it, and still parses; every version-8 document sets it. The `| undefined`
+   * mirrors Zod's `.optional()` output under exactOptionalPropertyTypes.
+   */
+  readonly contradictions?: CaseContradictions | undefined;
 }
 
 const count = z.number().int().min(0);
@@ -246,6 +256,25 @@ const CaseBreakdownSchema = z.object({
   caveats: z.array(z.enum(CASE_BREAKDOWN_CAVEATS)),
 }) satisfies z.ZodType<CaseBreakdown>;
 
+// Mirrors case-engine's CaseContradictions exactly. A position's `value` is the
+// stored claim value, any JSON, carried through unchanged.
+const ContradictionPositionSchema = z.object({
+  value: z.unknown(),
+  evidenceIds: z.array(z.string()),
+  strengths: z.array(Strength),
+}) satisfies z.ZodType<ContradictionPosition>;
+
+const ContradictionSchema = z.object({
+  entityId: z.string(),
+  attribute: z.string(),
+  positions: z.array(ContradictionPositionSchema),
+}) satisfies z.ZodType<Contradiction>;
+
+const CaseContradictionsSchema = z.object({
+  items: z.array(ContradictionSchema),
+  caveat: z.string(),
+}) satisfies z.ZodType<CaseContradictions>;
+
 /** A stored case analysis document, validated whole. */
 export const CaseAnalysisDocumentSchema = z.object({
   formatVersion: z.literal(CASE_ANALYSIS_FORMAT_VERSION),
@@ -255,6 +284,10 @@ export const CaseAnalysisDocumentSchema = z.object({
   coverage: z.union([CaseCoverageSchema, EmptyCaseSchema]),
   collectors: z.union([CaseCollectorsSchema, EmptyCaseSchema]),
   breakdown: z.union([CaseBreakdownSchema, EmptyCaseSchema]),
+  // Optional for backward compatibility: a document stored before ENGINE_VERSION
+  // 8 has no contradictions field and still parses (it reads STALE, as its hash
+  // differs). Every version-8 document sets it.
+  contradictions: CaseContradictionsSchema.optional(),
 }) satisfies z.ZodType<CaseAnalysisDocument>;
 
 /** The wording a document was produced under (CASE_WORDING), as stored beside it. */

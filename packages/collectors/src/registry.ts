@@ -108,6 +108,9 @@ function deepFreezeSource(source: SourceDeclaration): Source {
         : Object.freeze({
             protocol: source.network.protocol,
             hosts: Object.freeze([...source.network.hosts]),
+            // An open-host source carries its flag through: the runtime reads it
+            // to bind the fetch to the authorised target's own host (runtime.ts).
+            ...(source.network.openHost === true ? { openHost: true as const } : {}),
             rateLimit: Object.freeze({ ...source.network.rateLimit }),
             operators: Object.freeze(
               source.network.operators.map((operator) =>

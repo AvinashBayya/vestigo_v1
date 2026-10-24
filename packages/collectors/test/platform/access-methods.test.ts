@@ -131,7 +131,8 @@ describe("a BLOCKED or UNVERIFIED platform source never runs (RELEASE-BLOCKING, 
         const runtime = deploymentRuntime(nodeEnv, methods);
         const entries = runtime.registry.list();
         const notPermitted = entries.filter((entry) => entry.commercialUse !== "PERMITTED");
-        // Phase 3B's eight, and every monitoring collector of 2026-10-17.
+        // Phase 3B's eight, every monitoring collector of 2026-10-17, and the
+        // direct article fetch (2026-10-22, exact-article Stage 3).
         expect(notPermitted.map((entry) => entry.id).sort()).toEqual(
           [
             "commoncrawl",
@@ -144,6 +145,7 @@ describe("a BLOCKED or UNVERIFIED platform source never runs (RELEASE-BLOCKING, 
             "wayback",
             "bluesky.search",
             "reddit.search",
+            "article",
             ...RSS_PUBLISHERS.map((publisher) => publisher.id),
           ].sort(),
         );

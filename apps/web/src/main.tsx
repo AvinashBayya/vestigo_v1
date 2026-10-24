@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { createAppRouter } from "./router.tsx";
+import { createAppRouter, preloadFirstPage } from "./router.tsx";
 import { applyTheme, initialTheme } from "./theme.ts";
 
 // Before the first paint, so a dark-theme viewer never sees a light flash.
@@ -32,6 +32,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
 const router = createAppRouter(queryClient);
+preloadFirstPage(router);
 
 createRoot(container).render(
   <StrictMode>

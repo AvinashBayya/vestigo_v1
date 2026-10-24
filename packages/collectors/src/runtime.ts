@@ -441,6 +441,22 @@ export class CollectorRuntime {
     const credentials: CollectorCredentials = Object.freeze({
       get: (vaultId: string) => handed.get(vaultId) ?? null,
     });
+    // An open-host source may contact only the authorised target's own host:
+    // admission has already required an in-force authorisation for it (the
+    // collection-mode scope gate), and a redirect off it is refused. A static
+    // source keeps its declared hosts (allowedHosts left undefined → default).
+    // The target was validated at admission and its host resolved for that
+    // authorisation, so this parse succeeds; an invalid target is a typed
+    // failure, never an empty allowlist (which would read as "no host").
+    let allowedHosts: readonly string[] | undefined;
+    if (entry.source.network?.openHost === true) {
+      try {
+        allowedHosts = [parseTarget("DOMAIN", target.value).value];
+      } catch (error) {
+        if (error instanceof InvalidTargetError) return failed(entry.id, error.code, error.message);
+        throw error;
+      }
+    }
     const context: RunContext<unknown> = Object.freeze({
       target,
       credentials,
@@ -451,6 +467,7 @@ export class CollectorRuntime {
         signal: controller.signal,
         secrets,
         onRequestSent: (host) => request.meter?.requestSent(entry.source.id, host),
+        ...(allowedHosts === undefined ? {} : { allowedHosts }),
       }),
       signal: controller.signal,
       found: (result: unknown, evidence: readonly [EvidenceItem, ...EvidenceItem[]]) =>

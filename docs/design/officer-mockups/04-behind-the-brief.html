@@ -1,0 +1,147 @@
+<title>Behind the Brief</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* The reports a brief rests on — a readable list with provenance, for a non-technical reader. Same briefing register. */
+  :root{
+    --bg:#f1efe9; --paper:#fbfaf6; --paper-2:#f4f2ec; --sunk:#e8e5dc;
+    --border:#e0ddd2; --border-strong:#cbc7ba; --hair:#eae7dd;
+    --ink:#20242b; --ink-2:#555a62; --ink-3:#8a8e96;
+    --accent:#1f4a66; --accent-fg:#ffffff; --accent-soft:#2f6a8f;
+    --focus:#2f6a8f; --r:12px;
+    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#101318; --paper:#191d23; --paper-2:#1f242b; --sunk:#14181d;
+    --border:#2a2f37; --border-strong:#3a404a; --hair:#232830;
+    --ink:#eceef1; --ink-2:#b6bbc3; --ink-3:#848a93;
+    --accent:#6fb0d4; --accent-fg:#0c1418; --accent-soft:#8cc3e2; --focus:#6fb0d4; color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#101318; --paper:#191d23; --paper-2:#1f242b; --sunk:#14181d;
+    --border:#2a2f37; --border-strong:#3a404a; --hair:#232830;
+    --ink:#eceef1; --ink-2:#b6bbc3; --ink-3:#848a93;
+    --accent:#6fb0d4; --accent-fg:#0c1418; --accent-soft:#8cc3e2; --focus:#6fb0d4; color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,p{margin:0}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+  .wrap{width:100%;max-width:720px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+
+  .handling{background:var(--sunk);border-bottom:1px solid var(--border);color:var(--ink-2);font-size:11.5px;letter-spacing:.08em;font-weight:600;text-transform:uppercase}
+  .handling.bottom{border-bottom:0;border-top:1px solid var(--border)}
+  .handling .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:7px}
+  .handling .note{font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--ink-3);font-size:11px}
+
+  .bar{background:var(--bg);border-bottom:1px solid var(--border)}
+  .bar .wrap{display:flex;align-items:center;gap:13px;min-height:58px;padding-block:9px}
+  .logo{display:flex;align-items:center;gap:9px}
+  .logo .g{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-weight:600;font-size:15px}
+  .logo b{font-weight:600;font-size:16px}
+  .back{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink-2);background:none;border:0}
+  .back svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.9}
+  .ico{width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--border);border-radius:999px;background:var(--paper);color:var(--ink-2)}
+  .ico svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7}
+
+  .head{padding-top:28px}
+  .kick{font-size:12.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-soft)}
+  h1{font-family:var(--serif);font-weight:600;font-size:29px;margin-top:9px}
+  .lede{color:var(--ink-2);font-size:15px;margin-top:9px}.lede b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+
+  .filters{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
+  .sel{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;background:var(--paper);border:1px solid var(--border-strong);border-radius:999px;font-size:13.5px;color:var(--ink);font-weight:500}
+  .sel svg{width:13px;height:13px;stroke:var(--ink-3);fill:none;stroke-width:1.8}
+
+  .list{margin-top:18px;display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+  .rep{padding:16px 18px;border-bottom:1px solid var(--hair)}
+  .rep:last-child{border-bottom:0}
+  .rtitle{font-family:var(--serif);font-size:17.5px;font-weight:600;line-height:1.35}
+  .rmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;font-size:13px;color:var(--ink-2)}
+  .rmeta .src{font-weight:600;color:var(--ink)}
+  .rmeta .sep{color:var(--border-strong)}
+  .rmeta .dash{color:var(--ink-3)}
+  .ract{display:flex;gap:9px;margin-top:12px}
+  .ab{height:38px;padding:0 14px;border-radius:999px;border:1px solid var(--border-strong);background:var(--paper);color:var(--ink);font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:7px}
+  .ab:hover{border-color:var(--ink-3)} .ab svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
+
+  .provnote{margin-top:14px;display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--ink-3);line-height:1.55}
+  .provnote svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.7;flex:none;margin-top:2px}
+
+  .foot{margin:30px 0 10px;padding-top:16px;border-top:1px solid var(--border);color:var(--ink-3);font-size:12.5px;line-height:1.6}
+  .foot b{color:var(--ink-2);font-weight:600}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="handling"><div class="wrap"><span>Handling: Official — for internal use</span><span class="note">example marking · set for each organisation</span></div></div>
+
+<div class="bar"><div class="wrap">
+  <span class="logo"><span class="g">V</span><b>Vestigo</b></span>
+  <button class="back"><svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg>Back to the brief</button>
+  <button class="ico" id="theme" aria-label="Day or night view"><svg id="ti" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg></button>
+</div></div>
+
+<div class="wrap">
+  <div class="head">
+    <div class="kick">Water-treaty review · behind the brief</div>
+    <h1>The reports this brief rests on</h1>
+    <p class="lede"><b>118</b> reports from <b>11</b> sources. Every one is listed, with where it came from. Nothing in the brief is based on anything not here.</p>
+  </div>
+
+  <div class="filters">
+    <span class="sel">All regions <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+    <span class="sel">All languages <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+    <span class="sel">All sources <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+    <span class="sel">Newest first <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+  </div>
+
+  <div class="list">
+    <div class="rep">
+      <div class="rtitle">India frames water-treaty review as a sovereign right</div>
+      <div class="rmeta"><span class="src">The Hindu</span><span class="sep">·</span>India<span class="sep">·</span>English<span class="sep">·</span>Published 14 Oct<span class="sep">·</span>Collected 15 Oct, 2:15 pm</div>
+      <div class="ract"><button class="ab"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>Read</button><button class="ab"><svg viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg>Pin</button></div>
+    </div>
+
+    <div class="rep">
+      <div class="rtitle">Review of water pact draws sharp reaction across the border</div>
+      <div class="rmeta"><span class="src">Dawn</span><span class="sep">·</span>Pakistan<span class="sep">·</span>English<span class="sep">·</span>Published 14 Oct<span class="sep">·</span>Collected 15 Oct, 2:15 pm</div>
+      <div class="ract"><button class="ab"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>Read</button><button class="ab"><svg viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg>Pin</button></div>
+    </div>
+
+    <div class="rep">
+      <div class="rtitle">Wire report: government signals review of decades-old treaty</div>
+      <div class="rmeta"><span class="src">Press Trust of India</span><span class="sep">·</span>India<span class="sep">·</span>English<span class="sep">·</span><span class="dash">Publish date not provided by source</span><span class="sep">·</span>Collected 15 Oct, 2:15 pm</div>
+      <div class="ract"><button class="ab"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>Read</button><button class="ab"><svg viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg>Pin</button></div>
+    </div>
+
+    <div class="rep">
+      <div class="rtitle">जल संधि की समीक्षा पर सियासत तेज़ (Politics sharpens over water-treaty review)</div>
+      <div class="rmeta"><span class="src">Dainik Bhaskar</span><span class="sep">·</span>India<span class="sep">·</span>Hindi<span class="sep">·</span>Published 13 Oct<span class="sep">·</span>Collected 15 Oct, 2:15 pm</div>
+      <div class="ract"><button class="ab"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>Read</button><button class="ab"><svg viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg>Pin</button></div>
+    </div>
+
+    <div class="rep">
+      <div class="rtitle">Analysts call for arbitration over South Asian water dispute</div>
+      <div class="rmeta"><span class="src">BBC News</span><span class="sep">·</span>United Kingdom<span class="sep">·</span>English<span class="sep">·</span>Published 14 Oct<span class="sep">·</span>Collected 15 Oct, 2:15 pm</div>
+      <div class="ract"><button class="ab"><svg viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>Read</button><button class="ab"><svg viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 7 3 3H7l3-3-1-7z"/></svg>Pin</button></div>
+    </div>
+  </div>
+
+  <div class="provnote"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5h.01"/></svg>
+    Every source name, country and language comes from our own source list — never from the article itself. Where a source didn't give a publish date, we say so rather than guess one.</div>
+
+  <div class="foot">
+    <b>Illustrative example for review</b> — not real reports; headlines stand in. Showing 5 of 118; the real page lets you page through all of them, filter by region, language or source, read the original, or pin any report into a case.
+  </div>
+</div>
+
+<div class="handling bottom"><div class="wrap"><span>Handling: Official — for internal use</span><span class="note">Vestigo · behind the brief</span></div></div>
+
+<script>
+  (function(){var r=document.documentElement,b=document.getElementById('theme');
+    try{var s=localStorage.getItem('v-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}
+    b.addEventListener('click',function(){var c=r.getAttribute('data-theme');var d=c?c==='dark':matchMedia('(prefers-color-scheme:dark)').matches;var n=d?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('v-theme',n);}catch(e){}});
+  })();
+</script>

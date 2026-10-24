@@ -22,6 +22,7 @@ import { collectorsQuery, DISCIPLINE_TEXT, type CollectorList as Registry } from
 import { plural } from "../components/Values.tsx";
 import { jobRowStatus, jobStatus, RUN_STATUS_TEXT } from "../run/progress.ts";
 import { NOT_APPLICABLE_REASON, type TargetType } from "../search/plan.ts";
+import { Contradictions } from "./Contradictions.tsx";
 import { PinButton } from "./Pin.tsx";
 import {
   caseQuery,
@@ -81,13 +82,7 @@ export function OverviewTab({ scope }: { readonly scope: Scope }) {
       <Summary scope={scope} />
       {scope.kind === "run" ? <Coverage id={scope.id} /> : <CasePins id={scope.id} />}
       <KeyEntities scope={scope} />
-      <Card title="Contradictions" className="lg:col-span-4">
-        <NotBuilt
-          title="Where one source denies what another states"
-          needs="It needs contradiction detection across sources, which the API does not have."
-          className={NOT_BUILT_BODY}
-        />
-      </Card>
+      <Contradictions scope={scope} />
       {scope.kind === "run" ? <Gaps id={scope.id} /> : null}
     </div>
   );

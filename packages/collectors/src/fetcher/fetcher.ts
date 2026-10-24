@@ -244,6 +244,13 @@ export function createUpstreamFetch(options: {
    * nothing upstream.
    */
   readonly onRequestSent?: (host: string) => void;
+  /**
+   * The hosts this run may contact. Defaults to the source's static declared
+   * hosts. An open-host source passes the one authorised host (the target's),
+   * so the request and every redirect are confined to it under the same SSRF
+   * checks; it never widens what a static source may reach.
+   */
+  readonly allowedHosts?: readonly string[];
 }): UpstreamFetch {
   const { source, network, run, signal: runSignal } = options;
   const resolver = network.resolver ?? systemResolver;
@@ -268,6 +275,7 @@ export function createUpstreamFetch(options: {
         `source "${source.id}" is not reached over the network`,
       );
     }
+    const allowedHosts = options.allowedHosts ?? declared.hosts;
     const deadline = performance.now() + valid.timeoutMs;
     const remaining = () => deadline - performance.now();
     const timedOut = (host: string) => new UpstreamTimeoutError(host, valid.timeoutMs);
@@ -406,7 +414,7 @@ export function createUpstreamFetch(options: {
         throw new UpstreamUnreachableError(url.hostname, { cause: error });
       });
 
-    let url = checkDestination(rawUrl, declared);
+    let url = checkDestination(rawUrl, declared, allowedHosts);
     let method: string = valid.method;
     for (let hop = 0; ; hop++) {
       if (runSignal.aborted || remaining() <= 0) throw timedOut(url.hostname);
@@ -429,7 +437,7 @@ export function createUpstreamFetch(options: {
         if (!URL.canParse(location, url.href)) {
           throw new DestinationRefusedError("MALFORMED_URL", "a redirect's location is not a URL");
         }
-        url = checkDestination(new URL(location, url).href, declared);
+        url = checkDestination(new URL(location, url).href, declared, allowedHosts);
         method = method === "HEAD" ? "HEAD" : "GET";
         continue;
       }

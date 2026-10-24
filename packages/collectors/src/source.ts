@@ -55,8 +55,18 @@ export interface SourceOperator {
 
 export interface SourceNetwork {
   readonly protocol: "https" | "http";
-  /** Exact DNS names; redirects may only stay within them. */
+  /** Exact DNS names; redirects may only stay within them. Empty for an open-host source. */
   readonly hosts: readonly string[];
+  /**
+   * An open-host source has no static host list: the host it may contact comes
+   * from the authorised target at run time (the fetcher is handed it as
+   * `allowedHosts`), under the same SSRF checks, same single host per request,
+   * and redirects confined to it. It is https only, names no fixed operator
+   * (the publisher varies), and still never contacts Instagram, Facebook or X.
+   * The authorisation that supplies the host is a separate layer (the
+   * collection-mode scope gate); open-host never relaxes an SSRF check.
+   */
+  readonly openHost?: boolean;
   readonly rateLimit: SourceRateLimit;
   /**
    * Who operates the hosts: every host belongs to exactly one operator. A
@@ -211,7 +221,17 @@ function validateNetwork(subject: string, network: SourceNetwork): void {
   if (!(PROTOCOLS as readonly string[]).includes(network.protocol)) {
     fail(subject, "network.protocol must be https or http");
   }
-  if (network.hosts.length === 0) fail(subject, "network.hosts must name at least one host");
+  if (network.openHost === true) {
+    if (network.protocol !== "https") fail(subject, "an open-host source must use https");
+    if (network.hosts.length !== 0) {
+      fail(subject, "an open-host source declares no static hosts; its host comes from the target");
+    }
+    if (network.operators.length !== 0) {
+      fail(subject, "an open-host source names no operator; its host varies per target");
+    }
+  } else if (network.hosts.length === 0) {
+    fail(subject, "network.hosts must name at least one host");
+  }
   if (new Set(network.hosts).size !== network.hosts.length) {
     fail(subject, "network.hosts has duplicates");
   }
@@ -242,7 +262,9 @@ function validateNetwork(subject: string, network: SourceNetwork): void {
     fail(subject, "network.rateLimit.intervalSeconds must be an integer from 1 to 86400");
   }
   requireText(subject, "network.rateLimit.note", note);
-  if (network.operators.length === 0) fail(subject, "network.operators must name an operator");
+  if (!network.openHost && network.operators.length === 0) {
+    fail(subject, "network.operators must name an operator");
+  }
   const operatorNames = network.operators.map((operator) => operator.name.trim().toLowerCase());
   if (new Set(operatorNames).size !== operatorNames.length) {
     fail(subject, "network.operators has duplicate names");

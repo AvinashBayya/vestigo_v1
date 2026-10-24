@@ -2,8 +2,9 @@
  * The platform registry as shipped: which collectors are registered, in what
  * order, under which licence status. The ten of Phase 3B, then news, held from
  * Phase 3B until Track M Day 2, then the monitoring collectors of 2026-10-17:
- * Bluesky and Reddit search, and one RSS collector per publisher, every one
- * UNVERIFIED (docs/PLAN.md).
+ * Bluesky and Reddit search, and one RSS collector per publisher, then the
+ * direct article fetch (2026-10-22, exact-article Stage 3), every one of these
+ * last UNVERIFIED (docs/PLAN.md, docs/M1_DIRECT_ARTICLE_FETCH_REPORT.md).
  */
 import { describe, expect, it } from "vitest";
 import { RSS_PUBLISHERS } from "../../src/data/rss-feeds.ts";
@@ -28,6 +29,7 @@ const REGISTERED = [
   ["bluesky.search", "UNVERIFIED"],
   ["reddit.search", "UNVERIFIED"],
   ...RSS_PUBLISHERS.map((publisher) => [publisher.id, "UNVERIFIED"] as const),
+  ["article", "UNVERIFIED"],
 ];
 
 describe("the platform registry", () => {

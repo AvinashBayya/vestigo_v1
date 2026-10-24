@@ -11,6 +11,7 @@ import {
   defineCollector,
   PLATFORM_COLLECTORS,
   type CollectionOutcome,
+  type ScopeClearance,
   type SourceDeclaration,
 } from "@repo/collectors";
 import { loadFixture, startHarness, type Fixture } from "@repo/collectors/testing";
@@ -260,6 +261,28 @@ describe("planning a run", () => {
     ]);
   });
 
+  it("treats a pasted article URL as a URL and as its publisher domain, so a domain collector runs (news-URL regression)", async () => {
+    const url = "https://www.hindustantimes.com/india-news/some-headline-101.html";
+    const plan = await planRun(runtime, {
+      input: url,
+      requestedType: null,
+      entitlement: TECHINT,
+      scopeFor: () => Promise.resolve(null),
+    });
+    expect(plan.detected).toEqual({ primaryType: "URL", alternateTypes: ["DOMAIN"] });
+    // Both candidates are valid — the full URL, and its host as a domain. The
+    // DOMAIN candidate is no longer reported invalid ("malformed"): the bug.
+    expect(plan.targets).toHaveLength(2);
+    expect(plan.targets).toContainEqual({ type: "URL", value: url });
+    expect(plan.targets).toContainEqual({ type: "DOMAIN", value: "www.hindustantimes.com" });
+    expect(plan.targets.every((target) => "value" in target)).toBe(true);
+    // A domain collector runs on the extracted host, as GDELT news (DOMAIN) would.
+    expect(plan.jobs).toContainEqual({
+      collectorId: "fake.domain",
+      target: { type: "DOMAIN", value: "www.hindustantimes.com" },
+    });
+  });
+
   it("records an input that is not the requested type, and plans nothing on it", async () => {
     const plan = await planRun(runtime, {
       input: "not a domain",
@@ -406,6 +429,8 @@ const FOUND_CASES: readonly {
   readonly collectorId: string;
   readonly target: { readonly type: TargetType; readonly value: string };
   readonly fixtures: readonly Fixture[];
+  /** For an ACTIVE collector: the scope authorisation in force for the exact target. */
+  readonly scopeAuthorisation?: ScopeClearance;
 }[] = [
   {
     collectorId: "crtsh",
@@ -474,6 +499,20 @@ const FOUND_CASES: readonly {
     collectorId: "news",
     target: { type: "DOMAIN", value: "example.net" },
     fixtures: [loadFixture("news", "domain-found")],
+  },
+  // Direct article fetch (exact-article Stage 3): the one article URL is the
+  // entity, its fields the claims, published_by its outlet. ACTIVE, so a scope
+  // authorisation for the exact URL is in force (a DOMAIN authorisation clears
+  // it in the real flow; here the resolved clearance is supplied directly).
+  {
+    collectorId: "article",
+    target: { type: "URL", value: "https://news.example.com/world/story-1" },
+    fixtures: [loadFixture("article", "found")],
+    scopeAuthorisation: {
+      id: "scope-article",
+      targetType: "URL",
+      target: "https://news.example.com/world/story-1",
+    },
   },
 ];
 
@@ -603,6 +642,82 @@ describe("extractors", () => {
     );
   });
 
+  it("article: the URL is the subject, its fields claims (the raw headline reported, the parse derived), published_by its outlet", () => {
+    const result = {
+      headline: "Placeholder &amp; headline",
+      derived: {
+        url: "https://news.example.com/world/story-1",
+        outletDomain: "news.example.com",
+        dedupKey: "https://news.example.com/world/story-1",
+        canonicalUrl: "https://news.example.com/world/story-1",
+        title: "Placeholder & headline",
+        author: "[Byline]",
+        language: "en",
+        publishedAt: "2026-10-20T09:30:00.000Z",
+        extractionStatus: "FULL_TEXT",
+        bodyText: "Write to press@example.com or see https://report.example.org/doc for more.",
+        bodyTextTruncated: false,
+        mentions: [
+          { kind: "EMAIL_ADDRESS", value: "press@example.com", start: 9, end: 26 },
+          { kind: "URL", value: "https://report.example.org/doc", start: 34, end: 64 },
+        ],
+      },
+    };
+    const extract = EXTRACTORS["article"];
+    if (extract === undefined) throw new Error("no article extractor");
+    const target = { type: "URL" as const, value: "https://news.example.com/world/story-1" };
+    const { entities, relationships, claims } = extract({ target, result });
+    // The article URL is the subject; its outlet is a DOMAIN entity; each
+    // mentioned identifier is its own entity, resolved by its value.
+    expect(entities.filter((e) => e.kind === "URL").map((e) => e.identifier)).toEqual([
+      "https://news.example.com/world/story-1",
+      "https://report.example.org/doc",
+    ]);
+    expect(entities.filter((e) => e.kind === "DOMAIN").map((e) => e.identifier)).toEqual([
+      "news.example.com",
+    ]);
+    expect(entities.filter((e) => e.kind === "EMAIL_ADDRESS").map((e) => e.identifier)).toEqual([
+      "press@example.com",
+    ]);
+    // A headline or an author name is never turned into a named entity.
+    expect(entities.some((e) => e.kind === "PERSON" || e.kind === "ORGANIZATION")).toBe(false);
+    // The outlet edge, then one `mentions` edge per identifier. A mention is an
+    // edge, never an entity claim, so it is never read as a contradiction.
+    expect(relationships.map((r) => r.kind)).toEqual(["published_by", "mentions", "mentions"]);
+
+    const resolved = resolveClaims(claims, result, "REPORTED");
+    const headline = resolved.find((c) => c.attribute === "article_headline");
+    // The raw <title> stays the source's own value, undecoded; it is REPORTED.
+    expect(headline?.value).toBe("Placeholder &amp; headline");
+    expect(headline?.strength).toBe("REPORTED");
+    // Everything extractArticle parsed is DERIVED, never presented as the source's.
+    for (const attribute of [
+      "article_title",
+      "article_author",
+      "article_language",
+      "article_published_at",
+      "article_canonical_url",
+      "article_dedup_key",
+      "article_extraction_status",
+    ]) {
+      expect(resolved.find((c) => c.attribute === attribute)?.strength, attribute).toBe("DERIVED");
+    }
+    expect(new Set(resolved.map((c) => c.attribute))).toEqual(
+      new Set([
+        "article_headline",
+        "article_title",
+        "article_author",
+        "article_language",
+        "article_published_at",
+        "article_canonical_url",
+        "article_dedup_key",
+        "article_extraction_status",
+        "published_by",
+        "mentions",
+      ]),
+    );
+  });
+
   it.each(NOTHING_DRAWN_CASES)(
     "$collectorId on a $target.type: checks the result and draws nothing yet, so no entity, claim or count",
     async (testCase) => {
@@ -638,7 +753,13 @@ describe("extractors", () => {
         fixtures: testCase.fixtures,
       });
       try {
-        const outcome = await harness.run(testCase.collectorId, testCase.target);
+        const outcome = await harness.run(
+          testCase.collectorId,
+          testCase.target,
+          testCase.scopeAuthorisation === undefined
+            ? {}
+            : { scopeAuthorisation: testCase.scopeAuthorisation },
+        );
         expect(outcome.status, JSON.stringify(outcome)).toBe("FOUND");
         if (outcome.status !== "FOUND") return;
         const extract = EXTRACTORS[testCase.collectorId];

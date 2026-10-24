@@ -37,9 +37,17 @@
  *      UNVERIFIED, is UNVERIFIED (new), its counts null. A run's recorded
  *      UNVERIFIED_SOURCE_NOT_ALLOWED or ACCESS_METHOD_NOT_ENABLED is a place
  *      where the collector could not run at all, as LICENCE_BLOCKED is.
+ *   8: claim contradiction review runs (M4-1): the analysis reads each claim's
+ *      attribute and value, and a discipline's breakdown reports CONTRADICTIONS
+ *      as a measured count (the entities whose claims disagree, supported by
+ *      that discipline's evidence), where version 7 reported it as
+ *      CONTRADICTION_DETECTION_NOT_BUILT. The stored document gains a
+ *      `contradictions` field (the conflicting positions, with their evidence
+ *      and strengths); a document stored before this does not carry it, reads
+ *      STALE as its hash differs, and is never reinterpreted as having run it.
  *
  * It is one part of the input hash a stored analysis is keyed by (owner ruling
  * D-3). That hash is computed in R1-b's job, which holds the input it read, and
  * never here (owner ruling, 2026-10-09).
  */
-export const ENGINE_VERSION = 7;
+export const ENGINE_VERSION = 8;

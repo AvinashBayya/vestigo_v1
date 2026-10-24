@@ -1,4 +1,4 @@
-import { planRun } from "@repo/osint-engine";
+import { planRun, resolveScopeClearance } from "@repo/osint-engine";
 import { EmptyTargetError, TARGET_TYPES } from "@repo/core";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -106,12 +106,7 @@ export const estimateRoutes =
             input: request.body.target,
             requestedType: request.body.targetType ?? null,
             entitlement: { plan: tenant.plan, vettingStatus: tenant.vettingStatus },
-            scopeFor: async (target) => {
-              const row = await repos.scopeAuthorisations.findInForce(target.type, target.value);
-              return row === null
-                ? null
-                : { id: row.id, targetType: row.targetType, target: row.target };
-            },
+            scopeFor: (target) => resolveScopeClearance(repos.scopeAuthorisations, target),
           });
         } catch (error) {
           if (error instanceof EmptyTargetError) {

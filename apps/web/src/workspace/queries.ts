@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { timed, unwrap } from "../api.ts";
 import { api, type paths } from "../client/index.ts";
+import type { components } from "../client/schema.gen.ts";
 
 type Ok<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends {
   responses: { 200: { content: { "application/json": infer T } } };
@@ -25,6 +26,12 @@ export type CaseRow = CaseList["items"][number];
 export type PinList = Ok<"/api/v1/cases/{id}/pins", "get">;
 export type PinRow = PinList["items"][number];
 export type RunRead = Ok<"/api/v1/runs/{id}", "get">;
+/**
+ * Where a case's analysis stands, with its documents. The named schema
+ * component the analyses endpoints $ref, not an Ok<> re-extraction: its deep
+ * unions otherwise materialise as a distinct structural type (TS2719).
+ */
+export type CaseAnalysisRead = components["schemas"]["CaseAnalysisRead"];
 export type Strength = EvidenceDetail["strength"];
 export type PinTarget = PinRow["target"];
 
@@ -156,6 +163,18 @@ export const casePinsQuery = (id: string) =>
           params: { path: { id }, query: { limit: LIST_LIMIT } },
           signal: timed(signal),
         }),
+      ),
+  });
+
+/** Where a case's analysis stands now (COMPLETE/PENDING/FAILED/STALE/NONE_YET), with its documents. */
+export const caseAnalysisQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["case-analysis", id],
+    // No return annotation: CaseAnalysisRead's deep unions trip a structural
+    // check (TS2719) against unwrap's inferred type, which are the same type.
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET("/api/v1/cases/{id}/analyses", { params: { path: { id } }, signal: timed(signal) }),
       ),
   });
 

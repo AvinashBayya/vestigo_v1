@@ -12,6 +12,8 @@ import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionState } from "./api.ts";
 import { createAppRouter } from "./router.tsx";
+// Every screen the router loads on demand, loaded with this file (see test-screens.ts).
+import "./test-screens.ts";
 
 // The generated client captures fetch when it is created, at import time.
 const fetchMock = vi.hoisted(() => {

@@ -260,6 +260,10 @@ export const envSchema = z.object({
     description:
       "Case analyses computed at once, across every worker. The analysis is CPU-bound and has its own bulkhead, apart from collection and reports.",
   }),
+  EXTRACTION_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(2).meta({
+    description:
+      "Article prose extractions run at once, across every worker. Each calls a model, so it has its own bulkhead, apart from collection and reports.",
+  }),
   CASE_ANALYSIS_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(60_000).meta({
     description:
       "Longest one attempt at a case analysis may wait before it fails as CASE_ANALYSIS_TIMEOUT. The computation itself is synchronous and bounded by the case's size, not by this.",

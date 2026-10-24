@@ -34,6 +34,7 @@ import {
   byCodeUnit,
   caseBreakdown,
   caseCollectors,
+  caseContradictions,
   caseCoverage,
   CaseInputError,
   ENGINE_VERSION,
@@ -252,6 +253,7 @@ export class CaseAnalysisProcessor {
         coverage: caseCoverage(read.input),
         collectors: caseCollectors(read.input),
         breakdown: caseBreakdown(read.input),
+        contradictions: caseContradictions(read.input),
       };
     } catch (error) {
       if (!(error instanceof CaseInputError)) throw error;

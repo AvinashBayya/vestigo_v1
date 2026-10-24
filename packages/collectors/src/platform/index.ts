@@ -3,6 +3,7 @@ import type { Collector } from "../contract.ts";
 import { CollectorDefinitionError } from "../errors.ts";
 import { CollectorRegistry } from "../registry.ts";
 import type { SourceDeclaration } from "../source.ts";
+import { articleCollector } from "./article.ts";
 import { commoncrawlCollector } from "./commoncrawl.ts";
 import { contactPhoneCollector } from "./contact-phone.ts";
 import { crtshCollector } from "./crtsh.ts";
@@ -45,6 +46,10 @@ export const PLATFORM_COLLECTORS: readonly Collector[] = [
   blueskySearchCollector,
   redditSearchCollector,
   ...RSS_COLLECTORS,
+  // Direct article fetch (2026-10-22): ACTIVE, open-host, UNVERIFIED — it never
+  // runs in a deployment until an owner records a per-publisher verdict, and
+  // even then only for a target with a scope authorisation in force.
+  articleCollector,
 ];
 
 /** A collector built but held off the platform: it never runs, and reports say why. */
@@ -125,6 +130,7 @@ export function createPlatformRegistry(
 }
 
 // The result schemas, for code that reads what a collector recorded (fusion).
+export { ARTICLE_RESULT } from "./article.ts";
 export { COMMONCRAWL_RESULT } from "./commoncrawl.ts";
 export { CONTACT_PHONE_RESULT } from "./contact-phone.ts";
 export { CRTSH_RESULT } from "./crtsh.ts";

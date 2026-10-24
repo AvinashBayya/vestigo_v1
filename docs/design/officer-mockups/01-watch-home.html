@@ -1,0 +1,206 @@
+<title>Vestigo Watch</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* The officer's home: everything they watch, what changed first, in plain words. Same briefing register as the situation brief. */
+  :root{
+    --bg:#f1efe9; --paper:#fbfaf6; --paper-2:#f4f2ec; --sunk:#e8e5dc;
+    --border:#e0ddd2; --border-strong:#cbc7ba; --hair:#eae7dd;
+    --ink:#20242b; --ink-2:#555a62; --ink-3:#8a8e96;
+    --accent:#1f4a66; --accent-fg:#ffffff; --accent-soft:#2f6a8f;
+    --attn:#8a5412;          /* "needs attention" — status colour, used sparingly */
+    --calm:#3f6b4e;          /* "quiet" status */
+    --line:#4a6075;
+    --focus:#2f6a8f;
+    --r:12px;
+    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#101318; --paper:#191d23; --paper-2:#1f242b; --sunk:#14181d;
+    --border:#2a2f37; --border-strong:#3a404a; --hair:#232830;
+    --ink:#eceef1; --ink-2:#b6bbc3; --ink-3:#848a93;
+    --accent:#6fb0d4; --accent-fg:#0c1418; --accent-soft:#8cc3e2;
+    --attn:#d6a65c; --calm:#7bbd92; --line:#8aa6bd; --focus:#6fb0d4; color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#101318; --paper:#191d23; --paper-2:#1f242b; --sunk:#14181d;
+    --border:#2a2f37; --border-strong:#3a404a; --hair:#232830;
+    --ink:#eceef1; --ink-2:#b6bbc3; --ink-3:#848a93;
+    --accent:#6fb0d4; --accent-fg:#0c1418; --accent-soft:#8cc3e2;
+    --attn:#d6a65c; --calm:#7bbd92; --line:#8aa6bd; --focus:#6fb0d4; color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,p{margin:0}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+  .wrap{width:100%;max-width:760px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+
+  .handling{background:var(--sunk);border-bottom:1px solid var(--border);color:var(--ink-2);font-size:11.5px;letter-spacing:.08em;font-weight:600;text-transform:uppercase}
+  .handling.bottom{border-bottom:0;border-top:1px solid var(--border)}
+  .handling .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:7px}
+  .handling .note{font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--ink-3);font-size:11px}
+
+  .bar{background:var(--bg);border-bottom:1px solid var(--border)}
+  .bar .wrap{display:flex;align-items:center;gap:13px;min-height:58px;padding-block:9px}
+  .logo{display:flex;align-items:center;gap:9px;flex:none}
+  .logo .g{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-weight:600;font-size:15px}
+  .logo b{font-weight:600;font-size:16px}
+  .ask{flex:1;min-width:0;display:flex;align-items:center;gap:9px;height:42px;padding:0 14px;background:var(--paper);border:1px solid var(--border-strong);border-radius:999px}
+  .ask svg{width:17px;height:17px;stroke:var(--ink-3);fill:none;stroke-width:1.8;flex:none}
+  .ask input{border:0;background:transparent;color:var(--ink);font:inherit;font-size:15px;width:100%;outline:none}
+  .ico{width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--border);border-radius:999px;background:var(--paper);color:var(--ink-2);flex:none}
+  .ico:hover{color:var(--ink)} .ico svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7}
+
+  .head{padding-top:30px;display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .head h1{font-family:var(--serif);font-weight:600;font-size:30px;letter-spacing:-.2px}
+  .head .when{color:var(--ink-3);font-size:14px}
+  .summ{margin-top:12px;font-size:16.5px;color:var(--ink-2)}
+  .summ b{color:var(--ink);font-weight:600}
+
+  .sectitle{display:flex;align-items:center;gap:10px;margin:30px 0 14px}
+  .sectitle h2{font-family:var(--serif);font-weight:600;font-size:21px}
+  .sectitle .count{font-size:13px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+
+  /* attention cards */
+  .attncard{background:var(--paper);border:1px solid var(--border);border-left:4px solid var(--attn);border-radius:var(--r);padding:18px 20px;margin-bottom:13px}
+  .ac-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .status{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--ink);border:1px solid var(--border-strong);border-radius:999px;padding:3px 11px}
+  .status .d{width:8px;height:8px;border-radius:999px;flex:none}
+  .d.attn{background:var(--attn)} .d.calm{background:var(--calm)} .d.mute{background:var(--ink-3)}
+  .ac-sub{font-size:13px;color:var(--ink-3);margin-left:auto;font-variant-numeric:tabular-nums}
+  .ac-name{font-family:var(--serif);font-size:21px;font-weight:600;margin-top:11px}
+  .ac-what{font-size:16px;color:var(--ink);margin-top:6px;line-height:1.5}
+  .ac-what b{font-weight:600}
+  .ac-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap}
+  .ac-facts{font-size:13.5px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+  .open{display:inline-flex;align-items:center;gap:8px;height:42px;padding:0 18px;border-radius:999px;background:var(--accent);color:var(--accent-fg);font-weight:600;font-size:14.5px;border:0}
+  .open:hover{background:var(--accent-soft)} .open svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+
+  /* watch list */
+  .list{display:flex;flex-direction:column;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+  .item{display:flex;align-items:center;gap:14px;padding:15px 18px;border-bottom:1px solid var(--hair);min-height:62px;background:none;border-left:0;border-right:0;border-top:0;width:100%;text-align:left;color:inherit}
+  .item:last-child{border-bottom:0}
+  .item:hover{background:var(--paper-2)}
+  .it-main{min-width:0;flex:1}
+  .it-name{font-size:16px;font-weight:600}
+  .it-area{font-size:13px;color:var(--ink-3);margin-top:2px}
+  .it-status{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--ink-2);font-weight:500;flex:none}
+  .it-status .d{width:8px;height:8px;border-radius:999px}
+  .it-when{font-size:12.5px;color:var(--ink-3);flex:none;width:92px;text-align:right;font-variant-numeric:tabular-nums}
+  .it-go{width:18px;height:18px;stroke:var(--ink-3);fill:none;stroke-width:2;flex:none}
+  @media (max-width:560px){.it-when{display:none}.it-status{order:3;width:100%;margin-top:2px}}
+
+  .newbtn{margin-top:18px;display:inline-flex;align-items:center;gap:10px;height:50px;padding:0 22px;border-radius:999px;border:1px solid var(--border-strong);background:var(--paper);color:var(--ink);font-weight:600;font-size:15.5px}
+  .newbtn:hover{border-color:var(--ink-3)} .newbtn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
+
+  .foot{margin:34px 0 10px;padding-top:16px;border-top:1px solid var(--border);color:var(--ink-3);font-size:12.5px;line-height:1.6}
+  .foot b{color:var(--ink-2);font-weight:600}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="handling"><div class="wrap"><span>Handling: Official — for internal use</span><span class="note">example marking · set for each organisation</span></div></div>
+
+<div class="bar">
+  <div class="wrap">
+    <span class="logo"><span class="g">V</span><b>Vestigo</b></span>
+    <label class="ask">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+      <input placeholder="Look into a subject, place, name or link…" aria-label="Look into something">
+    </label>
+    <button class="ico" id="theme" aria-label="Day or night view"><svg id="ti" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg></button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="head">
+    <h1>Your watch</h1>
+    <span class="when">Thursday, 15 October · 2:15 pm</span>
+  </div>
+  <p class="summ"><b>2</b> of your <b>6</b> watched subjects have new activity today. The rest are quiet.</p>
+
+  <div class="sectitle"><h2>Needs your attention</h2><span class="count">2 subjects</span></div>
+
+  <div class="attncard">
+    <div class="ac-top">
+      <span class="status"><span class="d attn"></span>Rising sharply</span>
+      <span class="ac-sub">updated 2:15 pm</span>
+    </div>
+    <div class="ac-name">Water-treaty review</div>
+    <p class="ac-what">Coverage tripled since yesterday and is now reaching <b>Hindi-language outlets</b>. Pakistani outlets are pushing a “treaty violation” message.</p>
+    <div class="ac-foot">
+      <span class="ac-facts">118 reports today · up from 40 yesterday · India &amp; neighbours</span>
+      <button class="open">Open brief <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+
+  <div class="attncard">
+    <div class="ac-top">
+      <span class="status"><span class="d attn"></span>New activity</span>
+      <span class="ac-sub">updated 1:40 pm</span>
+    </div>
+    <div class="ac-name">Border trade corridor</div>
+    <p class="ac-what">First coverage has appeared from <b>Gulf outlets</b> — nothing on this from the region until today.</p>
+    <div class="ac-foot">
+      <span class="ac-facts">23 reports today · first seen this morning · South Asia</span>
+      <button class="open">Open brief <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </div>
+  </div>
+
+  <div class="sectitle"><h2>Everything you're watching</h2><span class="count">6 subjects</span></div>
+  <div class="list">
+    <button class="item">
+      <span class="it-main"><div class="it-name">Water-treaty review</div><div class="it-area">India &amp; neighbours</div></span>
+      <span class="it-status"><span class="d attn"></span>Rising</span>
+      <span class="it-when">2:15 pm</span>
+      <svg class="it-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="item">
+      <span class="it-main"><div class="it-name">Border trade corridor</div><div class="it-area">South Asia</div></span>
+      <span class="it-status"><span class="d attn"></span>New activity</span>
+      <span class="it-when">1:40 pm</span>
+      <svg class="it-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="item">
+      <span class="it-main"><div class="it-name">Port expansion project</div><div class="it-area">Indian Ocean region</div></span>
+      <span class="it-status"><span class="d mute"></span>Settling</span>
+      <span class="it-when">11:20 am</span>
+      <svg class="it-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="item">
+      <span class="it-main"><div class="it-name">Regional election coverage</div><div class="it-area">India</div></span>
+      <span class="it-status"><span class="d calm"></span>Quiet</span>
+      <span class="it-when">this morning</span>
+      <svg class="it-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="item">
+      <span class="it-main"><div class="it-name">Defence exhibition mentions</div><div class="it-area">Worldwide</div></span>
+      <span class="it-status"><span class="d calm"></span>Quiet</span>
+      <span class="it-when">yesterday</span>
+      <svg class="it-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <button class="item">
+      <span class="it-main"><div class="it-name">Supply-chain rumours</div><div class="it-area">South &amp; East Asia</div></span>
+      <span class="it-status"><span class="d calm"></span>No change</span>
+      <span class="it-when">yesterday</span>
+      <svg class="it-go" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+  </div>
+
+  <button class="newbtn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Watch something new</button>
+
+  <div class="foot">
+    <b>Illustrative example for review</b> — not real activity; the handling marking is a placeholder set for each organisation. “Quiet” means checked with little change; a subject with no sources found says so when you open it.
+  </div>
+</div>
+
+<div class="handling bottom"><div class="wrap"><span>Handling: Official — for internal use</span><span class="note">Vestigo · your watch</span></div></div>
+
+<script>
+  (function(){var r=document.documentElement,b=document.getElementById('theme');
+    try{var s=localStorage.getItem('v-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}
+    b.addEventListener('click',function(){var c=r.getAttribute('data-theme');var d=c?c==='dark':matchMedia('(prefers-color-scheme:dark)').matches;var n=d?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('v-theme',n);}catch(e){}});
+  })();
+</script>

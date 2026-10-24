@@ -4,11 +4,15 @@
  * the same recorded fixtures. Never imported by any other file in src/ (lint).
  *
  * The test harness for platform collectors. Tests never touch the network:
- * every declared host of every platform source resolves to a placeholder
- * public address (checked by the fetcher exactly as in production, never
- * contacted), and the socket goes to a loopback server that answers only with
- * recorded fixtures, matched on exact host and path. Anything unmatched is
- * answered 599 and listed, so a test cannot pass on a request it did not expect.
+ * every declared host of every platform source, and every host a fixture is
+ * recorded for, resolves to a placeholder public address (checked by the
+ * fetcher exactly as in production, never contacted), and the socket goes to a
+ * loopback server that answers only with recorded fixtures, matched on exact
+ * host and path. Anything unmatched is answered 599 and listed, so a test
+ * cannot pass on a request it did not expect. Resolving a fixture's host (not
+ * just a declared one) lets an open-host collector reach the host its
+ * authorised target names — the host comes from the target, not a static
+ * source list — while still never contacting it.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders } from "node:http";
@@ -145,7 +149,10 @@ export async function startHarness(options: {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
 
-  const declared = new Set(PLATFORM_SOURCES.flatMap((source) => source.network?.hosts ?? []));
+  const resolvable = new Set([
+    ...PLATFORM_SOURCES.flatMap((source) => source.network?.hosts ?? []),
+    ...options.fixtures.map((fixture) => fixture.request.host),
+  ]);
   const runtime = new CollectorRuntime({
     registry: new CollectorRegistry({ sources: PLATFORM_SOURCES, collectors: options.collectors }),
     ...(options.accessMethods === undefined ? {} : { accessMethods: options.accessMethods }),
@@ -153,7 +160,7 @@ export async function startHarness(options: {
       rateLimiter: options.rateLimiter ?? ALWAYS_ALLOW,
       resolver: (host) =>
         Promise.resolve(
-          declared.has(host) ? [{ address: PLACEHOLDER_ADDRESS, family: 4 as const }] : [],
+          resolvable.has(host) ? [{ address: PLACEHOLDER_ADDRESS, family: 4 as const }] : [],
         ),
       socketFactory: () => connect(port, "127.0.0.1"),
     },

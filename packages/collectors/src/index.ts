@@ -22,6 +22,7 @@ export {
 } from "./access.ts";
 export { PLATFORM_SOURCES } from "./catalogue.ts";
 export {
+  ARTICLE_RESULT,
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
   createPlatformRegistry,

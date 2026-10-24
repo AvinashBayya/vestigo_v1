@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://news.example.com/contact-story",
+    "recordedOn": "2026-10-22",
+    "notes": "Synthetic HTML article whose prose states an email and a URL, for the M4-2 identifier-mention offline test. No real publisher was contacted; example.com/example.org are reserved documentation domains and every value is a placeholder."
+  },
+  "request": { "host": "news.example.com", "path": "/contact-story" },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "text/html; charset=utf-8" },
+    "body": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Contact story</title></head><body><article><h1>Contact story</h1><p>Reach the press desk at press@example.com or read the full report at https://report.example.org/doc-1.</p></article></body></html>"
+  }
+}

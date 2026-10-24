@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://news.example.com/redirecting",
+    "recordedOn": "2026-10-22",
+    "notes": "Synthetic 302 whose Location points off the authorised host, for the exact-article Stage 3 offline test. No real publisher was contacted; it pins that a redirect off the one authorised host is refused by the fetcher (the off-host hop is never connected)."
+  },
+  "request": { "host": "news.example.com", "path": "/redirecting" },
+  "response": {
+    "status": 302,
+    "headers": { "location": "https://evil.example/landing", "content-type": "text/html" },
+    "body": ""
+  }
+}

@@ -1491,9 +1491,12 @@ describe("regressions: cases/case-intelligence-breakdown.ts", () => {
     });
   });
 
-  it("buildCaseIntelligenceBreakdown: the further figures are not built, each null with its input", () => {
+  it("buildCaseIntelligenceBreakdown: CONTRADICTIONS is measured; the further figures are not built, each null with its input", () => {
     // Legacy defaulted an unread media snapshot to "in the case" and showed its
-    // claims and conflicts as counts. None of these inputs exists yet.
+    // claims and conflicts as counts. Contradiction detection is built now
+    // (ENGINE_VERSION 8): TECHINT CONTRADICTIONS is a measured count — zero
+    // here, as the fixture's claims carry no attribute or value to disagree on.
+    // The media and location figures still have no input, so they stay null.
     const metrics = Object.fromEntries(
       breakdown().sections.map((section) => [section.discipline, section.metrics]),
     );
@@ -1501,7 +1504,7 @@ describe("regressions: cases/case-intelligence-breakdown.ts", () => {
       TECHINT: [
         {
           metric: "CONTRADICTIONS",
-          value: { count: null, ids: null, reason: "CONTRADICTION_DETECTION_NOT_BUILT" },
+          value: { count: 0, ids: [] },
         },
       ],
       SOCMINT: [],
@@ -1523,6 +1526,104 @@ describe("regressions: cases/case-intelligence-breakdown.ts", () => {
       ],
       PERSON: [],
     });
+  });
+
+  it("CONTRADICTIONS: counts a discipline's contradicted entities by its own evidence, agreement aside", () => {
+    const withClaims = (extra: CaseInput["claims"]): CaseInput => ({
+      ...CASE,
+      claims: [...CASE.claims, ...extra],
+    });
+    // ev1 and ev2 are the dns collector's evidence (TECHINT). Two claims on one
+    // entity+attribute with different values are a contradiction under TECHINT.
+    const techint = sectionOf(
+      breakdown(
+        withClaims([
+          {
+            id: id("cx1"),
+            evidenceId: id("ev1"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "a_record",
+            value: "192.0.2.1",
+          },
+          {
+            id: id("cx2"),
+            evidenceId: id("ev2"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "OBSERVED",
+            attribute: "a_record",
+            value: "192.0.2.2",
+          },
+        ]),
+      ),
+      "TECHINT",
+    );
+    expect(techint.metrics).toEqual([
+      { metric: "CONTRADICTIONS", value: { count: 1, ids: [id("e1")] } },
+    ]);
+
+    // The same value from two sources is agreement, never a contradiction.
+    const agreeing = sectionOf(
+      breakdown(
+        withClaims([
+          {
+            id: id("cx1"),
+            evidenceId: id("ev1"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "a_record",
+            value: "192.0.2.1",
+          },
+          {
+            id: id("cx2"),
+            evidenceId: id("ev2"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "OBSERVED",
+            attribute: "a_record",
+            value: "192.0.2.1",
+          },
+        ]),
+      ),
+      "TECHINT",
+    );
+    expect(agreeing.metrics).toEqual([{ metric: "CONTRADICTIONS", value: { count: 0, ids: [] } }]);
+
+    // ev4 is the gh collector's evidence (SOCMINT): a contradiction supported
+    // only by it does not count under TECHINT. SOCMINT has no CONTRADICTIONS
+    // metric, so the breakdown shows it nowhere; it is in the analysis's own
+    // `contradictions` (the complete, case-wide set).
+    const socmintOnly = sectionOf(
+      breakdown(
+        withClaims([
+          {
+            id: id("cx1"),
+            evidenceId: id("ev4"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "handle",
+            value: "[a]",
+          },
+          {
+            id: id("cx2"),
+            evidenceId: id("ev4"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "handle",
+            value: "[b]",
+          },
+        ]),
+      ),
+      "TECHINT",
+    );
+    expect(socmintOnly.metrics).toEqual([
+      { metric: "CONTRADICTIONS", value: { count: 0, ids: [] } },
+    ]);
   });
 
   it("BreakdownInput: every input is required, so nothing omitted can default to 'in the case'", () => {

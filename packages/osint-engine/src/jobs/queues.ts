@@ -41,6 +41,7 @@ import { z } from "zod";
 import type { RunFusion } from "../fusion/fuse.ts";
 import { RunNotReadyError, type RunCoordinator } from "../runs.ts";
 import type { ReportGenerator } from "../reports/generator.ts";
+import type { ArticleExtractionProcessor } from "../extraction/processor.ts";
 import type { CaseAnalysisProcessor } from "./case-analysis.ts";
 import { ReportNotRenderableError, type ReportRenderer } from "../reports/renderer.ts";
 import type { CollectorJobProcessor } from "./collector-job.ts";
@@ -54,6 +55,7 @@ export const DEAD_LETTER_QUEUE = "dead-letter";
 export const REPORTS_QUEUE = "reports";
 export const REPORT_RENDERS_QUEUE = "report-renders";
 export const CASE_ANALYSES_QUEUE = "case-analyses";
+export const EXTRACTIONS_QUEUE = "extractions";
 
 /** The queue for one upstream source's collector jobs. */
 export function collectQueueName(sourceId: string): string {
@@ -68,13 +70,23 @@ const CASE_ANALYSIS_MESSAGE = z.strictObject({
   caseAnalysisId: z.uuid(),
   attempt: z.number().int().min(1),
 });
+/** One article prose extraction, keyed to the article collector job it reads. */
+const EXTRACTION_MESSAGE = z.strictObject({ tenantId: z.uuid(), jobId: z.uuid() });
 
 export const DEAD_LETTER_MESSAGE = z.strictObject({
-  kind: z.enum(["INVESTIGATION", "COLLECT", "FUSION", "REPORT", "REPORT_PDF", "CASE_ANALYSIS"]),
+  kind: z.enum([
+    "INVESTIGATION",
+    "COLLECT",
+    "FUSION",
+    "REPORT",
+    "REPORT_PDF",
+    "CASE_ANALYSIS",
+    "EXTRACTION",
+  ]),
   tenantId: z.uuid(),
   /** The run, for kinds INVESTIGATION, COLLECT and FUSION. */
   runId: z.uuid().nullable(),
-  /** The collector job, for kind COLLECT. */
+  /** The collector job, for kind COLLECT; the article job, for kind EXTRACTION. */
   jobId: z.uuid().nullable(),
   /** The report, for kinds REPORT and REPORT_PDF. */
   reportId: z.uuid().nullable(),
@@ -330,6 +342,26 @@ async function enqueueRender(
   );
 }
 
+/**
+ * Enqueues one article job's prose extraction; enqueueing the same job twice
+ * adds it once (jobId `extract-<jobId>`). Bounded. A duplicate delivery is
+ * harmless: the extraction re-checks everything and SKIPs an already-extracted
+ * job, and its claim write is guarded by a unique index.
+ */
+async function enqueueExtraction(
+  queue: Queue,
+  retry: RetryPolicy,
+  tenantId: string,
+  jobId: string,
+  timeoutMs: number,
+): Promise<void> {
+  const message = EXTRACTION_MESSAGE.parse({ tenantId, jobId });
+  await bounded(
+    queue.add("extract", message, { ...deliveryOptions(retry), jobId: `extract-${jobId}` }),
+    timeoutMs,
+  );
+}
+
 /** Adds a run's flow: its collector jobs on their source queues, under one fusion parent. */
 async function addRunFlow(
   flows: FlowProducer,
@@ -511,6 +543,18 @@ export interface WorkerPoolOptions {
     readonly processor: CaseAnalysisProcessor;
     readonly concurrency: number;
   };
+  /**
+   * Article prose extraction (M4-4B). When given, the extractions queue is
+   * consumed with its own bulkhead, and — when `enabled` (a model is
+   * configured) — the fusion worker fans out one extraction per FOUND article
+   * job after a run is fused. Off by default: with no model configured, nothing
+   * is enqueued and successful collection and fusion stand.
+   */
+  readonly extraction?: {
+    readonly processor: ArticleExtractionProcessor;
+    readonly concurrency: number;
+    readonly enabled: boolean;
+  };
   readonly observer?: WorkerPoolObserver;
 }
 
@@ -534,12 +578,17 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
     ...(options.reports === undefined ? [] : [REPORTS_QUEUE]),
     ...(options.renders === undefined ? [] : [REPORT_RENDERS_QUEUE]),
     ...(options.caseAnalyses === undefined ? [] : [CASE_ANALYSES_QUEUE]),
+    ...(options.extraction === undefined ? [] : [EXTRACTIONS_QUEUE]),
     ...collectQueues.keys(),
   ]);
   const flows = new FlowProducer({ connection, prefix });
   const deadLetters = new Queue(DEAD_LETTER_QUEUE, { connection, prefix });
   // Where a generated report's PDF render is enqueued.
   const renderQueue = new Queue(REPORT_RENDERS_QUEUE, { connection, prefix });
+  // Where the fusion worker fans a run's FOUND article jobs out to extraction.
+  // Built only when extraction is wired, like the render queue above.
+  const extractionQueue =
+    options.extraction === undefined ? null : new Queue(EXTRACTIONS_QUEUE, { connection, prefix });
   const settings = { backoffStrategy: backoffStrategy(options.retry) };
   const enqueueTimeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   const observer = options.observer ?? {};
@@ -665,6 +714,23 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
               errorCode: code,
             },
           );
+          return;
+        }
+        if (kind === "EXTRACTION") {
+          const extraction = EXTRACTION_MESSAGE.parse(delivery.data);
+          // No extraction state row to settle: a crashed or terminally failed
+          // extraction simply wrote no claim, and its collected evidence stands.
+          // The dead-letter record is its durable, inspectable trace.
+          await settle(() => Promise.resolve(undefined), {
+            kind,
+            tenantId: extraction.tenantId,
+            runId: null,
+            jobId: extraction.jobId,
+            reportId: null,
+            caseAnalysisId: null,
+            queue,
+            errorCode: code,
+          });
           return;
         }
         const message =
@@ -829,15 +895,67 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
         }
         return { disposition: disposition.kind };
       });
+    } else if (queue === EXTRACTIONS_QUEUE && options.extraction !== undefined) {
+      const { processor, concurrency } = options.extraction;
+      // Model calls are expensive: the bulkhead holds across every worker.
+      const handle = new Queue(queue, { connection, prefix });
+      await handle.setGlobalConcurrency(concurrency);
+      await handle.close();
+      start(queue, "EXTRACTION", concurrency, async (delivery) => {
+        const message = EXTRACTION_MESSAGE.safeParse(delivery.data);
+        if (!message.success) throw new UnrecoverableError("MESSAGE_INVALID");
+        const finalAttempt = delivery.attemptsMade + 1 >= (delivery.opts.attempts ?? 1);
+        const disposition = await processor.process(
+          parseTenantId(message.data.tenantId),
+          message.data.jobId,
+          { attempt: delivery.attemptsMade + 1, finalAttempt },
+        );
+        if (disposition.kind === "RETRY") {
+          throw new JobRetryError(disposition.delayMs, disposition.errorCode);
+        }
+        // A terminal failure (a rejected or invalid answer, or the model
+        // endpoint still down on the last attempt) is dead-lettered with its
+        // code: there is no extraction state row, so the dead-letter record is
+        // its durable trace. Collection and fusion are untouched.
+        if (disposition.kind === "COMPLETED" && disposition.status === "FAILED") {
+          throw new UnrecoverableError(disposition.errorCode ?? "EXTRACTION_FAILED");
+        }
+        return { disposition: disposition.kind };
+      });
     } else if (queue === FUSION_QUEUE) {
       start(queue, "FUSION", options.fusionConcurrency, async (delivery) => {
         const message = RUN_MESSAGE.safeParse(delivery.data);
         if (!message.success) throw new UnrecoverableError("MESSAGE_INVALID");
-        const report = await options.fusion.fuseRun(
-          parseTenantId(message.data.tenantId),
-          message.data.runId,
-        );
-        return { status: report.status, fused: report.fusedJobIds.length };
+        const tenantId = parseTenantId(message.data.tenantId);
+        const report = await options.fusion.fuseRun(tenantId, message.data.runId);
+        // After the run's article evidence is fused and persisted, fan out one
+        // prose extraction per FOUND article job (M4-4B). Only when a model is
+        // configured; enqueueing is keyed by the job, so a redelivery adds each
+        // once, and the extraction re-checks and SKIPs an already-extracted job.
+        let extractionsEnqueued = 0;
+        if (options.extraction?.enabled === true && extractionQueue !== null) {
+          const jobIds = await options.extraction.processor.pendingForRun(
+            tenantId,
+            message.data.runId,
+          );
+          for (const jobId of jobIds) {
+            // Bounded; a failed enqueue does not fail the run's fusion. A later
+            // fusion delivery (a replayed job reopens the run) enqueues it then.
+            await enqueueExtraction(
+              extractionQueue,
+              options.retry,
+              message.data.tenantId,
+              jobId,
+              enqueueTimeoutMs,
+            );
+            extractionsEnqueued += 1;
+          }
+        }
+        return {
+          status: report.status,
+          fused: report.fusedJobIds.length,
+          extractionsEnqueued,
+        };
       });
     } else {
       const sourceId = collectQueues.get(queue);
@@ -876,6 +994,7 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
       await flows.close();
       await deadLetters.close();
       await renderQueue.close();
+      if (extractionQueue !== null) await extractionQueue.close();
     },
   };
 }

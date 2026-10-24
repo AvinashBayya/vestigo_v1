@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://news.example.com/world/story-1",
+    "recordedOn": "2026-10-22",
+    "notes": "Synthetic HTML article for the exact-article Stage 3 offline test. No real publisher was contacted; example.com is the reserved documentation domain (RFC 2606) and every value is a bracketed or obviously-placeholder string. The <title> carries an undecoded entity so the test pins that the reported headline is a verbatim fragment of the bytes while the decoded title is derived."
+  },
+  "request": { "host": "news.example.com", "path": "/world/story-1" },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "text/html; charset=utf-8" },
+    "body": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Placeholder headline for an offline test &amp; nothing real</title><meta property=\"og:title\" content=\"Placeholder headline for an offline test &amp; nothing real\"><meta property=\"article:published_time\" content=\"2026-10-20T09:30:00Z\"><meta name=\"author\" content=\"[Placeholder Byline]\"><meta property=\"og:locale\" content=\"en_GB\"><link rel=\"canonical\" href=\"https://news.example.com/world/story-1\"></head><body><article><h1>Placeholder headline</h1><p>This is the first placeholder paragraph of an article used only for an offline test. It contains no real reporting.</p><p>A second placeholder paragraph, also invented for the test.</p></article></body></html>"
+  }
+}

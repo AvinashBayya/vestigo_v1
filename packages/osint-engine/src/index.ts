@@ -81,6 +81,7 @@ export {
   collectQueueName,
   DEAD_LETTER_MESSAGE,
   DEAD_LETTER_QUEUE,
+  EXTRACTIONS_QUEUE,
   FUSION_QUEUE,
   INVESTIGATIONS_QUEUE,
   InvestigationQueue,
@@ -136,6 +137,26 @@ export {
   type AssemblyInput,
   type AssemblyLimits,
 } from "./reports/assemble.ts";
+export {
+  ARTICLE_EXTRACTION_PROMPT_VERSION,
+  EXTRACTION_SUBJECT_TYPES,
+  extractArticleStatements,
+  MAX_ARTICLE_STATEMENTS,
+  type ArticleExtraction,
+  type ArticleStatement,
+  type ExtractionSubjectType,
+} from "./extraction/article-extraction.ts";
+export {
+  ARTICLE_STATEMENTS_ATTRIBUTE,
+  runArticleExtraction,
+  type ArticleExtractionDeps,
+  type ArticleExtractionDisposition,
+} from "./extraction/run.ts";
+export {
+  ArticleExtractionProcessor,
+  type ArticleExtractionProcessorOptions,
+  type ExtractionDisposition,
+} from "./extraction/processor.ts";
 export { coveragePlan } from "./reports/stored-plan.ts";
 export { canonicalJson, CanonicalFormError, sha256Of } from "./case-analysis/canonical.ts";
 export { caseAnalysisCollectors, type CaseAnalysisCollectors } from "./case-analysis/collectors.ts";
@@ -167,3 +188,4 @@ export {
   type ReportRenderDisposition,
   type ReportRendererOptions,
 } from "./reports/renderer.ts";
+export { resolveScopeClearance, type ScopeAuthorisationLookup } from "./scope.ts";

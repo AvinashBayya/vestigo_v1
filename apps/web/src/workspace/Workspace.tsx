@@ -22,7 +22,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import {
   createContext,
   useCallback,
@@ -82,6 +82,23 @@ export const TAB_TEXT: Readonly<Record<WorkspaceTab, string>> = {
 export const TAB_LIST_WORDS = `${WORKSPACE_TABS.slice(0, -1)
   .map((tab) => TAB_TEXT[tab])
   .join(", ")} and ${TAB_TEXT.report}`;
+
+const isTab = (value: string): value is WorkspaceTab =>
+  (RUN_TABS as readonly string[]).includes(value);
+
+/** The `/runs/$runId/$tab` route's component (router.tsx): a run's results, or a tab it does not have. */
+export function RunResultsRoute() {
+  const { runId, tab } = useParams({ from: "/runs/$runId/$tab" });
+  if (!isTab(tab)) return <UnknownTab scope={{ kind: "run", id: runId }} tab={tab} />;
+  return <Workspace key={runId} scope={{ kind: "run", id: runId }} tab={tab} />;
+}
+
+/** The `/cases/$caseId/$tab` route's component (router.tsx): a case's pins, or a tab it does not have. */
+export function CaseRoute() {
+  const { caseId, tab } = useParams({ from: "/cases/$caseId/$tab" });
+  if (!isTab(tab)) return <UnknownTab scope={{ kind: "case", id: caseId }} tab={tab} />;
+  return <Workspace key={caseId} scope={{ kind: "case", id: caseId }} tab={tab} />;
+}
 
 /**
  * The frame's side columns, filled by a tab through a portal: the runs rail at

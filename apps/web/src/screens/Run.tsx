@@ -21,7 +21,7 @@ import {
   type RunLock,
 } from "@repo/ui";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { ApiProblem } from "../api.ts";
 import { collectorsQuery, DISCIPLINE_TEXT, type Collector } from "../collectors.ts";
@@ -73,6 +73,12 @@ const VETTING_TEXT: Readonly<Record<VettingStatus, string>> = {
 /** A refusal at connect that says the run does not exist (or is not this organisation's). */
 const isNotFound = (error: unknown): boolean =>
   error instanceof ApiProblem && (error.status === 404 || error.code === "NOT_FOUND");
+
+/** The `/runs/$runId` route's component (router.tsx): a fresh screen for each run. */
+export function RunRoute() {
+  const { runId } = useParams({ from: "/runs/$runId" });
+  return <RunScreen key={runId} runId={runId} />;
+}
 
 /**
  * A run's live progress (docs/design/mockups/RunLive.dc.html), full-bleed: the

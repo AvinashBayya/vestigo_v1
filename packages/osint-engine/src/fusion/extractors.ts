@@ -22,6 +22,7 @@
  *     is the order the collector cited its responses in.
  */
 import {
+  ARTICLE_RESULT,
   BLUESKY_SEARCH_RESULT,
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
@@ -470,6 +471,55 @@ const news: Extractor = ({ result }) => {
 };
 
 /**
+ * article (direct fetch): the one article URL is the entity, and the page's
+ * own fields become claims on it — the raw <title> a REPORTED claim (the one
+ * value quoted verbatim from the bytes), everything the extractor parsed a
+ * DERIVED claim (a parse of those bytes — article.ts). The publisher's host is
+ * a DOMAIN entity the article is `published_by`.
+ *
+ * Distinct from the GDELT `news` extractor by construction: its own `article_*`
+ * attributes and its own evidence, so a direct fetch and an aggregator's listing
+ * of the same URL stay separable on the one shared URL entity. No entity is made
+ * from a title or an author name — a headline can name a person, and a person is
+ * never resolved by a name (./identifiers.ts). One evidence row backs every
+ * claim: the article response (index 0).
+ */
+const article: Extractor = ({ target, result }) => {
+  const r = ARTICLE_RESULT.parse(result);
+  const d = new Drafts();
+  const url = targetEntity(d, target);
+  d.claim(url, "article_headline", ["headline"], 0);
+  d.claim(url, "article_title", ["derived", "title"], 0);
+  d.claim(url, "article_author", ["derived", "author"], 0);
+  d.claim(url, "article_language", ["derived", "language"], 0);
+  d.claim(url, "article_published_at", ["derived", "publishedAt"], 0);
+  d.claim(url, "article_canonical_url", ["derived", "canonicalUrl"], 0);
+  d.claim(url, "article_dedup_key", ["derived", "dedupKey"], 0);
+  d.claim(url, "article_extraction_status", ["derived", "extractionStatus"], 0);
+  const outlet = d.entity(
+    "DOMAIN",
+    normaliseDomain(r.derived.outletDomain),
+    r.derived.outletDomain,
+  );
+  d.relate(url, outlet, "published_by", 0, ["derived", "outletDomain"]);
+  // Identifier mentions in the article's text (article.ts / article-extract.ts):
+  // each becomes an entity resolved by its identifier and a `mentions` edge from
+  // the article, grounded in the article evidence. A mention is an edge, never a
+  // claim on an entity, so a value stated by several articles stays corroboration
+  // in the graph and is never read as a contradiction (contradiction review
+  // compares entity claims only). No person, organisation or place is drawn — a
+  // name never resolves one (./identifiers.ts).
+  r.derived.mentions.forEach((mention, index) => {
+    const identifier =
+      mention.kind === "URL" ? normaliseUrl(mention.value) : normaliseEmail(mention.value);
+    if (identifier === null) return;
+    const mentioned = d.entity(mention.kind, identifier, mention.value);
+    d.relate(url, mentioned, "mentions", 0, ["derived", "mentions", index, "value"]);
+  });
+  return d.build();
+};
+
+/**
  * The monitoring collectors (2026-10-17: Bluesky and Reddit search, and one
  * RSS collector per publisher): each result is checked, and nothing is drawn
  * from it yet, as from news. Their items become items, with their authors,
@@ -502,6 +552,7 @@ export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   devto,
   commoncrawl,
   news,
+  article,
   "bluesky.search": checkedOnly(BLUESKY_SEARCH_RESULT),
   "reddit.search": checkedOnly(REDDIT_SEARCH_RESULT),
   ...Object.fromEntries(RSS_COLLECTORS.map((collector) => [collector.declaration.id, rss])),

@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://news.example.com/data",
+    "recordedOn": "2026-10-22",
+    "notes": "Synthetic 200 whose body is JSON, not HTML, for the exact-article Stage 3 offline test. No real publisher was contacted; it pins that a 200 is not treated as an article unless its content type is HTML."
+  },
+  "request": { "host": "news.example.com", "path": "/data" },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "application/json" },
+    "body": "{\"note\":\"[placeholder json, not an article]\"}"
+  }
+}

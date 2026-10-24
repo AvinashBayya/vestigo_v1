@@ -13,7 +13,7 @@
  * is gated in the worker by @repo/access; and a hung or failing case analysis
  * holds only its own queue's slots (R1-b).
  */
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { connect, type AddressInfo } from "node:net";
@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
+  ARTICLE_RESULT,
   CollectorRegistry,
   CollectorRuntime,
   defineCollector,
@@ -1777,5 +1778,272 @@ describe("a topic run on the monitoring collectors, end to end (RELEASE-BLOCKING
     } finally {
       await harness.close();
     }
+  });
+});
+
+// ── Exact-article evidence persistence (M2) ───────────────────────────────
+
+/**
+ * The exact-article path end to end through the real database: an ACTIVE
+ * open-host collector, cleared for a URL by an in-force DOMAIN authorisation,
+ * fetched over the SSRF-hardened path from a recorded fixture (no real
+ * publisher), extracted, and persisted as canonical evidence that a tenant-
+ * scoped read returns with its provenance — the same read the evidence API
+ * makes. The source is UNVERIFIED, so this runs only because the harness
+ * replays recorded answers; no deployment runs it. Fixtures are synthetic, on
+ * the reserved example.com documentation domain.
+ */
+describe("the exact-article path persists retrievable, tenant-scoped evidence (exact-article M2)", () => {
+  const ARTICLE_HOST = "news.example.com";
+  const ARTICLE_URL = "https://news.example.com/world/story-1";
+  const PUBLISHED_AT = "2026-10-20T09:30:00.000Z";
+  // The one value quoted verbatim from the bytes: the raw <title>, entity undecoded.
+  const RAW_HEADLINE = "Placeholder headline for an offline test &amp; nothing real";
+  const DERIVED_ATTRIBUTES = [
+    "article_title",
+    "article_author",
+    "article_language",
+    "article_published_at",
+    "article_canonical_url",
+    "article_dedup_key",
+    "article_extraction_status",
+  ];
+
+  let harness: Harness;
+  let engine: Engine;
+  let tenant: { tenantId: TenantId; userId: string };
+  let runId: string;
+  let evidenceId = "";
+  let contentHash = "";
+
+  /** An in-force DOMAIN authorisation for a host, created as an authorised member would. */
+  const authoriseDomain = (who: { tenantId: TenantId; userId: string }, host: string) =>
+    db.withTenant(who.tenantId, ({ repos }) =>
+      repos.scopeAuthorisations.create({
+        targetType: "DOMAIN",
+        target: host,
+        authorisedByUserId: who.userId,
+        basis: "[signed engagement letter, offline test]",
+        validFrom: new Date("2020-01-01T00:00:00Z"),
+        validUntil: new Date("2090-01-01T00:00:00Z"),
+      }),
+    );
+
+  beforeAll(async () => {
+    harness = await startHarness({
+      collectors: platform(["article"]),
+      // An article and a non-article (JSON) response, both on the one authorised host.
+      fixtures: [
+        loadFixture("article", "found"),
+        loadFixture("article", "not-html"),
+        loadFixture("article", "with-mentions"),
+      ],
+    });
+    engine = await startEngine(harness.runtime);
+    tenant = await newTenant("article");
+    await authoriseDomain(tenant, ARTICLE_HOST);
+    runId = await startRun(engine, tenant, ARTICLE_URL);
+    await finishedRun(tenant.tenantId, runId);
+    const ids = byCollector(await jobsOf(tenant.tenantId, runId), "article").evidenceIds ?? [];
+    if (ids.length !== 1) {
+      throw new Error(`expected one article evidence row, got ${JSON.stringify(ids)}`);
+    }
+    evidenceId = ids[0] ?? "";
+    contentHash = `sha256:${createHash("sha256")
+      .update(Buffer.from(loadFixture("article", "found").response.body, "utf8"))
+      .digest("hex")}`;
+  }, 60_000);
+
+  afterAll(async () => {
+    await engine.close();
+    await harness.close();
+  });
+
+  it("plans and runs the ACTIVE article collector on the URL, cleared by the DOMAIN authorisation", async () => {
+    const run = await db.withTenant(tenant.tenantId, ({ repos }) => repos.runs.findById(runId));
+    expect(run?.status).toBe("SUCCEEDED");
+    const plan = z
+      .object({
+        detected: z.object({ primaryType: z.string() }),
+        jobs: z.array(
+          z.object({
+            collectorId: z.string(),
+            target: z.object({ type: z.string(), value: z.string() }),
+          }),
+        ),
+      })
+      .parse(run?.plan);
+    // A pasted URL is detected URL-primary; the article collector is planned on it.
+    expect(plan.detected.primaryType).toBe("URL");
+    expect(plan.jobs).toEqual([
+      { collectorId: "article", target: { type: "URL", value: ARTICLE_URL } },
+    ]);
+    const job = byCollector(await jobsOf(tenant.tenantId, runId), "article");
+    expect([job.status, job.outcome]).toEqual(["SUCCEEDED", "FOUND"]);
+    expect(job.evidenceIds).toHaveLength(1);
+    expect(job.fusedAt).not.toBeNull();
+    expect(harness.unmatched).toEqual([]);
+  });
+
+  it("persists one evidence row: the exact URL, the stated publish time (not the retrieval time), and the content hash", async () => {
+    const evidence = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.evidence.findById(evidenceId),
+    );
+    expect(evidence).not.toBeNull();
+    if (evidence === null) return;
+    expect(evidence.collectorId).toBe("article");
+    expect(evidence.collectorVersion).toBe("1.0.0");
+    expect(evidence.sourceUrl).toBe(ARTICLE_URL);
+    expect(evidence.jobId).not.toBeNull();
+    expect(evidence.claimStrength).toBe("REPORTED");
+    expect(evidence.contentHash).toBe(contentHash);
+    // Publication time is the page's stated time; retrieval time is measured, and later.
+    expect(evidence.observedAt?.toISOString()).toBe(PUBLISHED_AT);
+    const { observedAt, collectedAt } = evidence;
+    expect(collectedAt).toBeInstanceOf(Date);
+    expect(observedAt).toBeInstanceOf(Date);
+    if (collectedAt !== null && observedAt !== null) {
+      expect(collectedAt.getTime()).toBeGreaterThan(observedAt.getTime());
+    }
+    // The label is the registry's own — "Direct article fetch", never a publisher
+    // string and never GDELT's. This is what the evidence API shows as sourceLabel.
+    expect(harness.runtime.registry.entry("article").label).toBe("Direct article fetch");
+  });
+
+  it("stores the raw bytes, retrievable from the content store and re-hashed on read", async () => {
+    // The same read the payload-download API makes: get() re-hashes and throws on mismatch.
+    const bytes = await contentStore.get(tenant.tenantId, contentHash);
+    expect(new TextDecoder().decode(bytes)).toBe(loadFixture("article", "found").response.body);
+  });
+
+  it("separates stated (verbatim) from derived (parsed) claims, each citing the evidence", async () => {
+    const claims = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.claims.listForEvidence([evidenceId], { limit: 500 }),
+    );
+    expect(claims.length).toBeGreaterThan(0);
+    for (const claim of claims) expect(claim.evidenceId).toBe(evidenceId);
+    const byAttribute = new Map(claims.map((claim) => [claim.attribute, claim]));
+
+    // The one stated value is the raw <title>, at the evidence's REPORTED strength.
+    expect(byAttribute.get("article_headline")?.strength).toBe("REPORTED");
+    expect(byAttribute.get("article_headline")?.value).toBe(RAW_HEADLINE);
+    // Everything the parser produced is DERIVED, never presented as the source's own.
+    for (const attribute of DERIVED_ATTRIBUTES) {
+      expect(byAttribute.get(attribute)?.strength, attribute).toBe("DERIVED");
+    }
+    // The extraction status is recorded honestly (this fixture has body text).
+    expect(byAttribute.get("article_extraction_status")?.value).toBe("FULL_TEXT");
+    expect(byAttribute.get("article_published_at")?.value).toBe(PUBLISHED_AT);
+    // Mirrors the evidence API's stated/derived split: only the headline is stated.
+    expect(claims.filter((claim) => claim.strength !== "DERIVED").map((c) => c.attribute)).toEqual([
+      "article_headline",
+    ]);
+  });
+
+  it("fuses the article URL entity and its publisher outlet, with the article's own attributes", async () => {
+    const { entities, relationships } = await db.withTenant(tenant.tenantId, async ({ repos }) => ({
+      entities: await repos.entities.list({ limit: 1000 }),
+      relationships: await repos.entityRelationships.list({ limit: 1000 }),
+    }));
+    const urls = entities.filter((entity) => entity.kind === "URL");
+    expect(urls.map((entity) => entity.displayName)).toEqual([ARTICLE_URL]);
+    expect(
+      entities.filter((entity) => entity.kind === "DOMAIN" && entity.identifier === ARTICLE_HOST),
+    ).toHaveLength(1);
+    // No entity is invented from a headline or an author name.
+    expect(
+      entities.some((entity) => entity.kind === "PERSON" || entity.kind === "ORGANIZATION"),
+    ).toBe(false);
+    expect(relationships.map((relationship) => relationship.kind)).toEqual(["published_by"]);
+  });
+
+  it("does not duplicate evidence when a finished job is delivered again", async () => {
+    const before = await evidenceIdsOf(tenant.tenantId);
+    const job = byCollector(await jobsOf(tenant.tenantId, runId), "article");
+    expect(
+      await engine.processor.process(tenant.tenantId, job.id, { finalAttempt: false }),
+    ).toEqual({ kind: "SKIPPED", status: "SUCCEEDED" });
+    expect(await evidenceIdsOf(tenant.tenantId)).toEqual(before);
+  });
+
+  it("isolates the evidence to the tenant that collected it", async () => {
+    const other = await newTenant("article-other");
+    const seen = await db.withTenant(other.tenantId, ({ repos }) =>
+      repos.evidence.list({ limit: 1000 }),
+    );
+    expect(seen).toEqual([]);
+  });
+
+  it("records no evidence for a refused retrieval or a failed one", async () => {
+    // Refused: a URL whose host has no authorisation is excluded at planning,
+    // never fetched, and no evidence is written.
+    const refused = await startRun(engine, tenant, "https://unauthorised.example/story");
+    expect((await finishedRun(tenant.tenantId, refused))?.status).toBe("FAILED");
+    const refusedPlan = z
+      .object({
+        excluded: z.array(z.object({ collectorId: z.string(), reason: z.string() })),
+      })
+      .parse(
+        (await db.withTenant(tenant.tenantId, ({ repos }) => repos.runs.findById(refused)))?.plan,
+      );
+    expect(refusedPlan.excluded).toContainEqual(
+      expect.objectContaining({ collectorId: "article", reason: "SCOPE_AUTHORISATION_REQUIRED" }),
+    );
+    expect(await jobsOf(tenant.tenantId, refused)).toEqual([]);
+
+    // Failed: an authorised URL whose response is not an article fails the job,
+    // and still writes no evidence — a failure never becomes a false success.
+    const before = await evidenceIdsOf(tenant.tenantId);
+    const failed = await startRun(engine, tenant, "https://news.example.com/data");
+    expect((await finishedRun(tenant.tenantId, failed))?.status).toBe("FAILED");
+    const job = byCollector(await jobsOf(tenant.tenantId, failed), "article");
+    expect([job.status, job.outcome, job.lastErrorCode]).toEqual([
+      "FAILED",
+      "FAILED",
+      "UPSTREAM_RESPONSE_INVALID",
+    ]);
+    expect(job.evidenceIds).toBeNull();
+    expect(await evidenceIdsOf(tenant.tenantId)).toEqual(before);
+  });
+
+  it("retains the article text and fuses its identifier mentions into the graph (M4-2)", async () => {
+    const mentionsUrl = "https://news.example.com/contact-story";
+    const mentionsRun = await startRun(engine, tenant, mentionsUrl);
+    expect((await finishedRun(tenant.tenantId, mentionsRun))?.status).toBe("SUCCEEDED");
+    const job = byCollector(await jobsOf(tenant.tenantId, mentionsRun), "article");
+    expect([job.status, job.outcome]).toEqual(["SUCCEEDED", "FOUND"]);
+    expect(job.fusedAt).not.toBeNull();
+
+    // The body text and its identifier mentions are retained in the stored result.
+    const result = ARTICLE_RESULT.parse(job.result);
+    expect(result.derived.bodyText).toContain("press desk");
+    expect(result.derived.mentions.map((mention) => [mention.kind, mention.value])).toEqual([
+      ["EMAIL_ADDRESS", "press@example.com"],
+      ["URL", "https://report.example.org/doc-1"],
+    ]);
+
+    // The mentioned identifiers are persisted entities, linked from the article
+    // by a `mentions` edge — text-derived intelligence reaches the real graph.
+    const { entities, relationships } = await db.withTenant(tenant.tenantId, async ({ repos }) => ({
+      entities: await repos.entities.list({ limit: 1000 }),
+      relationships: await repos.entityRelationships.list({ limit: 1000 }),
+    }));
+    const article = entities.find((e) => e.kind === "URL" && e.displayName === mentionsUrl);
+    const mentionedUrl = entities.find(
+      (e) => e.kind === "URL" && e.displayName === "https://report.example.org/doc-1",
+    );
+    const mentionedEmail = entities.find(
+      (e) => e.kind === "EMAIL_ADDRESS" && e.displayName === "press@example.com",
+    );
+    expect(article).toBeDefined();
+    expect(mentionedUrl).toBeDefined();
+    expect(mentionedEmail).toBeDefined();
+    const mentionEdges = relationships.filter(
+      (relationship) =>
+        relationship.kind === "mentions" && relationship.sourceEntityId === article?.id,
+    );
+    expect(new Set(mentionEdges.map((relationship) => relationship.targetEntityId))).toEqual(
+      new Set([mentionedUrl?.id, mentionedEmail?.id]),
+    );
   });
 });

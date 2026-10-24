@@ -48,6 +48,7 @@ import {
   type CollectorDiscipline,
 } from "@repo/core";
 import { ENGINE_VERSION } from "../version.ts";
+import { caseContradictions, type CaseContradictions } from "./case-contradictions.ts";
 import { type CaseInput } from "./case-input.ts";
 import {
   byStrength,
@@ -312,9 +313,35 @@ function unionByStrength(
   return byStrength(records);
 }
 
+/**
+ * The CONTRADICTIONS metric for a discipline: the entities whose stored claims
+ * disagree on an attribute, counted where at least one conflicting position is
+ * supported by this discipline's evidence (so a contradiction counts under
+ * every discipline whose evidence backs it — the ENTITY_AND_RELATIONSHIP_COUNTS_OVERLAP
+ * caveat). The full positions, with their evidence and strengths, are the
+ * analysis's `contradictions`; this is the per-discipline pointer to the
+ * entities to inspect. Zero means detection ran and this discipline's claims
+ * disagree on nothing — never that detection is not built.
+ */
+function contradictedEntities(
+  contradictions: CaseContradictions,
+  disciplineEvidence: ReadonlySet<string>,
+): Counted {
+  return counted(
+    contradictions.items
+      .filter((item) =>
+        item.positions.some((position) =>
+          position.evidenceIds.some((evidenceId) => disciplineEvidence.has(evidenceId)),
+        ),
+      )
+      .map((item) => item.entityId),
+  );
+}
+
 function section(
   discipline: CollectorDiscipline,
   all: readonly CaseCollector[],
+  contradictions: CaseContradictions,
 ): DisciplineSection {
   const collectors = all.filter((collector) => collector.discipline === discipline);
   // Only collectors the registry does not list as BLOCKED, NOT_IMPLEMENTED or
@@ -411,10 +438,13 @@ function section(
     relationships: count(union(collectors, (collector) => collector.relationships)),
     evidenceByStrength: reason === null ? unionByStrength(collectors, "evidence") : null,
     claimsByStrength: reason === null ? unionByStrength(collectors, "claims") : null,
-    metrics: DISCIPLINE_METRICS[discipline].map((metric) => ({
-      metric,
-      value: { count: null, ids: null, reason: METRIC_NOT_BUILT[metric] },
-    })),
+    metrics: DISCIPLINE_METRICS[discipline].map((metric) =>
+      // CONTRADICTIONS is built (ENGINE_VERSION 8): a measured count of this
+      // discipline's contradicted entities. The rest are not built yet.
+      metric === "CONTRADICTIONS"
+        ? { metric, value: contradictedEntities(contradictions, new Set(evidence.ids)) }
+        : { metric, value: { count: null, ids: null, reason: METRIC_NOT_BUILT[metric] } },
+    ),
     collectors: {
       registered: registered.map(ref),
       ran: inGroup(
@@ -455,6 +485,7 @@ export function caseBreakdown(input: CaseInput): CaseBreakdown | EmptyCase {
   const view = caseView(input);
   if ("kind" in view) return view;
 
+  const contradictions = caseContradictions(input);
   const notRegistered = view.collectors.filter((collector) => collector.discipline === null);
   const about = new Set(
     input.claims.flatMap((claim) => [
@@ -466,7 +497,9 @@ export function caseBreakdown(input: CaseInput): CaseBreakdown | EmptyCase {
     kind: "CASE_BREAKDOWN",
     engineVersion: ENGINE_VERSION,
     caseId: view.caseId,
-    sections: COLLECTOR_DISCIPLINES.map((discipline) => section(discipline, view.collectors)),
+    sections: COLLECTOR_DISCIPLINES.map((discipline) =>
+      section(discipline, view.collectors, contradictions),
+    ),
     notRegistered: {
       collectors: notRegistered.map(ref),
       evidence: union(notRegistered, (collector) => collector.evidence),

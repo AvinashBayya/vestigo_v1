@@ -5,26 +5,46 @@
  * the recorded IANA bootstrap snapshot.
  */
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { RDAP_REGISTRY_HOSTS } from "../../src/data/rdap-registry-hosts.ts";
 import {
   COLLECTOR_USER_AGENT,
   defineCollector,
+  forbiddenPlatformDomainOf,
+  PLATFORM_COLLECTORS,
   PLATFORM_SOURCES,
   type Collector,
 } from "../../src/index.ts";
 import { allFixturePaths, FIXTURE, startHarness, type Fixture, type Harness } from "./harness.ts";
 
 const DECLARED = new Set(PLATFORM_SOURCES.flatMap((source) => source.network?.hosts ?? []));
+// A collector whose source is open-host names no static host: its fixtures name
+// the host the authorised target would (the host comes from the target, not a
+// declared list), so they are exempt from the declared-host check — but still
+// never a platform that is never contacted (CLAUDE.md §3).
+const OPEN_HOST_SOURCES = new Set(
+  PLATFORM_SOURCES.filter((source) => source.network?.openHost === true).map((source) => source.id),
+);
+const OPEN_HOST_COLLECTORS = new Set(
+  PLATFORM_COLLECTORS.filter((collector) =>
+    OPEN_HOST_SOURCES.has(collector.declaration.source),
+  ).map((collector) => collector.declaration.id),
+);
 
 describe("fixtures", () => {
   it("every fixture file has a valid shape and says where it came from", () => {
     for (const path of allFixturePaths()) {
       const parsed = FIXTURE.safeParse(JSON.parse(readFileSync(path, "utf8")));
       expect(parsed.success, path).toBe(true);
-      if (parsed.success) expect(DECLARED.has(parsed.data.request.host), path).toBe(true);
+      if (!parsed.success) continue;
+      const host = parsed.data.request.host;
+      if (OPEN_HOST_COLLECTORS.has(basename(dirname(path)))) {
+        expect(forbiddenPlatformDomainOf(host), path).toBeNull();
+      } else {
+        expect(DECLARED.has(host), path).toBe(true);
+      }
     }
   });
 });

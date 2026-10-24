@@ -43,6 +43,10 @@ export interface CaseScopeRecords {
     readonly entityId: string | null;
     readonly relationshipId: string | null;
     readonly strength: ClaimStrength;
+    /** The attribute the claim is about, as stored; contradiction review reads it. */
+    readonly attribute: string;
+    /** The value asserted, as stored (jsonb); `null` is a stated null. */
+    readonly value: unknown;
   }[];
   readonly entityIds: readonly string[];
   readonly relationshipIds: readonly string[];
@@ -123,6 +127,8 @@ export class CaseScopeRepository extends TenantRepository {
           entityId: claims.entityId,
           relationshipId: claims.relationshipId,
           strength: claims.strength,
+          attribute: claims.attribute,
+          value: claims.value,
         })
         .from(claims)
         .where(and(eq(claims.tenantId, tenantId), sql`${claims.id} in (${claimIds})`))

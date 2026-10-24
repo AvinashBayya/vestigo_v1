@@ -28,6 +28,28 @@ function domain(value: string): string | null {
   return DNS_NAME.test(hostname) ? hostname : null;
 }
 
+/**
+ * A DOMAIN target: a bare domain as written, or — when given a full http(s)
+ * URL — the URL's host. An analyst can paste a news article URL and treat it
+ * as its publisher's domain (the detection offers DOMAIN as a URL's alternate,
+ * core/target-detection.ts), so a domain collector (e.g. GDELT news) runs on
+ * the host rather than being handed the whole URL and refusing it as malformed.
+ *
+ * Only this target type accepts a URL. `domain()` itself stays strict, so an
+ * email address's domain part can never be a URL, and nothing else that
+ * validates a domain is loosened. A URL carrying credentials is refused, as
+ * the URL target rule refuses one.
+ */
+function domainTarget(value: string): string | null {
+  const trimmed = value.trim();
+  if (/^https?:\/\//i.test(trimmed) && URL.canParse(trimmed)) {
+    const parsed = new URL(trimmed);
+    if (parsed.username !== "" || parsed.password !== "") return null;
+    return domain(parsed.hostname);
+  }
+  return domain(trimmed);
+}
+
 function ipAddress(value: string): string | null {
   if (parseIPv4(value) !== null) return value;
   if (parseIPv6(value) === null) return null;
@@ -56,7 +78,7 @@ function url(value: string): string | null {
 function normalise(type: TargetType, value: string): string | null {
   switch (type) {
     case "DOMAIN":
-      return domain(value);
+      return domainTarget(value);
     case "IP_ADDRESS":
       return ipAddress(value);
     case "EMAIL_ADDRESS":

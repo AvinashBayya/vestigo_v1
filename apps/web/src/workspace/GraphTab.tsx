@@ -5,15 +5,15 @@ import {
   GraphShell,
   GraphToolbarButton,
   Notice,
+  Skeleton,
   StrengthBadge,
   type GraphShellState,
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProblemNotice } from "../components/ProblemNotice.tsx";
 import { plural } from "../components/Values.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
-import { CytoscapeGraph } from "./graph/CytoscapeGraph.tsx";
 import { GraphRail } from "./graph/GraphRail.tsx";
 import type { GraphSelection } from "./graph/types.ts";
 import { PinButton, usePinState } from "./Pin.tsx";
@@ -36,6 +36,28 @@ const allInferred = (edge: GraphEdge) =>
   edge.strengths.length > 0 && edge.strengths.every((strength) => strength === "INFERRED");
 
 /**
+ * The renderer, and Cytoscape with it, is downloaded only where a graph is
+ * drawn: no other tab or route carries it. A failed download is thrown where
+ * the graph is drawn, to the router's error component.
+ */
+const loadRenderer = () => import("./graph/CytoscapeGraph.tsx");
+const CytoscapeGraph = lazy(() =>
+  loadRenderer().then((module) => ({ default: module.CytoscapeGraph })),
+);
+
+/** While the renderer downloads: the canvas's shape, as the shell draws loading (§8), never a spinner. */
+function RendererPending() {
+  return (
+    <div className="flex aspect-video w-full flex-col gap-3 p-4 pt-16" aria-busy="true">
+      <p role="status" className="text-caption text-ink-muted">
+        Preparing to draw the graph.
+      </p>
+      <Skeleton className="grow" />
+    </div>
+  );
+}
+
+/**
  * The Graph tab (docs/design/mockups/Workspace.dc.html, centre and right):
  * the graph shell around the Cytoscape canvas, with the hop reach and "Hide
  * inferred" over it, the legend in words, the same graph as a list under it
@@ -46,6 +68,11 @@ export function GraphTab({ scope }: { readonly scope: Scope }) {
   const [hops, setHops] = useState<number>(1);
   const [hideInferred, setHideInferred] = useState(false);
   const graph = useQuery(graphQuery(scope, hops));
+  useEffect(() => {
+    // The renderer downloads alongside the graph's read, not after it. Nothing is
+    // lost on a failure here: the lazy import meets it again where the graph is drawn.
+    loadRenderer().catch(() => undefined);
+  }, []);
   const open = useProvenance();
   const resetProvenance = useProvenanceReset();
   const current = useProvenanceCurrent();
@@ -145,13 +172,15 @@ export function GraphTab({ scope }: { readonly scope: Scope }) {
     state = {
       kind: "ready",
       renderer: (
-        <CytoscapeGraph
-          nodes={nodes}
-          edges={shownEdges}
-          selected={selected}
-          onSelect={onSelect}
-          className="aspect-video w-full"
-        />
+        <Suspense fallback={<RendererPending />}>
+          <CytoscapeGraph
+            nodes={nodes}
+            edges={shownEdges}
+            selected={selected}
+            onSelect={onSelect}
+            className="aspect-video w-full"
+          />
+        </Suspense>
       ),
     };
   }

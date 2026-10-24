@@ -12,6 +12,8 @@ import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import type { Mock } from "vitest";
 import type { SessionState } from "../api.ts";
 import { createAppRouter } from "../router.tsx";
+// Every screen the router loads on demand, loaded with these tests (see test-screens.ts).
+import "../test-screens.ts";
 
 export type Handler = (
   request: Request,

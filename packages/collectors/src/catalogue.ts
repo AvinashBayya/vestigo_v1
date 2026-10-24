@@ -827,6 +827,37 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     attribution: null,
   },
 
+  // ── Direct article fetch: the one open-host source ─────────────────────
+  // A direct article fetch reaches whatever publisher the tenant authorised
+  // (per publisher domain, Stage 1 of the exact-article work), so its host is
+  // not a fixed list: it comes from the authorised target, and the fetch is
+  // bound to that one host (openHost, runtime.ts + fetcher). No single
+  // commercial-use verdict covers every publisher, so it is UNVERIFIED and
+  // never runs in a deployment; the exact-article path is proven offline
+  // (docs/M1_DIRECT_ARTICLE_FETCH_REPORT.md) and a per-publisher verdict is
+  // recorded before any real publisher is enabled. https only; it names no
+  // operator (its host varies per target), so evidence it would produce is
+  // still labelled by this source, never by a publisher-supplied string.
+  {
+    id: "direct-article",
+    name: "Direct article fetch (open host)",
+    access: OPEN,
+    licence: {
+      commercialUse: "UNVERIFIED",
+      reason:
+        "A direct fetch reaches whatever publisher the tenant authorises; no blanket commercial-use verdict covers every publisher, so it is unverified and never runs until an owner records a per-publisher verdict.",
+      check: null,
+    },
+    network: {
+      protocol: "https",
+      hosts: [],
+      openHost: true,
+      rateLimit: SELF_IMPOSED_DEFAULT,
+      operators: [],
+    },
+    attribution: null,
+  },
+
   // ── RSS: one source per publishing domain, every one UNVERIFIED ────────
   ...RSS_PUBLISHERS.map(rssSource),
 ];
