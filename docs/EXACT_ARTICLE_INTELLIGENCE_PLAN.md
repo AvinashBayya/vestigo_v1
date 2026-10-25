@@ -65,3 +65,40 @@ Implementation (M1–M5) is separate from the human decision (M0). Nothing proce
 - **Verified now:** a pasted article URL runs GDELT news for the publisher **domain** (metadata-level coverage, drawn into the graph) and is validated correctly as a URL or a DOMAIN (the news-URL fix). Full suite green.
 - **Blocked on a human decision (M0):** exact-article retrieval. It needs an owner to record a source verdict (and, for the no-third-party path, to approve the open-host model), plus a robots/paywall/licence review. No exact-article collector exists, and none may run until then.
 - **Next recommended milestone:** M0 (owner verdict + policy decision), then M1 (open-host fetch, if Option A) — the smallest step that unblocks a deterministic, fixture-tested exact-article collector without touching any security gate.
+
+## M5 synthesis canary — runbook (fixture-only, opt-in; NOT RUN by default)
+
+**Purpose and scope.** The one bounded, metered first run of M5's cited synthesis against a **real open-weight provider**, over a **synthetic in-repo article run** — never a real publisher. It confirms the M5 acceptance against a live model: a synthesis whose every statement resolves to an article evidence id, honest "no provider" when unconfigured. It is the test `packages/osint-engine/test/m5-synthesis-canary.test.ts`, which is **skipped by default** and makes no external request unless explicitly opted in. The article is a `LOCAL_ANALYSIS` synthetic collector (no network) plus a seeded grounded `article_statements` claim — the real `article` collector, the SSRF fetcher, and all publishers are never invoked.
+
+**Required opt-in flag.** `M5_SYNTHESIS_CANARY=1`. Without it the real-provider block is skipped. With it but **no `READY` provider**, the test fails loudly — it never falls back to the scripted provider.
+
+**Required provider configuration (names only — never record a key value).** Synthesis uses the **LARGE** model.
+- `LLM_HOSTED_BASE_URL` — https, OpenAI-compatible, non-Azure, up to but not including `/chat/completions`.
+- `LLM_HOSTED_API_KEY` — the platform's hosted-provider key (platform-owned; never logged or committed).
+- `LLM_LARGE_MODEL` — one allowlisted LARGE id from `packages/config/src/llm.ts`: `Qwen/Qwen3-32B` (default) · `openai/gpt-oss-120b` · `mistralai/Mistral-Small-3.1-24B-Instruct-2503`.
+- Optional: `LLM_SMALL_MODEL` (default `Qwen/Qwen3-8B`; extraction only), `LLM_HOSTED_STRUCTURED_OUTPUT` (`none`|`json_schema`|`json_object`), `LLM_MODEL_NAMES` (if served under different names), `LLM_REQUEST_TIMEOUT_MS`.
+- Self-hosted alternative: `LLM_PROFILE=vllm` **and** `LLM_VLLM_ENABLED=true` (+ `LLM_VLLM_BASE_URL`, optional `LLM_VLLM_API_KEY`). A non-allowlisted / Llama / Gemini model, an Azure host, or a base URL set without a key is refused by `resolveLlmConfiguration`.
+
+**Prerequisites.** `docker compose up -d --wait` (Postgres + Redis for the engine suite). The usual application secrets to boot are `AUTH_SECRET` and `VAULT_MASTER_KEY` — set them in the environment; do not read or reproduce their values.
+
+**Exact command — NOT RUN here (run once, deliberately, with a provider configured):**
+
+```
+docker compose up -d --wait
+M5_SYNTHESIS_CANARY=1 \
+  LLM_HOSTED_BASE_URL=<https OpenAI-compatible base, non-Azure> \
+  LLM_HOSTED_API_KEY=<platform key> \
+  LLM_LARGE_MODEL=Qwen/Qwen3-32B \
+  pnpm --filter @repo/osint-engine exec vitest run test/m5-synthesis-canary.test.ts
+```
+
+**Expected assertions (opt-in block; verified only against the real provider):**
+- **Synthesis:** `synthesis.status === "GENERATED"`.
+- **Evidence citation:** every statement cites ≥1 source number present in the report, and — the article being the only source — every citation resolves to the **article evidence id**.
+- **Strength:** every statement's strength ∈ {`CORRELATED`, `INFERRED`, `HYPOTHESIS`} (never `OBSERVED`/`REPORTED`/`DERIVED`).
+- **Metering (exactly once):** one `LLM_INPUT_TOKEN` usage row and one `LLM_OUTPUT_TOKEN` row for the report, each `quantity > 0` — charged once per unit, never double-charged (a validation retry stays within the same usage row). The client runs with no cache, so the model is genuinely called.
+- **Provenance:** `synthesis.model.id ===` the configured `LLM_LARGE_MODEL`, its licence ∈ {Apache-2.0, MIT}, `endpointHost ===` the configured host, `regionHeaders` an array copied as received.
+
+**Expected no-provider degradation (always on; verified offline, no request):** with no `LLM_HOSTED_BASE_URL`, `resolveLlmConfiguration` → `NOT_CONFIGURED` and `createLlmClient` → `{ unavailable }`; a synthesis request then returns the honest `SYNTHESIS_UNAVAILABLE`/`NOT_REQUESTED` path, and deterministic reports still generate.
+
+**Restrictions (invariant).** No real publisher is fetched; no collector/SSRF path is invoked. Authorization, tenant isolation (RLS), the person gate, SSRF protections, the citation validator, and evidence integrity are unchanged. No secret is logged or committed. The canary **never** falls back to the scripted provider when opted in with invalid configuration — it fails loudly instead.
