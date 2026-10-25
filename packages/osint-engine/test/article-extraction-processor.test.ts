@@ -84,8 +84,7 @@ async function articleCase(
   readonly jobId: string;
   readonly evidenceId: string;
 }> {
-  const fused = options.fused ?? true;
-  const outcome = options.outcome ?? "FOUND";
+  const { fused = true, outcome = "FOUND" } = options;
   const tenantId = parseTenantId(randomUUID());
   await db.provisionTenant({ tenantId, name: `[Tenant ${tag}]`, region: "IN" });
   return db.withTenant(tenantId, async ({ repos }) => {

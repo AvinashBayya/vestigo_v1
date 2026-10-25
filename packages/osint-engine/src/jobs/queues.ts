@@ -918,7 +918,12 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
         // code: there is no extraction state row, so the dead-letter record is
         // its durable trace. Collection and fusion are untouched.
         if (disposition.kind === "COMPLETED" && disposition.status === "FAILED") {
-          throw new UnrecoverableError(disposition.errorCode ?? "EXTRACTION_FAILED");
+          // A FAILED extraction always carries its code (extraction/processor.ts);
+          // the union allows null only for the SUCCEEDED case. Guard it explicitly
+          // rather than fall back to a literal code that can never render.
+          const { errorCode } = disposition;
+          if (errorCode === null) throw new UnrecoverableError("EXTRACTION_FAILED_WITHOUT_CODE");
+          throw new UnrecoverableError(errorCode);
         }
         return { disposition: disposition.kind };
       });
