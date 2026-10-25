@@ -14,3 +14,7 @@ packages/collectors/test/snapshots/
 
 # Golden files: the run report's coverage output, compared byte for byte.
 packages/osint-engine/test/golden/
+
+# Authored audit and research documents, kept exactly as written (as with docs/).
+audit/
+Vestigo_Global_News_Providers_and_APIs.md
