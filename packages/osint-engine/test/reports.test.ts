@@ -57,6 +57,8 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  ARTICLE_STATEMENTS_ATTRIBUTE,
+  assembleReport,
   CollectionExecutor,
   CollectorJobProcessor,
   InvestigationQueue,
@@ -1244,4 +1246,231 @@ describe("attribution required by a source is carried into the report (RELEASE-B
       await engine.close();
     }
   }, 60_000);
+});
+
+// ── M5: cited synthesis over an article run resolves to the article evidence ──
+
+const ARTICLE_URL = "https://news.example.com/report-article";
+
+/** A PERMITTED local source standing in for the direct-article source. */
+const ARTICLE_SOURCE: SourceDeclaration = {
+  id: "m5-article-local",
+  name: "[M5 article source]",
+  access: ["open"],
+  licence: {
+    commercialUse: "PERMITTED",
+    reason: "[test source]",
+    check: {
+      checkedOn: "2026-09-30",
+      sourceUrl: "https://example.com/terms",
+      recordedIn: "[test]",
+    },
+  },
+  network: null,
+  attribution: null,
+};
+
+/**
+ * Grounded statements as M4-4 extraction would persist them: the value of one
+ * DERIVED `article_statements` claim. Bracketed placeholders — no invented real
+ * people, organisations or facts.
+ */
+const ARTICLE_STATEMENTS: {
+  subjectType: string;
+  subject: string;
+  attribute: string;
+  value: string;
+  quote: string;
+  start: number;
+  end: number;
+}[] = [
+  {
+    subjectType: "ORGANIZATION",
+    subject: "[Acme Corp]",
+    attribute: "was founded in",
+    value: "[1998]",
+    quote: "[Acme Corp was founded in 1998]",
+    start: 0,
+    end: 31,
+  },
+  {
+    subjectType: "PERSON",
+    subject: "[Jordan Rao]",
+    attribute: "is described as the chief executive of",
+    value: "[Acme Corp]",
+    quote: "[Jordan Rao, the chief executive of Acme Corp]",
+    start: 40,
+    end: 86,
+  },
+  {
+    subjectType: "PLACE",
+    subject: "[Pune]",
+    attribute: "is where the company is based",
+    value: "[India]",
+    quote: "[the company is based in Pune, India]",
+    start: 90,
+    end: 128,
+  },
+];
+
+/** A local article collector: one REPORTED headline, no network. */
+const articleCollector = defineCollector(
+  {
+    id: "fake.article",
+    version: "1.0.0",
+    displayName: "[fake direct article fetch]",
+    discipline: "MEDIAINT",
+    targetTypes: ["URL"],
+    collectionMode: "LOCAL_ANALYSIS",
+    source: "m5-article-local",
+    credentials: { vaultIds: [], runsWithout: true },
+    // LOCAL_ANALYSIS collectors are DERIVED by rule; the article's REPORTED
+    // headline is not what M5 tests — the seeded article_statements claim is.
+    claimStrength: "DERIVED",
+    timeoutMs: 5_000,
+    resultSchema: z.object({ headline: z.string() }),
+  },
+  (ctx) => {
+    const result = { headline: "[Example headline]" };
+    return Promise.resolve(ctx.found(result, [{ response: ctx.record(result), observedAt: null }]));
+  },
+);
+
+/** Fusion draws the article's URL entity and its REPORTED headline claim. */
+const ARTICLE_EXTRACTOR: Extractor = () => ({
+  entities: [{ key: "u", kind: "URL", identifier: ARTICLE_URL, displayName: ARTICLE_URL }],
+  relationships: [],
+  claims: [
+    { subject: { entity: "u" }, attribute: "article_headline", path: ["headline"], evidence: 0 },
+  ],
+});
+
+describe("a synthesis over an article run resolves every statement to the article evidence (M5)", () => {
+  let runtime: CollectorRuntime;
+  let engine: Engine;
+  let provider: ScriptedProvider;
+  let tenant: { tenantId: TenantId; userId: string };
+  let runId: string;
+  let seeded: { evidenceId: string; entityId: string };
+  let assembled: Awaited<ReturnType<typeof assembleReport>>;
+  let document: ReportDocument;
+
+  beforeAll(async () => {
+    runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({
+        sources: [ARTICLE_SOURCE],
+        collectors: [articleCollector],
+      }),
+      network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
+    });
+    provider = new ScriptedProvider([compliantAnswer], [via("[provider a]", [REGION_HEADER])]);
+    engine = await startEngine(
+      runtime,
+      (registry) =>
+        new ReportGenerator({
+          db,
+          registry,
+          llm: client(provider),
+          defaultHandlingMarking: null,
+          producedBy: "[product]",
+          retry: FAST_RETRY,
+        }),
+      { "fake.article": ARTICLE_EXTRACTOR },
+    );
+    tenant = await newTenant("m5-article");
+    runId = await runToSettled(engine, tenant.tenantId, tenant.userId, ARTICLE_URL);
+
+    // Seed the article's prose intelligence exactly as the M4-4 extraction job
+    // does: one DERIVED `article_statements` claim on the article's URL entity
+    // (the entity fusion just created), citing the article evidence.
+    seeded = await db.withTenant(tenant.tenantId, async ({ repos }) => {
+      const jobs = await repos.jobs.listForRun(runId, { limit: 100 });
+      const evidenceId = jobs.flatMap((job) =>
+        job.outcome === "FOUND" ? (job.evidenceIds ?? []) : [],
+      )[0];
+      if (evidenceId === undefined) throw new Error("no article evidence was recorded");
+      const claims = await repos.claims.listForEvidence([evidenceId], { limit: 100 });
+      const headline = claims.find((claim) => claim.attribute === "article_headline");
+      if (headline === undefined || headline.entityId === null) {
+        throw new Error("fusion recorded no URL entity");
+      }
+      await repos.claims.createOnce({
+        evidenceId,
+        subject: { entityId: headline.entityId },
+        attribute: ARTICLE_STATEMENTS_ATTRIBUTE,
+        value: ARTICLE_STATEMENTS,
+        strength: "DERIVED",
+      });
+      return { evidenceId, entityId: headline.entityId };
+    });
+
+    assembled = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      assembleReport(repos, runtime.registry, {
+        reportId: randomUUID(),
+        runId,
+        generatedAt: new Date(),
+        handlingMarking: null,
+        producedBy: "[product]",
+      }),
+    );
+
+    const report = await requestReport(engine, tenant.tenantId, runId, true);
+    if (report?.status !== "SUCCEEDED") {
+      throw new Error(
+        `report did not succeed: ${String(report?.errorCode)} ${String(report?.errorMessage)}`,
+      );
+    }
+    document = report.document as ReportDocument;
+  }, 90_000);
+
+  afterAll(async () => {
+    await engine.close();
+  });
+
+  it("expands the article_statements claim into one synthesis record item per statement", () => {
+    expect(assembled.records).toHaveLength(1);
+    const record = assembled.records[0];
+    if (record === undefined) return expect.unreachable("one article source record");
+    const content = record.content as {
+      claims: { subject: string; attribute: string; value: string }[];
+    };
+    // One item for the REPORTED headline, plus one per grounded statement —
+    // not a single value truncated to SYNTHESIS_VALUE_CHARS.
+    expect(content.claims).toHaveLength(1 + ARTICLE_STATEMENTS.length);
+    expect(content.claims).toEqual(
+      expect.arrayContaining([
+        { subject: "[Acme Corp]", attribute: "was founded in", value: "[1998]" },
+        {
+          subject: "[Jordan Rao]",
+          attribute: "is described as the chief executive of",
+          value: "[Acme Corp]",
+        },
+        { subject: "[Pune]", attribute: "is where the company is based", value: "[India]" },
+      ]),
+    );
+    // The expansion happened: no item carries the raw statement objects as a blob.
+    expect(content.claims.every((claim) => !claim.value.includes("subjectType"))).toBe(true);
+    expect(content.claims.some((claim) => claim.attribute === "article_headline")).toBe(true);
+    expect(assembled.refs.get("E1")?.source).toBe("fake.article");
+  });
+
+  it("writes a synthesis whose every statement resolves to the article evidence id", () => {
+    if (document.synthesis.status !== "GENERATED") {
+      return expect.unreachable("a generated synthesis");
+    }
+    const articleSource = document.sources.find(
+      (source) => source.evidenceId === seeded.evidenceId,
+    );
+    expect(articleSource).toBeDefined();
+    if (articleSource === undefined) return;
+    const numbers = new Set(document.sources.map((source) => source.number));
+    expect(document.synthesis.statements.length).toBeGreaterThan(0);
+    for (const statement of document.synthesis.statements) {
+      expect(statement.citations.length).toBeGreaterThan(0);
+      for (const n of statement.citations) expect(numbers.has(n)).toBe(true);
+    }
+    // The article is the only source, so every statement cites its evidence.
+    const cited = new Set(document.synthesis.statements.flatMap((s) => s.citations));
+    expect([...cited]).toEqual([articleSource.number]);
+  });
 });
