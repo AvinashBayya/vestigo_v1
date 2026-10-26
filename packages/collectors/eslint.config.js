@@ -60,6 +60,17 @@ const NO_EMPTY_ON_FAILURE = [
   },
 ];
 
+/**
+ * The replay grant lets a runtime replay recorded answers for an UNVERIFIED
+ * source. Only the fixture harness (src/testing.ts) may take it: nothing a
+ * deployment builds can, so no product path runs an UNVERIFIED source.
+ */
+const REPLAY_GRANT = {
+  group: ["**/runtime", "**/runtime.ts", "**/runtime.js"],
+  importNames: ["replayRecordedAnswers"],
+  message: "Only the fixture harness (src/testing.ts) may let a runtime replay recorded answers.",
+};
+
 const RESTRICTED_GLOBALS = [
   { name: "Bun", message: "Node only: Bun globals are not available at runtime." },
 ];
@@ -97,6 +108,7 @@ export default [
               group: ["**/testing", "**/testing.ts", "**/testing.js"],
               message: "The fixture harness is for tests only; nothing in src/ may use it.",
             },
+            REPLAY_GRANT,
           ],
         },
       ],
@@ -129,7 +141,7 @@ export default [
     rules: {
       "no-restricted-imports": [
         "error",
-        { paths: [...BUN.paths, ...NO_DATABASE], patterns: BUN.patterns },
+        { paths: [...BUN.paths, ...NO_DATABASE], patterns: [...BUN.patterns, REPLAY_GRANT] },
       ],
       "no-restricted-globals": [
         "error",

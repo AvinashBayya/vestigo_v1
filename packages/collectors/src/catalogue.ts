@@ -1,4 +1,6 @@
+import type { DeclaredAccess } from "./access.ts";
 import { RDAP_REGISTRY_HOSTS } from "./data/rdap-registry-hosts.ts";
+import { RSS_PUBLISHERS, type RssPublisher } from "./data/rss-feeds.ts";
 import type {
   LicenceCheck,
   SourceDeclaration,
@@ -52,6 +54,22 @@ function decided(row: number, sourceUrl: string | null = null): LicenceCheck {
   };
 }
 
+/**
+ * How each source is reached (src/access.ts), from what docs/audit/COLLECTORS.md
+ * records of it: a key, a token or a paid account, or none. A method says how
+ * a source is reached; whether that may be done is its licence verdict, so a
+ * BLOCKED source declares its method too and still never runs. No platform
+ * source is reached through the operator method: the product ships none.
+ */
+/** No credential. */
+const OPEN = ["open"] as const satisfies DeclaredAccess;
+/** The provider's own keyed API: a key, token or client credential the tenant sets. */
+const OFFICIAL = ["official"] as const satisfies DeclaredAccess;
+/** No credential, or the provider's key for more (a higher quota). */
+const OPEN_OR_OFFICIAL = ["open", "official"] as const satisfies DeclaredAccess;
+/** A third-party data vendor, through the tenant's own paid account with it. */
+const LICENSED = ["licensed"] as const satisfies DeclaredAccess;
+
 /** Our own limit for upstreams whose published limit nobody has checked. */
 const SELF_IMPOSED_DEFAULT: SourceRateLimit = {
   requests: 1,
@@ -78,11 +96,44 @@ function https(
   };
 }
 
+/** Each publisher's feeds: our own politeness limit, one request every two seconds. */
+const RSS_RATE_LIMIT: SourceRateLimit = {
+  requests: 1,
+  intervalSeconds: 2,
+  basis: "SELF_IMPOSED",
+  note: "No published limit has been checked for this publisher's feeds; one request every two seconds until one is.",
+};
+
+/**
+ * A publisher's RSS feeds (src/data/rss-feeds.ts): reached openly, its terms
+ * unchecked, so UNVERIFIED, never run until the owner records them. A
+ * publisher's feeds are published for syndication; whether that allows a
+ * commercial product to read them is what the owner reads.
+ */
+function rssSource(publisher: RssPublisher): SourceDeclaration {
+  return {
+    id: publisher.id,
+    name: `${publisher.publisher} RSS feeds`,
+    access: OPEN,
+    licence: {
+      commercialUse: "UNVERIFIED",
+      reason: "The publisher's terms for its feeds have not been checked.",
+      check: null,
+    },
+    network: https(
+      publisher.operators.map((entry) => operator(entry.name, entry.hosts)),
+      RSS_RATE_LIMIT,
+    ),
+    attribution: null,
+  };
+}
+
 export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   // ── BLOCKED: registered and listed, never run ──────────────────────────
   {
     id: "shodan-internetdb",
     name: "Shodan InternetDB",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -95,6 +146,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "c2intelfeeds",
     name: "C2IntelFeeds",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason: "Licensed CC BY-NC-SA 4.0: non-commercial use only.",
@@ -106,6 +158,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "insightface-buffalo-l",
     name: "InsightFace buffalo_l model pack",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -118,6 +171,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "youtube-innertube",
     name: "YouTube InnerTube",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -130,6 +184,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "youtube-ytdlp",
     name: "YouTube via yt-dlp",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -142,6 +197,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "duckduckgo-html",
     name: "DuckDuckGo HTML results scrape",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -154,6 +210,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "local-network-scan",
     name: "Local network and Wi-Fi scanner",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -166,6 +223,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "google-news-rss",
     name: "Google News RSS",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason: "An undocumented Google feed with no confirmed terms; blocked rather than relied on.",
@@ -177,6 +235,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "hackertarget",
     name: "HackerTarget",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -189,6 +248,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "alienvault-otx",
     name: "AlienVault OTX",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -201,6 +261,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "ucdp",
     name: "UCDP GED API",
+    access: OFFICIAL,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -218,6 +279,8 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "reliefweb",
     name: "ReliefWeb API",
+    // A pre-approved appname is mandatory (docs/audit/COLLECTORS.md row 27).
+    access: OFFICIAL,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -235,6 +298,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "opensky",
     name: "OpenSky Network",
+    access: OPEN,
     licence: {
       commercialUse: "BLOCKED",
       reason:
@@ -253,6 +317,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "wikidata",
     name: "Wikidata",
+    access: OPEN,
     licence: {
       commercialUse: "PERMITTED",
       reason:
@@ -268,6 +333,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "libphonenumber-js",
     name: "libphonenumber-js phone metadata",
+    access: OPEN,
     licence: {
       commercialUse: "PERMITTED",
       reason:
@@ -283,6 +349,9 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "gdelt-doc",
     name: "GDELT DOC 2.0 API",
+    // The first source on access methods (2026-10-16): open, no key, PERMITTED,
+    // so it runs wherever open is enabled, as it did before.
+    access: OPEN,
     licence: {
       commercialUse: "PERMITTED",
       reason:
@@ -300,6 +369,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "gdelt-events",
     name: "GDELT Events 2.0 exports",
+    access: OPEN,
     licence: {
       commercialUse: "PERMITTED",
       reason:
@@ -317,6 +387,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "safecast",
     name: "Safecast radiation data",
+    access: OPEN,
     licence: {
       commercialUse: "PERMITTED",
       reason: "CC0: free and open for anyone to use under any circumstance.",
@@ -326,10 +397,11 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     attribution: null,
   },
 
-  // ── UNVERIFIED: run only where configuration allows unverified sources ──
+  // ── UNVERIFIED: never run until their terms are checked and recorded ──
   {
     id: "devto",
     name: "DEV Community API",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "The DEV (Forem) API terms have not been checked.",
@@ -341,6 +413,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "commoncrawl",
     name: "Common Crawl URL index",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -358,6 +431,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "hibp",
     name: "Have I Been Pwned API",
+    access: OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -375,6 +449,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "crtsh",
     name: "crt.sh Certificate Transparency",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "crt.sh publishes no API terms page that has been checked.",
@@ -386,6 +461,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "cloudflare-doh",
     name: "Cloudflare DNS over HTTPS",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "Cloudflare's public resolver terms have not been checked.",
@@ -397,6 +473,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "rdap",
     name: "RDAP registry lookups",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "An IETF-standard registry service; each registry's terms have not been checked.",
@@ -410,6 +487,8 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "bluesky",
     name: "Bluesky public API",
+    // An optional account app password, for historical search (row 44).
+    access: OPEN_OR_OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "An open protocol's public API; Bluesky's terms have not been checked.",
@@ -421,6 +500,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "telegram-preview",
     name: "Telegram public channel preview",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "A web preview page, not an API; Telegram's terms have not been checked.",
@@ -432,6 +512,9 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "reddit-api",
     name: "Reddit Data API",
+    // Its public JSON endpoint without a key (rows 7 and 20), or a tenant's
+    // OAuth app; one provider, one set of terms (the Data API terms).
+    access: OPEN_OR_OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -444,6 +527,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "wayback-cdx",
     name: "Internet Archive Wayback CDX",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "The archive.org terms page returned no usable content to the audit.",
@@ -455,6 +539,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "jina-reader",
     name: "Jina Reader",
+    access: OPEN_OR_OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -467,6 +552,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "brave-search",
     name: "Brave Search API",
+    access: OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -479,6 +565,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "gravatar",
     name: "Gravatar",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "Gravatar's terms have not been checked.",
@@ -490,6 +577,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "github-api",
     name: "GitHub REST API",
+    access: OPEN_OR_OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "GitHub's API terms have not been checked.",
@@ -506,6 +594,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "openpgp-keyserver",
     name: "keys.openpgp.org",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "The keyserver's terms have not been checked.",
@@ -517,6 +606,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "usgs-earthquakes",
     name: "USGS earthquake feed",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "US federal government data, public domain by US law, but not separately verified.",
@@ -528,6 +618,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "nominatim",
     name: "OpenStreetMap Nominatim",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -548,6 +639,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "gpsjam",
     name: "GPSJam interference data",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "The FAQ contains no licence or reuse terms.",
@@ -559,6 +651,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "nasa-eonet",
     name: "NASA EONET natural events",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "NASA open data; its terms have not been separately verified.",
@@ -570,6 +663,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "noaa-swpc",
     name: "NOAA Space Weather Prediction Center",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "US federal government data; not separately verified.",
@@ -581,6 +675,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "kpler",
     name: "Kpler Supply & Demand API",
+    access: LICENSED,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -593,6 +688,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "cisa-kev",
     name: "CISA Known Exploited Vulnerabilities",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "US federal government data; not separately verified.",
@@ -604,6 +700,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "feodo-tracker",
     name: "abuse.ch Feodo Tracker",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "abuse.ch's terms were linked but not fetched.",
@@ -615,6 +712,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "wikipedia",
     name: "Wikipedia",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -627,6 +725,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "openverse",
     name: "Openverse images",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "The API's terms have not been checked; each image carries its own licence.",
@@ -638,6 +737,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "hacker-news",
     name: "Hacker News APIs",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "The Firebase and Algolia API terms have not been checked.",
@@ -652,6 +752,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "youtube-data-api",
     name: "YouTube Data API v3",
+    access: OFFICIAL,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -664,6 +765,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "nhtsa-vpic",
     name: "NHTSA vPIC VIN decoder",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason: "A US federal government API; its terms have not been separately verified.",
@@ -675,6 +777,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "theharvester",
     name: "theHarvester (tool container)",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -687,6 +790,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "spiderfoot",
     name: "SpiderFoot (tool container)",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -699,6 +803,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "searxng",
     name: "SearXNG (tool container)",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -711,6 +816,7 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
   {
     id: "ivre",
     name: "IVRE (tool container)",
+    access: OPEN,
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
@@ -720,4 +826,38 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     network: null,
     attribution: null,
   },
+
+  // ── Direct article fetch: the one open-host source ─────────────────────
+  // A direct article fetch reaches whatever publisher the tenant authorised
+  // (per publisher domain, Stage 1 of the exact-article work), so its host is
+  // not a fixed list: it comes from the authorised target, and the fetch is
+  // bound to that one host (openHost, runtime.ts + fetcher). No single
+  // commercial-use verdict covers every publisher, so it is UNVERIFIED and
+  // never runs in a deployment; the exact-article path is proven offline
+  // (docs/M1_DIRECT_ARTICLE_FETCH_REPORT.md) and a per-publisher verdict is
+  // recorded before any real publisher is enabled. https only; it names no
+  // operator (its host varies per target), so evidence it would produce is
+  // still labelled by this source, never by a publisher-supplied string.
+  {
+    id: "direct-article",
+    name: "Direct article fetch (open host)",
+    access: OPEN,
+    licence: {
+      commercialUse: "UNVERIFIED",
+      reason:
+        "A direct fetch reaches whatever publisher the tenant authorises; no blanket commercial-use verdict covers every publisher, so it is unverified and never runs until an owner records a per-publisher verdict.",
+      check: null,
+    },
+    network: {
+      protocol: "https",
+      hosts: [],
+      openHost: true,
+      rateLimit: SELF_IMPOSED_DEFAULT,
+      operators: [],
+    },
+    attribution: null,
+  },
+
+  // ── RSS: one source per publishing domain, every one UNVERIFIED ────────
+  ...RSS_PUBLISHERS.map(rssSource),
 ];

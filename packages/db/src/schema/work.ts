@@ -141,7 +141,10 @@ export const jobs = pgTable(
     params: jsonb("params").notNull().default({}),
     /** The last attempt's collection outcome; null until one finished. */
     outcome: jobOutcome("outcome"),
-    /** What a NOT_FOUND said was not found, as the collector stated it. Only with NOT_FOUND. */
+    /**
+     * What a NOT_FOUND said was not found, or what an EMPTY_UNCONFIRMED said
+     * came back empty, as the collector stated it. Only with those two.
+     */
     outcomeDetail: text("outcome_detail"),
     /** The FOUND result, exactly as the runtime validated it. Only with FOUND. */
     result: jsonb("result"),
@@ -188,9 +191,12 @@ export const jobs = pgTable(
     check("jobs_result_only_found", sql`${t.result} is null or ${t.outcome} = 'FOUND'`),
     check("jobs_evidence_only_found", sql`${t.evidenceIds} is null or ${t.outcome} = 'FOUND'`),
     check("jobs_fused_only_found", sql`${t.fusedAt} is null or ${t.outcome} = 'FOUND'`),
+    // A detail says what came back empty: a not-found, or an empty answer whose
+    // upstream is unreliable (unconfirmed). Compared as text, so the migration
+    // that adds EMPTY_UNCONFIRMED to the enum can add this check too (0027).
     check(
-      "jobs_detail_only_not_found",
-      sql`${t.outcomeDetail} is null or ${t.outcome} = 'NOT_FOUND'`,
+      "jobs_detail_only_empty_answers",
+      sql`${t.outcomeDetail} is null or ${t.outcome}::text in ('NOT_FOUND', 'EMPTY_UNCONFIRMED')`,
     ),
     check("jobs_target_complete", sql`(${t.targetType} is null) = (${t.target} is null)`),
   ],

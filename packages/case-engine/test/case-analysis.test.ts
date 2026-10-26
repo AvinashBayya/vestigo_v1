@@ -294,6 +294,32 @@ describe("the discipline breakdown", () => {
     expect(techint.relationships).toEqual({ count: 0, ids: [] });
   });
 
+  it("lists a collector whose source's empty answer is unconfirmed as ran, with that state, never as found nothing (Track M Day 2)", () => {
+    const unconfirmed: CaseInput = {
+      ...CASE,
+      jobs: CASE.jobs.map((job) =>
+        job.id === id("job A crt")
+          ? { ...job, outcome: "EMPTY_UNCONFIRMED", outcomeDetail: "[test] returned nothing" }
+          : job,
+      ),
+    };
+    const groups = sectionOf(breakdown(unconfirmed), "TECHINT").collectors;
+    expect(collectorIds(groups.foundNothing)).toEqual([]);
+    expect(collectorIds(groups.ran)).toEqual(["crt", "dns", "rdap"]);
+    expect(groups.ran.find((group) => group.collectorId === "crt")?.runs).toEqual([
+      {
+        runId: id("run A"),
+        jobId: id("job A crt"),
+        state: "EMPTY_UNCONFIRMED",
+        reasonCode: null,
+        detail: "[test] returned nothing",
+      },
+    ]);
+    // Read as found nothing, the same job is in that group.
+    const groupsBefore = sectionOf(breakdown(), "TECHINT").collectors;
+    expect(collectorIds(groupsBefore.foundNothing)).toEqual(["crt"]);
+  });
+
   it("groups each discipline's collectors by what they did in the case's runs", () => {
     const groups = sectionOf(breakdown(), "TECHINT").collectors;
     expect(collectorIds(groups.registered)).toEqual(["active", "crt", "dns", "late", "rdap"]);
@@ -413,7 +439,7 @@ describe("the discipline breakdown", () => {
   });
 
   it("never lists a collector as held in a run whose recorded plan ran it", () => {
-    // news is held now. In run A it ran and found ev10, not pinned.
+    // news is held in this fixture's registry now. In run A it ran and found ev10, not pinned.
     const ranThen: CaseInput = {
       ...CASE,
       registry: REGISTRY.filter((entry) => entry.id !== "wayback"),
@@ -926,12 +952,15 @@ describe("the codes a stored analysis holds are additive only", () => {
       "LOCKED",
       "NOT_BUILT",
       "BLOCKED",
+      // ENGINE_VERSION 7: an unverified source never runs (2026-10-16).
+      "UNVERIFIED",
     ]);
     expect(DISCIPLINE_NOT_MEASURED).toEqual([
       "NO_COLLECTOR_BUILT",
       "ONLY_HELD_COLLECTORS",
       "LOCKED",
       "ONLY_BLOCKED_COLLECTORS",
+      "ONLY_UNVERIFIED_COLLECTORS",
     ]);
     expect(REGISTRATIONS).toEqual([
       "REGISTERED",
@@ -939,8 +968,104 @@ describe("the codes a stored analysis holds are additive only", () => {
       "NOT_REGISTERED",
       "BLOCKED",
       "NOT_IMPLEMENTED",
+      "UNVERIFIED",
     ]);
-    expect(CANNOT_RUN).toEqual(["BLOCKED", "NOT_IMPLEMENTED"]);
+    expect(CANNOT_RUN).toEqual(["BLOCKED", "NOT_IMPLEMENTED", "UNVERIFIED"]);
+  });
+});
+
+describe("a collector on an UNVERIFIED source cannot run (access methods, 2026-10-16; D-39)", () => {
+  // An unverified source never runs, in any deployment, so the registry lists
+  // its collectors as UNVERIFIED: never counted as able to run, and a
+  // discipline none of whose collectors can run reads null, never 0
+  // (acceptance c).
+  const exclusion = (
+    collectorId: string,
+    reason: string,
+    targetType: CoverageExclusion["targetType"] = "DOMAIN",
+  ): CoverageExclusion => ({
+    collectorId,
+    targetType,
+    reason,
+    message: `[test] ${collectorId}: ${reason}`,
+  });
+  const withExclusions = (
+    input: CaseInput,
+    added: Readonly<Record<string, readonly CoverageExclusion[]>>,
+  ): CaseInput => ({
+    ...input,
+    runs: input.runs.map((run) => {
+      const extra = added[run.id];
+      return extra === undefined || run.plan.kind !== "PLANNED"
+        ? run
+        : { ...run, plan: { ...run.plan, excluded: [...run.plan.excluded, ...extra] } };
+    }),
+  });
+  const withRegistry = (...entries: CaseRegistryCollector[]): CaseInput => ({
+    ...CASE,
+    registry: [...REGISTRY, ...entries],
+  });
+  const geoint = (...entries: CaseRegistryCollector[]): DisciplineSection =>
+    sectionOf(breakdown(withRegistry(...entries)), "GEOINT");
+  const unverified = registered("geo.unverified", "PASSIVE_API", "GEOINT", "UNVERIFIED");
+
+  it("shows a discipline whose only collectors read an unverified source as UNVERIFIED, its counts null, never a measured zero", () => {
+    const only = geoint(unverified);
+    expect(only.status).toBe("UNVERIFIED");
+    for (const count of [only.evidence, only.claims, only.entities, only.relationships]) {
+      expect(count).toEqual({ count: null, ids: null, reason: "ONLY_UNVERIFIED_COLLECTORS" });
+    }
+    expect([only.evidenceByStrength, only.claimsByStrength]).toEqual([null, null]);
+    expect(only.collectors.registered).toEqual([]);
+    expect(only.collectors.notInAnyRun).toEqual([]);
+    expect(JSON.stringify(only)).not.toMatch(/"count":0/);
+  });
+
+  it("puts UNVERIFIED ahead of BLOCKED and NOT_BUILT, behind HELD and a collector that can run", () => {
+    const blocked = registered("geo.blocked", "PASSIVE_API", "GEOINT", "BLOCKED");
+    const pending = registered("geo.pending", "PASSIVE_API", "GEOINT", "NOT_IMPLEMENTED");
+    // Recording a verdict is what would let the discipline collect.
+    expect(geoint(unverified, blocked, pending).status).toBe("UNVERIFIED");
+    const open = geoint(unverified, registered("geo.open", "PASSIVE_API", "GEOINT"));
+    expect(open.status).toBe("ZERO");
+    expect(open.evidence).toEqual({ count: 0, ids: [] });
+  });
+
+  it("lists it under its own registration, with its registry label and discipline", () => {
+    const listed = collectors(withRegistry(unverified)).collectors.find(
+      (collector) => collector.collectorId === "geo.unverified",
+    );
+    expect(listed).toMatchObject({
+      registration: "UNVERIFIED",
+      heldReason: null,
+      sourceLabel: "[fake geo.unverified]",
+      discipline: "GEOINT",
+    });
+  });
+
+  it("judges a lock without the places a run recorded as unverified, or with no access method enabled", () => {
+    // phone is locked in both runs. Beside it, a PERSON collector refused for
+    // its unverified source, and one whose only access method was not enabled.
+    const beside = withExclusions(
+      withRegistry(
+        registered("person.unverified", "PASSIVE_API", "PERSON", "UNVERIFIED"),
+        registered("person.operator", "PASSIVE_API", "PERSON"),
+      ),
+      {
+        [id("run A")]: [
+          exclusion("person.unverified", "UNVERIFIED_SOURCE_NOT_ALLOWED"),
+          exclusion("person.operator", "ACCESS_METHOD_NOT_ENABLED"),
+        ],
+        [id("run B")]: [
+          exclusion("person.unverified", "UNVERIFIED_SOURCE_NOT_ALLOWED", "USERNAME"),
+          exclusion("person.operator", "ACCESS_METHOD_NOT_ENABLED", "USERNAME"),
+        ],
+      },
+    );
+    const person = sectionOf(breakdown(beside), "PERSON");
+    expect(person.status).toBe("LOCKED");
+    expect(person.evidence).toEqual({ count: null, ids: null, reason: "LOCKED" });
+    expect(collectorIds(person.collectors.locked)).toEqual(["phone"]);
   });
 });
 
@@ -1366,9 +1491,12 @@ describe("regressions: cases/case-intelligence-breakdown.ts", () => {
     });
   });
 
-  it("buildCaseIntelligenceBreakdown: the further figures are not built, each null with its input", () => {
+  it("buildCaseIntelligenceBreakdown: CONTRADICTIONS is measured; the further figures are not built, each null with its input", () => {
     // Legacy defaulted an unread media snapshot to "in the case" and showed its
-    // claims and conflicts as counts. None of these inputs exists yet.
+    // claims and conflicts as counts. Contradiction detection is built now
+    // (ENGINE_VERSION 8): TECHINT CONTRADICTIONS is a measured count — zero
+    // here, as the fixture's claims carry no attribute or value to disagree on.
+    // The media and location figures still have no input, so they stay null.
     const metrics = Object.fromEntries(
       breakdown().sections.map((section) => [section.discipline, section.metrics]),
     );
@@ -1376,7 +1504,7 @@ describe("regressions: cases/case-intelligence-breakdown.ts", () => {
       TECHINT: [
         {
           metric: "CONTRADICTIONS",
-          value: { count: null, ids: null, reason: "CONTRADICTION_DETECTION_NOT_BUILT" },
+          value: { count: 0, ids: [] },
         },
       ],
       SOCMINT: [],
@@ -1398,6 +1526,104 @@ describe("regressions: cases/case-intelligence-breakdown.ts", () => {
       ],
       PERSON: [],
     });
+  });
+
+  it("CONTRADICTIONS: counts a discipline's contradicted entities by its own evidence, agreement aside", () => {
+    const withClaims = (extra: CaseInput["claims"]): CaseInput => ({
+      ...CASE,
+      claims: [...CASE.claims, ...extra],
+    });
+    // ev1 and ev2 are the dns collector's evidence (TECHINT). Two claims on one
+    // entity+attribute with different values are a contradiction under TECHINT.
+    const techint = sectionOf(
+      breakdown(
+        withClaims([
+          {
+            id: id("cx1"),
+            evidenceId: id("ev1"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "a_record",
+            value: "192.0.2.1",
+          },
+          {
+            id: id("cx2"),
+            evidenceId: id("ev2"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "OBSERVED",
+            attribute: "a_record",
+            value: "192.0.2.2",
+          },
+        ]),
+      ),
+      "TECHINT",
+    );
+    expect(techint.metrics).toEqual([
+      { metric: "CONTRADICTIONS", value: { count: 1, ids: [id("e1")] } },
+    ]);
+
+    // The same value from two sources is agreement, never a contradiction.
+    const agreeing = sectionOf(
+      breakdown(
+        withClaims([
+          {
+            id: id("cx1"),
+            evidenceId: id("ev1"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "a_record",
+            value: "192.0.2.1",
+          },
+          {
+            id: id("cx2"),
+            evidenceId: id("ev2"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "OBSERVED",
+            attribute: "a_record",
+            value: "192.0.2.1",
+          },
+        ]),
+      ),
+      "TECHINT",
+    );
+    expect(agreeing.metrics).toEqual([{ metric: "CONTRADICTIONS", value: { count: 0, ids: [] } }]);
+
+    // ev4 is the gh collector's evidence (SOCMINT): a contradiction supported
+    // only by it does not count under TECHINT. SOCMINT has no CONTRADICTIONS
+    // metric, so the breakdown shows it nowhere; it is in the analysis's own
+    // `contradictions` (the complete, case-wide set).
+    const socmintOnly = sectionOf(
+      breakdown(
+        withClaims([
+          {
+            id: id("cx1"),
+            evidenceId: id("ev4"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "handle",
+            value: "[a]",
+          },
+          {
+            id: id("cx2"),
+            evidenceId: id("ev4"),
+            entityId: id("e1"),
+            relationshipId: null,
+            strength: "REPORTED",
+            attribute: "handle",
+            value: "[b]",
+          },
+        ]),
+      ),
+      "TECHINT",
+    );
+    expect(socmintOnly.metrics).toEqual([
+      { metric: "CONTRADICTIONS", value: { count: 0, ids: [] } },
+    ]);
   });
 
   it("BreakdownInput: every input is required, so nothing omitted can default to 'in the case'", () => {

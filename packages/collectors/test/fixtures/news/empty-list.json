@@ -3,7 +3,7 @@
     "kind": "synthetic",
     "source": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
     "recordedOn": "2026-09-28",
-    "notes": "Synthetic: an explicit empty article list, the other shape a no-match answer could take. Recorded no-match answers are {} (see not-found.json)."
+    "notes": "Synthetic: an explicit empty article list, the other shape an empty answer could take. The recorded empty answer is {} (empty-answer.json). Either reads as unconfirmed, never as \"no coverage\"."
   },
   "request": {
     "host": "api.gdeltproject.org",

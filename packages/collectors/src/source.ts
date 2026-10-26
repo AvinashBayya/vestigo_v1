@@ -1,4 +1,11 @@
 import { COMMERCIAL_USE_VERDICTS, type CommercialUseVerdict } from "@repo/core";
+import {
+  isAccessMethod,
+  isKeyedAccessMethod,
+  OPERATOR_ID_PREFIX,
+  type AccessMethod,
+  type DeclaredAccess,
+} from "./access.ts";
 import { CollectorDefinitionError } from "./errors.ts";
 import { isIpLiteralHost } from "./fetcher/address.ts";
 
@@ -48,8 +55,18 @@ export interface SourceOperator {
 
 export interface SourceNetwork {
   readonly protocol: "https" | "http";
-  /** Exact DNS names; redirects may only stay within them. */
+  /** Exact DNS names; redirects may only stay within them. Empty for an open-host source. */
   readonly hosts: readonly string[];
+  /**
+   * An open-host source has no static host list: the host it may contact comes
+   * from the authorised target at run time (the fetcher is handed it as
+   * `allowedHosts`), under the same SSRF checks, same single host per request,
+   * and redirects confined to it. It is https only, names no fixed operator
+   * (the publisher varies), and still never contacts Instagram, Facebook or X.
+   * The authorisation that supplies the host is a separate layer (the
+   * collection-mode scope gate); open-host never relaxes an SSRF check.
+   */
+  readonly openHost?: boolean;
   readonly rateLimit: SourceRateLimit;
   /**
    * Who operates the hosts: every host belongs to exactly one operator. A
@@ -88,6 +105,13 @@ export interface Attribution {
 export interface SourceDeclaration {
   readonly id: string;
   readonly name: string;
+  /**
+   * How it is reached (src/access.ts): one or more of open, official, licensed
+   * and operator, at most one of them keyed. A method says how; whether that
+   * may be done is `licence`, which every method of the source shares. A
+   * licensed vendor, or an operator's own collector, is a source of its own.
+   */
+  readonly access: DeclaredAccess;
   readonly licence: LicenceVerdict;
   /** Null for a source that is not reached over the network (a model, a local tool). */
   readonly network: SourceNetwork | null;
@@ -103,6 +127,40 @@ const DNS_NAME =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const INTERNAL_SUFFIXES = [".internal", ".local", ".localhost", ".localdomain", ".home.arpa"];
 const MAX_INTERVAL_SECONDS = 24 * 60 * 60;
+
+/**
+ * Instagram, Facebook and X: never collected from, by any access method
+ * (CLAUDE.md §3; ARCHITECTURE-DECISIONS §12). No source may declare one of
+ * these domains or a host under it. A backstop for the rule, not the whole of
+ * it: a host list cannot see a mirror, or a service that fetches any URL.
+ */
+export const FORBIDDEN_PLATFORM_DOMAINS: readonly string[] = [
+  "instagram.com",
+  "cdninstagram.com",
+  "instagr.am",
+  "facebook.com",
+  "facebook.net",
+  "fb.com",
+  "fb.me",
+  "fb.watch",
+  "fbcdn.net",
+  "fbsbx.com",
+  "messenger.com",
+  "m.me",
+  "x.com",
+  "twitter.com",
+  "twimg.com",
+  "t.co",
+];
+
+/** The forbidden domain a host is, or sits under; null when it is none of them. */
+export function forbiddenPlatformDomainOf(host: string): string | null {
+  const lower = host.toLowerCase();
+  return (
+    FORBIDDEN_PLATFORM_DOMAINS.find((domain) => lower === domain || lower.endsWith(`.${domain}`)) ??
+    null
+  );
+}
 
 function fail(subject: string, problem: string): never {
   throw new CollectorDefinitionError(subject, problem);
@@ -163,7 +221,17 @@ function validateNetwork(subject: string, network: SourceNetwork): void {
   if (!(PROTOCOLS as readonly string[]).includes(network.protocol)) {
     fail(subject, "network.protocol must be https or http");
   }
-  if (network.hosts.length === 0) fail(subject, "network.hosts must name at least one host");
+  if (network.openHost === true) {
+    if (network.protocol !== "https") fail(subject, "an open-host source must use https");
+    if (network.hosts.length !== 0) {
+      fail(subject, "an open-host source declares no static hosts; its host comes from the target");
+    }
+    if (network.operators.length !== 0) {
+      fail(subject, "an open-host source names no operator; its host varies per target");
+    }
+  } else if (network.hosts.length === 0) {
+    fail(subject, "network.hosts must name at least one host");
+  }
   if (new Set(network.hosts).size !== network.hosts.length) {
     fail(subject, "network.hosts has duplicates");
   }
@@ -172,6 +240,13 @@ function validateNetwork(subject: string, network: SourceNetwork): void {
       fail(
         subject,
         `network host "${host}" must be a lowercase public DNS name, not an IP literal`,
+      );
+    }
+    const forbidden = forbiddenPlatformDomainOf(host);
+    if (forbidden !== null) {
+      fail(
+        subject,
+        `network host "${host}" is under ${forbidden}: Instagram, Facebook and X are never collected from (CLAUDE.md §3)`,
       );
     }
   }
@@ -187,7 +262,9 @@ function validateNetwork(subject: string, network: SourceNetwork): void {
     fail(subject, "network.rateLimit.intervalSeconds must be an integer from 1 to 86400");
   }
   requireText(subject, "network.rateLimit.note", note);
-  if (network.operators.length === 0) fail(subject, "network.operators must name an operator");
+  if (!network.openHost && network.operators.length === 0) {
+    fail(subject, "network.operators must name an operator");
+  }
   const operatorNames = network.operators.map((operator) => operator.name.trim().toLowerCase());
   if (new Set(operatorNames).size !== operatorNames.length) {
     fail(subject, "network.operators has duplicate names");
@@ -206,11 +283,53 @@ function validateNetwork(subject: string, network: SourceNetwork): void {
   }
 }
 
+function validateAccess(subject: string, source: SourceDeclaration): void {
+  // Read as data, as every field is: a declaration may come from anywhere.
+  const declared: unknown = source.access;
+  if (!Array.isArray(declared) || declared.length === 0) {
+    fail(
+      subject,
+      "access must name at least one access method: open, official, licensed or operator",
+    );
+  }
+  const methods: AccessMethod[] = [];
+  for (const method of declared as readonly unknown[]) {
+    if (typeof method !== "string" || !isAccessMethod(method)) {
+      fail(subject, "access names something that is not open, official, licensed or operator");
+    }
+    if (methods.includes(method)) fail(subject, `access names ${method} twice`);
+    methods.push(method);
+  }
+  if (methods.filter(isKeyedAccessMethod).length > 1) {
+    fail(
+      subject,
+      "access names more than one keyed method (official, licensed, operator): another way in, with other credentials, is another source with its own verdict",
+    );
+  }
+  const operator = methods.includes("operator");
+  if (operator && methods.length > 1) {
+    fail(
+      subject,
+      "the operator method stands alone: an operator's own collector reads a source of its own",
+    );
+  }
+  if (operator && source.network === null) {
+    fail(subject, "the operator method reaches a service over the network, so it needs a network");
+  }
+  if (operator !== source.id.startsWith(OPERATOR_ID_PREFIX)) {
+    fail(
+      subject,
+      `an id starts "${OPERATOR_ID_PREFIX}" exactly when the source is reached through the operator method`,
+    );
+  }
+}
+
 /** Checks one source declaration against the catalogue rules; throws on the first problem. */
 export function validateSource(source: SourceDeclaration): void {
   const subject = `source "${source.id}"`;
   if (!SOURCE_ID.test(source.id)) fail(subject, "id must match ^[a-z0-9][a-z0-9.-]{0,63}$");
   requireText(subject, "name", source.name);
+  validateAccess(subject, source);
   validateLicence(subject, source.licence);
   if (source.network !== null) validateNetwork(subject, source.network);
   if (source.attribution !== null) {

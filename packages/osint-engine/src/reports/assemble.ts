@@ -43,7 +43,9 @@ import {
 } from "@repo/core";
 import type { Claim, Entity, Evidence, Job, Repositories } from "@repo/db";
 import { scanText, stringsIn, type UntrustedRecord } from "@repo/llm";
+import { z } from "zod";
 import { readRunProgress } from "../progress.ts";
+import { ARTICLE_STATEMENTS_ATTRIBUTE } from "../extraction/run.ts";
 import { coveragePlan, StoredPlan } from "./stored-plan.ts";
 
 export class ReportRunNotSettledError extends AppError {
@@ -334,6 +336,51 @@ export async function assembleReport(
 }
 
 /**
+ * An article-prose claim's value: the statements extracted from the article
+ * body text (M4-4). Only the fields a synthesis record needs are read; the
+ * verbatim quote and its span are ignored here. Extra fields are stripped, and
+ * a value of any other shape fails to parse and falls back to generic rendering.
+ */
+const ArticleStatementItems = z.array(
+  z.object({ subject: z.string(), attribute: z.string(), value: z.string() }),
+);
+
+/**
+ * The record items one claim contributes to a synthesis. Normally one — the
+ * claim's value rendered as text. The one exception is the article-prose claim
+ * (`article_statements`: a DERIVED claim whose value is the list of grounded
+ * statements extracted from the article's body text, M4-4). It is expanded into
+ * one item per statement, so the synthesiser reads each grounded statement
+ * instead of a single value truncated to SYNTHESIS_VALUE_CHARS. Every expanded
+ * item is still attributed to the same source, so it cites the one article
+ * evidence the claim cites, and a synthesis statement over them resolves to the
+ * article evidence id. A malformed or empty value falls back to the generic
+ * rendering rather than dropping the claim.
+ */
+function synthesisItems(
+  finding: ReportEntity,
+  claim: ReportClaim,
+): { subject: string; attribute: string; value: string }[] {
+  if (claim.attribute === ARTICLE_STATEMENTS_ATTRIBUTE) {
+    const parsed = ArticleStatementItems.safeParse(claim.value);
+    if (parsed.success && parsed.data.length > 0) {
+      return parsed.data.map((statement) => ({
+        subject: statement.subject,
+        attribute: statement.attribute,
+        value: displayValue(statement.value, SYNTHESIS_VALUE_CHARS).text,
+      }));
+    }
+  }
+  return [
+    {
+      subject: finding.displayName,
+      attribute: claim.attribute,
+      value: displayValue(claim.value, SYNTHESIS_VALUE_CHARS).text,
+    },
+  ];
+}
+
+/**
  * The records a synthesis is written from: one per cited source, holding that
  * source's claims as text. Every string in them is collected data, and is
  * passed to a model only through @repo/llm's untrusted framing. The same pass
@@ -356,12 +403,8 @@ function synthesisRecords(
   };
   for (const finding of findings) {
     for (const claim of finding.claims) {
-      for (const number of claim.citations) {
-        add(number, {
-          subject: finding.displayName,
-          attribute: claim.attribute,
-          value: displayValue(claim.value, SYNTHESIS_VALUE_CHARS).text,
-        });
+      for (const item of synthesisItems(finding, claim)) {
+        for (const number of claim.citations) add(number, item);
       }
     }
   }

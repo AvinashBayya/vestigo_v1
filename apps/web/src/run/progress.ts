@@ -215,13 +215,16 @@ export function durationBetween(from: string | null, to: string | null): number 
 }
 
 /**
- * A job's status as its row and the summary's count chips show it (§3, D7):
- * jobStatus, except that a job that succeeded and found nothing is
+ * A job's status as its row and the summary's count chips show it (§3, D7,
+ * D9): jobStatus, except that a job that succeeded and found nothing is
  * FOUND_NOTHING, a measured zero, never confused with one that found
- * something. jobStatus keeps the run report's reading (RAN) for the report.
+ * something; and one whose source answered with nothing it cannot be trusted
+ * on (EMPTY_UNCONFIRMED) is UNCONFIRMED, never a found nothing and never a
+ * zero. jobStatus keeps the run report's reading (RAN) for the report.
  */
 export function jobRowStatus(job: JobData): CollectorStatus {
   if (job.status === "SUCCEEDED" && job.outcome === "NOT_FOUND") return "FOUND_NOTHING";
+  if (job.status === "SUCCEEDED" && job.outcome === "EMPTY_UNCONFIRMED") return "UNCONFIRMED";
   return jobStatus(job);
 }
 
@@ -263,6 +266,15 @@ export function jobRowItem(job: JobData, discipline: string | null): CollectorRo
       break;
     case "FOUND_NOTHING":
       parts.push(job.outcomeDetail ?? "the source had nothing for this target");
+      if (took !== null) parts.push(formatDuration(took));
+      if (job.attempts > 1) parts.push(`recovered on attempt ${String(job.attempts)}`);
+      break;
+    case "UNCONFIRMED":
+      // The collector's own words say what came back empty and why that is not "nothing".
+      parts.push(
+        job.outcomeDetail ??
+          "returned nothing, unconfirmed: this source's empty answers are unreliable",
+      );
       if (took !== null) parts.push(formatDuration(took));
       if (job.attempts > 1) parts.push(`recovered on attempt ${String(job.attempts)}`);
       break;
@@ -381,6 +393,7 @@ export function notApplicableMessage(
 export const COUNT_WORD: Readonly<Record<CollectorStatus, string>> = {
   RAN: "ran",
   FOUND_NOTHING: "found nothing",
+  UNCONFIRMED: "returned nothing, unconfirmed",
   RUNNING: "running",
   QUEUED: "queued",
   FAILED: "failed",
@@ -398,6 +411,7 @@ export const COUNT_WORD: Readonly<Record<CollectorStatus, string>> = {
 const COUNT_ORDER: readonly CollectorStatus[] = [
   "RAN",
   "FOUND_NOTHING",
+  "UNCONFIRMED",
   "RUNNING",
   "QUEUED",
   "FAILED",
@@ -461,6 +475,16 @@ export function arrivingRows(jobs: readonly JobData[]): MetricRow[] {
       label: "Collectors that found nothing",
       value: count(jobs.filter((job) => jobRowStatus(job) === "FOUND_NOTHING").length),
     },
+    // Never added to "found nothing": an unconfirmed empty answer is not a zero.
+    // Listed when some collector gave one, as a count chip is.
+    ...(jobs.some((job) => jobRowStatus(job) === "UNCONFIRMED")
+      ? [
+          {
+            label: "Collectors that returned nothing, unconfirmed",
+            value: count(jobs.filter((job) => jobRowStatus(job) === "UNCONFIRMED").length),
+          },
+        ]
+      : []),
     {
       label: "Claims",
       value: {

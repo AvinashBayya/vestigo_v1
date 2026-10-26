@@ -12,7 +12,11 @@
  *     throwing, a cut no longer splits a character, and a run with no
  *     collector planned no longer reads "all 0 planned collectors finished";
  *   - R1-b pre-flight: a run that planned no collector, complete or failed,
- *     reads "NOTHING PLANNED", and one planned collector is singular.
+ *     reads "NOTHING PLANNED", and one planned collector is singular;
+ *   - Track M Day 2 (2026-10-15): a job may end EMPTY_UNCONFIRMED, its own
+ *     coverage state, counted apart from "found nothing" with its caveat.
+ *     Its rows are added after the ones already written, which do not change;
+ *     the large run gains its 60 jobs, and so its name and headline.
  * Any other change needs the same: a ruling, its own commit, and the
  * rewritten files in its diff.
  *
@@ -54,9 +58,25 @@ import {
 const id = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const AT = new Date("2026-10-01T00:00:00.000Z");
 
+/**
+ * The job outcomes as the golden files were first written (R1-a), with null
+ * after them, and then each outcome added since, in order: EMPTY_UNCONFIRMED
+ * (Track M Day 2). A fixture's numbers come from its place in these lists, so
+ * a new outcome adds rows to the golden files and changes none already there.
+ */
+const OUTCOMES_WRITTEN = 6;
+const WRITTEN_OUTCOMES: readonly (JobOutcome | null)[] = [
+  ...JOB_OUTCOMES.slice(0, OUTCOMES_WRITTEN),
+  null,
+];
+const ADDED_OUTCOMES: readonly JobOutcome[] = JOB_OUTCOMES.slice(OUTCOMES_WRITTEN);
+/** What a job says came back empty: a NOT_FOUND, or an answer that is unconfirmed. */
+const SAYS_EMPTY: ReadonlySet<JobOutcome | null> = new Set(["NOT_FOUND", "EMPTY_UNCONFIRMED"]);
+
 const SOURCE: SourceDeclaration = {
   id: "golden",
   name: "[Source golden]",
+  access: ["open"],
   licence: {
     commercialUse: "PERMITTED",
     reason: "[test]",
@@ -177,12 +197,14 @@ interface CoverageFixture {
 
 const large = (): CoverageFixture => {
   const ids = ["golden.dns", "golden.crt", "golden.whois", "golden.active", "golden.unicode"];
-  const outcomes: (JobOutcome | null)[] = [...JOB_OUTCOMES, null];
-  // Two rounds of every collector, status and outcome: 420 jobs.
-  const combinations = [0, 1].flatMap((round) =>
-    JOB_STATUSES.flatMap((status: JobStatus) =>
-      outcomes.flatMap((outcome) =>
-        ids.map((collectorId) => ({ round, status, outcome, collectorId })),
+  // Two rounds of every collector, status and outcome: 420 jobs as first
+  // written, then 60 more for the outcome added since, after them.
+  const combinations = [WRITTEN_OUTCOMES, ADDED_OUTCOMES].flatMap((outcomes) =>
+    [0, 1].flatMap((round) =>
+      JOB_STATUSES.flatMap((status: JobStatus) =>
+        outcomes.flatMap((outcome) =>
+          ids.map((collectorId) => ({ round, status, outcome, collectorId })),
+        ),
       ),
     ),
   );
@@ -196,14 +218,14 @@ const large = (): CoverageFixture => {
         outcome === "FOUND"
           ? Array.from({ length: i % 3 }, (_, k) => id(20_000 + i * 3 + k))
           : null,
-      outcomeDetail: outcome === "NOT_FOUND" ? `[detail ${String(i)}]` : null,
+      outcomeDetail: SAYS_EMPTY.has(outcome) ? `[detail ${String(i)}]` : null,
       lastErrorCode: status === "FAILED" || status === "DEAD_LETTERED" ? `ERR_${String(i)}` : null,
       lastErrorMessage:
         status === "FAILED" || status === "DEAD_LETTERED" ? `[error ${String(i)}]` : null,
     }),
   );
   return {
-    name: "large run: 420 jobs over every status and outcome, 60 exclusions, an active collector",
+    name: "large run: 480 jobs over every status and outcome, 60 exclusions, an active collector",
     status: "PARTIAL",
     plan: {
       ...PLAN_DOMAIN,
@@ -576,7 +598,7 @@ describe("the run report's coverage, byte for byte against its golden files", ()
   });
 
   it("coverageFromJob, for every job status and outcome", () => {
-    const outcomes: (JobOutcome | null)[] = [...JOB_OUTCOMES, null];
+    const outcomes = [...WRITTEN_OUTCOMES, ...ADDED_OUTCOMES];
     golden(
       "coverage-from-job.json",
       JOB_STATUSES.flatMap((status, s) =>

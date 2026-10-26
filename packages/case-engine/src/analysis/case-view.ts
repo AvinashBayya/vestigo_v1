@@ -106,15 +106,16 @@ export interface CaseCollectorRun {
 
 /**
  * Where a collector stands:
- *   REGISTERED       in the registry, and not listed as BLOCKED or
- *                    NOT_IMPLEMENTED (an UNVERIFIED one runs only where the
- *                    deployment allows unverified sources);
+ *   REGISTERED       in the registry, and not listed as BLOCKED,
+ *                    NOT_IMPLEMENTED or UNVERIFIED;
  *   HELD             built, held off the platform, not in the registry;
  *   NOT_REGISTERED   not in the registry, and not held;
  *   BLOCKED          in the registry, but its source's licence verdict is BLOCKED;
- *   NOT_IMPLEMENTED  in the registry, with no implementation to run.
- * A BLOCKED or NOT_IMPLEMENTED collector keeps its registry label and
- * discipline, and is never counted as one that could have run.
+ *   NOT_IMPLEMENTED  in the registry, with no implementation to run;
+ *   UNVERIFIED       in the registry, but its source's licence is
+ *                    unverified, and an unverified source never runs.
+ * A BLOCKED, NOT_IMPLEMENTED or UNVERIFIED collector keeps its registry label
+ * and discipline, and is never counted as one that could have run.
  */
 export const REGISTRATIONS = ["REGISTERED", "HELD", "NOT_REGISTERED", ...CANNOT_RUN] as const;
 export type Registration = (typeof REGISTRATIONS)[number];

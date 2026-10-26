@@ -20,9 +20,10 @@ import {
   type Collector,
   type CollectorDeclaration,
   type CollectorImplementation,
+  type AccessMethod,
   type SourceDeclaration,
 } from "@repo/collectors";
-import { allowsUnverifiedSources } from "@repo/config";
+import { ACCESS_METHODS, enabledAccessMethods, loadEnv } from "@repo/config";
 import { parseTenantId, type TenantId } from "@repo/core";
 import {
   CollectorNotEnabledError,
@@ -124,6 +125,7 @@ function source(id: string, overrides: Partial<SourceDeclaration> = {}): SourceD
   return {
     id,
     name: `[Source ${id}]`,
+    access: ["open"],
     licence: {
       commercialUse: "PERMITTED",
       reason: "[test source]",
@@ -147,7 +149,8 @@ function source(id: string, overrides: Partial<SourceDeclaration> = {}): SourceD
 
 const SOURCES: SourceDeclaration[] = [
   source("one"),
-  source("two"),
+  // Open, or with a tenant key for more.
+  source("two", { access: ["open", "official"] }),
   source("strict", {
     network: {
       protocol: "http",
@@ -168,7 +171,9 @@ const SOURCES: SourceDeclaration[] = [
       check: { checkedOn: "2026-09-28", sourceUrl: null, recordedIn: "[test]" },
     },
   }),
+  // Open, or with a tenant key: so refusing it can be shown to read no key.
   source("unverified", {
+    access: ["open", "official"],
     licence: { commercialUse: "UNVERIFIED", reason: "[terms not checked]", check: null },
   }),
 ];
@@ -240,7 +245,9 @@ const COLLECTORS: Collector[] = [
     namesFrom("blocked.test", "fake.blocked"),
   ),
   defineCollector(
-    declaration("fake.unverified", "unverified"),
+    declaration("fake.unverified", "unverified", {
+      credentials: { vaultIds: ["unverified-key"], runsWithout: true },
+    }),
     namesFrom("unverified.test", "fake.unverified"),
   ),
   defineCollector(
@@ -276,7 +283,8 @@ const COLLECTORS: Collector[] = [
 
 function engine(
   options: {
-    allowUnverifiedSources?: boolean;
+    /** As a deployment configures it; unset, its default (never operator). */
+    accessMethods?: readonly AccessMethod[];
     limiterPrefix?: string;
     answers?: Record<string, string[]>;
     port?: number;
@@ -295,7 +303,7 @@ function engine(
   });
   const runtime = new CollectorRuntime({
     registry: new CollectorRegistry({ sources: SOURCES, collectors: COLLECTORS }),
-    allowUnverifiedSources: options.allowUnverifiedSources ?? true,
+    ...(options.accessMethods === undefined ? {} : { accessMethods: options.accessMethods }),
     network: {
       rateLimiter: redisUpstreamRateLimiter(limiter),
       resolver: (host) =>
@@ -379,8 +387,9 @@ describe("a BLOCKED collector cannot be executed by any path (RELEASE-BLOCKING)"
   it("is refused before its code runs, reads no credential, reaches no upstream and writes no evidence", async () => {
     const { tenantId } = await newTenant("blocked");
     routes.set("blocked.test/names?q=example.com", (res) => res.end('["leaked"]'));
+    // The most permissive engine a deployment can build: every access method enabled.
     const report = await collect(
-      engine({ allowUnverifiedSources: true }),
+      engine({ accessMethods: ACCESS_METHODS }),
       tenantId,
       "fake.blocked",
     );
@@ -423,32 +432,66 @@ describe("a BLOCKED collector cannot be executed by any path (RELEASE-BLOCKING)"
   });
 });
 
-describe("an UNVERIFIED collector is refused when the production flag is set (RELEASE-BLOCKING)", () => {
-  it("refuses in production by default, and runs only when explicitly allowed", async () => {
+describe("an UNVERIFIED collector never runs, in any environment (RELEASE-BLOCKING; access methods, acceptance b)", () => {
+  it("is refused before its code runs, and before its key is read, every access method enabled or not", async () => {
     const { tenantId } = await newTenant("unverified");
     routes.set("unverified.test/names?q=example.com", (res) => res.end('["a"]'));
-    const production = allowsUnverifiedSources({
-      NODE_ENV: "production",
-      COLLECTORS_ALLOW_UNVERIFIED: undefined,
-    });
-    const refused = await collect(
-      engine({ allowUnverifiedSources: production }),
-      tenantId,
-      "fake.unverified",
+    // The tenant holds the key it would use, so a read before refusal would show.
+    await db.withTenant(tenantId, (ctx) =>
+      vault.store(ctx, { provider: "unverified-key", label: "[Test key]", secret: "[tenant key]" }),
     );
-    expect(status(refused)).toBe("REFUSED:UNVERIFIED_SOURCE_NOT_ALLOWED");
+    for (const nodeEnv of ["development", "test", "production"] as const) {
+      for (const methods of [undefined, "open,official,licensed,operator"]) {
+        // Loaded as a deployment loads it, the retired flag set (loadEnv drops it).
+        const env = loadEnv({
+          DATABASE_URL: "postgres://app_runtime:app_runtime@127.0.0.1:5432/app",
+          DATABASE_AUTH_URL: "postgres://app_auth:app_auth@127.0.0.1:5432/app",
+          REDIS_URL: "redis://127.0.0.1:6379",
+          AUTH_SECRET: "x".repeat(32),
+          AUTH_BASE_URL: "http://127.0.0.1:3000",
+          WEB_ORIGIN: "http://localhost:5173",
+          VAULT_MASTER_KEY: "[test master key]",
+          VAULT_MASTER_KEY_ID: "test-1",
+          NODE_ENV: nodeEnv,
+          COLLECTORS_ACCESS_METHODS: methods,
+          COLLECTORS_ALLOW_UNVERIFIED: "true",
+        });
+        const refused = await collect(
+          engine({ accessMethods: enabledAccessMethods(env) }),
+          tenantId,
+          "fake.unverified",
+        );
+        expect(status(refused)).toBe("REFUSED:UNVERIFIED_SOURCE_NOT_ALLOWED");
+      }
+    }
+    expect(called).not.toContain("fake.unverified");
     expect(requests).toEqual([]);
     expect(await evidenceCount(tenantId)).toBe(0);
+    expect(await credentialReads(tenantId)).toBe(0);
+  });
+});
 
-    const optedIn = allowsUnverifiedSources({
-      NODE_ENV: "production",
-      COLLECTORS_ALLOW_UNVERIFIED: "true",
-    });
-    expect(
-      status(
-        await collect(engine({ allowUnverifiedSources: optedIn }), tenantId, "fake.unverified"),
-      ),
-    ).toBe("FOUND");
+describe("a credential is read only for an access method enabled here (RELEASE-BLOCKING; access methods)", () => {
+  it("leaves the tenant's key unread, and unsent, when the official method is not enabled", async () => {
+    const { tenantId } = await newTenant("official-off");
+    routes.set("two.test/names?q=example.com", (res) => res.end('["open"]'));
+    await db.withTenant(tenantId, (ctx) =>
+      vault.store(ctx, { provider: "one-key", label: "[Test key]", secret: "tenant-secret-value" }),
+    );
+    const openOnly = engine({ accessMethods: ["open"] });
+    // Runs without the key, which is the open method: FOUND, handed nothing.
+    expect((await collect(openOnly, tenantId, "fake.optional-key")).outcome.status).toBe("FOUND");
+    // Needs the key, and no keyed method is enabled: refused before any read.
+    expect(status(await collect(openOnly, tenantId, "fake.keyed"))).toBe(
+      "REFUSED:ACCESS_METHOD_NOT_ENABLED",
+    );
+    expect(requests.map((request) => request.headers.authorization)).toEqual([undefined]);
+    expect(await credentialReads(tenantId)).toBe(0);
+
+    // Enabled, the same key is read once, audited, and sent.
+    const found = await collect(engine(), tenantId, "fake.keyed");
+    expect(found.outcome.status).toBe("FOUND");
+    expect(await credentialReads(tenantId)).toBe(1);
   });
 });
 

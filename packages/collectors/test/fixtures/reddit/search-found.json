@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://www.reddit.com/dev/api/#GET_search",
+    "notes": "Synthetic: three posts in the search listing's documented shape, placeholder values: a link post with a thumbnail, a text post (domain self.*, thumbnail \"self\"), and one with no created_utc, whose date is null. No live answer could be recorded: www.reddit.com answered an unauthenticated search from this address with its 403 block page on 2026-10-17 (public-search-403.json), and no OAuth app is held here, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "oauth.reddit.com",
+    "path": "/search?q=%22climate+change%22&sort=new&limit=100&type=link&raw_json=1"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"kind\":\"Listing\",\"data\":{\"after\":null,\"dist\":3,\"children\":[{\"kind\":\"t3\",\"data\":{\"id\":\"[id-1]\",\"name\":\"t3_[id-1]\",\"subreddit\":\"[subreddit-1]\",\"author\":\"[author-1]\",\"title\":\"[post title 1]\",\"permalink\":\"/r/[subreddit-1]/comments/[id-1]/[slug-1]/\",\"url\":\"https://news.example.org/[article-1]\",\"domain\":\"news.example.org\",\"thumbnail\":\"https://b.thumbs.redditmedia.com/[thumb-1].jpg\",\"created_utc\":1792130400}},{\"kind\":\"t3\",\"data\":{\"id\":\"[id-2]\",\"name\":\"t3_[id-2]\",\"subreddit\":\"[subreddit-2]\",\"author\":\"[author-2]\",\"title\":\"[post title 2]\",\"permalink\":\"/r/[subreddit-2]/comments/[id-2]/[slug-2]/\",\"url\":\"https://www.reddit.com/r/[subreddit-2]/comments/[id-2]/[slug-2]/\",\"domain\":\"self.[subreddit-2]\",\"thumbnail\":\"self\",\"created_utc\":1792126800}},{\"kind\":\"t3\",\"data\":{\"id\":\"[id-3]\",\"name\":\"t3_[id-3]\",\"subreddit\":\"[subreddit-3]\",\"author\":\"[author-3]\",\"title\":\"[post title 3]\",\"permalink\":\"/r/[subreddit-3]/comments/[id-3]/[slug-3]/\",\"url\":\"https://news.example.org/[article-3]\",\"domain\":\"news.example.org\",\"thumbnail\":\"default\"}}],\"before\":null}}"
+  }
+}

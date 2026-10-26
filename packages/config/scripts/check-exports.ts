@@ -12,7 +12,12 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "envSchema",
     "loadEnv",
     "loadEnvSubset",
-    "allowsUnverifiedSources",
+    "enabledAccessMethods",
+    "ACCESS_METHODS",
+    "AccessMethod",
+    "DEFAULT_ACCESS_METHODS",
+    "isAccessMethod",
+    "parseAccessMethods",
     "Env",
     "EnvSource",
     "ConfigError",
@@ -79,6 +84,8 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "ApiKeyScopeError",
     "decideDisciplineAccess",
     "personGate",
+    // An operator's own collector counts as person data (access methods, 2026-10-16).
+    "disciplineFitsOperatorCollector",
   ],
   // The collector frame: catalogue, registry, runtime and the evidence path's pure half.
   "packages/collectors/src/index.ts": [
@@ -99,6 +106,15 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "createPlatformRegistry",
     "HELD_PLATFORM_COLLECTORS",
     "reportedPart",
+    // Access methods (2026-10-16): how a source is reached, and what runs here.
+    "ACCESS_METHODS",
+    "AccessMethod",
+    "KEYED_ACCESS_METHODS",
+    "OPERATOR_ID_PREFIX",
+    "OperatorAttachment",
+    "SourceAccess",
+    "CollectorAccess",
+    "FORBIDDEN_PLATFORM_DOMAINS",
   ],
   // Case analysis over stored records, pure: the run report's coverage, and
   // a case's coverage, collectors and discipline breakdown.

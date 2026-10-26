@@ -21,8 +21,9 @@ import {
   collectorsQuery,
   readiness,
   readinessNote,
+  runsVia,
+  runsViaText,
   type Collector,
-  type CollectorList,
 } from "../collectors.ts";
 import { ProblemNotice } from "../components/ProblemNotice.tsx";
 import { Instant } from "../components/Values.tsx";
@@ -551,33 +552,37 @@ function MonitorAlerts() {
 }
 
 /** The note every row shares, when there is more than one row and all say the same; else null. */
-function sharedNote(items: readonly Collector[], list: CollectorList): string | null {
-  const notes = items.map((item) => readinessNote(item, list));
+function sharedNote(items: readonly Collector[]): string | null {
+  const notes = items.map((item) => readinessNote(item));
   const first = notes[0];
   if (notes.length < 2 || first === null || first === undefined) return null;
   return notes.every((note) => note === first) ? first : null;
 }
 
-function CollectorRows({
-  items,
-  list,
-}: {
-  readonly items: readonly Collector[];
-  readonly list: CollectorList;
-}) {
+function CollectorRows({ items }: { readonly items: readonly Collector[] }) {
   // The same note on every row is said once, above them, rather than repeated.
-  const shared = sharedNote(items, list);
+  const shared = sharedNote(items);
   const rows = (
     <ul className="flex flex-col gap-2.75">
       {items.map((item) => {
-        const note = shared === null ? readinessNote(item, list) : null;
+        const note = shared === null ? readinessNote(item) : null;
+        const via = runsVia(item);
         return (
           <li key={item.id} className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 flex-col gap-0.75">
               <p className="text-ui text-ink-primary">{item.label}</p>
               {note === null ? null : <p className="text-caption text-ink-muted">{note}</p>}
+              <p className="text-caption text-ink-muted">
+                Runs via{" "}
+                {via === null ? (
+                  // Nothing it can run via here: a dash, never 0 (acceptance c).
+                  <Unmeasured summary="None." reason="No access method can run here." />
+                ) : (
+                  runsViaText(via)
+                )}
+              </p>
             </div>
-            <StatusChip status={readiness(item, list)} />
+            <StatusChip status={readiness(item)} />
           </li>
         );
       })}
@@ -624,14 +629,14 @@ function CollectorHealth() {
             None of them can run in this deployment.
           </p>
         ) : (
-          <CollectorRows items={ready} list={list} />
+          <CollectorRows items={ready} />
         )}
         {held.length === 0 ? null : (
           <details className="flex flex-col gap-2 border-t border-border-subtle">
             <summary className="flex min-h-target cursor-pointer items-center text-ui text-ink-secondary">
               {held.length} held: not enabled here
             </summary>
-            <CollectorRows items={held} list={list} />
+            <CollectorRows items={held} />
           </details>
         )}
       </div>

@@ -4,7 +4,7 @@
  * logic lives in @repo/osint-engine and the packages under it.
  */
 import {
-  allowsUnverifiedSources,
+  enabledAccessMethods,
   PRODUCT_NAME,
   resolveContentStoreDir,
   resolveLlmConfiguration,
@@ -26,6 +26,7 @@ import {
 } from "@repo/integrations";
 import { createLlmClient } from "@repo/llm";
 import {
+  ArticleExtractionProcessor,
   caseAnalysisCollectors,
   CaseAnalysisProcessor,
   CollectionExecutor,
@@ -53,7 +54,8 @@ export const WORKER_ENV = [
   "VAULT_MASTER_KEY",
   "VAULT_MASTER_KEY_ID",
   "CONTENT_STORE_DIR",
-  "COLLECTORS_ALLOW_UNVERIFIED",
+  // The access methods collectors may use here; the same value as the API.
+  "COLLECTORS_ACCESS_METHODS",
   "QUEUE_PREFIX",
   "WORKER_QUEUES",
   "COLLECT_CONCURRENCY",
@@ -83,6 +85,8 @@ export const WORKER_ENV = [
   // Case analyses (R1-b): their bulkhead and per-attempt timeout.
   "CASE_ANALYSIS_CONCURRENCY",
   "CASE_ANALYSIS_TIMEOUT_MS",
+  // Article prose extraction (M4-4B): its bulkhead.
+  "EXTRACTION_CONCURRENCY",
 ] as const satisfies readonly (keyof Env)[];
 
 export type WorkerEnv = Pick<Env, (typeof WORKER_ENV)[number]>;
@@ -121,7 +125,8 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
 
   const runtime = new CollectorRuntime({
     registry: createPlatformRegistry(),
-    allowUnverifiedSources: allowsUnverifiedSources(env),
+    // An UNVERIFIED source never runs; operator only where this names it.
+    accessMethods: enabledAccessMethods(env),
     network: {
       rateLimiter: redisUpstreamRateLimiter(
         new SlidingLogRateLimiter({ redis, keyPrefix: `${env.QUEUE_PREFIX}:upstream` }),
@@ -188,6 +193,10 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
     producedBy: PRODUCT_NAME,
     retry,
   });
+  // Article prose extraction (M4-4B). Off unless a model is configured: the
+  // fusion worker then fans out one extraction per FOUND article job, and the
+  // extractions queue consumes them with its own bulkhead.
+  const extraction = new ArticleExtractionProcessor({ db, llm, retry });
 
   const pool = await startWorkerPool({
     connection: { url: env.REDIS_URL, prefix: env.QUEUE_PREFIX },
@@ -217,6 +226,11 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
         timeoutMs: env.CASE_ANALYSIS_TIMEOUT_MS,
       }),
       concurrency: env.CASE_ANALYSIS_CONCURRENCY,
+    },
+    extraction: {
+      processor: extraction,
+      concurrency: env.EXTRACTION_CONCURRENCY,
+      enabled: llmConfiguration.status !== "NOT_CONFIGURED",
     },
     observer: {
       // Ids and codes only: a job's target can be personal data (CLAUDE.md §8).

@@ -60,7 +60,9 @@ const ReportWordingSchema = z.object({
   cover: z.object({ target: text, collectedAs: text, run: text, runValue: text, generated: text }),
   marking: z.object({ set: text, notSet: text }),
   footer: z.object({ report: text, page: text }),
-  states: z.record(z.enum(COVERAGE_STATES), text),
+  // Partial: a report keeps its wording, so one stored before a state existed
+  // (EMPTY_UNCONFIRMED, Track M Day 2) has no label for it, and no entry in it.
+  states: z.partialRecord(z.enum(COVERAGE_STATES), text),
   coverage: z.object({
     allCollected: text,
     noneCollected: text,

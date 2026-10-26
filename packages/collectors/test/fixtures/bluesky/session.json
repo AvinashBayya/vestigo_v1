@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://docs.bsky.app/docs/api/com-atproto-server-create-session",
+    "notes": "Synthetic: com.atproto.server.createSession's documented answer, placeholder values. No live answer could be recorded: the public AppView refused an unauthenticated search with 403 on 2026-10-17 (public-search-403.json), and no account app password is held here, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "bsky.social",
+    "path": "/xrpc/com.atproto.server.createSession"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"accessJwt\":\"[access token]\",\"refreshJwt\":\"[refresh token]\",\"handle\":\"[account].bsky.social\",\"did\":\"did:plc:[account]\"}"
+  }
+}

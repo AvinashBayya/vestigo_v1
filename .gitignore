@@ -13,3 +13,11 @@ legacy/
 # Generated at build time; never hand-edited.
 apps/api/openapi.json
 apps/web/src/client/
+
+# Runtime evidence content store (collected third-party data; never commit)
+apps/worker/data/
+
+# Local agent tooling: skills and transient workflow worktrees. Never tracked
+# or shipped, and holds copies of the source tree — so Prettier (which honours
+# .gitignore) and the source guards (fabrication.ts EXCLUDED_DIRECTORIES) skip it.
+.claude/

@@ -12,6 +12,8 @@ import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import type { Mock } from "vitest";
 import type { SessionState } from "../api.ts";
 import { createAppRouter } from "../router.tsx";
+// Every screen the router loads on demand, loaded with these tests (see test-screens.ts).
+import "../test-screens.ts";
 
 export type Handler = (
   request: Request,
@@ -361,7 +363,13 @@ export const DEFAULTS: Record<string, Handler> = {
   "GET /api/v1/session": () => Response.json(session),
   "GET /api/v1/me": () =>
     Response.json(me(["run:read", "evidence:read", "case:read", "case:write"])),
-  "GET /api/v1/collectors": () => Response.json({ unverifiedSourcesAllowed: true, items: [] }),
+  "GET /api/v1/collectors": () =>
+    Response.json({
+      unverifiedSourcesAllowed: false,
+      accessMethodsEnabled: ["open", "official", "licensed"],
+      sources: [],
+      items: [],
+    }),
   [`GET /api/v1/runs/${RUN_ID}`]: () => Response.json(RUN),
   "GET /api/v1/timeline": () => Response.json(TIMELINE),
   "GET /api/v1/entities": () => Response.json(ENTITIES),

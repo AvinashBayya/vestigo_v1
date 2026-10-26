@@ -135,6 +135,47 @@ export class ClaimsRepository extends TenantRepository {
     );
   }
 
+  /**
+   * Inserts the claim, or does nothing if one already exists for this evidence
+   * and attribute, returning whether it was written. This is the durable guard
+   * for the article prose extraction (M4-4B): it inserts against the partial
+   * unique index `claims_one_article_statements_per_evidence`, so two concurrent
+   * workers, or a redelivery, can never write a second `article_statements`
+   * claim for the same evidence — the loser's insert no-ops.
+   *
+   * It is valid only for an attribute backed by that partial unique index
+   * (currently `article_statements`): used for any other attribute, Postgres
+   * has no matching index for the ON CONFLICT and rejects the insert.
+   */
+  async createOnce(
+    input: NewClaim,
+  ): Promise<{ readonly claim: Claim | null; readonly created: boolean }> {
+    const entityId = "entityId" in input.subject ? input.subject.entityId : undefined;
+    const relationshipId =
+      "relationshipId" in input.subject ? input.subject.relationshipId : undefined;
+    return this.run(async (tx) => {
+      const claim = firstRow(
+        await tx
+          .insert(claims)
+          .values({
+            tenantId: this.tenantId,
+            evidenceId: requireUuid(input.evidenceId),
+            entityId: entityId === undefined ? null : requireUuid(entityId),
+            relationshipId: relationshipId === undefined ? null : requireUuid(relationshipId),
+            attribute: input.attribute,
+            value: input.value,
+            strength: input.strength,
+          })
+          .onConflictDoNothing({
+            target: [claims.tenantId, claims.evidenceId, claims.attribute],
+            where: sql`${claims.attribute} = 'article_statements'`,
+          })
+          .returning(),
+      );
+      return { claim, created: claim !== null };
+    });
+  }
+
   async findById(id: string): Promise<Claim | null> {
     return this.run(async (tx) =>
       firstRow(await tx.select().from(claims).where(this.owned(claims, id))),

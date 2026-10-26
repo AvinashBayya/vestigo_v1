@@ -135,8 +135,15 @@ The collector frame is built; the collectors themselves are ported in Phase 3B.
   commercial-use verdict. The verdict is a reviewed code change, never configuration.
   - PERMITTED rests on terms someone read, with the URL recorded.
   - BLOCKED never runs, by any path. It is still listed, with its reason.
-  - UNVERIFIED runs only where `COLLECTORS_ALLOW_UNVERIFIED` allows it. Unset, that means on in
-    development and test, and off in production.
+  - UNVERIFIED never runs either, in any environment, until its terms are checked and a verdict
+    recorded (access methods, 2026-10-16). Its collector's tests replay recorded answers through
+    the offline fixture harness, which no deployment can load.
+- **Every source declares how it is reached**: open (no credential), official (the provider's
+  keyed API), licensed (a data vendor, through the tenant's account) or operator (an operator's
+  own attached collector). A source runs only via a method enabled in the deployment
+  (`COLLECTORS_ACCESS_METHODS`: open, official and licensed unless it says otherwise; operator
+  only where it names it), and only if its verdict is PERMITTED. Every credential comes from the
+  tenant's vault. The product ships no operator collector, only the interface one attaches to.
 - **A collector is a pure function** of (target, credentials, fetch). It declares, as data, the
   following:
   - its id and version, and a display name that becomes its evidence label;

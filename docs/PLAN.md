@@ -13,7 +13,7 @@ against a real target, and sees real evidence. That slice cuts across Phases 2, 
 | 0     | Audit and migration map                 | Done. Findings in [audit/](audit/): REPORT, INVENTORY (per-module KEEP / REWRITE / DROP verdicts, used as the porting map), COLLECTORS, DEPENDENCIES, QUESTIONS. |
 | 1     | Scaffold and toolchain                  | **Done, 2026-09-25.** See below.                                                                                                                         |
 | 2     | Data foundation and tenancy             | **Done, 2026-09-28.** Session A: data layer and tenant isolation. Session B: authentication, MFA, permissions, module gating, API keys, audit, credential vault. See both records below. |
-| 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held), the `derived` provenance rule. See both records below. |
+| 3     | Collector SDK and migration             | **Done, 2026-09-30.** Session A: collector SDK, registry, licence gating, fetcher, evidence path. Session B: eleven collectors ported, ten registered (news held until Track M Day 2), the `derived` provenance rule. See both records below. |
 | 4     | Jobs, orchestration and tool containers | **Done, 2026-09-30** (tool containers and monitors deferred). BullMQ per-source queues, fault isolation, metering and quotas, run API with SSE, fusion, scope-authorisation API, operator-named labels, MFA enrolment token. See the record below. |
 | 5     | AI, fusion and reports                  | **Done, 2026-10-01; live checkpoint passed 2026-10-03** (Groq, development only — see the follow-up below). `packages/llm` with allowlist, profiles, cache, metering, injection defence and citation validator; path-decided claim strength; report pipeline with coverage and limitations; PDF, JSON, CSV and Maltego exports; evaluation harness. See the record below. |
 | 6     | Frontend                                | **6a done, 2026-10-03.** **6b in progress:** prerequisite and step 1 (auth) done 2026-10-03, looked at by the owner 2026-10-05; step 2 (search dashboard) done and looked at 2026-10-05; step 3 (run view) done 2026-10-05. **Realigned with the screen designs** (docs/design/) on 2026-10-05, awaiting the owner's side-by-side review. Step 3's Locked state completed 2026-10-06. Step 4 (results and the case workspace) done 2026-10-06 and verified live the same day (two layout defects found and fixed); step 5 (report view) done 2026-10-06, verified live. **6b complete**, awaiting the owner's look. **UI foundation:** U1-a (design system from the mockups) done 2026-10-07; U1-b (component library and the dev gallery) done and approved 2026-10-07; U1-c (every screen rebuilt from the library) done 2026-10-07, awaiting the owner's review. See the Phase 6a and 6b records below. |
@@ -743,7 +743,9 @@ news got through: GDELT answered 429, then refused connections. So `{}` may mean
 understood", and news's NOT_FOUND may be systematically false. Its found fixture is synthetic
 for the same reason. **What resolves it:** one live, recorded FOUND for a quoted-domain query.
 Then register news, replace the synthetic found fixture, and keep a recorded `{}` for a domain
-with no coverage.
+with no coverage. *Resolved in Track M Day 2 (below), on the owner's instruction: news is
+registered, an empty answer is never NOT_FOUND but unconfirmed, and the found fixture is a live
+recording, of a topic; no live FOUND for a domain phrase could be recorded.*
 
 **Verified at the checkpoint.**
 
@@ -758,7 +760,8 @@ with no coverage.
 
 ### Decisions taken in Phase 3B
 
-1. **news is held unregistered** until a live FOUND for a domain phrase is recorded.
+1. **news is held unregistered** until a live FOUND for a domain phrase is recorded. *Superseded in
+   Track M Day 2: registered on the owner's instruction (below).*
 2. **A mandatory `derived` block, not per-field strength.** It is enforced at registration and
    on every run.
 3. **libphonenumber-js is pinned exactly.** Every upgrade bumps contact.phone's version.
@@ -979,7 +982,8 @@ RUN status PARTIAL, settled; counts SUCCEEDED 3, DEAD_LETTERED 1
   - Listing across tenants belongs to the cross-tenant operator design (Phase 2A open question).
   - BullMQ's failed set is kept indefinitely, so it needs a retention policy (Phase 8).
 - **Quotas have no operator tooling;** they are set as the schema owner. Phase 7.
-- **news** still has no extractor; registering it will need one (a test enforces this).
+- ~~**news** still has no extractor; registering it will need one (a test enforces this).~~ Built in
+  Track M Day 2: it checks the result and draws nothing from it yet.
 - **The progress stream polls.** Consider a push signal at scale.
 - **Two load flakes seen:** the api server-spawn test (Phase 3B), and the web test worker start
   (this phase). Both pass alone and on rerun.
@@ -4007,3 +4011,549 @@ again.
 
 **Noted.** `apps/worker/data/content-store/` holds a local run's stored payloads. It is untracked,
 not ignored, and not committed.
+
+## Track M Day 2: GDELT un-held for a topic, behind the Day 1 gate (2026-10-15)
+
+**The owner's instruction** (2026-10-15), which rules D-M4 (`docs/monitoring/MONITORING-PLAN.md`
+§9) and changes its canary:
+- Add TOPIC to the GDELT collector, which took domains, mapping each article's language and outlet
+  country from what GDELT returns. The source label comes from the registry, never an article.
+- Un-hold GDELT, with the live FOUND recording it was held for as a fixture. Attribution travels
+  on its evidence.
+- GDELT's empty answer is "returned nothing — unconfirmed", never a confident NOT_FOUND and never
+  "0 articles". A list that reached the cap is "newest 250 only", never readable as a rise.
+- One request every five seconds, shared across tenants by the Redis limiter, proved across two
+  workers. A topic run that used only GDELT stays person data (Day 1).
+- A canary whose pass means GDELT is up, not that any query found something, and says so.
+- The RSS collector, the monitoring page and the scheduler are later days.
+
+**Pre-flight.**
+- The base is 51a7576 (Day 1), the same as `origin/main`; the tracked tree was clean.
+- The clean worktree `D:/vestigo-baseline` was reset to 51a7576; it held Day 1's change
+  uncommitted, identical but for the record's pipeline placeholder.
+- The baseline took five runs. Runs 1 to 4 each failed on a different load or pause timeout, and
+  each test passed alone: a web worker that did not start; a web lookup that timed out; a run the
+  machine slept through; database and Redis waits. Run 5, at turbo concurrency 2: 54 of 54
+  tasks, nothing cached, 2,163 tests, as Day 1; fabrication clean on 499 files; 181 symbols.
+
+**The live recording.** GDELT refused this address most of the day: 429 ("Please limit requests to
+one every 5 seconds"), from the first request, or a refused connection. Polling every ten minutes,
+one request was answered:
+- `"climate change"`, 17:27 UTC, through the collectors package's own fetcher: 200, 166 articles
+  from 150 outlet domains in 20 languages, each with all eight fields. `language` and
+  `sourcecountry` are names ("English", "United States"), not codes; `url_mobile` is blank in 140,
+  `socialimage` in 24, `sourcecountry` in 3; every `seendate` is `YYYYMMDDTHHMMSSZ`, newest first.
+- Under the 250 cap, yet its seendates run from 14:30 to 17:00 UTC that day, of the three months
+  asked for: a list under the cap is not all the coverage in the window either.
+- Stored as `test/fixtures/news/found.json`, recorded-redacted: titles become `[headline N]`, and
+  the paths of `url`, `url_mobile` and `socialimage` become placeholders (the first URL named a
+  person). Everything else is as received; GDELT's layout was rebuilt byte for byte from the
+  parsed answer before redacting, and the received body's SHA-256 is in the notes.
+- Not recorded, every attempt answered 429: the canary's own answer (`canary-found.json` is
+  synthetic and says so) and a FOUND for a domain phrase, the Phase 3B condition.
+
+**Built, in two commits.**
+1. **The ruling** (6c230e5), in a commit of its own with its golden diff, as coverage requires:
+   - EMPTY_UNCONFIRMED, appended to the job outcomes and coverage states (`packages/core`), worded
+     RETURNED NOTHING (UNCONFIRMED). A report keeps its wording, so a stored one may lack a label
+     added since: the API reads it partially, and the PDF prints the state's own name.
+   - `ctx.emptyUnconfirmed` (a 2xx this run received, a detail, network collectors only). A
+     collector declaring `emptyAnswersUnreliable` cannot return `notFound()`.
+   - Migration 0027 appends the enum value and lets a job keep its detail
+     (`jobs_detail_only_empty_answers`, compared as text, as 0025 did).
+   - The job SUCCEEDS with its detail, is never retried, and is the circuit's success.
+   - Coverage (`packages/case-engine`): its own state, counted apart in the headline ("1 returned
+     nothing — unconfirmed") with a caveat; a breakdown lists it as ran, never found nothing;
+     ENGINE_VERSION 6.
+   - Golden files rewritten with `WRITE_GOLDEN=1`, every existing row unchanged: the outcomes are
+     ordered as first written, then null, then added ones. Six rows were added; the large run
+     gained its 60 jobs, so its name, headline and caveats changed.
+   - Web: the Unconfirmed chip in the hypothesis grey (DESIGN-SYSTEM D9); its row gives the
+     collector's words, never "0 evidence records"; its own count chip; a gap on the Overview.
+2. **GDELT** (the commit after it):
+   - `news` 2.0.0 takes DOMAIN and TOPIC. A topic is one exact phrase, less one pair of outer
+     straight or curly quotes. A quote mark inside, or nothing inside the quotes, is refused before
+     anything is sent (`TARGET_NOT_SEARCHABLE`): it would end the phrase and turn the rest into
+     GDELT's operators. A hashtag is sent as typed.
+   - An empty answer runs the canary: `"government"`, the documented default list of 75, the same
+     window and the same shared limit. Articles back: EMPTY_UNCONFIRMED, its detail ending "A
+     passing canary means GDELT is up — not that any query found something." Nothing back:
+     UNAVAILABLE, GDELT is not answering searches. A refused canary is UNAVAILABLE and says so.
+   - The result states the search sent, `newest250Only`, the span of seendates it covers, and
+     `volume: { count: null, reason: NOT_MEASURED_BY_AN_ARTICLE_LIST }`; `returnedCount` and
+     `capped` are gone, so no figure in it counts coverage.
+   - Comments that called GDELT's `{}` and seendate "documented" now say recorded.
+   - Registered, appended to `PLATFORM_COLLECTORS`; `HELD_PLATFORM_COLLECTORS` is empty, exported.
+   - Fusion: a news extractor that checks the result and draws nothing yet (no entity, no claim,
+     no count), so a TOPIC fuses without an entity kind.
+
+**Review.** An adversarial review was started (five lenses, two refuting skeptics per finding) and
+did not finish: the session ended while its reviewers ran, and at the owner's request for speed it
+was not run again. The risky pieces were checked directly instead, and by the removals below.
+
+**Shown failing on the code before the change** (each piece removed, the tests run, the file
+restored byte for byte, hash checked):
+- **An empty answer as NOT_FOUND**, as before: the runtime refused it, and five honesty tests
+  failed.
+- **Without TOPIC:** 16 news tests failed, the live-recording FOUND test among them.
+- **Without the newest-250 flag:** the cap test failed.
+- **GDELT's limit at one a second:** the two-worker test failed on Redis's clock.
+- **news not registered,** as before: the API's GDELT-only topic run planned nothing, and the suite
+  failed.
+- **Without GDELT's attribution:** the evidence test failed.
+
+**Pipeline** (`pnpm turbo lint typecheck test --force --continue --concurrency=2`, in the clean
+worktree: at commit 1, then with commit 2's change mirrored into it, every file identical to the
+commit but this record's pipeline lines).
+- Commit 1 (6c230e5): 53 of 54 tasks, nothing cached, 2,180 tests (17 more than the baseline's
+  2,163); the fabrication check clean on 499 files; the export check 181 symbols. The one failure
+  was a 30-second timeout in the stream-access test (a member removed mid-stream), which this
+  change does not touch; run alone, that file passed, 7 of 7.
+- Commit 2: 52 of 54 tasks, nothing cached, 2,203 tests (40 more than the baseline); the
+  fabrication check clean on 501 files; 181 symbols. Five tests failed, none of them Day 2's, all
+  in one pause of the machine: four 30-second timeouts were reported after 363 to 370 seconds, in
+  the api and osint-engine suites at once, and a fifth test lost its database connection just
+  after. Docker ran throughout. The two suites rerun alone in the same worktree, their builds
+  cached: api 239 of 239, osint-engine 179 of 179.
+
+| Package | Tests | Package | Tests |
+|---|---|---|---|
+| core | 33 | osint-engine | 179 |
+| access | 67 | worker | 4 |
+| config | 265 | api | 239 |
+| case-engine | 77 | ui | 95 |
+| collectors | 504 | web | 183 |
+| llm | 130 | integrations | 122 |
+| db | 305 | | |
+
+**Open for the owner.**
+- **Domains.** news keeps DOMAIN, as item 1 and §4.2 read. No live FOUND for a domain phrase could
+  be recorded, and GDELT's answers covered only the newest hours, so most domain searches will be
+  unconfirmed. Every domain run, for every tenant, now spends one or two GDELT requests. In
+  production it is the one domain collector that runs, the others being unverified. One line
+  (`targetTypes`) makes it topic-only.
+- **Case engine.** The ruling touched `packages/case-engine` and its R1 code, against the Track M
+  ruling that it would not: without it, coverage reads an unconfirmed answer as NOTHING FOUND.
+- **Stored case analyses read STALE** after deploy: ENGINE_VERSION 6, and the held list changed.
+- **GDELT is under strain.** It asks (blog, 2026-06-30) that searches move to its ngram files for
+  now, and its 429 counts toward the circuit, as every collector's 429 does.
+- **D9**, the Unconfirmed chip's colour.
+- **The canary and the domain recordings** are still to be made when GDELT answers this address.
+
+**Noted.** `PROJECT-BRIEF.md`, `R1-HONESTY.md` and `R1-PLAN.md` still say news is held; they are
+dated snapshots and R1 files, left as they are.
+
+## Access methods: a licence-gated registry, GDELT the first open source (2026-10-16)
+
+**The owner's instruction** (2026-10-16):
+- Every source declares one or more access methods and a licence verdict. The methods are open (a
+  free public API), official (a keyed API), licensed (a data vendor's account) and operator
+  (operator-supplied credentials, off by default).
+- A source runs only via an enabled method whose verdict is PERMITTED. The operator method stays
+  off unless configuration enables it. No credentialed scraping code, only the interface an
+  operator would attach their own collector to.
+- A source with no runnable method yields "—" or null, never 0. Tenant isolation and the Day 1
+  person gate hold.
+- GDELT's news collector is the first open source, PERMITTED and enabled, not rewritten, its Day 2
+  behaviour intact.
+- Acceptance: (a) operator is off by default; (b) a BLOCKED or UNVERIFIED source never runs; (c) a
+  source with no runnable method renders "—", not 0; (d) GDELT's Day 2 tests pass unchanged.
+
+**How it was read** (stated here so the owner can correct it):
+- **(b) is absolute in the product.** No runtime the API or a worker builds runs an UNVERIFIED
+  source, in any environment. `COLLECTORS_ALLOW_UNVERIFIED` and `allowsUnverifiedSources` are
+  retired, and the variable is dropped if set, as every retired variable is. This supersedes the
+  Phase 3A allowance (unset: on in development and test). The offline fixture harness may still
+  replay recorded answers for an UNVERIFIED collector. Its network is a loopback fixture server
+  and a placeholder resolver, so a replay never contacts the source. The grant is package-internal
+  (`replayRecordedAnswers`, lint-fenced to `src/testing.ts`), and a new RELEASE-BLOCKING check
+  fails if any app or package source loads `@repo/collectors/testing`. Without replay, about 240
+  tests of eight shipped collectors, the cross-tenant API checkpoints among them, would have had
+  to go.
+- **"The operator supplies the key" means the tenant's administrator, through the tenant's vault.**
+  No platform-level collector credential exists (the Phase 3A tenant-keys-only ruling; an env file
+  is plaintext on disk, CLAUDE.md §9). The deployment's configuration only switches methods on.
+- **A licensed vendor, or an operator's own collector, is a source of its own**, with its own id,
+  label, verdict and hosts (CLAUDE.md, source labelling). The verdict stays one per source, shared
+  by every method (Phase 3A decision 2): different terms for another way in are another source.
+- **"Enabled in config"** is `COLLECTORS_ACCESS_METHODS`, a comma-separated list. Unset, it is
+  open, official and licensed, never operator. Verdicts stay code.
+- **"First" open source** is a fact of this change's history, not something a test can measure.
+  wikidata and libphonenumber declare open in the same change.
+
+**What changed.**
+- **config:** `ACCESS_METHODS`, `DEFAULT_ACCESS_METHODS`, `COLLECTORS_ACCESS_METHODS` and
+  `enabledAccessMethods`; `.env.example` regenerated.
+- **collectors:**
+  - `SourceDeclaration.access` is required, and every catalogue source declares its methods
+    from what the audit records of a key, token or paid account. Open or official: github,
+    jina-reader, bluesky. Official: ucdp, reliefweb, hibp, reddit-api, brave-search,
+    youtube-data-api. Licensed: kpler. Open: the rest, gdelt-doc first.
+  - Validation allows at most one keyed method. Operator stands alone, needs a network, and is
+    exactly the sources and collectors whose ids start `operator.`.
+  - No source may declare an Instagram, Facebook or X host: a backstop for §3, not the rule
+    itself.
+  - The registry checks that a collector's credentials fit its source's methods, and lists the
+    methods each collector can use. A tenant vault id belongs to one source: a collector on
+    another source may not name it, so an attached collector cannot be handed, say, the
+    tenant's GitHub key. An operator collector must be declared PERSON: it may read
+    people whatever it says, so it is person data, fail closed (`@repo/access`
+    `disciplineFitsOperatorCollector`).
+  - The runtime's `access()` and `sources()` decide, in order: licence (BLOCKED, then
+    UNVERIFIED), an enabled method, an implementation. Then the unchanged discipline, Day 1
+    TOPIC and scope checks run. It hands a collector only the credentials of a keyed method
+    enabled here. `createPlatformRegistry({ operatorAttachments })` is the attach interface, and
+    the product attaches none.
+- **core:** `UNRUNNABLE_REASONS` gains `UNVERIFIED_SOURCE_NOT_ALLOWED` and
+  `ACCESS_METHOD_NOT_ENABLED`.
+- **osint-engine:** the executor reads from the vault only the vault ids `access()` allows.
+  `caseAnalysisCollectors` marks an UNVERIFIED collector as unable to run, from the registry
+  alone, so the API and the worker agree and configuration stays out of the input hash. The
+  stored-document schema names registrations by value.
+- **case-engine (D-39, for UNVERIFIED):** registration and discipline status UNVERIFIED, counts
+  null with `ONLY_UNVERIFIED_COLLECTORS`, and ENGINE_VERSION 7.
+- **api:** GET /api/v1/collectors gives each collector its `sourceId` and `access`, with
+  `runsVia` null and a refusal and reason when nothing runs. The list gains
+  `accessMethodsEnabled` and every catalogue source. `unverifiedSourcesAllowed` stays, always
+  false, so clients do not break. The estimate's vault ids are the ones a run would read.
+- **worker:** reads `COLLECTORS_ACCESS_METHODS`.
+- **web:** readiness is the API's `access`, failing closed. Each health-card row says what it
+  runs via, or a dash ("None. No access method can run here."). `ACCESS_METHOD_NOT_ENABLED` reads
+  Held. `Unmeasured` takes an optional summary for a dash that stands for a known absence.
+
+**Acceptance tests.**
+- **(a) Operator is off by default:**
+  - the config, in every NODE_ENV (`env.test.ts`, `env-example.test.ts`);
+  - the runtime, where an attached operator collector is refused, its code unrun and its account
+    unread, until operator is named, and stays person-gated once it is (`runtime.test.ts`);
+  - a deployment's runtime and the platform registry (`platform/access-methods.test.ts`);
+  - the attach interface's refusals, in the same file.
+- **(b) BLOCKED and UNVERIFIED never run:** by default and with every method enabled, the
+  environment loaded as a deployment loads it (loadEnv drops the retired flag; the runtime takes
+  nothing else from the environment, NODE_ENV included). Checked in the runtime, for every
+  platform collector, and end to end with no request, no evidence, and no read of the key the
+  tenant holds for it (`collection.test.ts`). A deployment's DOMAIN plan is news alone. The
+  BLOCKED test now runs on the most permissive path left: the replay grant with all four
+  methods.
+- **(c) Null and a reason, never 0:** in the runtime and on the platform; through the API
+  (`collectors.test.ts`); in the web health card, a dash named "None.", no zero, and a collector
+  the API did not decide held (`search.test.tsx`). In the case breakdown, a discipline whose
+  only collector is UNVERIFIED reads null (`case-analysis.test.ts`,
+  `case-analysis-collectors.test.ts`). A stored ENGINE_VERSION 6 document, written by 6bf5fe3's
+  own code, still reads.
+- **(d) GDELT's Day 2 tests are unchanged and pass:** `news.test.ts`, `gdelt-limit.test.ts`,
+  `gdelt-topic-runs.test.ts` and `platform-registry.test.ts` are byte-identical to 6bf5fe3. In
+  `pipeline.test.ts`, only its own fake source gained `access: ["open"]` and five retired-option
+  lines went; its GDELT tests are untouched. New: gdelt-doc declares exactly open, PERMITTED and
+  enabled; news runs via open and sends no credential; turning open off turns GDELT off, and
+  says so.
+- **Credentials and configuration:** GitHub's collector is handed the tenant's key only while
+  official is enabled (`platform/access-methods.test.ts`); an attachment naming another source's
+  key is refused; a worker started with open switched off plans no GDELT job and records
+  `ACCESS_METHOD_NOT_ENABLED` (`apps/worker/src/index.test.ts`); the estimate's vault ids follow
+  the enabled methods (`apps/api/test/estimate-access.test.ts`); every unrunnable reason reads
+  Held in the web (`search/plan.test.ts`).
+- **Changed on purpose:**
+  - The worker's DOMAIN plan, which Day 2 extended with news, is now news alone.
+  - The case-analysis collectors test now reads UNVERIFIED as unable to run.
+  - The collection and runtime tests that ran an UNVERIFIED source "where allowed" became the
+    (b) tests.
+
+**Pipeline.** (`pnpm turbo lint typecheck test --force --continue --concurrency=2`, in the clean
+worktree at 6bf5fe3 with this change mirrored into it, every file identical to the commit but this
+record's pipeline line): 54 of 54 tasks, nothing cached, 2,259 tests (56 more than Day 2's
+2,203); the fabrication check clean on 508 files; the export check 195 symbols. An earlier run of
+the same change, before the review's fixes, lost four tests to one pause of the machine (30-second
+timeouts reported after up to 786 seconds); those suites rerun alone passed.
+
+| Package | Tests | Package | Tests |
+|---|---|---|---|
+| core | 33 | osint-engine | 181 |
+| access | 69 | worker | 5 |
+| config | 273 | api | 241 |
+| case-engine | 81 | ui | 96 |
+| collectors | 537 | web | 186 |
+| llm | 130 | integrations | 122 |
+| db | 305 | | |
+
+**Open for the owner.**
+- **Production and development now run the same three collectors:** wikidata, contact.phone and
+  news. A USERNAME target plans nothing anywhere. The M3 live checkpoint waits for Bluesky's and
+  Mastodon's verdicts. Recording verdicts is owner work.
+- **The operator attach interface** runs attached code in the worker's process, with what that
+  process can reach. It needs the same review as platform code. Host, verdict and person rules
+  are backstops, not a sandbox. Open questions:
+  - whose account an operator method uses;
+  - whether enabling it should be a per-tenant, audited record rather than a deployment
+    setting;
+  - fusion: no extractor exists for an attached collector, so a FOUND job from one would fail
+    fusion with a typed error.
+- **The case engine** was touched again (ENGINE_VERSION 7), so stored analyses read STALE after
+  deploy.
+- **Owner-reviewed wording, not changed:** `UNMEASURED_IS_NOT_ZERO` lists the causes as "none is
+  built, or each is held, blocked by its source's licence, or not yet implemented". Proposed:
+  "none is built, or each is held, blocked by its source's licence, waiting for its source's
+  licence to be checked, or not yet implemented".
+- **What D-39 leaves:** a collector whose only methods are switched off by configuration still
+  reads REGISTERED in case analysis. Its runs record `ACCESS_METHOD_NOT_ENABLED`, which the lock
+  judgement leaves out. No platform collector is affected under the default.
+- **Stored report coverage** still carries `evidenceCount: 0` for excluded and held entries.
+  Neither the web nor the PDF renders it. Making it null is a core type change with a migration
+  plan.
+- **The database's guard stays at BLOCKED.** UNVERIFIED rows stay enabled, because the offline
+  replay writes their evidence, so the runtime is what refuses them.
+- **Removing `unverifiedSourcesAllowed`** from the API is a breaking change, left for a version
+  bump.
+- **`platform-registry.test.ts`'s title** still says "UNVERIFIED only where allowed". It is kept
+  byte-identical for (d), and its assertion (availability) still holds.
+
+**Noted.** `R1-PLAN.md` (D-39 open) and `PROJECT-BRIEF.md` are R1 files and a dated snapshot, left
+as they are. In the main tree, the untracked `.claude/` worktrees trip the person-gate guard. The
+clean worktree has none.
+
+## Monitoring collectors: RSS, Reddit and Bluesky on the open method (2026-10-17)
+
+**The owner's instruction** (2026-10-17):
+- Build RSS, Reddit and Bluesky collectors on the access-method seam, each item in the news
+  collector's shape, with the registry's label, claim strengths (OBSERVED for the item's
+  existence, REPORTED for what it says), a published date that is null when the source gives
+  none, and a region when known.
+- RSS: World Monitor's direct-publisher feeds, without Google News, plus six to eight named
+  Indian outlets, each verified live.
+- Reddit: the public JSON endpoint at one request a second, or an OAuth app if configured.
+  Bluesky: the public `searchPosts`.
+- An empty or failed fetch is EMPTY_UNCONFIRMED, never 0. TOPIC runs stay person-gated.
+
+**The owner's rulings, the same day**, on four conflicts raised before building:
+- **Held:** the sources have no recorded verdict, so they are built UNVERIFIED and tested on
+  recorded answers; none runs until the owner records its terms.
+- **Collectors only:** there is no watch, trends or brief stage in Vestigo (slices M1, M3, M5 of
+  `docs/monitoring/MONITORING-PLAN.md`), so items reach stored evidence, as GDELT's do.
+- **The feed list as leads only:** World Monitor's list is AGPL-3.0. No file is copied. Each
+  publisher's own feed URL is verified and declared under a source of its own.
+- **Additive fields:** items keep the news shape and add `published` and, derived, `publishedAt`
+  and `region`. GDELT keeps its own shape.
+
+**What was found, live.**
+- **Bluesky:** the public AppView answered an unauthenticated `searchPosts` with 403
+  (recorded). Keyless Bluesky search does not exist today.
+- **Reddit:** www.reddit.com answered this address's unauthenticated search with its 403 block
+  page (recorded). Neither refusal was worked around (CLAUDE.md §3).
+- **RSS:** 179 URLs were fetched once each: 167 from World Monitor's list and twelve Indian
+  candidates. `test/snapshots/rss-feed-verification.json` records what happened to every one:
+  - 153 kept, from 132 publishers;
+  - 15 failed the check and were skipped (HTTP 403, 404, 429, not a feed, a reset
+    connection), three of them Indian candidates: ThePrint (403), The Wire (not a feed) and
+    Deccan Herald (404);
+  - 10 Google News URLs, written out by hand rather than through `gn()`, left out whatever
+    they answered (8 had parsed);
+  - a ninth Indian outlet that passed, Business Standard, left out to stay within eight.
+- **Language is not a region:** The Hindu's feed states en-US and The Times of India's en-GB.
+  So `region` comes only from a country the feed list records, never from a language tag.
+  It is IN for twelve publishers:
+  - seven publishers for the eight added outlets (The Times of India and The Economic Times
+    share indiatimes.com);
+  - five from World Monitor's list: NDTV, The Hindu, Inc42, Aaj Tak and Amar Ujala.
+
+**What changed.**
+- **collectors:**
+  - `rss.<domain>`: one collector per publishing domain, each on its own UNVERIFIED source
+    with its own limit (one request every two seconds).
+    - **Matching:** for a topic, it keeps the items whose title or summary contains the phrase
+      as whole words, case-insensitively, the title and the summary each on its own. A
+      letter, mark or digit on either side continues a word, in any script, so "AI" is not
+      found in "said". Typographic apostrophes and dashes match their plain forms, and HTML's
+      named entities are decoded first, so "Côte d’Ivoire" and "M&amp;uuml;nchen" are found.
+    - **No link:** an item that mentions the topic but gives no link cannot be cited. It is
+      counted (`itemsMentioningWithoutLink`), and an answer with only such items says so.
+  - `bluesky.search` reads the public AppView, or bsky.social with the tenant's app password
+    (vault id `bluesky`). There it signs in, searches, and closes the session
+    (`deleteSession`) whatever the search answered, or if it could not be sent. A close that
+    fails, or cannot be sent, is UNAVAILABLE and says the session may still be open. A post's
+    web link is built from the DID in its URI, never from its author's handle.
+  - `reddit.search` reads the public JSON endpoint, or oauth.reddit.com with the tenant's OAuth
+    app (vault id `reddit-api`), at Reddit's one request a second. `reddit-api` now declares
+    open and official.
+  - A page that names another page (Bluesky's `cursor`, Reddit's `after`) is marked
+    newest-only, as a full page is.
+  - **The RSS and Atom reader** uses no XML library and no DTD, and fetches nothing. It returns
+    each value as the feed's text has it, for the provenance check, and decoded under
+    `derived`.
+    - It reads, and decodes text, in one forward pass, so a hostile body costs time in
+      proportion to its length. An item that never closes is a typed failure.
+    - An Atom entry takes its alternate link, or its first link without a rel, and never
+      reads the `<source>` it was copied from as its own. An RSS item with no `<link>` takes
+      its guid when that is a permalink URL.
+    - A video's `media:content` is never the item's image; its poster thumbnail is.
+  - **Dates** are read field by field, in the two forms feeds use: RFC 822/2822 (RSS) and
+    RFC 3339 (Atom, Bluesky). A date with no time zone, no year, a day the month does not
+    have, an order that could be day-first or month-first, or a weekday that is not the
+    date's, is null, never a lenient parser's guess or this server's reading. A two-digit
+    year is read by RFC 2822's rule only when the weekday confirms it (CISA's feed writes
+    them). On the 7,052 dated items of the live check, this reads every date as before.
+  - `CredentialMalformedError`, for a vault credential not in the form a collector needs.
+- **osint-engine:** extractors that check each result and draw nothing yet, as news does.
+
+**Departures from the instruction, stated.**
+- **A failed fetch is a typed failure, not EMPTY_UNCONFIRMED.** CLAUDE.md §1 says a collector
+  that fails returns a typed error, and the runtime refuses an unconfirmed answer that cites
+  no 2xx response. A 429 or 5xx is UNAVAILABLE and retried; a 403 is FAILED,
+  UPSTREAM_REFUSED. Neither is ever 0. A 2xx with nothing on the topic is EMPTY_UNCONFIRMED.
+- **The source label is not in the item.** A collector cannot state a label (CLAUDE.md, source
+  labelling). Every evidence row takes it from the registry through its collector id. The
+  pipeline test checks that each row's collector is its own job's.
+- **Real items exist for RSS only.** Bluesky's and Reddit's found answers are synthetic in
+  their documented shapes until an app password or an OAuth app lets one be recorded.
+- **The user agent is the platform's** (`Vestigo-collector/1.0`). A collector cannot set its
+  own, and Reddit asks for one naming a contact.
+
+**Acceptance tests.**
+- **(a) Items reach stored evidence:** a topic run through the engine
+  (`pipeline.test.ts`) stores a real BBC item, a Bluesky post and a Reddit post, one
+  evidence row each, with nothing drawn. Each row is its own job's collector's, and BBC's
+  cites the World feed, where the item was.
+- **(b) Empty is unconfirmed, failure is typed, never 0:**
+  - an RSS topic with no matching item, and an empty Bluesky or Reddit page, are
+    EMPTY_UNCONFIRMED, and a run of one completes with nothing stored;
+  - a feed answering 503, 403 or a page that is not a feed, and the recorded Bluesky and
+    Reddit 403s, are typed failures;
+  - one unreadable feed of a publisher fails its whole job, never a quiet partial: the last
+    of BBC's seven, after an earlier one matched, and a middle one refusing.
+- **(c) No invented date:** BBC Hindi's recorded second item has no `<pubDate>`, and its
+  `publishedAt` is null; so are a Bluesky post with no `createdAt`, a Reddit post with no
+  `created_utc`, a date with no time zone, dates such as "17-Oct-2026", whose year could
+  pass for an offset, and dates a lenient parser would complete (no year, 31 February, a
+  wrong weekday). One item's malformed date is null on that item alone: the run keeps the
+  others.
+- **(d) The Day 1 gate:** each collector refuses a topic without the person module or approved
+  vetting, and the planner leaves all three out of a topic run for such a tenant.
+- **The feed list:** a test checks it is exactly the feeds the live check kept, with no Google
+  News and eight Indian outlets added. It checks that the snapshot accounts for all 179 URLs,
+  and that each publisher's country is the one the snapshot records for its feeds.
+
+**The adversarial review, the same day.** It confirmed 17 findings, 14 distinct issues, all
+fixed. Each fix has a test that fails when it is reverted (the Verge fixtures' since the
+second review); eleven were checked by putting the defect back.
+- **Dates:** a zoneless date ending in a dash and a year ("17-Oct-2026") read as having an
+  offset, giving this server's midnight.
+- **Matching:**
+  - the phrase was a raw substring of the title and summary joined, so "AI" was found in
+    "said", and across the two fields;
+  - matching items with no link were dropped silently, and the empty answer then said that
+    nothing mentioned the topic.
+- **The reader:** its item scan was quadratic on items that never close, blocking the worker.
+- **Bluesky:**
+  - its web link used the author's handle, which can be "handle.invalid" or change;
+  - each signed-in run left its session open on the tenant's account.
+- **Paging:** Bluesky's cursor and Reddit's `after` were ignored, so a partial page read as
+  complete.
+- **Data:**
+  - Aaj Tak and Amar Ujala had no country, and the test pinned that gap;
+  - the record's figures did not add up, with every left-out URL missing from the snapshot;
+  - the Verge fixtures kept their Atom category terms, a person's name among them.
+- **Tests:**
+  - the partial-failure test failed the first feed, so it could not catch a quiet partial;
+  - the Atom link choice was untested;
+  - the acceptance (a) label check compared the registry with a copy of itself.
+
+**A second review, of those fixes, the same day.** Four reviewers, each checked by a skeptic,
+confirmed 14 findings, 12 distinct issues, all fixed. Each fix has a test that fails when it is
+reverted; all eleven code fixes were checked by putting the defect back.
+- **The reader:**
+  - its tag strip was still quadratic, so matching, not parsing, could block the worker;
+  - a video's `media:content` was stored as the item's image;
+  - `&constructor;` decoded to a function's source text, which a topic could then match;
+  - most named entities stayed encoded, so "M&amp;uuml;nchen" did not match "München";
+  - an Atom entry's `<source>` could give the entry its title, link and date.
+- **Matching:** curly apostrophes did not match straight ones.
+- **Dates:**
+  - `Date.parse` filled in missing years and days, rolled 31 February into March and
+    guessed month-first;
+  - a five-digit year failed the whole run's result, losing every item.
+- **Bluesky:** a close that could not be sent left the session open without saying so, and
+  the test for the close ran no path that needed it.
+- **Claims:** the schema still said no mentioning item is dropped, the monitoring plan still
+  called Reddit official only, and the first review's "each fix has a test" was not yet true
+  for the Verge fixtures.
+
+**Pipeline.** In a clean worktree holding only this change, `pnpm turbo lint typecheck test --force`
+ran 54 of 54 tasks green, lint and typecheck clean, 2,318 tests: collectors 590, db 305,
+config 273, api 241, osint-engine 187, web 186, llm 130, integrations 122, ui 96, case-engine
+81, access 69, core 33, worker 5.
+
+**Open for the owner.**
+- **Verdicts:** 134 sources wait on the owner reading the terms: Bluesky's, Reddit's Data API
+  terms (D-M8), and each of the 132 publishers'. Until then none runs.
+- **Keys to record real answers:** a Bluesky app password and a Reddit OAuth app, held as tenant
+  credentials, would let their found answers be recorded and the synthetic fixtures replaced.
+- **Scale:** each source gets its own collect queue, so a collect pool now opens 134 more queues,
+  idle while the sources are UNVERIFIED. Opening queues only for sources that can run is a
+  separate change.
+- **The health card** lists the 134 among the held collectors.
+- **Feeds change:** a publisher can move or drop a feed. Its collector then fails, typed, until
+  the list is checked again.
+- **Bluesky sessions:** a signed-in run opens and closes its own session. Bluesky limits
+  sign-ins per account, so a tenant watching many topics would need one session kept between
+  runs, outside the collector. Not built; latent while Bluesky is held.
+- **One feed to look at closely:** `rss.trumpstruth-org` is a third party's feed of one
+  person's posts on a social platform. Whether reading it is within that platform's terms
+  (CLAUDE.md §3) belongs in its verdict.
+
+**Noted.** Docker Desktop was not running this morning; it was started for the tests.
+
+## Global RSS/Atom publishers from the owner's news catalog (2026-10-21)
+
+**The owner's instruction.** The owner added `Vestigo_Global_News_Providers_and_APIs.md`, a
+research catalog of ~250 news providers, and asked to add all of them and to build "fallback
+ones for uninterrupted retrieval." Two rules shaped what is deliverable, and the owner chose the
+scope around them (this session):
+
+- **Scope: RSS feeds first.** Nothing runs until the owner records a licence verdict, so
+  everything added here is held `UNVERIFIED`, exactly like the existing RSS publishers.
+- **Fallback: both the honest kinds.** Silent substitution (one source's data under another's
+  label) cannot be built — it is structurally impossible here (CLAUDE.md source labelling). The
+  parallel-independent-sources model already gives "uninterrupted": the planner runs every
+  TOPIC source as its own job, each with its own rate limit, bulkhead and circuit breaker, and a
+  rate limit retries with backoff without opening the circuit (`policy.ts`). More verified
+  publishers is itself more resilient coverage. Multiple-keys-per-API is deferred to the
+  news-API round (no keyed news source exists yet to use it); its one seam is
+  `packages/osint-engine/src/credentials.ts`.
+- **Skipped:** licensed wire agencies (Reuters, AP, AFP, Bloomberg, Factiva, LexisNexis,
+  Meltwater, Xinhua, TASS, Anadolu, EFE, DPA, Kyodo, Yonhap, Bernama, PTI, ANI, Antara) and
+  website-only outlets — no feed, API or contract to use yet. Instagram/Facebook/X refused.
+
+**What changed.** The catalog's publishers were turned into candidate feed URLs (the explicit
+ones it lists, plus conventional paths), fetched live on 2026-10-21, and kept only where a URL
+answered 200 within its redirects and parsed as RSS or Atom with a titled, linked item. 86 feeds
+verified, adding **85 new publishers** (one more feed merged into the existing euronews entry);
+`RSS_PUBLISHERS` grows from 132 to **217**, each a held `UNVERIFIED` source + collector + queue
+through the existing batch path (no change to `catalogue.ts`). The 2026-10-17 baseline is
+untouched but for country enrichment.
+
+- **`country` widened** from `"IN" | null` to an ISO 3166-1 alpha-2 set (`RSS_COUNTRY_CODES`,
+  generated), tagged from the catalog's own country grouping — recorded data, never a guess, and
+  never from a language tag. 48 countries now; the article `region` schema widened to match.
+- **Snapshot** (`test/snapshots/rss-feed-verification.json`) now records two live batches and
+  accounts for every one of the 328 URLs fetched across both (239 kept, 78 failed with a reason,
+  11 excluded). The stale "153 kept" header is corrected while regenerating.
+
+**Departures / honesty.**
+- **Not "all ~250."** Many catalog publishers are website-only or 403 automated fetches; the
+  change adds the ones that genuinely resolve and parse, and the snapshot records why each other
+  was skipped. The count is what verified, not what was hoped.
+- **Still held.** No source here is PERMITTED; none runs until the owner reads its terms. 217 RSS
+  sources wait on per-publisher verdicts.
+
+**Acceptance.** The RSS, registry, access-method and extractor-coverage suites derive their
+expected lists from `RSS_PUBLISHERS`, so the new publishers flow through them; collectors 590,
+osint-engine units 53. The region test checks each publisher's country against the snapshot feed
+by feed. Guards: no new PERMITTED source, no Google News or Instagram/Facebook/X host, every feed
+host declared under an operator (enforced by the registry build).
+
+**Open for the owner.**
+- **Verdicts:** 217 RSS publishers now wait on the owner reading each one's terms; until then
+  none runs. The licence reading pack is the next step.
+- **Scale:** the worker now derives 217 idle collect queues; opening queues only for runnable
+  sources remains a separate change.
+- **The news-search APIs** (GDELT Cloud, NewsAPI, The News API, World News API, Currents,
+  Mediastack, NYT, Guardian) and multiple-keys-per-API are the next round, not this one.

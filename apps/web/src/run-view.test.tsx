@@ -10,6 +10,8 @@ import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionState } from "./api.ts";
 import { createAppRouter } from "./router.tsx";
+// Every screen the router loads on demand, loaded with this file (see test-screens.ts).
+import "./test-screens.ts";
 import type { JobData, LockedEventData, RunData } from "./run/progress.ts";
 
 // The generated client captures fetch when it is created, at import time.
@@ -55,7 +57,9 @@ function progressStream() {
 
 /** The collector list: the plan's left-out sources are in it; the test jobs' collectors are not. */
 const COLLECTORS = {
-  unverifiedSourcesAllowed: true,
+  unverifiedSourcesAllowed: false,
+  accessMethodsEnabled: ["open", "official", "licensed"],
+  sources: [],
   items: [
     {
       id: "unlicensed-source",
@@ -77,6 +81,13 @@ const COLLECTORS = {
     credentials: { vaultIds: [], runsWithout: true },
     availability: "AVAILABLE",
     availabilityReason: null,
+    sourceId: `[source of ${entry.id}]`,
+    access: {
+      methods: [{ kind: "open", enabled: true, licenceVerdict: "PERMITTED", runnable: true }],
+      runsVia: ["open"],
+      refusal: null,
+      reason: null,
+    },
   })),
 };
 

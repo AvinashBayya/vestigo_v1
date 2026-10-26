@@ -12,6 +12,7 @@ import {
   displayValue,
   runCoverage,
   sourceLabelOf,
+  UNCONFIRMED_CAVEAT,
   type CoverageJob,
 } from "../src/index.ts";
 
@@ -139,6 +140,72 @@ describe("coverageHeadline", () => {
     expect(coverageHeadline("FAILED", [entry("FAILED"), entry("FAILED")], null)).toBe(
       "FAILED RUN: none of the 2 planned collectors completed.",
     );
+  });
+});
+
+describe("an empty answer whose source is unreliable (Track M Day 2)", () => {
+  const job = (collectorId: string, outcome: CoverageJob["outcome"]): CoverageJob => ({
+    ...QUEUED,
+    collectorId,
+    status: "SUCCEEDED",
+    outcome,
+    outcomeDetail: outcome === "FOUND" ? null : `[${collectorId}: what came back empty]`,
+    targetType: "TOPIC",
+    attempts: 1,
+    evidenceIds: outcome === "FOUND" ? ["[evidence]"] : null,
+  });
+  const registry = ["found", "nothing", "unconfirmed"].map((id) => ({
+    id,
+    label: `[${id}]`,
+    collectionMode: "PASSIVE_API" as const,
+  }));
+  const coverageOf = (jobs: CoverageJob[]) =>
+    runCoverage({
+      registry,
+      status: "SUCCEEDED",
+      plan: { kind: "PLANNED", targetTypes: ["TOPIC"], excluded: [] },
+      jobs,
+      held: [],
+    });
+
+  it("is its own state with the collector's words, never NOTHING_FOUND", () => {
+    const entry = coverageFromJob(job("unconfirmed", "EMPTY_UNCONFIRMED"), "[unconfirmed]");
+    expect(entry).toEqual({
+      collectorId: "unconfirmed",
+      sourceLabel: "[unconfirmed]",
+      targetType: "TOPIC",
+      attempts: 1,
+      evidenceCount: 0,
+      state: "EMPTY_UNCONFIRMED",
+      reasonCode: null,
+      detail: "[unconfirmed: what came back empty]",
+    });
+    expect(coverageFromJob(job("nothing", "NOT_FOUND"), "[nothing]").state).toBe("NOTHING_FOUND");
+  });
+
+  it("is counted apart in the headline, never as found nothing, and its caveat is stated", () => {
+    const coverage = coverageOf([
+      job("found", "FOUND"),
+      job("nothing", "NOT_FOUND"),
+      job("unconfirmed", "EMPTY_UNCONFIRMED"),
+    ]);
+    expect(coverage.headline).toBe(
+      "COMPLETE RUN: all 3 planned collectors finished (1 found something, 1 found nothing, 1 returned nothing — unconfirmed).",
+    );
+    expect(coverage.caveats.at(-1)).toBe(UNCONFIRMED_CAVEAT);
+    expect(UNCONFIRMED_CAVEAT).toMatch(/not a count of zero/);
+    const alone = coverageOf([job("unconfirmed", "EMPTY_UNCONFIRMED")]);
+    expect(alone.headline).toBe(
+      "COMPLETE RUN: all 1 planned collector finished (0 found something, 0 found nothing, 1 returned nothing — unconfirmed).",
+    );
+  });
+
+  it("changes nothing for a run without one: the same headline, and no caveat for it", () => {
+    const coverage = coverageOf([job("found", "FOUND"), job("nothing", "NOT_FOUND")]);
+    expect(coverage.headline).toBe(
+      "COMPLETE RUN: all 2 planned collectors finished (1 found something, 1 found nothing).",
+    );
+    expect(coverage.caveats).not.toContain(UNCONFIRMED_CAVEAT);
   });
 });
 

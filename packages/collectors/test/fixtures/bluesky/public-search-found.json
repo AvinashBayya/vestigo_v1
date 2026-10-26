@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://docs.bsky.app/docs/api/app-bsky-feed-search-posts",
+    "notes": "Synthetic: the public AppView's searchPosts answer in its documented shape, for the day it answers without a key again; one placeholder post, whose author handle is \"handle.invalid\", as Bluesky shows a handle it could not verify. No live answer could be recorded: the public AppView refused an unauthenticated search with 403 on 2026-10-17 (public-search-403.json), and no account app password is held here, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "public.api.bsky.app",
+    "path": "/xrpc/app.bsky.feed.searchPosts?q=%22%5Ban+open+topic%5D%22&sort=latest&limit=100"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"posts\":[{\"uri\":\"at://did:plc:[author-4]/app.bsky.feed.post/[post-4]\",\"cid\":\"[cid-4]\",\"author\":{\"did\":\"did:plc:[author-4]\",\"handle\":\"handle.invalid\"},\"record\":{\"$type\":\"app.bsky.feed.post\",\"text\":\"[post text 4]\",\"createdAt\":\"2026-10-17T04:00:00.000Z\"},\"indexedAt\":\"2026-10-17T04:00:01.000Z\"}]}"
+  }
+}

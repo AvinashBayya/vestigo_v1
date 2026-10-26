@@ -29,9 +29,13 @@ import type {
 
 /**
  * Why a registered collector never runs, as the registry lists it: its
- * source's licence verdict is BLOCKED, or it has no implementation.
+ * source's licence verdict is BLOCKED, it has no implementation, or its
+ * source's licence is UNVERIFIED, which never runs (owner instruction,
+ * 2026-10-16). Each is a fact of code, the same in every deployment. Whether
+ * an access method is enabled is configuration, so it is not here: a run's
+ * plan records it (ACCESS_METHOD_NOT_ENABLED). Additive only.
  */
-export const CANNOT_RUN = ["BLOCKED", "NOT_IMPLEMENTED"] as const;
+export const CANNOT_RUN = ["BLOCKED", "NOT_IMPLEMENTED", "UNVERIFIED"] as const;
 export type CannotRun = (typeof CANNOT_RUN)[number];
 
 /**
@@ -43,9 +47,9 @@ export type CannotRun = (typeof CANNOT_RUN)[number];
 export interface CaseRegistryCollector extends CoverageCollector {
   readonly discipline: CollectorDiscipline;
   /**
-   * Why it never runs (BLOCKED, NOT_IMPLEMENTED); null when the registry lists
-   * neither. A deployment can still refuse an UNVERIFIED one; the run's plan
-   * records that.
+   * Why it never runs (BLOCKED, NOT_IMPLEMENTED, UNVERIFIED); null when the
+   * registry lists none of them. A deployment can still refuse one whose
+   * access methods it does not enable; the run's plan records that.
    */
   readonly cannotRun: CannotRun | null;
 }
@@ -77,6 +81,19 @@ export interface CaseClaim {
   readonly relationshipId: string | null;
   /** As recorded on the claim. */
   readonly strength: ClaimStrength;
+  /**
+   * The attribute the claim is about, as recorded (`attribute` on the claim
+   * row). Optional and additive: present only when the caller supplies it, so
+   * an input that omits it is unchanged (the hash never gains a field it did
+   * not have). Contradiction review reads it when present (./case-contradictions.ts).
+   */
+  readonly attribute?: string;
+  /**
+   * The value asserted, as recorded (`value`, jsonb). `null` is a stated null;
+   * absent (`undefined`) means the value was not supplied to this analysis.
+   * Contradiction review considers only claims that carry a non-null value.
+   */
+  readonly value?: unknown;
 }
 
 export interface CaseEntity {

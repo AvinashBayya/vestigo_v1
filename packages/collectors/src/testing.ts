@@ -4,11 +4,15 @@
  * the same recorded fixtures. Never imported by any other file in src/ (lint).
  *
  * The test harness for platform collectors. Tests never touch the network:
- * every declared host of every platform source resolves to a placeholder
- * public address (checked by the fetcher exactly as in production, never
- * contacted), and the socket goes to a loopback server that answers only with
- * recorded fixtures, matched on exact host and path. Anything unmatched is
- * answered 599 and listed, so a test cannot pass on a request it did not expect.
+ * every declared host of every platform source, and every host a fixture is
+ * recorded for, resolves to a placeholder public address (checked by the
+ * fetcher exactly as in production, never contacted), and the socket goes to a
+ * loopback server that answers only with recorded fixtures, matched on exact
+ * host and path. Anything unmatched is answered 599 and listed, so a test
+ * cannot pass on a request it did not expect. Resolving a fixture's host (not
+ * just a declared one) lets an open-host collector reach the host its
+ * authorised target names — the host comes from the target, not a static
+ * source list — while still never contacting it.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { createServer, type IncomingHttpHeaders } from "node:http";
@@ -24,8 +28,10 @@ import {
   type CollectionOutcome,
   type Collector,
   type DispatchRequest,
+  type AccessMethod,
   type UpstreamRateLimiter,
 } from "./index.ts";
+import { replayRecordedAnswers } from "./runtime.ts";
 
 /** The package's recorded fixtures: test/fixtures, from src/ or dist/ alike. */
 export const FIXTURES_DIR = join(import.meta.dirname, "..", "test", "fixtures");
@@ -104,11 +110,21 @@ const DROPPED_HEADERS = new Set([
   "connection",
 ]);
 
+/**
+ * A runtime over the platform catalogue whose every request is answered from
+ * `fixtures`. `allowUnverifiedSources` (default true) lets it replay recorded
+ * answers for an UNVERIFIED source, as no deployment can: an UNVERIFIED source
+ * never runs, but its collector's parsing is still tested on what its
+ * upstream once answered, and a replay never contacts the source. False
+ * refuses them as a deployment does. BLOCKED is refused either way, and so is
+ * a method `accessMethods` does not enable (the deployment default unless given).
+ */
 export async function startHarness(options: {
   readonly collectors: readonly Collector[];
   readonly fixtures: readonly Fixture[];
   readonly rateLimiter?: UpstreamRateLimiter;
   readonly allowUnverifiedSources?: boolean;
+  readonly accessMethods?: readonly AccessMethod[];
 }): Promise<Harness> {
   const byKey = new Map(options.fixtures.map((f) => [`${f.request.host}${f.request.path}`, f]));
   const requests: RecordedRequest[] = [];
@@ -133,19 +149,23 @@ export async function startHarness(options: {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
 
-  const declared = new Set(PLATFORM_SOURCES.flatMap((source) => source.network?.hosts ?? []));
+  const resolvable = new Set([
+    ...PLATFORM_SOURCES.flatMap((source) => source.network?.hosts ?? []),
+    ...options.fixtures.map((fixture) => fixture.request.host),
+  ]);
   const runtime = new CollectorRuntime({
     registry: new CollectorRegistry({ sources: PLATFORM_SOURCES, collectors: options.collectors }),
-    allowUnverifiedSources: options.allowUnverifiedSources ?? true,
+    ...(options.accessMethods === undefined ? {} : { accessMethods: options.accessMethods }),
     network: {
       rateLimiter: options.rateLimiter ?? ALWAYS_ALLOW,
       resolver: (host) =>
         Promise.resolve(
-          declared.has(host) ? [{ address: PLACEHOLDER_ADDRESS, family: 4 as const }] : [],
+          resolvable.has(host) ? [{ address: PLACEHOLDER_ADDRESS, family: 4 as const }] : [],
         ),
       socketFactory: () => connect(port, "127.0.0.1"),
     },
   });
+  if (options.allowUnverifiedSources ?? true) replayRecordedAnswers(runtime);
 
   return {
     runtime,

@@ -4,15 +4,12 @@ import type { Captured } from "./fetcher/capture.ts";
 
 /**
  * Why a collector was not run. Each is decided before the collector's code is
- * reached. LICENCE_BLOCKED and NOT_IMPLEMENTED are core's UNRUNNABLE_REASONS:
- * the collector cannot run for anyone.
+ * reached. Core's UNRUNNABLE_REASONS (LICENCE_BLOCKED, NOT_IMPLEMENTED,
+ * UNVERIFIED_SOURCE_NOT_ALLOWED, ACCESS_METHOD_NOT_ENABLED) say the collector
+ * cannot run here for anyone; the others are about this target or tenant.
  */
 export type RefusalReason =
-  | UnrunnableReason
-  | "UNVERIFIED_SOURCE_NOT_ALLOWED"
-  | "TARGET_TYPE_NOT_ACCEPTED"
-  | LockReason
-  | "SCOPE_AUTHORISATION_REQUIRED";
+  UnrunnableReason | "TARGET_TYPE_NOT_ACCEPTED" | LockReason | "SCOPE_AUTHORISATION_REQUIRED";
 
 /** A machine-readable code and a message with no target value, credential or URL path. */
 export interface OutcomeError {
@@ -25,6 +22,9 @@ export interface OutcomeError {
  * FOUND carries a result or produces evidence:
  *   FOUND             something was found, validated, citing captured responses;
  *   NOT_FOUND         the upstream answered and has nothing for this target;
+ *   EMPTY_UNCONFIRMED the upstream answered with nothing, but its empty answers
+ *                     are unreliable: whether it holds anything is unconfirmed,
+ *                     so this is never a finding that it has nothing;
  *   FAILED            it went wrong and retrying will not help;
  *   UNAVAILABLE       it went wrong and retrying later may help;
  *   NEEDS_CREDENTIALS a required tenant credential is missing;
@@ -42,6 +42,14 @@ export type CollectionOutcome =
       readonly collectorId: string;
       readonly detail: string;
       /** The response (or, for a local analysis, the recorded analysis) that said so. */
+      readonly response: Captured;
+    }
+  | {
+      readonly status: "EMPTY_UNCONFIRMED";
+      readonly collectorId: string;
+      /** What came back empty, and why that does not show there is nothing. */
+      readonly detail: string;
+      /** The empty response this run received. */
       readonly response: Captured;
     }
   | { readonly status: "FAILED"; readonly collectorId: string; readonly error: OutcomeError }

@@ -31,8 +31,15 @@ describe("LOCK_REASONS", () => {
 });
 
 describe("UNRUNNABLE_REASONS", () => {
-  it("is exactly the two reasons a collector cannot run at all: its licence, no implementation", () => {
-    expect(UNRUNNABLE_REASONS).toEqual(["LICENCE_BLOCKED", "NOT_IMPLEMENTED"]);
+  it("is exactly the reasons a collector cannot run at all, the first two first (additive only)", () => {
+    // Its licence is BLOCKED; no implementation; its licence is UNVERIFIED,
+    // which never runs; no access method it can use is enabled (2026-10-16).
+    expect(UNRUNNABLE_REASONS).toEqual([
+      "LICENCE_BLOCKED",
+      "NOT_IMPLEMENTED",
+      "UNVERIFIED_SOURCE_NOT_ALLOWED",
+      "ACCESS_METHOD_NOT_ENABLED",
+    ]);
   });
 });
 

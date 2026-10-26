@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://docs.bsky.app/docs/api/app-bsky-feed-search-posts",
+    "notes": "Synthetic: searchPosts' documented answer with no posts. No live answer could be recorded: the public AppView refused an unauthenticated search with 403 on 2026-10-17 (public-search-403.json), and no account app password is held here, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "bsky.social",
+    "path": "/xrpc/app.bsky.feed.searchPosts?q=%22%5Ba+topic+no+post+mentions%5D%22&sort=latest&limit=100"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"posts\":[]}"
+  }
+}

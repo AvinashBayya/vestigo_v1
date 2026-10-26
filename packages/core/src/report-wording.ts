@@ -63,7 +63,13 @@ export interface ReportWording {
     /** {page}, {pages} */
     readonly page: string;
   };
-  readonly states: Readonly<Record<CoverageState, string>>;
+  /**
+   * Each coverage state's label, as the report prints it. A report keeps the
+   * wording it was generated with, so one stored before a state existed has
+   * no label for it (and no entry in it). The current wording labels every
+   * state (STATE_WORDING).
+   */
+  readonly states: Readonly<Partial<Record<CoverageState, string>>>;
   readonly coverage: {
     readonly allCollected: string;
     readonly noneCollected: string;
@@ -130,6 +136,19 @@ export interface ReportWording {
   readonly tabular: { readonly markingNotSet: string; readonly notRecorded: string };
 }
 
+/** Every coverage state's label as reports are generated now: one for each state, checked. */
+const STATE_WORDING: Readonly<Record<CoverageState, string>> = {
+  COLLECTED: "COLLECTED",
+  NOTHING_FOUND: "NOTHING FOUND",
+  FAILED: "FAILED",
+  NEEDS_CREDENTIALS: "NEEDS CREDENTIALS",
+  REFUSED: "REFUSED",
+  NOT_FINISHED: "NOT FINISHED",
+  EXCLUDED: "EXCLUDED",
+  HELD: "HELD",
+  EMPTY_UNCONFIRMED: "RETURNED NOTHING (UNCONFIRMED)",
+};
+
 /** The wording reports are generated with from now on. Snapshot it; never render from it. */
 export const REPORT_WORDING: ReportWording = {
   glossary: CLAIM_STRENGTHS.map((strength) => ({
@@ -162,16 +181,7 @@ export const REPORT_WORDING: ReportWording = {
     notSet: "NO HANDLING MARKING IS SET FOR THIS ORGANISATION",
   },
   footer: { report: "Report {reportId}", page: "Page {page} of {pages}" },
-  states: {
-    COLLECTED: "COLLECTED",
-    NOTHING_FOUND: "NOTHING FOUND",
-    FAILED: "FAILED",
-    NEEDS_CREDENTIALS: "NEEDS CREDENTIALS",
-    REFUSED: "REFUSED",
-    NOT_FINISHED: "NOT FINISHED",
-    EXCLUDED: "EXCLUDED",
-    HELD: "HELD",
-  },
+  states: STATE_WORDING,
   coverage: {
     allCollected: "Every collector planned for this target collected something.",
     noneCollected: "No collector found anything for this target.",

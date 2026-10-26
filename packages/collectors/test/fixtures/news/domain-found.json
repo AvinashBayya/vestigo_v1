@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+    "recordedOn": "2026-09-30",
+    "notes": "Synthetic: four articles in GDELT DOC's documented artlist shape with placeholder values, every field present as GDELT sends it (blank strings where GDELT leaves a field empty). A live recording was attempted for several domains on 2026-09-30; GDELT answered every request from this address with 429, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "api.gdeltproject.org",
+    "path": "/api/v2/doc/doc?query=%22example.net%22&mode=artlist&format=json&maxrecords=250&timespan=3months&sort=datedesc"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": "{\"articles\":[{\"url\":\"https://news.example.org/[article-1]\",\"url_mobile\":\"\",\"title\":\"[synthetic headline 1]\",\"seendate\":\"20260921T013000Z\",\"socialimage\":\"\",\"domain\":\"news.example.org\",\"language\":\"[language]\",\"sourcecountry\":\"[outlet country]\"},{\"url\":\"https://news.example.org/[article-2]\",\"url_mobile\":\"https://m.news.example.org/[article-2]\",\"title\":\"[synthetic headline 2]\",\"seendate\":\"20260922T023000Z\",\"socialimage\":\"https://news.example.org/[image-2].jpg\",\"domain\":\"news.example.org\",\"language\":\"[language]\",\"sourcecountry\":\"[outlet country]\"},{\"url\":\"https://news.example.org/[article-3]\",\"url_mobile\":\"\",\"title\":\"[synthetic headline 3]\",\"seendate\":\"20260923T033000Z\",\"socialimage\":\"https://news.example.org/[image-3].jpg\",\"domain\":\"news.example.org\",\"language\":\"[language]\",\"sourcecountry\":\"[outlet country]\"},{\"url\":\"https://news.example.org/[article-4]\",\"url_mobile\":\"https://m.news.example.org/[article-4]\",\"title\":\"[synthetic headline 4]\",\"seendate\":\"20260924T043000Z\",\"socialimage\":\"https://news.example.org/[image-4].jpg\",\"domain\":\"news.example.org\",\"language\":\"[language]\",\"sourcecountry\":\"[outlet country]\"}]}"
+  }
+}

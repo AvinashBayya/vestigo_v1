@@ -1,0 +1,280 @@
+<title>Vestigo Trends</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* The officer's discovery screen: what's emerging now, and what trended over a period. Same briefing register as the brief and watch. */
+  :root{
+    --bg:#f1efe9; --paper:#fbfaf6; --paper-2:#f4f2ec; --sunk:#e8e5dc;
+    --border:#e0ddd2; --border-strong:#cbc7ba; --hair:#eae7dd;
+    --ink:#20242b; --ink-2:#555a62; --ink-3:#8a8e96;
+    --accent:#1f4a66; --accent-fg:#ffffff; --accent-soft:#2f6a8f;
+    --attn:#8a5412; --calm:#3f6b4e; --line:#4a6075;
+    --focus:#2f6a8f; --r:12px;
+    --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#101318; --paper:#191d23; --paper-2:#1f242b; --sunk:#14181d;
+    --border:#2a2f37; --border-strong:#3a404a; --hair:#232830;
+    --ink:#eceef1; --ink-2:#b6bbc3; --ink-3:#848a93;
+    --accent:#6fb0d4; --accent-fg:#0c1418; --accent-soft:#8cc3e2;
+    --attn:#d6a65c; --calm:#7bbd92; --line:#8aa6bd; --focus:#6fb0d4; color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#101318; --paper:#191d23; --paper-2:#1f242b; --sunk:#14181d;
+    --border:#2a2f37; --border-strong:#3a404a; --hair:#232830;
+    --ink:#eceef1; --ink-2:#b6bbc3; --ink-3:#848a93;
+    --accent:#6fb0d4; --accent-fg:#0c1418; --accent-soft:#8cc3e2;
+    --attn:#d6a65c; --calm:#7bbd92; --line:#8aa6bd; --focus:#6fb0d4; color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,p{margin:0}
+  button{font-family:inherit;cursor:pointer}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+  .wrap{width:100%;max-width:780px;margin:0 auto;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+
+  .handling{background:var(--sunk);border-bottom:1px solid var(--border);color:var(--ink-2);font-size:11.5px;letter-spacing:.08em;font-weight:600;text-transform:uppercase}
+  .handling.bottom{border-bottom:0;border-top:1px solid var(--border)}
+  .handling .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:7px}
+  .handling .note{font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--ink-3);font-size:11px}
+
+  .bar{background:var(--bg);border-bottom:1px solid var(--border)}
+  .bar .wrap{display:flex;align-items:center;gap:13px;min-height:58px;padding-block:9px}
+  .logo{display:flex;align-items:center;gap:9px;flex:none}
+  .logo .g{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center;font-weight:600;font-size:15px}
+  .logo b{font-weight:600;font-size:16px}
+  .ask{flex:1;min-width:0;display:flex;align-items:center;gap:9px;height:42px;padding:0 14px;background:var(--paper);border:1px solid var(--border-strong);border-radius:999px}
+  .ask svg{width:17px;height:17px;stroke:var(--ink-3);fill:none;stroke-width:1.8;flex:none}
+  .ask input{border:0;background:transparent;color:var(--ink);font:inherit;font-size:15px;width:100%;outline:none}
+  .ico{width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--border);border-radius:999px;background:var(--paper);color:var(--ink-2);flex:none}
+  .ico:hover{color:var(--ink)} .ico svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7}
+
+  .head{padding-top:28px}
+  .kick{font-size:12.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-soft)}
+  h1{font-family:var(--serif);font-weight:600;font-size:30px;letter-spacing:-.2px;margin-top:9px}
+  .head .meta{color:var(--ink-3);font-size:14px;margin-top:9px}
+
+  .modebar{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}
+  .seg{display:inline-flex;background:var(--sunk);border:1px solid var(--border);border-radius:999px;padding:3px}
+  .seg button{height:34px;padding:0 16px;border:0;border-radius:999px;background:transparent;color:var(--ink-2);font-size:13.5px;font-weight:600}
+  .seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+  .areaOf{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;background:var(--paper);border:1px solid var(--border);border-radius:999px;font-size:13px;color:var(--ink)}
+  .areaOf svg{width:13px;height:13px;stroke:var(--ink-3);fill:none;stroke-width:1.8}
+  .refresh{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-3)}
+  .refresh button{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1px solid var(--border);border-radius:999px;background:var(--paper);color:var(--ink-2);font-size:12.5px;font-weight:500}
+  .refresh svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:1.8}
+
+  .srcnote{margin-top:14px;display:flex;gap:9px;align-items:flex-start;background:var(--paper-2);border:1px solid var(--border);border-radius:var(--r);padding:11px 14px;font-size:13px;color:var(--ink-2)}
+  .srcnote svg{width:16px;height:16px;stroke:var(--ink-3);fill:none;stroke-width:1.7;flex:none;margin-top:1px}
+  .srcnote b{color:var(--ink);font-weight:600}
+
+  .sectitle{font-family:var(--serif);font-weight:600;font-size:20px;margin:26px 0 12px}
+
+  /* trend cards */
+  .tcard{background:var(--paper);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;margin-bottom:12px;display:flex;gap:16px;align-items:center}
+  .tcard .body{min-width:0;flex:1}
+  .ttop{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .why{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink);border:1px solid var(--border-strong);border-radius:999px;padding:3px 11px}
+  .why .d{width:8px;height:8px;border-radius:999px;flex:none;background:var(--attn)}
+  .why.calm .d{background:var(--calm)} .why.mute .d{background:var(--ink-3)}
+  .tname{font-family:var(--serif);font-size:19px;font-weight:600;margin-top:9px}
+  .tfacts{font-size:13.5px;color:var(--ink-2);margin-top:5px;font-variant-numeric:tabular-nums}
+  .tact{display:flex;gap:9px;margin-top:13px;flex-wrap:wrap}
+  .btn{height:40px;padding:0 16px;border-radius:999px;font-weight:600;font-size:14px;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);background:var(--paper);color:var(--ink)}
+  .btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.9}
+  .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+  .btn.primary:hover{background:var(--accent-soft)} .btn:hover{border-color:var(--ink-3)}
+  .mini{width:92px;height:44px;flex:none}
+  svg.spark{display:block;width:100%;height:100%}
+  .spark .ln{stroke:var(--line);stroke-width:2;fill:none}.spark .ar{fill:var(--line);opacity:.12}
+
+  /* locked (person) */
+  .tcard.locked{background:var(--paper-2)}
+  .tcard.locked .tname{color:var(--ink-2)}
+  .lockmsg{font-size:13.5px;color:var(--ink-2);margin-top:6px;display:flex;align-items:flex-start;gap:7px}
+  .lockmsg svg{width:15px;height:15px;stroke:var(--ink-3);fill:none;stroke-width:1.7;flex:none;margin-top:2px}
+
+  /* period view */
+  .daterange{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;background:var(--paper);border:1px solid var(--border-strong);border-radius:999px;font-size:13.5px;color:var(--ink);font-weight:500}
+  .daterange svg{width:14px;height:14px;stroke:var(--ink-3);fill:none;stroke-width:1.8}
+  .overall{margin-top:14px;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+  .overall p{font-size:14.5px;color:var(--ink)}.overall p b{font-weight:600}
+  svg.big{display:block;width:100%;height:auto;margin-top:10px;font-family:var(--sans)}
+  .big .ar{fill:var(--line);opacity:.13}.big .ln{stroke:var(--line);stroke-width:2.5;fill:none}
+  .big .dot{fill:var(--line)}.big .ax{fill:var(--ink-3);font-size:11px}
+  .prow{display:flex;align-items:center;gap:15px;background:var(--paper);border:1px solid var(--border);border-radius:var(--r);padding:14px 18px;margin-bottom:11px}
+  .prow .rk{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--ink-3);width:22px;flex:none;text-align:center}
+  .prow .pb{min-width:0;flex:1}
+  .prow .pn{font-size:16px;font-weight:600}
+  .prow .pf{font-size:13px;color:var(--ink-2);margin-top:3px;font-variant-numeric:tabular-nums}
+  .prow .go{width:40px;height:40px;border-radius:999px;border:1px solid var(--border-strong);background:var(--paper);display:grid;place-items:center;flex:none;color:var(--ink-2)}
+  .prow .go:hover{color:var(--ink);border-color:var(--ink-3)} .prow .go svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+
+  .foot{margin:32px 0 10px;padding-top:16px;border-top:1px solid var(--border);color:var(--ink-3);font-size:12.5px;line-height:1.6}
+  .foot b{color:var(--ink-2);font-weight:600}
+  [hidden]{display:none!important}
+  @media (max-width:560px){ .mini{display:none} .tcard{align-items:flex-start} }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="handling"><div class="wrap"><span>Handling: Official — for internal use</span><span class="note">example marking · set for each organisation</span></div></div>
+
+<div class="bar">
+  <div class="wrap">
+    <span class="logo"><span class="g">V</span><b>Vestigo</b></span>
+    <label class="ask">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
+      <input placeholder="Look into a subject, place, name or link…" aria-label="Look into something">
+    </label>
+    <button class="ico" id="theme" aria-label="Day or night view"><svg id="ti" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M19 5l-1.4 1.4M6.4 17.6 5 19"/></svg></button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="head">
+    <div class="kick">Trends</div>
+    <h1>What's emerging</h1>
+    <div class="meta">Area of interest: India &amp; neighbours</div>
+  </div>
+
+  <div class="modebar">
+    <div class="seg" role="group" aria-label="Trend view">
+      <button id="m-now" aria-pressed="true">Right now</button>
+      <button id="m-period" aria-pressed="false">Over a period</button>
+    </div>
+    <span class="areaOf">India &amp; neighbours <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+    <span class="refresh" id="now-refresh">Updated 2:15 pm <button><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7M21 4v4h-4"/></svg>Refresh</button></span>
+  </div>
+
+  <!-- RIGHT NOW -->
+  <div id="view-now">
+    <div class="srcnote"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5h.01"/></svg>
+      <span>Based on <b>news coverage we collected</b>. Social media is not included yet. Rising means more reports than before — never a guess. We only call something a trend when the rise is real.</span></div>
+
+    <h2 class="sectitle">Rising now</h2>
+
+    <div class="tcard">
+      <div class="body">
+        <div class="ttop"><span class="why"><span class="d"></span>Rising fast</span></div>
+        <div class="tname">Water-treaty review</div>
+        <div class="tfacts">118 reports today · roughly triple yesterday · now reaching Hindi outlets · since 5 Oct</div>
+        <div class="tact"><button class="btn primary">Open brief <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button><button class="btn">Watch</button></div>
+      </div>
+      <div class="mini" data-spark="4,7,6,8,12,9,11,14,19"></div>
+    </div>
+
+    <div class="tcard">
+      <div class="body">
+        <div class="ttop"><span class="why"><span class="d"></span>New</span></div>
+        <div class="tname">Border trade corridor</div>
+        <div class="tfacts">23 reports · first coverage from Gulf outlets today · South Asia</div>
+        <div class="tact"><button class="btn primary">Open brief <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button><button class="btn">Watch</button></div>
+      </div>
+      <div class="mini" data-spark="0,0,0,0,2,5,9,14,23"></div>
+    </div>
+
+    <div class="tcard">
+      <div class="body">
+        <div class="ttop"><span class="why"><span class="d"></span>Spreading</span></div>
+        <div class="tname">Naval exercise rumours</div>
+        <div class="tfacts">41 reports · picked up by 2 more countries this week · since 12 Oct</div>
+        <div class="tact"><button class="btn primary">Open brief <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button><button class="btn">Watch</button></div>
+      </div>
+      <div class="mini" data-spark="6,8,7,10,13,15,18,16,17"></div>
+    </div>
+
+    <div class="tcard locked">
+      <div class="body">
+        <div class="ttop"><span class="why mute"><span class="d"></span>Named person</span></div>
+        <div class="tname">A named individual is trending</div>
+        <div class="lockmsg"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          Coverage here is about a specific person. Viewing it needs the Person plan and approved vetting — the same check as any person search.</div>
+      </div>
+    </div>
+
+    <div class="tcard">
+      <div class="body">
+        <div class="ttop"><span class="why mute"><span class="d"></span>Too little to tell yet</span></div>
+        <div class="tname">Port strike claims</div>
+        <div class="tfacts">Only 4 reports from a single source. Not enough to say whether this is real — worth watching, not acting on.</div>
+        <div class="tact"><button class="btn">Watch</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OVER A PERIOD -->
+  <div id="view-period" hidden>
+    <div class="srcnote" style="margin-top:16px"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5h.01"/></svg>
+      <span>The biggest stories in the window you choose, by how much was collected. <b>News coverage only</b> for now.</span></div>
+
+    <div style="margin-top:16px"><span class="daterange"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>1 – 15 October 2026 <svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></div>
+
+    <div class="overall">
+      <p><b>All coverage in this window.</b> Quiet early, then a clear rise from 8 October.</p>
+      <svg class="big" id="bigchart" viewBox="0 0 740 170" role="img" aria-label="Total reports per day, 1 to 15 October"></svg>
+    </div>
+
+    <h2 class="sectitle">Biggest stories, 1–15 October</h2>
+
+    <div class="prow">
+      <span class="rk">1</span>
+      <div class="pb"><div class="pn">Water-treaty review</div><div class="pf">118 reports · peaked 11 Oct · India &amp; Pakistan</div></div>
+      <button class="go" aria-label="Open brief"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>
+    <div class="prow">
+      <span class="rk">2</span>
+      <div class="pb"><div class="pn">Naval exercise rumours</div><div class="pf">41 reports · peaked 13 Oct · regional</div></div>
+      <button class="go" aria-label="Open brief"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>
+    <div class="prow">
+      <span class="rk">3</span>
+      <div class="pb"><div class="pn">Border trade corridor</div><div class="pf">23 reports · still rising at window's end · South Asia</div></div>
+      <button class="go" aria-label="Open brief"><svg viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg></button>
+    </div>
+  </div>
+
+  <div class="foot">
+    <b>Illustrative example for review</b> — not real activity; the handling marking is a placeholder set for each organisation. A trend is a measured rise in reports we collected, never a guess; thin signals are shown as such. Live updating and social sources come in later stages.
+  </div>
+</div>
+
+<div class="handling bottom"><div class="wrap"><span>Handling: Official — for internal use</span><span class="note">Vestigo · trends</span></div></div>
+
+<script>
+  (function(){var r=document.documentElement,b=document.getElementById('theme');
+    try{var s=localStorage.getItem('v-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}
+    b.addEventListener('click',function(){var c=r.getAttribute('data-theme');var d=c?c==='dark':matchMedia('(prefers-color-scheme:dark)').matches;var n=d?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('v-theme',n);}catch(e){}});
+  })();
+  var NS='http://www.w3.org/2000/svg';
+  function el(n,a){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);return e;}
+  // mini sparklines
+  document.querySelectorAll('.mini[data-spark]').forEach(function(d){
+    var v=d.getAttribute('data-spark').split(',').map(Number),max=Math.max.apply(null,v)||1;
+    var W=92,H=44,pt=4,pw=W-6,ph=H-2*pt,st=pw/(v.length-1);
+    var pts=v.map(function(y,i){return [3+i*st,pt+ph-(y/max)*ph];});
+    var svg=el('svg',{class:'spark',viewBox:'0 0 '+W+' '+H});
+    svg.appendChild(el('path',{class:'ar',d:'M'+pts[0][0]+' '+(pt+ph)+' '+pts.map(function(p){return 'L'+p[0]+' '+p[1];}).join(' ')+' L'+pts[pts.length-1][0]+' '+(pt+ph)+' Z'}));
+    svg.appendChild(el('path',{class:'ln',d:'M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L')}));
+    d.appendChild(svg);
+  });
+  // mode toggle
+  (function(){
+    var n=document.getElementById('m-now'),p=document.getElementById('m-period');
+    var vn=document.getElementById('view-now'),vp=document.getElementById('view-period'),rf=document.getElementById('now-refresh');
+    function set(now){n.setAttribute('aria-pressed',now);p.setAttribute('aria-pressed',!now);vn.hidden=!now;vp.hidden=now;rf.style.visibility=now?'visible':'hidden';}
+    n.addEventListener('click',function(){set(true)});p.addEventListener('click',function(){set(false)});
+  })();
+  // big chart
+  (function(){
+    var svg=document.getElementById('bigchart');function cv(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+    var data=[3,5,4,6,5,7,6,12,16,13,19,15,11,18,9];
+    var W=740,H=170,pL=8,pR=8,pT=12,pB=26,pw=W-pL-pR,ph=H-pT-pB,max=20;
+    var st=pw/(data.length-1),pts=data.map(function(y,i){return [pL+i*st,pT+ph-(y/max)*ph];});
+    svg.appendChild(el('path',{class:'ar',d:'M'+pts[0][0]+' '+(pT+ph)+' '+pts.map(function(p){return 'L'+p[0]+' '+p[1];}).join(' ')+' L'+pts[pts.length-1][0]+' '+(pT+ph)+' Z'}));
+    svg.appendChild(el('path',{class:'ln',d:'M'+pts.map(function(p){return p[0]+' '+p[1];}).join(' L')}));
+    pts.forEach(function(p,i){svg.appendChild(el('circle',{class:'dot',cx:p[0],cy:p[1],r:2}));
+      if(i%2===0){var t=el('text',{class:'ax',x:p[0],y:H-8,'text-anchor':'middle'});t.textContent=(i+1);svg.appendChild(t);}});
+  })();
+</script>

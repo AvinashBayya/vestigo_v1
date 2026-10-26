@@ -47,6 +47,13 @@ export interface CollectorDeclaration<Schema extends z.ZodType> {
   readonly timeoutMs: number;
   /** Every FOUND result is validated against it before anything is recorded. */
   readonly resultSchema: Schema;
+  /**
+   * Set when an empty answer from its upstream may be false (GDELT DOC): the
+   * collector reports one as EMPTY_UNCONFIRMED, and the runtime refuses a
+   * not-found from it. Left out, the upstream answers empty only when it holds
+   * nothing, which is NOT_FOUND.
+   */
+  readonly emptyAnswersUnreliable?: true;
 }
 
 /**
@@ -61,7 +68,8 @@ export interface EvidenceItem {
 }
 
 // A type-only brand: no module outside this one can name it, so a collector
-// cannot build a return value itself. It must call found() or notFound().
+// cannot build a return value itself. It must call found(), notFound() or
+// emptyUnconfirmed().
 declare const COLLECTOR_RETURN: unique symbol;
 
 export type CollectorReturn<Result> =
@@ -73,7 +81,7 @@ export type CollectorReturn<Result> =
     }
   | {
       readonly [COLLECTOR_RETURN]: Result;
-      readonly kind: "NOT_FOUND";
+      readonly kind: "NOT_FOUND" | "EMPTY_UNCONFIRMED";
       readonly response: Captured;
       readonly detail: string;
     };
@@ -101,6 +109,13 @@ export interface RunContext<Result> {
    * throw, and the SDK reports it as FAILED or UNAVAILABLE.
    */
   notFound(response: Captured, detail: string): CollectorReturn<Result>;
+  /**
+   * The upstream answered with nothing, and its empty answers are unreliable,
+   * so whether it holds anything is unconfirmed: never "not found", never zero.
+   * Cites the empty response (2xx); `detail` says what came back empty and why
+   * that does not show there is nothing. Network collectors only.
+   */
+  emptyUnconfirmed(response: Captured, detail: string): CollectorReturn<Result>;
   /**
    * LOCAL_ANALYSIS collectors only: records this run's analysis (the
    * collector, the target and `output`) as the evidence to cite. A network
@@ -148,6 +163,9 @@ function freezeDeclaration<Schema extends z.ZodType>(
     claimStrength: declaration.claimStrength,
     timeoutMs: declaration.timeoutMs,
     resultSchema: declaration.resultSchema,
+    ...(declaration.emptyAnswersUnreliable === undefined
+      ? {}
+      : { emptyAnswersUnreliable: declaration.emptyAnswersUnreliable }),
   });
 }
 
@@ -188,7 +206,11 @@ export function makeReturn<Result>(
         readonly result: Result;
         readonly evidence: readonly EvidenceItem[];
       }
-    | { readonly kind: "NOT_FOUND"; readonly response: Captured; readonly detail: string },
+    | {
+        readonly kind: "NOT_FOUND" | "EMPTY_UNCONFIRMED";
+        readonly response: Captured;
+        readonly detail: string;
+      },
 ): CollectorReturn<Result> {
   const frozen = Object.freeze(
     value.kind === "FOUND"
@@ -207,7 +229,7 @@ export function makeReturn<Result>(
   return frozen as unknown as CollectorReturn<Result>;
 }
 
-/** Internal: the run that produced a return value, or null if found()/notFound() did not. */
+/** Internal: the run that produced a return value, or null if found(), notFound() or emptyUnconfirmed() did not. */
 export function returningRun(value: unknown): symbol | null {
   if (typeof value !== "object" || value === null) return null;
   return RETURNS.get(value) ?? null;

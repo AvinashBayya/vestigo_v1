@@ -15,7 +15,7 @@
  *   - a case with nothing pinned completes honestly as EMPTY_CASE.
  */
 import { randomUUID } from "node:crypto";
-import { ENGINE_VERSION } from "@repo/case-engine";
+import { CONTRADICTION_CAVEAT, ENGINE_VERSION } from "@repo/case-engine";
 import { CASE_WORDING, type TenantId } from "@repo/core";
 import { contentRef, createDatabase, hashContent, type Database } from "@repo/db";
 import pg from "pg";
@@ -182,6 +182,126 @@ describe("one attempt at a case analysis (RELEASE-BLOCKING)", () => {
       basis: { evidenceIds: [fixture.evidenceId], runIds: [fixture.runId] },
     });
     expect(CaseAnalysisDocumentSchema.safeParse(complete?.document).success).toBe(true);
+  });
+
+  it("generates, persists and reflects a contradiction when stored claims disagree (M4-1)", async () => {
+    const fixture = await entitledCase("job-contradiction");
+    // A second TECHINT evidence reports the entity's registrar differently. Both
+    // claims are on the pinned entity, so both are in the case; the stored claims
+    // disagree on one attribute of one entity — a reviewable contradiction.
+    const secondEvidenceId = await db.withTenant(fixture.tenantId, async ({ repos }) => {
+      const hash = hashContent(new TextEncoder().encode("[payload job-contradiction:tech2]"));
+      // No recorded job (jobId null), so it needs no job-result bookkeeping; it
+      // is in the case because the pinned entity's claim below cites it.
+      const evidence = await repos.evidence.record({
+        collectorId: TECH_COLLECTOR,
+        collectorVersion: "1.0.0",
+        jobId: null,
+        sourceUrl: "https://example.com/other",
+        contentHash: hash,
+        payloadRef: contentRef(fixture.tenantId, hash),
+        observedAt: null,
+        collectedAt: AT,
+        claimStrength: "REPORTED",
+      });
+      await repos.claims.create({
+        evidenceId: evidence.id,
+        subject: { entityId: fixture.entityId },
+        attribute: "registrar",
+        value: "[a different registrar]",
+        strength: "DERIVED",
+      });
+      return evidence.id;
+    });
+
+    const { analysisId } = await request(fixture.tenantId, fixture.caseId);
+    expect(await processor().process(fixture.tenantId, analysisId, 1)).toEqual({
+      kind: "COMPLETED",
+      status: "COMPLETE",
+      errorCode: null,
+    });
+    const events = await eventsOf(fixture.tenantId, analysisId);
+    const document = CaseAnalysisDocumentSchema.parse(events[1]?.document);
+
+    // Generated and persisted: the conflicting positions, each with its own
+    // evidence and strength carried through exactly, and the standing caveat.
+    // Positions sort by the stable key of their value ("[a..." before "[r...").
+    expect(document.contradictions).toEqual({
+      items: [
+        {
+          entityId: fixture.entityId,
+          attribute: "registrar",
+          positions: [
+            {
+              value: "[a different registrar]",
+              evidenceIds: [secondEvidenceId],
+              strengths: ["DERIVED"],
+            },
+            { value: "[registrar]", evidenceIds: [fixture.evidenceId], strengths: ["REPORTED"] },
+          ],
+        },
+      ],
+      caveat: CONTRADICTION_CAVEAT,
+    });
+
+    // Reflected in the breakdown: TECHINT reports the contradicted entity, a
+    // measured count, never CONTRADICTION_DETECTION_NOT_BUILT.
+    if (document.breakdown.kind !== "CASE_BREAKDOWN") throw new Error("expected a breakdown");
+    const techint = document.breakdown.sections.find((section) => section.discipline === "TECHINT");
+    expect(techint?.metrics).toEqual([
+      { metric: "CONTRADICTIONS", value: { count: 1, ids: [fixture.entityId] } },
+    ]);
+  });
+
+  it("surfaces a contradiction between two article fetches of one URL: article claims reach analysis (M4-2)", async () => {
+    const fixture = await entitledCase("job-article-conflict");
+    const urlValue = "https://news.example.com/world/story-1";
+    const titles = ["[Headline as first fetched]", "[Headline after the publisher edited it]"];
+    await db.withTenant(fixture.tenantId, async ({ repos }) => {
+      const urlEntity = await repos.entities.create({ kind: "URL", displayName: urlValue });
+      // Two fetches of the one article URL recorded a different title: a genuine
+      // contradiction on (URL, article_title), the kind an article's own claims make.
+      for (const [index, title] of titles.entries()) {
+        const hash = hashContent(new TextEncoder().encode(`[article payload ${String(index)}]`));
+        const evidence = await repos.evidence.record({
+          collectorId: TECH_COLLECTOR,
+          collectorVersion: "1.0.0",
+          jobId: null,
+          sourceUrl: urlValue,
+          contentHash: hash,
+          payloadRef: contentRef(fixture.tenantId, hash),
+          observedAt: null,
+          collectedAt: AT,
+          claimStrength: "REPORTED",
+        });
+        await repos.claims.create({
+          evidenceId: evidence.id,
+          subject: { entityId: urlEntity.id },
+          attribute: "article_title",
+          value: title,
+          strength: "REPORTED",
+        });
+      }
+      await repos.casePins.pin({
+        caseId: fixture.caseId,
+        target: { entityId: urlEntity.id },
+        pinnedByUserId: fixture.userId,
+        note: null,
+      });
+    });
+
+    const { analysisId } = await request(fixture.tenantId, fixture.caseId);
+    expect((await processor().process(fixture.tenantId, analysisId, 1)).status).toBe("COMPLETE");
+    const events = await eventsOf(fixture.tenantId, analysisId);
+    const document = CaseAnalysisDocumentSchema.parse(events[1]?.document);
+    const conflict = document.contradictions?.items.find(
+      (item) => item.attribute === "article_title",
+    );
+    expect(conflict).toBeDefined();
+    // Both stated titles are kept, neither resolved; agreement would not appear.
+    expect(conflict?.positions.map((position) => position.value).sort()).toEqual(
+      [...titles].sort(),
+    );
   });
 
   it("writes nothing twice when the same attempt is delivered again, or twice at once", async () => {

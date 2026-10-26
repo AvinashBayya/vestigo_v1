@@ -10,7 +10,10 @@
  * byte. Changed since only by the owner's rulings, each a commit of its own
  * with its golden diff: a run in which no collector was planned says so
  * ("NOTHING PLANNED"), whatever its status, and every count agrees in number
- * ("1 planned collector", "1 further collector was").
+ * ("1 planned collector", "1 further collector was"); and (Track M Day 2) an
+ * empty answer from a source whose empty answers are unreliable is its own
+ * state, EMPTY_UNCONFIRMED, counted apart from "found nothing" and stated with
+ * its caveat.
  *
  * Nothing here is estimated. Coverage is named facts, never a percentage
  * (there is no honest denominator for "every source that exists"). This is
@@ -46,6 +49,9 @@ const PASSIVE_CAVEAT =
   "Collection was passive: every collector read a third party's record or analysed the input, and none contacted the target.";
 const ACTIVE_CAVEAT =
   "At least one collector contacted the target directly under a recorded scope authorisation; see the coverage entries.";
+/** Stated whenever a collector returned nothing that is unconfirmed (Track M Day 2). */
+export const UNCONFIRMED_CAVEAT =
+  "Returned nothing (unconfirmed) means the source answered with nothing, but its empty answers are unreliable. It is not a finding that the source has nothing, and not a count of zero.";
 
 /** A registered collector, as coverage reads it: from the registry, never from the collector. */
 export interface CoverageCollector {
@@ -69,7 +75,7 @@ export interface CoverageJob {
   readonly status: JobStatus;
   /** The last attempt's outcome; null until one finished. */
   readonly outcome: JobOutcome | null;
-  /** What a NOT_FOUND said was not found. */
+  /** What a NOT_FOUND said was not found, or an EMPTY_UNCONFIRMED said came back empty. */
   readonly outcomeDetail: string | null;
   readonly targetType: TargetType | null;
   /** Attempts actually made. */
@@ -132,7 +138,10 @@ export function coverageFromJob(job: CoverageJob, label: string): CoverageEntry 
     case "SUCCEEDED":
       return job.outcome === "FOUND"
         ? { ...base, state: "COLLECTED", reasonCode: null, detail: null }
-        : { ...base, state: "NOTHING_FOUND", reasonCode: null, detail: job.outcomeDetail };
+        : job.outcome === "EMPTY_UNCONFIRMED"
+          ? // Never "nothing found": the source's empty answers are unreliable.
+            { ...base, state: "EMPTY_UNCONFIRMED", reasonCode: null, detail: job.outcomeDetail }
+          : { ...base, state: "NOTHING_FOUND", reasonCode: null, detail: job.outcomeDetail };
     case "FAILED":
       return {
         ...base,
@@ -167,8 +176,13 @@ export function coverageHeadline(
 ): string {
   if (planError !== null) return `FAILED RUN: the run could not be planned (${planError}).`;
   const ran = entries.filter((e) => e.attempts !== null);
-  const completed = ran.filter((e) => e.state === "COLLECTED" || e.state === "NOTHING_FOUND");
+  const completed = ran.filter(
+    (e) =>
+      e.state === "COLLECTED" || e.state === "NOTHING_FOUND" || e.state === "EMPTY_UNCONFIRMED",
+  );
   const found = ran.filter((e) => e.state === "COLLECTED").length;
+  // Counted apart, never as "found nothing": the source's empty answers are unreliable.
+  const unconfirmed = ran.filter((e) => e.state === "EMPTY_UNCONFIRMED").length;
   const notRun = entries.filter((e) => e.attempts === null).length;
   const notRunNote =
     notRun === 0
@@ -176,7 +190,9 @@ export function coverageHeadline(
       : notRun === 1
         ? " 1 further collector was excluded or held and did not run."
         : ` ${String(notRun)} further collectors were excluded or held and did not run.`;
-  const counts = `${String(found)} found something, ${String(completed.length - found)} found nothing`;
+  const counts =
+    `${String(found)} found something, ${String(completed.length - found - unconfirmed)} found nothing` +
+    (unconfirmed === 0 ? "" : `, ${String(unconfirmed)} returned nothing — unconfirmed`);
   const planned = `${String(ran.length)} planned ${ran.length === 1 ? "collector" : "collectors"}`;
   // A run that planned no collector cannot have finished or failed to finish any.
   const nothingPlanned = `NOTHING PLANNED: no collector was planned to run, so there is nothing to report on.${notRunNote}`;
@@ -255,12 +271,17 @@ export function runCoverage(input: RunCoverageInput): ReportCoverage {
     (job) =>
       registry.find((candidate) => candidate.id === job.collectorId)?.collectionMode === "ACTIVE",
   );
+  const unconfirmed = entries.some((entry) => entry.state === "EMPTY_UNCONFIRMED");
   return {
     runStatus: status,
     partial: status !== "SUCCEEDED" || planError !== null,
     headline: coverageHeadline(status, entries, planError),
     entries,
     notApplicable,
-    caveats: [active ? ACTIVE_CAVEAT : PASSIVE_CAVEAT, ...COVERAGE_CAVEATS],
+    caveats: [
+      active ? ACTIVE_CAVEAT : PASSIVE_CAVEAT,
+      ...COVERAGE_CAVEATS,
+      ...(unconfirmed ? [UNCONFIRMED_CAVEAT] : []),
+    ],
   };
 }

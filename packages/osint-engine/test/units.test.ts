@@ -11,6 +11,7 @@ import {
   defineCollector,
   PLATFORM_COLLECTORS,
   type CollectionOutcome,
+  type ScopeClearance,
   type SourceDeclaration,
 } from "@repo/collectors";
 import { loadFixture, startHarness, type Fixture } from "@repo/collectors/testing";
@@ -95,6 +96,8 @@ describe("what an outcome says about its source's health", () => {
   it.each([
     ["FOUND", null, "SUCCESS"],
     ["NOT_FOUND", null, "SUCCESS"],
+    // The source answered; that its empty answer cannot be trusted says nothing of its health.
+    ["EMPTY_UNCONFIRMED", null, "SUCCESS"],
     ["UNAVAILABLE", "UPSTREAM_UNAVAILABLE", "FAILURE"],
     ["UNAVAILABLE", "UPSTREAM_TIMEOUT", "FAILURE"],
     ["UNAVAILABLE", "COLLECTOR_TIMEOUT", "FAILURE"],
@@ -126,6 +129,7 @@ function source(
   return {
     id,
     name: `[Source ${id}]`,
+    access: ["open"],
     licence: {
       commercialUse,
       reason: "[test]",
@@ -198,7 +202,6 @@ const runtime = new CollectorRuntime({
       fake("fake.active", "open", { ...PASSIVE_DOMAIN, mode: "ACTIVE" }),
     ],
   }),
-  allowUnverifiedSources: false,
   network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
 });
 
@@ -258,6 +261,28 @@ describe("planning a run", () => {
     ]);
   });
 
+  it("treats a pasted article URL as a URL and as its publisher domain, so a domain collector runs (news-URL regression)", async () => {
+    const url = "https://www.hindustantimes.com/india-news/some-headline-101.html";
+    const plan = await planRun(runtime, {
+      input: url,
+      requestedType: null,
+      entitlement: TECHINT,
+      scopeFor: () => Promise.resolve(null),
+    });
+    expect(plan.detected).toEqual({ primaryType: "URL", alternateTypes: ["DOMAIN"] });
+    // Both candidates are valid — the full URL, and its host as a domain. The
+    // DOMAIN candidate is no longer reported invalid ("malformed"): the bug.
+    expect(plan.targets).toHaveLength(2);
+    expect(plan.targets).toContainEqual({ type: "URL", value: url });
+    expect(plan.targets).toContainEqual({ type: "DOMAIN", value: "www.hindustantimes.com" });
+    expect(plan.targets.every((target) => "value" in target)).toBe(true);
+    // A domain collector runs on the extracted host, as GDELT news (DOMAIN) would.
+    expect(plan.jobs).toContainEqual({
+      collectorId: "fake.domain",
+      target: { type: "DOMAIN", value: "www.hindustantimes.com" },
+    });
+  });
+
   it("records an input that is not the requested type, and plans nothing on it", async () => {
     const plan = await planRun(runtime, {
       input: "not a domain",
@@ -294,7 +319,6 @@ describe("planning a TOPIC: person data whatever collects it (RELEASE-BLOCKING)"
         }),
       ],
     }),
-    allowUnverifiedSources: false,
     network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
   });
   const plan = (
@@ -405,6 +429,8 @@ const FOUND_CASES: readonly {
   readonly collectorId: string;
   readonly target: { readonly type: TargetType; readonly value: string };
   readonly fixtures: readonly Fixture[];
+  /** For an ACTIVE collector: the scope authorisation in force for the exact target. */
+  readonly scopeAuthorisation?: ScopeClearance;
 }[] = [
   {
     collectorId: "crtsh",
@@ -461,6 +487,62 @@ const FOUND_CASES: readonly {
     target: { type: "DOMAIN", value: "iana.org" },
     fixtures: [loadFixture("commoncrawl", "collinfo"), loadFixture("commoncrawl", "cdx-iana")],
   },
+  // GDELT news: each article is a URL entity published_by its outlet DOMAIN,
+  // the article's fields its claims. Both a TOPIC and a DOMAIN search draw this
+  // way; a DOMAIN search's own domain appears only as an outlet GDELT reports.
+  {
+    collectorId: "news",
+    target: { type: "TOPIC", value: "climate change" },
+    fixtures: [loadFixture("news", "found")],
+  },
+  {
+    collectorId: "news",
+    target: { type: "DOMAIN", value: "example.net" },
+    fixtures: [loadFixture("news", "domain-found")],
+  },
+  // Direct article fetch (exact-article Stage 3): the one article URL is the
+  // entity, its fields the claims, published_by its outlet. ACTIVE, so a scope
+  // authorisation for the exact URL is in force (a DOMAIN authorisation clears
+  // it in the real flow; here the resolved clearance is supplied directly).
+  {
+    collectorId: "article",
+    target: { type: "URL", value: "https://news.example.com/world/story-1" },
+    fixtures: [loadFixture("article", "found")],
+    scopeAuthorisation: {
+      id: "scope-article",
+      targetType: "URL",
+      target: "https://news.example.com/world/story-1",
+    },
+  },
+];
+
+/**
+ * Extractors that check a FOUND result and draw nothing from it yet; the
+ * evidence is kept and cited. The monitoring collectors' items become items in
+ * Track M's item extractors (docs/monitoring/MONITORING-PLAN.md §7), and until
+ * then no claim, and no count, is made from a list.
+ */
+const NOTHING_DRAWN_CASES: readonly {
+  readonly collectorId: string;
+  readonly target: { readonly type: TargetType; readonly value: string };
+  readonly fixtures: readonly Fixture[];
+}[] = [
+  // The monitoring collectors (2026-10-17), on their recorded answers.
+  {
+    collectorId: "rss.thehindu-com",
+    target: { type: "TOPIC", value: "[feeder-default headline 1]" },
+    fixtures: [loadFixture("rss", "thehindu-com-feeder-default")],
+  },
+  {
+    collectorId: "bluesky.search",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [loadFixture("bluesky", "public-search-found")],
+  },
+  {
+    collectorId: "reddit.search",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [loadFixture("reddit", "public-search-found")],
+  },
 ];
 
 describe("extractors", () => {
@@ -468,8 +550,200 @@ describe("extractors", () => {
     expect(Object.keys(EXTRACTORS).sort()).toEqual(
       PLATFORM_COLLECTORS.map((collector) => collector.declaration.id).sort(),
     );
-    expect(FOUND_CASES.map((c) => c.collectorId).sort()).toEqual(Object.keys(EXTRACTORS).sort());
+    const cased = new Set([...FOUND_CASES, ...NOTHING_DRAWN_CASES].map((c) => c.collectorId));
+    // Every RSS collector shares one extractor, so one publisher's case covers them all.
+    const rss = EXTRACTORS["rss.thehindu-com"];
+    expect(rss).toBeDefined();
+    for (const [id, extract] of Object.entries(EXTRACTORS)) {
+      if (id.startsWith("rss.")) {
+        expect(extract, id).toBe(rss);
+        cased.add(id);
+      }
+    }
+    expect([...cased].sort()).toEqual(Object.keys(EXTRACTORS).sort());
   });
+
+  it("news: each article is a URL entity published_by its outlet, with its fields as claims and no invented entity", () => {
+    const result = {
+      articles: [
+        {
+          url: "https://a.example/story-1",
+          mobileUrl: null,
+          title: "[headline one]",
+          seendate: "20261015T143000Z",
+          outletDomain: "a.example",
+          language: "English",
+          outletCountry: "United States",
+          socialImageUrl: null,
+          derived: { seenByGdeltAt: "2026-10-15T14:30:00.000Z" },
+        },
+        {
+          // Same outlet (different case), a second article: one DOMAIN entity,
+          // and a title/date/country that are absent assert nothing.
+          url: "https://a.example/story-2",
+          mobileUrl: null,
+          title: null,
+          seendate: null,
+          outletDomain: "A.Example",
+          language: "English",
+          outletCountry: null,
+          socialImageUrl: null,
+          derived: { seenByGdeltAt: null },
+        },
+      ],
+      derived: {
+        search: { query: '"x"', timespan: "3months", sort: "datedesc", maxRecords: 250 },
+        newest250Only: false,
+        seenSpan: { newest: "2026-10-15T14:30:00.000Z", oldest: "2026-10-15T14:30:00.000Z" },
+        volume: { count: null, reason: "NOT_MEASURED_BY_AN_ARTICLE_LIST" },
+      },
+    };
+    const extract = EXTRACTORS["news"];
+    if (extract === undefined) throw new Error("no news extractor");
+    const { entities, relationships, claims } = extract({
+      target: { type: "TOPIC", value: "x" },
+      result,
+    });
+    // One URL entity per article; one DOMAIN outlet, deduped across case.
+    expect(entities.filter((e) => e.kind === "URL").map((e) => e.identifier)).toEqual([
+      "https://a.example/story-1",
+      "https://a.example/story-2",
+    ]);
+    const domains = entities.filter((e) => e.kind === "DOMAIN");
+    expect(domains).toHaveLength(1);
+    expect(domains[0]?.identifier).toBe("a.example");
+    // A headline or a country is never turned into a named entity.
+    expect(entities.some((e) => e.kind === "PERSON" || e.kind === "ORGANIZATION")).toBe(false);
+    expect(entities.some((e) => e.kind === "LOCATION")).toBe(false);
+    // The only edges are each article to its own outlet: no article-to-article edge.
+    expect(relationships.map((r) => r.kind)).toEqual(["published_by", "published_by"]);
+    expect(new Set(relationships.map((r) => r.to))).toEqual(new Set([domains[0]?.key]));
+    // Reported fields keep the source strength; the parsed seen-time is DERIVED;
+    // a null field makes no claim.
+    const resolved = resolveClaims(claims, result, "REPORTED");
+    const title = resolved.find((c) => c.attribute === "news_title");
+    expect(title?.value).toBe("[headline one]");
+    expect(title?.strength).toBe("REPORTED");
+    expect(resolved.filter((c) => c.attribute === "news_title")).toHaveLength(1);
+    const seen = resolved.find((c) => c.attribute === "news_seen_by_gdelt_at");
+    expect(seen?.value).toBe("2026-10-15T14:30:00.000Z");
+    expect(seen?.strength).toBe("DERIVED");
+    // Exactly the article's own fields and the outlet edge are claimed: a null
+    // field drops (mobileUrl and socialImageUrl here), and nothing counts the list.
+    expect(new Set(resolved.map((c) => c.attribute))).toEqual(
+      new Set([
+        "news_title",
+        "news_language",
+        "news_outlet_country",
+        "news_seendate",
+        "news_seen_by_gdelt_at",
+        "published_by",
+      ]),
+    );
+  });
+
+  it("article: the URL is the subject, its fields claims (the raw headline reported, the parse derived), published_by its outlet", () => {
+    const result = {
+      headline: "Placeholder &amp; headline",
+      derived: {
+        url: "https://news.example.com/world/story-1",
+        outletDomain: "news.example.com",
+        dedupKey: "https://news.example.com/world/story-1",
+        canonicalUrl: "https://news.example.com/world/story-1",
+        title: "Placeholder & headline",
+        author: "[Byline]",
+        language: "en",
+        publishedAt: "2026-10-20T09:30:00.000Z",
+        extractionStatus: "FULL_TEXT",
+        bodyText: "Write to press@example.com or see https://report.example.org/doc for more.",
+        bodyTextTruncated: false,
+        mentions: [
+          { kind: "EMAIL_ADDRESS", value: "press@example.com", start: 9, end: 26 },
+          { kind: "URL", value: "https://report.example.org/doc", start: 34, end: 64 },
+        ],
+      },
+    };
+    const extract = EXTRACTORS["article"];
+    if (extract === undefined) throw new Error("no article extractor");
+    const target = { type: "URL" as const, value: "https://news.example.com/world/story-1" };
+    const { entities, relationships, claims } = extract({ target, result });
+    // The article URL is the subject; its outlet is a DOMAIN entity; each
+    // mentioned identifier is its own entity, resolved by its value.
+    expect(entities.filter((e) => e.kind === "URL").map((e) => e.identifier)).toEqual([
+      "https://news.example.com/world/story-1",
+      "https://report.example.org/doc",
+    ]);
+    expect(entities.filter((e) => e.kind === "DOMAIN").map((e) => e.identifier)).toEqual([
+      "news.example.com",
+    ]);
+    expect(entities.filter((e) => e.kind === "EMAIL_ADDRESS").map((e) => e.identifier)).toEqual([
+      "press@example.com",
+    ]);
+    // A headline or an author name is never turned into a named entity.
+    expect(entities.some((e) => e.kind === "PERSON" || e.kind === "ORGANIZATION")).toBe(false);
+    // The outlet edge, then one `mentions` edge per identifier. A mention is an
+    // edge, never an entity claim, so it is never read as a contradiction.
+    expect(relationships.map((r) => r.kind)).toEqual(["published_by", "mentions", "mentions"]);
+
+    const resolved = resolveClaims(claims, result, "REPORTED");
+    const headline = resolved.find((c) => c.attribute === "article_headline");
+    // The raw <title> stays the source's own value, undecoded; it is REPORTED.
+    expect(headline?.value).toBe("Placeholder &amp; headline");
+    expect(headline?.strength).toBe("REPORTED");
+    // Everything extractArticle parsed is DERIVED, never presented as the source's.
+    for (const attribute of [
+      "article_title",
+      "article_author",
+      "article_language",
+      "article_published_at",
+      "article_canonical_url",
+      "article_dedup_key",
+      "article_extraction_status",
+    ]) {
+      expect(resolved.find((c) => c.attribute === attribute)?.strength, attribute).toBe("DERIVED");
+    }
+    expect(new Set(resolved.map((c) => c.attribute))).toEqual(
+      new Set([
+        "article_headline",
+        "article_title",
+        "article_author",
+        "article_language",
+        "article_published_at",
+        "article_canonical_url",
+        "article_dedup_key",
+        "article_extraction_status",
+        "published_by",
+        "mentions",
+      ]),
+    );
+  });
+
+  it.each(NOTHING_DRAWN_CASES)(
+    "$collectorId on a $target.type: checks the result and draws nothing yet, so no entity, claim or count",
+    async (testCase) => {
+      const harness = await startHarness({
+        collectors: PLATFORM_COLLECTORS.filter((c) => c.declaration.id === testCase.collectorId),
+        fixtures: testCase.fixtures,
+      });
+      try {
+        const outcome = await harness.run(testCase.collectorId, testCase.target);
+        expect(outcome.status, JSON.stringify(outcome)).toBe("FOUND");
+        if (outcome.status !== "FOUND") return;
+        const extract = EXTRACTORS[testCase.collectorId];
+        if (extract === undefined) throw new Error("no extractor");
+        // A TOPIC has no entity kind: the extractor never asks for the target's entity.
+        expect(extract({ target: testCase.target, result: outcome.result })).toEqual({
+          entities: [],
+          relationships: [],
+          claims: [],
+        });
+        // What it is given is checked, as every extractor checks it.
+        expect(() => extract({ target: testCase.target, result: { articles: [] } })).toThrow();
+      } finally {
+        await harness.close();
+      }
+    },
+  );
 
   it.each(FOUND_CASES)(
     "$collectorId: every claim cites real evidence, names known entities, and takes its strength from its path",
@@ -479,7 +753,13 @@ describe("extractors", () => {
         fixtures: testCase.fixtures,
       });
       try {
-        const outcome = await harness.run(testCase.collectorId, testCase.target);
+        const outcome = await harness.run(
+          testCase.collectorId,
+          testCase.target,
+          testCase.scopeAuthorisation === undefined
+            ? {}
+            : { scopeAuthorisation: testCase.scopeAuthorisation },
+        );
         expect(outcome.status, JSON.stringify(outcome)).toBe("FOUND");
         if (outcome.status !== "FOUND") return;
         const extract = EXTRACTORS[testCase.collectorId];

@@ -1,6 +1,16 @@
 import { decideDisciplineAccess, decideTargetAccess, type TenantEntitlement } from "@repo/access";
 import type { z } from "zod";
-import { AppError, type TargetType } from "@repo/core";
+import { AppError, type TargetType, type UnrunnableReason } from "@repo/core";
+import {
+  DEFAULT_ACCESS_METHODS,
+  isAccessMethod,
+  isKeyedAccessMethod,
+  type AccessMethod,
+  type AccessMethodEntry,
+  type CollectorAccess,
+  type RunsVia,
+  type SourceAccess,
+} from "./access.ts";
 import {
   makeReturn,
   returningRun,
@@ -30,6 +40,7 @@ import {
 } from "./outcome.ts";
 import { registryInternals, type CollectorRegistry, type RegistryEntry } from "./registry.ts";
 import { payloadIndex, reportedPart, unreadValuePath } from "./provenance.ts";
+import type { Source } from "./source.ts";
 import { parseTarget, type Target } from "./target.ts";
 
 /** A scope authorisation in force for a target, as read from the database. */
@@ -153,35 +164,192 @@ function outcomeOfError(
 }
 
 /**
+ * Runtimes allowed to replay recorded answers for an UNVERIFIED source. Only
+ * the fixture harness (src/testing.ts) adds one, to a runtime whose network
+ * is its loopback fixture server: a replay never contacts the source. Nothing
+ * a deployment builds is ever in it, so no product path runs an UNVERIFIED
+ * source.
+ */
+const REPLAYING = new WeakSet<CollectorRuntime>();
+
+/**
+ * Internal to the package, for src/testing.ts alone (lint): lets the
+ * harness's runtime replay recorded answers for UNVERIFIED sources. BLOCKED
+ * stays refused, and so does a method that is not enabled. Not exported from
+ * the package entry point.
+ */
+export function replayRecordedAnswers(runtime: CollectorRuntime): void {
+  REPLAYING.add(runtime);
+}
+
+function refusalWhenNoMethodRuns(methods: readonly AccessMethodEntry[]): string {
+  const [only] = methods;
+  return methods.length === 1 && only !== undefined
+    ? `Its only access method, ${only.kind}, is not enabled in this deployment.`
+    : `None of its access methods (${methods.map((method) => method.kind).join(", ")}) is enabled in this deployment.`;
+}
+
+/** A non-empty list of methods, or null for none: never an empty list. */
+function runsViaOf(methods: readonly AccessMethodEntry[]): RunsVia | null {
+  const [first, ...rest] = methods.filter((method) => method.runnable).map((method) => method.kind);
+  return first === undefined ? null : Object.freeze<RunsVia>([first, ...rest]);
+}
+
+/**
  * The only way to run a collector. Every check happens here, before the
  * collector's code is reached, and every outcome is checked after:
- *   - licence: BLOCKED never runs; UNVERIFIED only where allowed;
+ *   - licence: only PERMITTED runs; BLOCKED and UNVERIFIED never do;
+ *   - access method: one it can use is enabled in this deployment (access());
  *   - an implementation exists and the target type is accepted and valid;
  *   - plan and vetting for the discipline, and for a person target type
  *     whatever the discipline (a TOPIC; @repo/access);
  *   - a scope authorisation for the exact target, for ACTIVE collectors;
- *   - required credentials are present.
+ *   - required credentials are present, for a keyed method enabled here;
+ *     it is handed no other credential.
  * Then the collector runs within its budget, with a fetch bound to its source,
- * and its return must be a found()/notFound() from this very run.
+ * and its return must be a found(), notFound() or emptyUnconfirmed() from this
+ * very run. A collector whose upstream's empty answers are unreliable can never
+ * return notFound().
  */
 export class CollectorRuntime {
   readonly #registry: CollectorRegistry;
-  readonly #allowUnverifiedSources: boolean;
+  readonly #accessMethods: readonly AccessMethod[];
   readonly #network: NetworkRuntime;
 
   constructor(options: {
     readonly registry: CollectorRegistry;
-    /** From allowsUnverifiedSources(env): never true in production unless configured. */
-    readonly allowUnverifiedSources: boolean;
+    /**
+     * The access methods enabled here: enabledAccessMethods(env). Unset: open,
+     * official and licensed, never operator. A method still runs only for a
+     * PERMITTED source.
+     */
+    readonly accessMethods?: readonly AccessMethod[];
     readonly network: NetworkRuntime;
   }) {
+    // Read as data: a list from anywhere is checked before it means anything.
+    const methods: readonly unknown[] = options.accessMethods ?? DEFAULT_ACCESS_METHODS;
+    const enabled: AccessMethod[] = [];
+    for (const method of methods) {
+      if (typeof method !== "string" || !isAccessMethod(method) || enabled.includes(method)) {
+        throw new CollectorDefinitionError(
+          "collector runtime",
+          "accessMethods must name distinct access methods: open, official, licensed, operator",
+        );
+      }
+      enabled.push(method);
+    }
     this.#registry = options.registry;
-    this.#allowUnverifiedSources = options.allowUnverifiedSources;
+    this.#accessMethods = Object.freeze(enabled);
     this.#network = options.network;
   }
 
   get registry(): CollectorRegistry {
     return this.#registry;
+  }
+
+  /** The access methods enabled in this deployment. */
+  get accessMethods(): readonly AccessMethod[] {
+    return this.#accessMethods;
+  }
+
+  /** Each of these methods of a source, as this deployment treats it. */
+  #methods(source: Source, kinds: readonly AccessMethod[]): readonly AccessMethodEntry[] {
+    const verdict = source.licence.commercialUse;
+    const verdictRuns =
+      verdict === "PERMITTED" || (verdict === "UNVERIFIED" && REPLAYING.has(this));
+    return Object.freeze(
+      kinds.map((kind) => {
+        const enabled = this.#accessMethods.includes(kind);
+        return Object.freeze({
+          kind,
+          enabled,
+          licenceVerdict: verdict,
+          runnable: enabled && verdictRuns,
+        });
+      }),
+    );
+  }
+
+  /** Why none of these methods runs here, or null when one does. The licence first. */
+  #refusal(
+    source: Source,
+    methods: readonly AccessMethodEntry[],
+  ): { readonly refusal: UnrunnableReason; readonly reason: string } | null {
+    if (source.licence.commercialUse === "BLOCKED") {
+      return {
+        refusal: "LICENCE_BLOCKED",
+        reason: `${source.name} is blocked: ${source.licence.reason}`,
+      };
+    }
+    if (source.licence.commercialUse === "UNVERIFIED" && !REPLAYING.has(this)) {
+      return {
+        refusal: "UNVERIFIED_SOURCE_NOT_ALLOWED",
+        reason: `${source.name}'s licence is unverified, and an unverified source never runs: its terms must be checked and a verdict recorded first.`,
+      };
+    }
+    if (!methods.some((method) => method.runnable)) {
+      return { refusal: "ACCESS_METHOD_NOT_ENABLED", reason: refusalWhenNoMethodRuns(methods) };
+    }
+    return null;
+  }
+
+  /**
+   * Whether a collector can run here, before any per-run check, and via which
+   * of its access methods: its licence (BLOCKED, then UNVERIFIED), an enabled
+   * method, then an implementation. When it cannot, runsVia is null.
+   */
+  access(collectorId: string): CollectorAccess {
+    const entry = this.#registry.entry(collectorId);
+    const methods = this.#methods(entry.source, entry.accessMethods);
+    const implemented = registryInternals(this.#registry).implementations.has(entry.id);
+    const refusal =
+      this.#refusal(entry.source, methods) ??
+      (implemented
+        ? null
+        : {
+            refusal: "NOT_IMPLEMENTED" as const,
+            reason: "This collector has no implementation yet.",
+          });
+    if (refusal !== null) {
+      return Object.freeze({ methods, vaultIds: Object.freeze([]), runsVia: null, ...refusal });
+    }
+    // No refusal means a method runs: #refusal says so.
+    const runsVia = runsViaOf(methods);
+    if (runsVia === null) {
+      throw new CollectorDefinitionError(`collector "${entry.id}"`, "no access method runs");
+    }
+    return Object.freeze({
+      methods,
+      vaultIds: runsVia.some(isKeyedAccessMethod) ? entry.credentials.vaultIds : Object.freeze([]),
+      runsVia,
+      refusal: null,
+      reason: null,
+    });
+  }
+
+  /**
+   * Every source in the registry's catalogue as this deployment runs it: its
+   * declared methods, each enabled or not, and whether any of them can run.
+   */
+  sources(): readonly SourceAccess[] {
+    return this.#registry.sources().map((source) => {
+      const methods = this.#methods(source, source.access);
+      const refusal = this.#refusal(source, methods);
+      const base = {
+        id: source.id,
+        label: source.name,
+        methods,
+        licenceVerdict: source.licence.commercialUse,
+      };
+      if (refusal !== null) {
+        return Object.freeze({ ...base, enabled: false, runsVia: null, ...refusal });
+      }
+      const runsVia = runsViaOf(methods);
+      if (runsVia === null) {
+        throw new CollectorDefinitionError(`source "${source.id}"`, "no access method runs");
+      }
+      return Object.freeze({ ...base, enabled: true, runsVia, refusal: null, reason: null });
+    });
   }
 
   /**
@@ -190,24 +358,9 @@ export class CollectorRuntime {
    */
   admit(collectorId: string, admission: Admission): Rejection | null {
     const entry = this.#registry.entry(collectorId);
-    const { source } = entry;
-    if (source.licence.commercialUse === "BLOCKED") {
-      return refused(
-        entry.id,
-        "LICENCE_BLOCKED",
-        `${source.name} is blocked: ${source.licence.reason}`,
-      );
-    }
-    if (source.licence.commercialUse === "UNVERIFIED" && !this.#allowUnverifiedSources) {
-      return refused(
-        entry.id,
-        "UNVERIFIED_SOURCE_NOT_ALLOWED",
-        `${source.name}'s licence is unverified, and this deployment does not allow unverified sources.`,
-      );
-    }
-    if (registryInternals(this.#registry).implementations.get(entry.id) === undefined) {
-      return refused(entry.id, "NOT_IMPLEMENTED", "This collector has no implementation yet.");
-    }
+    // Its licence, an enabled access method, an implementation: in that order.
+    const access = this.access(entry.id);
+    if (access.runsVia === null) return refused(entry.id, access.refusal, access.reason);
     if (!entry.targetTypes.includes(admission.target.type)) {
       return refused(
         entry.id,
@@ -268,17 +421,42 @@ export class CollectorRuntime {
     }
     const target = parseTarget(request.target.type, request.target.value);
 
-    const missing = entry.credentials.vaultIds.filter((id) => !request.credentials.has(id));
-    if (missing.length > 0 && !entry.credentials.runsWithout) {
+    // Only a keyed method enabled here hands the collector anything: a
+    // credential for any other method stays out of its reach.
+    const access = this.access(entry.id);
+    if (access.runsVia === null) return refused(entry.id, access.refusal, access.reason);
+    const handed = new Map<string, CollectorSecret>();
+    for (const vaultId of access.vaultIds) {
+      const secret = request.credentials.get(vaultId);
+      if (secret !== undefined) handed.set(vaultId, secret);
+    }
+    const missing = access.vaultIds.filter((id) => !handed.has(id));
+    if (missing.length > 0 && !access.runsVia.includes("open")) {
       return Object.freeze({ status: "NEEDS_CREDENTIALS", collectorId: entry.id, missing });
     }
 
     const run = Symbol(entry.id);
     const controller = new AbortController();
-    const secrets = [...request.credentials.values()].map((secret) => secret.expose());
+    const secrets = [...handed.values()].map((secret) => secret.expose());
     const credentials: CollectorCredentials = Object.freeze({
-      get: (vaultId: string) => request.credentials.get(vaultId) ?? null,
+      get: (vaultId: string) => handed.get(vaultId) ?? null,
     });
+    // An open-host source may contact only the authorised target's own host:
+    // admission has already required an in-force authorisation for it (the
+    // collection-mode scope gate), and a redirect off it is refused. A static
+    // source keeps its declared hosts (allowedHosts left undefined → default).
+    // The target was validated at admission and its host resolved for that
+    // authorisation, so this parse succeeds; an invalid target is a typed
+    // failure, never an empty allowlist (which would read as "no host").
+    let allowedHosts: readonly string[] | undefined;
+    if (entry.source.network?.openHost === true) {
+      try {
+        allowedHosts = [parseTarget("DOMAIN", target.value).value];
+      } catch (error) {
+        if (error instanceof InvalidTargetError) return failed(entry.id, error.code, error.message);
+        throw error;
+      }
+    }
     const context: RunContext<unknown> = Object.freeze({
       target,
       credentials,
@@ -289,12 +467,15 @@ export class CollectorRuntime {
         signal: controller.signal,
         secrets,
         onRequestSent: (host) => request.meter?.requestSent(entry.source.id, host),
+        ...(allowedHosts === undefined ? {} : { allowedHosts }),
       }),
       signal: controller.signal,
       found: (result: unknown, evidence: readonly [EvidenceItem, ...EvidenceItem[]]) =>
         makeReturn(run, { kind: "FOUND", result, evidence }),
       notFound: (response: Captured, detail: string) =>
         makeReturn(run, { kind: "NOT_FOUND", response, detail }),
+      emptyUnconfirmed: (response: Captured, detail: string) =>
+        makeReturn(run, { kind: "EMPTY_UNCONFIRMED", response, detail }),
       record: (output: unknown) => {
         if (entry.collectionMode !== "LOCAL_ANALYSIS") {
           throw new CollectorDefinitionError(
@@ -328,11 +509,7 @@ export class CollectorRuntime {
     try {
       returned = await Promise.race([implementation(context), budget]);
     } catch (error) {
-      return outcomeOfError(
-        entry.id,
-        error,
-        entry.credentials.vaultIds.some((id) => request.credentials.has(id)),
-      );
+      return outcomeOfError(entry.id, error, handed.size > 0);
     } finally {
       clearTimeout(timer);
       // Anything the collector left in flight is cut off.
@@ -351,7 +528,9 @@ export class CollectorRuntime {
     const violation = (message: string) =>
       failed(entry.id, "COLLECTOR_CONTRACT_VIOLATION", message);
     if (returningRun(returned) !== run) {
-      return violation("The collector did not return found() or notFound() from its own run.");
+      return violation(
+        "The collector did not return found(), notFound() or emptyUnconfirmed() from its own run.",
+      );
     }
     const value = returned as
       | {
@@ -359,8 +538,9 @@ export class CollectorRuntime {
           readonly result: unknown;
           readonly evidence: readonly EvidenceItem[];
         }
+      | { readonly kind: "NOT_FOUND"; readonly response: Captured; readonly detail: string }
       | {
-          readonly kind: "NOT_FOUND";
+          readonly kind: "EMPTY_UNCONFIRMED";
           readonly response: Captured;
           readonly detail: string;
         };
@@ -373,7 +553,34 @@ export class CollectorRuntime {
         ? captured.kind === "LOCAL"
         : captured.kind === "NETWORK" && okStatus(captured.status));
 
+    if (value.kind === "EMPTY_UNCONFIRMED") {
+      // An unreliable empty answer is an upstream's; a local analysis has none.
+      if (local) {
+        return violation(
+          "Only a network collector's upstream can answer empty unreliably; a local analysis that found nothing reports not found.",
+        );
+      }
+      if (!citable(value.response, OK_FOR_FOUND)) {
+        return violation("An unconfirmed empty answer must cite a 2xx response this run received.");
+      }
+      if (value.detail.trim().length === 0) {
+        return violation("An unconfirmed empty answer must say what came back empty.");
+      }
+      return Object.freeze({
+        status: "EMPTY_UNCONFIRMED",
+        collectorId: entry.id,
+        detail: value.detail,
+        response: value.response,
+      });
+    }
+
     if (value.kind === "NOT_FOUND") {
+      // Its upstream's empty answers may be false, so none is "nothing there".
+      if (entry.emptyAnswersUnreliable) {
+        return violation(
+          "This collector's upstream gives unreliable empty answers, so it reports one as unconfirmed, never as not found.",
+        );
+      }
       if (!citable(value.response, OK_FOR_NOT_FOUND)) {
         return violation(
           local

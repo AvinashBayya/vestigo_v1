@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://docs.bsky.app/docs/api/app-bsky-feed-search-posts",
+    "notes": "Synthetic: three posts in searchPosts' documented shape, placeholder values. The second post has no createdAt, so its date is null; the third has an image. No live answer could be recorded: the public AppView refused an unauthenticated search with 403 on 2026-10-17 (public-search-403.json), and no account app password is held here, so this stands in until one can be recorded."
+  },
+  "request": {
+    "host": "bsky.social",
+    "path": "/xrpc/app.bsky.feed.searchPosts?q=%22climate+change%22&sort=latest&limit=100"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"cursor\":\"[cursor]\",\"posts\":[{\"uri\":\"at://did:plc:[author-1]/app.bsky.feed.post/[post-1]\",\"cid\":\"[cid-1]\",\"author\":{\"did\":\"did:plc:[author-1]\",\"handle\":\"author-one.example\"},\"record\":{\"$type\":\"app.bsky.feed.post\",\"text\":\"[post text 1]\",\"createdAt\":\"2026-10-17T05:30:00.000Z\",\"langs\":[\"en\"]},\"indexedAt\":\"2026-10-17T05:30:01.000Z\"},{\"uri\":\"at://did:plc:[author-2]/app.bsky.feed.post/[post-2]\",\"cid\":\"[cid-2]\",\"author\":{\"did\":\"did:plc:[author-2]\",\"handle\":\"author-two.example\"},\"record\":{\"$type\":\"app.bsky.feed.post\",\"text\":\"[post text 2]\"},\"indexedAt\":\"2026-10-17T05:20:00.000Z\"},{\"uri\":\"at://did:plc:[author-3]/app.bsky.feed.post/[post-3]\",\"cid\":\"[cid-3]\",\"author\":{\"did\":\"did:plc:[author-3]\",\"handle\":\"author-three.example\"},\"record\":{\"$type\":\"app.bsky.feed.post\",\"text\":\"[post text 3]\",\"createdAt\":\"2026-10-17T05:10:00.000Z\",\"langs\":[\"hi\"]},\"embed\":{\"$type\":\"app.bsky.embed.images#view\",\"images\":[{\"thumb\":\"https://cdn.bsky.app/img/feed_thumbnail/plain/[image-3]\",\"alt\":\"\"}]},\"indexedAt\":\"2026-10-17T05:10:02.000Z\"}]}"
+  }
+}

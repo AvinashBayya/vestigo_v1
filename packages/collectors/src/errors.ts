@@ -42,6 +42,22 @@ export class InvalidTargetError extends AppError {
   }
 }
 
+/**
+ * A valid target that this collector cannot put to its upstream as it stands:
+ * GDELT DOC, for one, cannot search a topic with a quote mark inside as one
+ * phrase, since the mark would end the phrase and the rest would be read as
+ * GDELT's operators. Refused before anything is sent; permanent (CLAUDE.md §5).
+ * The message names the problem, never the target.
+ */
+export class TargetNotSearchableError extends AppError {
+  readonly code = "TARGET_NOT_SEARCHABLE";
+
+  constructor(problem: string) {
+    super(`This target cannot be searched here: ${problem}.`);
+    this.name = "TargetNotSearchableError";
+  }
+}
+
 export type DestinationRefusal =
   | "MALFORMED_URL"
   | "SCHEME_NOT_ALLOWED"
@@ -168,5 +184,19 @@ export class UpstreamResponseError extends AppError {
   constructor(problem: string) {
     super(`The upstream's response could not be used: ${problem}.`);
     this.name = "UpstreamResponseError";
+  }
+}
+
+/**
+ * A tenant credential is not in the form its collector needs (a key in the
+ * vault for another use, a typo). Permanent until the tenant replaces it; its
+ * value is never repeated.
+ */
+export class CredentialMalformedError extends AppError {
+  readonly code = "CREDENTIAL_MALFORMED";
+
+  constructor(vaultId: string, expected: string) {
+    super(`The tenant's "${vaultId}" credential is not ${expected}.`);
+    this.name = "CredentialMalformedError";
   }
 }

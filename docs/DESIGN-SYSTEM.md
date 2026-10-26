@@ -140,7 +140,7 @@ The same vocabulary everywhere a collector appears. Statuses are pills (§9, sta
 
 | Status | Meaning | Chip (ink on fill · dot) |
 |---|---|---|
-| **Ready** | Before any run: it can run in this deployment (implemented, and its licence permits it or the deployment allows unverified sources) | `claim-observed-ink` on `claim-observed-fill` · `claim-observed-mark` |
+| **Ready** | Before any run: it can run in this deployment (implemented, its licence is PERMITTED, and one of its access methods is enabled here) | `claim-observed-ink` on `claim-observed-fill` · `claim-observed-mark` |
 | **Needs key** | No tenant credential configured | `status-needs-key-ink` on `claim-inferred-fill` · `claim-inferred-mark` |
 | **Unavailable** | Registered and permitted, but it cannot run here now: a service it needs is not attached (the GPU media worker), or its source is cut off by an open circuit breaker. Say which | `claim-hypothesis-ink` on `claim-hypothesis-fill` · `claim-hypothesis-mark` |
 | **Ran** | Finished, results attached | observed, as Ready |
@@ -149,12 +149,13 @@ The same vocabulary everywhere a collector appears. Statuses are pills (§9, sta
 | **Queued** | Planned, waiting for a worker or for its next attempt (say when) | hypothesis, as Unavailable |
 | **Failed** | With the reason, the code, the attempts and the retry or dead-letter state | `status-failed-ink` on `status-failed-fill` · `status-failed-mark`; row `status-failed-tint` with `status-failed-border` |
 | **Skipped** | Policy or plan prevented the run (e.g. active scan without scope authorisation) | hypothesis |
-| **Held** | Registered but not enabled (licence unverified, or held pending verification) | hypothesis |
+| **Held** | Registered but not enabled (licence unverified or blocked, none of its access methods enabled here, or held pending verification). What it runs via reads as a dash, "None", never 0 | hypothesis |
 | **Cancelled** | Stopped before it finished; nothing more will be collected | hypothesis |
 | **Found nothing** | Ran, and the source had nothing for the target: a measured nothing, not a failure and not missing evidence (added in U1-b, D7) | hypothesis |
+| **Unconfirmed** | Ran, and the source answered with nothing, but its empty answers are unreliable (GDELT): whether it holds anything is not known. Say what came back empty; never "Found nothing", never a count of zero, and it is a gap (added in Track M Day 2, D9) | hypothesis |
 | **Locked** | Access to the run was withdrawn while it was open (the run stream's `locked` event): its reason, the code a fresh request would get, and how often access was checked while the stream was open (added in U1-b, D7) | hypothesis |
 
-Seven statuses share the hypothesis grey (Unavailable, Queued, Skipped, Held, Cancelled, Found nothing, Locked) and differ by word alone. That is deliberate: none of them produced a result, and the word, never the colour, carries which.
+Eight statuses share the hypothesis grey (Unavailable, Queued, Skipped, Held, Cancelled, Found nothing, Unconfirmed, Locked) and differ by word alone. That is deliberate: none of them produced a result, and the word, never the colour, carries which.
 
 **Run status** is a separate vocabulary on the run's own chip: QUEUED, RUNNING, SUCCEEDED (shown "Ran"), CANCELLED and FAILED as above, and **PARTIAL** in `claim-inferred-ink` on `claim-inferred-fill`, written in capitals as the run mockup draws it.
 
@@ -486,6 +487,7 @@ The mockups are binding; these are the only places they are not followed, each b
 - **D6. Tab order.** The drawn order (Overview, Entities, Graph, Timeline, Evidence, Media, Map, Report) is adopted; the app currently orders Evidence before Graph.
 - **D7. Found nothing and Locked** (added in U1-b). Both are drawn in the hypothesis grey with their word: neither produced a result, as with the five grey statuses before them (§3). The alternatives are green for Found nothing (it ran successfully, and the nothing is measured) or a neutral `accent-soft` chip for Locked (as §8's Locked notice is neutral).
 - **D8. Citations in the report** (added in U1-b). Markers sit side by side in prose leading, so 44px hit areas on each would overlap (§7). Built as D2 does for links: the markers are text, and the citations open from a row of standalone 44px buttons after the paragraph. The alternative is WCAG 2.5.8's inline exemption, keeping the markers as the controls.
+- **D9. Unconfirmed** (added in Track M Day 2, for the owner's review). Drawn in the hypothesis grey with its word, as Found nothing (D7): it produced no result. Its row says what came back empty in the collector's words, never "0 evidence records", and the Overview lists it as a gap. The alternative is the Needs key amber, to set it apart from a measured nothing by colour as well as word.
 
 **Raised at U1-b, decided by the owner on 2026-10-07.** D7, D8, R1, R4–R7, R10 and the dark avatar's `border-default` edge on `surface-control` (1.04:1; its initials identify the button) are **accepted as built**. R2 and R3 were **fixed** (above, and §9). R8 and R9 are **deferred** (R8: IBM Plex Serif to be self-hosted later; R9: MapLibre GL arrives with GEOINT).
 

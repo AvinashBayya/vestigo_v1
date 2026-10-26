@@ -8,12 +8,12 @@ import {
   type CollectorRuntime,
   type CollectorSecret,
   type FoundOutcome,
-  type ScopeClearance,
   type UsageMeter,
 } from "@repo/collectors";
 import { AppError, type TargetType, type TenantId } from "@repo/core";
 import type { ContentStore, Database, TenantContext } from "@repo/db";
 import type { CredentialSource } from "./credentials.ts";
+import { resolveScopeClearance } from "./scope.ts";
 
 export interface CollectionRequest {
   readonly collectorId: string;
@@ -131,12 +131,10 @@ export class CollectionExecutor {
           },
         };
       }
-      let scopeAuthorisation: ScopeClearance | null = null;
-      if (entry.collectionMode === "ACTIVE") {
-        const row = await ctx.repos.scopeAuthorisations.findInForce(target.type, target.value);
-        scopeAuthorisation =
-          row === null ? null : { id: row.id, targetType: row.targetType, target: row.target };
-      }
+      const scopeAuthorisation =
+        entry.collectionMode === "ACTIVE"
+          ? await resolveScopeClearance(ctx.repos.scopeAuthorisations, target)
+          : null;
       const admission: Admission = {
         target,
         entitlement: { plan: tenant.plan, vettingStatus: tenant.vettingStatus },
@@ -144,10 +142,16 @@ export class CollectionExecutor {
       };
       const rejection = this.#runtime.admit(entry.id, admission);
       if (rejection !== null) return { rejected: rejection };
-      const credentials = await this.#credentials.resolve(ctx, entry.credentials.vaultIds, {
-        collectorId: entry.id,
-        requestId: request.requestId,
-      });
+      // Only a keyed access method enabled here reads the vault: a credential
+      // for a method that is not is never revealed, nor audited as read.
+      const credentials = await this.#credentials.resolve(
+        ctx,
+        this.#runtime.access(entry.id).vaultIds,
+        {
+          collectorId: entry.id,
+          requestId: request.requestId,
+        },
+      );
       return { rejected: null, admission, credentials };
     });
     if (admitted.rejected !== null) return admitted.rejected;

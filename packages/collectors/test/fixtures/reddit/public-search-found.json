@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "recordedOn": "2026-10-17",
+    "source": "https://www.reddit.com/dev/api/#GET_search",
+    "notes": "Synthetic: the public JSON endpoint's search listing, documented shape, for an address Reddit does not block; one placeholder post. No live answer could be recorded: www.reddit.com answered an unauthenticated search from this address with its 403 block page on 2026-10-17 (public-search-403.json), and no OAuth app is held here, so this stands in until one can be recorded. Its listing names a next page (after), as a page with more posts behind it does."
+  },
+  "request": {
+    "host": "www.reddit.com",
+    "path": "/search.json?q=%22%5Ban+open+topic%5D%22&sort=new&limit=100&type=link&raw_json=1"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"kind\":\"Listing\",\"data\":{\"after\":\"t3_[next page]\",\"dist\":1,\"children\":[{\"kind\":\"t3\",\"data\":{\"id\":\"[id-4]\",\"name\":\"t3_[id-4]\",\"subreddit\":\"[subreddit-4]\",\"author\":\"[author-4]\",\"title\":\"[post title 4]\",\"permalink\":\"/r/[subreddit-4]/comments/[id-4]/[slug-4]/\",\"url\":\"https://news.example.org/[article-4]\",\"domain\":\"news.example.org\",\"created_utc\":1792123200}}],\"before\":null}}"
+  }
+}

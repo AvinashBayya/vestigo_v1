@@ -570,7 +570,10 @@ class Renderer {
 const words = (attribute: string) => attribute.replace(/_/g, " ");
 
 function coverageLine(wording: ReportWording, entry: CoverageEntry): Span[] {
-  const parts: Span[] = [{ text: `[${wording.states[entry.state]}]`, style: "bold" }];
+  // A report stored before a state existed has no label for it, and no entry
+  // in it; were one there, its state's own name is printed, never another's.
+  const label = wording.states[entry.state] ?? entry.state;
+  const parts: Span[] = [{ text: `[${label}]`, style: "bold" }];
   const facts: string[] = [];
   if (entry.state === "COLLECTED") {
     facts.push(fillWording(wording.coverage.evidenceItems, { count: String(entry.evidenceCount) }));

@@ -268,8 +268,11 @@ export class CollectorJobProcessor {
 
   #decide(outcome: CollectionOutcome, attempt: number, options: ProcessOptions): JobDisposition {
     switch (outcome.status) {
+      // The source answered. An unconfirmed empty answer is final too: asking
+      // again would not confirm it.
       case "FOUND":
       case "NOT_FOUND":
+      case "EMPTY_UNCONFIRMED":
         return { kind: "COMPLETED", status: "SUCCEEDED", outcome: outcome.status };
       case "FAILED":
       case "REFUSED":
@@ -314,10 +317,12 @@ export class CollectorJobProcessor {
           lastError: null,
           finishedAt: now,
         };
-      } else if (outcome.status === "NOT_FOUND") {
+      } else if (outcome.status === "NOT_FOUND" || outcome.status === "EMPTY_UNCONFIRMED") {
+        // No evidence either way: absence is not recorded, and an unconfirmed
+        // empty answer is not even absence. The detail says which it was.
         transition = {
           status: "SUCCEEDED",
-          outcome: "NOT_FOUND",
+          outcome: outcome.status,
           outcomeDetail: outcome.detail,
           lastError: null,
           finishedAt: now,

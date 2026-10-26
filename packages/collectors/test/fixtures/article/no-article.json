@@ -1,0 +1,14 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://news.example.com/empty",
+    "recordedOn": "2026-10-22",
+    "notes": "Synthetic 200 HTML with no <title>, no metadata and no readable body text, for the exact-article Stage 3 offline test. No real publisher was contacted; it pins that a page fetched but not readable as an article is reported not found, never FOUND."
+  },
+  "request": { "host": "news.example.com", "path": "/empty" },
+  "response": {
+    "status": 200,
+    "headers": { "content-type": "text/html; charset=utf-8" },
+    "body": "<!doctype html><html><head><meta charset=\"utf-8\"></head><body><div>[no title, no article text, only a bare container]</div></body></html>"
+  }
+}

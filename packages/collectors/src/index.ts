@@ -4,8 +4,25 @@
 //
 // Deliberately not exported: anything that reaches a collector's
 // implementation. The runtime is the only way to run one.
+export {
+  ACCESS_METHODS,
+  DEFAULT_ACCESS_METHODS,
+  isAccessMethod,
+  isKeyedAccessMethod,
+  KEYED_ACCESS_METHODS,
+  OPERATOR_ID_PREFIX,
+  type AccessMethod,
+  type AccessMethodEntry,
+  type CollectorAccess,
+  type DeclaredAccess,
+  type KeyedAccessMethod,
+  type Runnability,
+  type RunsVia,
+  type SourceAccess,
+} from "./access.ts";
 export { PLATFORM_SOURCES } from "./catalogue.ts";
 export {
+  ARTICLE_RESULT,
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
   createPlatformRegistry,
@@ -14,13 +31,18 @@ export {
   DNS_RESULT,
   GITHUB_RESULT,
   HACKERNEWS_RESULT,
+  BLUESKY_SEARCH_RESULT,
   HELD_PLATFORM_COLLECTORS,
   NEWS_RESULT,
   PLATFORM_COLLECTORS,
   RDAP_RESULT,
+  REDDIT_SEARCH_RESULT,
+  RSS_COLLECTORS,
+  RSS_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
   type HeldCollector,
+  type OperatorAttachment,
 } from "./platform/index.ts";
 export { DERIVED_KEY, reportedPart } from "./provenance.ts";
 export {
@@ -37,11 +59,13 @@ export {
 } from "./contract.ts";
 export {
   CollectorDefinitionError,
+  CredentialMalformedError,
   DestinationRefusedError,
   FetchOptionsError,
   InvalidTargetError,
   RateLimiterUnavailableError,
   ResponseTooLargeError,
+  TargetNotSearchableError,
   UnknownCollectorError,
   UpstreamRateLimitedError,
   UpstreamRejectedError,
@@ -92,6 +116,8 @@ export {
   type ScopeClearance,
 } from "./runtime.ts";
 export {
+  FORBIDDEN_PLATFORM_DOMAINS,
+  forbiddenPlatformDomainOf,
   validateSource,
   type Attribution,
   type IsoDate,

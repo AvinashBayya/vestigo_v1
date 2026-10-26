@@ -23,7 +23,14 @@ describe("the generated client types the run progress stream", () => {
   it("types each event's payload", () => {
     expectTypeOf<Of<"job">>().toHaveProperty("sourceLabel").toEqualTypeOf<string>();
     expectTypeOf<Of<"job">["outcome"]>().toEqualTypeOf<
-      "FOUND" | "NOT_FOUND" | "FAILED" | "UNAVAILABLE" | "NEEDS_CREDENTIALS" | "REFUSED" | null
+      | "FOUND"
+      | "NOT_FOUND"
+      | "FAILED"
+      | "UNAVAILABLE"
+      | "NEEDS_CREDENTIALS"
+      | "REFUSED"
+      | "EMPTY_UNCONFIRMED"
+      | null
     >();
     expectTypeOf<Of<"run">>().not.toHaveProperty("jobs");
     expectTypeOf<Of<"end">["status"]>().extract<null>().toEqualTypeOf<null>();

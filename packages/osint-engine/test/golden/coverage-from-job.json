@@ -91,6 +91,19 @@
     }
   },
   {
+    "fixture": "QUEUED with EMPTY_UNCONFIRMED",
+    "output": {
+      "collectorId": "golden.dns",
+      "sourceLabel": "[label 7] 東京",
+      "targetType": "DOMAIN",
+      "attempts": 7,
+      "evidenceCount": 2,
+      "state": "NOT_FINISHED",
+      "reasonCode": "QUEUED",
+      "detail": null
+    }
+  },
+  {
     "fixture": "RUNNING with FOUND",
     "output": {
       "collectorId": "golden.dns",
@@ -176,6 +189,19 @@
       "targetType": null,
       "attempts": 6,
       "evidenceCount": 0,
+      "state": "NOT_FINISHED",
+      "reasonCode": "RUNNING",
+      "detail": null
+    }
+  },
+  {
+    "fixture": "RUNNING with EMPTY_UNCONFIRMED",
+    "output": {
+      "collectorId": "golden.dns",
+      "sourceLabel": "[label 7] 東京",
+      "targetType": "DOMAIN",
+      "attempts": 7,
+      "evidenceCount": 2,
       "state": "NOT_FINISHED",
       "reasonCode": "RUNNING",
       "detail": null
@@ -273,6 +299,19 @@
     }
   },
   {
+    "fixture": "SUCCEEDED with EMPTY_UNCONFIRMED",
+    "output": {
+      "collectorId": "golden.dns",
+      "sourceLabel": "[label 7] 東京",
+      "targetType": "DOMAIN",
+      "attempts": 7,
+      "evidenceCount": 2,
+      "state": "EMPTY_UNCONFIRMED",
+      "reasonCode": null,
+      "detail": "[detail 7]"
+    }
+  },
+  {
     "fixture": "FAILED with FOUND",
     "output": {
       "collectorId": "golden.dns",
@@ -361,6 +400,19 @@
       "state": "FAILED",
       "reasonCode": "ERR_6",
       "detail": "[error 6] — ünïcödé"
+    }
+  },
+  {
+    "fixture": "FAILED with EMPTY_UNCONFIRMED",
+    "output": {
+      "collectorId": "golden.dns",
+      "sourceLabel": "[label 7] 東京",
+      "targetType": "DOMAIN",
+      "attempts": 7,
+      "evidenceCount": 2,
+      "state": "FAILED",
+      "reasonCode": null,
+      "detail": null
     }
   },
   {
@@ -455,6 +507,19 @@
     }
   },
   {
+    "fixture": "DEAD_LETTERED with EMPTY_UNCONFIRMED",
+    "output": {
+      "collectorId": "golden.dns",
+      "sourceLabel": "[label 7] 東京",
+      "targetType": "DOMAIN",
+      "attempts": 7,
+      "evidenceCount": 2,
+      "state": "FAILED",
+      "reasonCode": null,
+      "detail": null
+    }
+  },
+  {
     "fixture": "CANCELLED with FOUND",
     "output": {
       "collectorId": "golden.dns",
@@ -540,6 +605,19 @@
       "targetType": null,
       "attempts": 6,
       "evidenceCount": 0,
+      "state": "NOT_FINISHED",
+      "reasonCode": "CANCELLED",
+      "detail": "The job was cancelled."
+    }
+  },
+  {
+    "fixture": "CANCELLED with EMPTY_UNCONFIRMED",
+    "output": {
+      "collectorId": "golden.dns",
+      "sourceLabel": "[label 7] 東京",
+      "targetType": "DOMAIN",
+      "attempts": 7,
+      "evidenceCount": 2,
       "state": "NOT_FINISHED",
       "reasonCode": "CANCELLED",
       "detail": "The job was cancelled."

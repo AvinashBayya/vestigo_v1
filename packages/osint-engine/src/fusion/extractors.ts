@@ -22,6 +22,8 @@
  *     is the order the collector cited its responses in.
  */
 import {
+  ARTICLE_RESULT,
+  BLUESKY_SEARCH_RESULT,
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
   CRTSH_RESULT,
@@ -30,8 +32,12 @@ import {
   DNS_RESULT,
   GITHUB_RESULT,
   HACKERNEWS_RESULT,
+  NEWS_RESULT,
   RDAP_RESULT,
+  REDDIT_SEARCH_RESULT,
   reportedPart,
+  RSS_COLLECTORS,
+  RSS_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
 } from "@repo/collectors";
@@ -227,7 +233,8 @@ function targetEntity(drafts: Drafts, target: ExtractorInput["target"]): string 
     case "FILE":
       throw new NotImplementedError("fusion.file-target", "no collector reads FILE targets yet");
     case "TOPIC":
-      throw new NotImplementedError("fusion.topic-target", "no collector reads TOPIC targets yet");
+      // The news extractor, the one reader of a TOPIC, never asks for it (D-M2 adds the kinds).
+      throw new NotImplementedError("fusion.topic-target", "a TOPIC has no entity kind yet");
   }
 }
 
@@ -416,6 +423,119 @@ const commoncrawl: Extractor = ({ target, result }) => {
 };
 
 /**
+ * news (GDELT DOC): each article becomes a URL entity and its outlet a DOMAIN
+ * entity, the article `published_by` that outlet. The article's own fields are
+ * REPORTED claims on its URL entity; the seen-time GDELT gives, parsed to ISO,
+ * is DERIVED (the collector's computation, named `seen_by_gdelt_at`, never
+ * `published_at`: GDELT's seendate is when GDELT saw the article, not when it
+ * was published — news.ts).
+ *
+ * What is deliberately NOT drawn, so nothing is fabricated or mislabelled:
+ *   - No entity from a title or a country. A headline can name a person, and a
+ *     person or organisation is never resolved by a name (./identifiers.ts);
+ *     GDELT's `outletCountry` is where the OUTLET is, never an event location
+ *     (news.ts), so it stays a claim, never a LOCATION entity.
+ *   - No edge between two entities merely because they share an article: the
+ *     only edge is the one the article states, its publishing outlet.
+ *   - No count: an article list is not a measure of coverage (news.ts), so no
+ *     claim counts the articles, and none can be read as a rise.
+ *
+ * A TOPIC has no entity kind, so the topic itself is not an entity and the
+ * extractor never asks for the target's; a DOMAIN run's searched domain appears
+ * only where GDELT reports it as an outlet. One evidence row backs every claim:
+ * GDELT's single search response (index 0).
+ */
+const news: Extractor = ({ result }) => {
+  const r = NEWS_RESULT.parse(result);
+  const d = new Drafts();
+  r.articles.forEach((article, i) => {
+    const at: ResultPath = ["articles", i];
+    const url = d.entity("URL", normaliseUrl(article.url), article.url);
+    d.claim(url, "news_title", [...at, "title"], 0);
+    d.claim(url, "news_language", [...at, "language"], 0);
+    d.claim(url, "news_outlet_country", [...at, "outletCountry"], 0);
+    d.claim(url, "news_seendate", [...at, "seendate"], 0);
+    d.claim(url, "news_seen_by_gdelt_at", [...at, "derived", "seenByGdeltAt"], 0);
+    d.claim(url, "news_mobile_url", [...at, "mobileUrl"], 0);
+    d.claim(url, "news_social_image_url", [...at, "socialImageUrl"], 0);
+    if (article.outletDomain !== null) {
+      const outlet = d.entity(
+        "DOMAIN",
+        normaliseDomain(article.outletDomain),
+        article.outletDomain,
+      );
+      d.relate(url, outlet, "published_by", 0, [...at, "outletDomain"]);
+    }
+  });
+  return d.build();
+};
+
+/**
+ * article (direct fetch): the one article URL is the entity, and the page's
+ * own fields become claims on it — the raw <title> a REPORTED claim (the one
+ * value quoted verbatim from the bytes), everything the extractor parsed a
+ * DERIVED claim (a parse of those bytes — article.ts). The publisher's host is
+ * a DOMAIN entity the article is `published_by`.
+ *
+ * Distinct from the GDELT `news` extractor by construction: its own `article_*`
+ * attributes and its own evidence, so a direct fetch and an aggregator's listing
+ * of the same URL stay separable on the one shared URL entity. No entity is made
+ * from a title or an author name — a headline can name a person, and a person is
+ * never resolved by a name (./identifiers.ts). One evidence row backs every
+ * claim: the article response (index 0).
+ */
+const article: Extractor = ({ target, result }) => {
+  const r = ARTICLE_RESULT.parse(result);
+  const d = new Drafts();
+  const url = targetEntity(d, target);
+  d.claim(url, "article_headline", ["headline"], 0);
+  d.claim(url, "article_title", ["derived", "title"], 0);
+  d.claim(url, "article_author", ["derived", "author"], 0);
+  d.claim(url, "article_language", ["derived", "language"], 0);
+  d.claim(url, "article_published_at", ["derived", "publishedAt"], 0);
+  d.claim(url, "article_canonical_url", ["derived", "canonicalUrl"], 0);
+  d.claim(url, "article_dedup_key", ["derived", "dedupKey"], 0);
+  d.claim(url, "article_extraction_status", ["derived", "extractionStatus"], 0);
+  const outlet = d.entity(
+    "DOMAIN",
+    normaliseDomain(r.derived.outletDomain),
+    r.derived.outletDomain,
+  );
+  d.relate(url, outlet, "published_by", 0, ["derived", "outletDomain"]);
+  // Identifier mentions in the article's text (article.ts / article-extract.ts):
+  // each becomes an entity resolved by its identifier and a `mentions` edge from
+  // the article, grounded in the article evidence. A mention is an edge, never a
+  // claim on an entity, so a value stated by several articles stays corroboration
+  // in the graph and is never read as a contradiction (contradiction review
+  // compares entity claims only). No person, organisation or place is drawn — a
+  // name never resolves one (./identifiers.ts).
+  r.derived.mentions.forEach((mention, index) => {
+    const identifier =
+      mention.kind === "URL" ? normaliseUrl(mention.value) : normaliseEmail(mention.value);
+    if (identifier === null) return;
+    const mentioned = d.entity(mention.kind, identifier, mention.value);
+    d.relate(url, mentioned, "mentions", 0, ["derived", "mentions", index, "value"]);
+  });
+  return d.build();
+};
+
+/**
+ * The monitoring collectors (2026-10-17: Bluesky and Reddit search, and one
+ * RSS collector per publisher): each result is checked, and nothing is drawn
+ * from it yet, as from news. Their items become items, with their authors,
+ * outlets and links as entities, in Track M's item extractors
+ * (docs/monitoring/MONITORING-PLAN.md §7); until then no claim is made from an
+ * item list, and in particular no count. Every RSS collector shares one.
+ */
+const checkedOnly =
+  (schema: { parse(value: unknown): unknown }): Extractor =>
+  ({ result }) => {
+    schema.parse(result);
+    return new Drafts().build();
+  };
+const rss = checkedOnly(RSS_RESULT);
+
+/**
  * One extractor per platform collector. A collector without one cannot be
  * fused, and fusion refuses to mark its job fused (a test checks every
  * registered collector has one).
@@ -431,4 +551,9 @@ export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   hackernews,
   devto,
   commoncrawl,
+  news,
+  article,
+  "bluesky.search": checkedOnly(BLUESKY_SEARCH_RESULT),
+  "reddit.search": checkedOnly(REDDIT_SEARCH_RESULT),
+  ...Object.fromEntries(RSS_COLLECTORS.map((collector) => [collector.declaration.id, rss])),
 };

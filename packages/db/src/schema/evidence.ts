@@ -8,6 +8,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { collectorsRegistry } from "./collectors.ts";
@@ -127,5 +128,14 @@ export const claims = pgTable(
     index("claims_relationship_idx").on(t.tenantId, t.relationshipId),
     check("claims_one_subject", sql`num_nonnulls(${t.entityId}, ${t.relationshipId}) = 1`),
     check("claims_attribute_format", sql`${t.attribute} ~ '^[a-z][a-z0-9_]*$'`),
+    // At most one `article_statements` claim per piece of evidence: the article
+    // prose extraction (M4-4B) persists its result as one such claim on the
+    // article's URL entity, and this partial unique index makes a duplicate
+    // structurally impossible, so concurrent workers or a redelivery cannot
+    // write it twice. It constrains only that one attribute; every other claim
+    // is unaffected. ClaimsRepository.createOnce inserts against it.
+    uniqueIndex("claims_one_article_statements_per_evidence")
+      .on(t.tenantId, t.evidenceId, t.attribute)
+      .where(sql`${t.attribute} = 'article_statements'`),
   ],
 );

@@ -127,6 +127,8 @@ export function testSource(
   return {
     id,
     name: `[Test source ${id}]`,
+    // Reached with no credential unless a test says otherwise.
+    access: ["open"],
     licence: {
       commercialUse: "PERMITTED",
       reason: "[test source]",

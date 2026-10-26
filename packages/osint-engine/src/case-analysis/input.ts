@@ -7,10 +7,10 @@
  * collectors, registry disciplines and labels, engine version): every field of
  * the CaseInput case-engine computes from (a job's attempts and errors, a run's
  * plan and times, an investigation's title, evidence times and strength, each
- * claim's subject and strength), the active merges reachable from the case's
- * entities, case-engine's ENGINE_VERSION and the CASE_WORDING a document would
- * carry. A stored analysis whose hash differs from the case's now was computed
- * from different input, and a read says so.
+ * claim's subject, strength, attribute and value), the active merges reachable
+ * from the case's entities, case-engine's ENGINE_VERSION and the CASE_WORDING a
+ * document would carry. A stored analysis whose hash differs from the case's now
+ * was computed from different input, and a read says so.
  */
 import { ENGINE_VERSION, type CaseInput } from "@repo/case-engine";
 import { CASE_WORDING } from "@repo/core";
@@ -57,6 +57,11 @@ export async function readCaseAnalysisInput(
         entityId: row.entityId,
         relationshipId: row.relationshipId,
         strength: row.strength,
+        // The attribute and value, so contradiction review can read what each
+        // claim asserts (case-engine/case-contradictions.ts). The hash covers
+        // them, so an analysis made before they were read reads STALE.
+        attribute: row.attribute,
+        value: row.value,
       })),
       entities: records.entityIds.map((id) => ({ id })),
       relationships: records.relationshipIds.map((id) => ({ id })),

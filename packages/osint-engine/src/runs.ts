@@ -7,6 +7,7 @@ import { tenantRegistration, type CollectorRuntime } from "@repo/collectors";
 import { AppError, EmptyTargetError, type TenantId } from "@repo/core";
 import { jobIdempotencyKey } from "./jobs/policy.ts";
 import { planRun, type RunPlan } from "./planner.ts";
+import { resolveScopeClearance } from "./scope.ts";
 import { PersonTargetOutsidePersonRunError, type Database } from "@repo/db";
 
 export class RunNotReadyError extends AppError {
@@ -110,12 +111,7 @@ export class RunCoordinator {
           input: investigation.target,
           requestedType: run.requestedTargetType,
           entitlement: { plan: tenant.plan, vettingStatus: tenant.vettingStatus },
-          scopeFor: async (target) => {
-            const row = await repos.scopeAuthorisations.findInForce(target.type, target.value);
-            return row === null
-              ? null
-              : { id: row.id, targetType: row.targetType, target: row.target };
-          },
+          scopeFor: (target) => resolveScopeClearance(repos.scopeAuthorisations, target),
         });
       } catch (error) {
         if (!(error instanceof EmptyTargetError)) throw error;

@@ -13,6 +13,8 @@ import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionState } from "./api.ts";
 import { createAppRouter } from "./router.tsx";
+// Every screen the router loads on demand, loaded with this file (see test-screens.ts).
+import "./test-screens.ts";
 
 // The generated client captures fetch when it is created, at import time.
 const fetchMock = vi.hoisted(() => {
@@ -83,7 +85,13 @@ const caseRow = (id: string, title: string, archivedAt: string | null = null) =>
 /** The dashboard's own reads, answered empty, for tests that land on "/". */
 const DASHBOARD: Record<string, Handler> = {
   "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
-  "GET /api/v1/collectors": () => Response.json({ unverifiedSourcesAllowed: false, items: [] }),
+  "GET /api/v1/collectors": () =>
+    Response.json({
+      unverifiedSourcesAllowed: false,
+      accessMethodsEnabled: ["open", "official", "licensed"],
+      sources: [],
+      items: [],
+    }),
 };
 
 const requests = (method: string, path: string) =>

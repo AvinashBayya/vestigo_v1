@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CASE_ID,
   ENTITIES,
+  job,
   renderAt,
   rowOf,
   RUN,
@@ -147,6 +148,39 @@ describe("the overview", () => {
     expect(gaps.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Every source left out of the plan is counted on the Coverage card.
     expect(screen.getByText("3 not run")).toBeTruthy();
+  });
+
+  it("an answer its source cannot be trusted on is a gap in the collector's words, never a source that ran with 0 evidence records (D9, Track M Day 2)", async () => {
+    fakeApi({
+      [`GET /api/v1/runs/${RUN_ID}`]: () =>
+        Response.json({
+          ...RUN,
+          status: "SUCCEEDED",
+          jobs: [
+            job({}),
+            job({
+              id: "j3",
+              collectorId: "news",
+              sourceLabel: "[News source]",
+              outcome: "EMPTY_UNCONFIRMED",
+              outcomeDetail: "[returned nothing, unconfirmed: why]",
+              evidenceIds: [],
+              fusedAt: null,
+            }),
+          ],
+        }),
+    });
+    renderAt(`/runs/${RUN_ID}/overview`);
+    const card = (await screen.findByRole("heading", { name: "Gaps to close" })).closest("section");
+    if (card === null) throw new Error("The Gaps to close card is not a section.");
+    const gaps = await within(card).findByRole("list", { name: "Gaps" });
+    expect(gaps.textContent).toContain("[News source] · Returned nothing, unconfirmed");
+    expect(gaps.textContent).toContain("[returned nothing, unconfirmed: why]");
+    expect(within(card).queryByText("Every planned source ran.")).toBeNull();
+    // On the Coverage card: its own chip, and the collector's words where a count would be.
+    expect(screen.getByText("1 unconfirmed")).toBeTruthy();
+    expect(screen.getByText("1 ran")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("0 evidence records");
   });
 
   it("for a case: labelled pinned items only, with its pins counted by kind", async () => {

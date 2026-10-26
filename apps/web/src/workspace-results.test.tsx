@@ -410,7 +410,8 @@ describe("the graph", () => {
     fakeApi({ "GET /api/v1/graph": () => Response.json({ ...GRAPH, truncated: true }) });
     renderAt(`/runs/${RUN_ID}/graph`);
     expect(await screen.findByText(/Partial: the graph was cut at 500 entities/)).toBeTruthy();
-    expect(screen.getByText(/This browser cannot draw the graph/)).toBeTruthy();
+    // The renderer is downloaded on demand, so its canvas (here, its no-canvas words) comes after.
+    expect(await screen.findByText(/This browser cannot draw the graph/)).toBeTruthy();
     const legend = screen.getByRole("list", { name: "Entity classes" });
     expect(legend.textContent).toContain("Domain");
     expect(legend.textContent).toContain("IP address");

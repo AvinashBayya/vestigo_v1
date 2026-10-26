@@ -20,8 +20,9 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { collectorsQuery, DISCIPLINE_TEXT, type CollectorList as Registry } from "../collectors.ts";
 import { plural } from "../components/Values.tsx";
-import { jobStatus, RUN_STATUS_TEXT } from "../run/progress.ts";
+import { jobRowStatus, jobStatus, RUN_STATUS_TEXT } from "../run/progress.ts";
 import { NOT_APPLICABLE_REASON, type TargetType } from "../search/plan.ts";
+import { Contradictions } from "./Contradictions.tsx";
 import { PinButton } from "./Pin.tsx";
 import {
   caseQuery,
@@ -44,12 +45,17 @@ import { Loaded, NOT_BUILT_BODY } from "./states.tsx";
 const ENTITIES_UNCOUNTED = `More than ${String(LIST_LIMIT)} entities: the entity list returns at most ${String(LIST_LIMIT)} and gives no total.`;
 const STRENGTHS_UNCOUNTED = `Not counted: the evidence list is cut at ${String(LIST_LIMIT)} here, so a count over it would be short.`;
 
-/** Statuses a job can end in that leave a gap, and the word for each. */
+/**
+ * Statuses a job can end in that leave a gap, and the word for each. An
+ * unconfirmed empty answer is one: whether the source holds anything is not
+ * known, so the source did not cover the target.
+ */
 const GAP: Partial<Readonly<Record<CollectorStatus, string>>> = {
   FAILED: "Failed",
   NEEDS_KEY: "Needs a key",
   SKIPPED: "Refused by policy",
   CANCELLED: "Cancelled",
+  UNCONFIRMED: "Returned nothing, unconfirmed",
 };
 
 /** Entity classes whose names are literal identifiers, set in mono (§4). */
@@ -76,13 +82,7 @@ export function OverviewTab({ scope }: { readonly scope: Scope }) {
       <Summary scope={scope} />
       {scope.kind === "run" ? <Coverage id={scope.id} /> : <CasePins id={scope.id} />}
       <KeyEntities scope={scope} />
-      <Card title="Contradictions" className="lg:col-span-4">
-        <NotBuilt
-          title="Where one source denies what another states"
-          needs="It needs contradiction detection across sources, which the API does not have."
-          className={NOT_BUILT_BODY}
-        />
-      </Card>
+      <Contradictions scope={scope} />
       {scope.kind === "run" ? <Gaps id={scope.id} /> : null}
     </div>
   );
@@ -284,18 +284,32 @@ function excludedOf(run: RunRead) {
   return run.plan !== null && "jobs" in run.plan ? run.plan.excluded : [];
 }
 
+/**
+ * A job's status as the run report reads it (RAN once it finished), except an
+ * unconfirmed empty answer, which is never a source that ran and found nothing
+ * (D9): it is UNCONFIRMED, and a gap.
+ */
+function coverageStatus(job: RunRead["jobs"][number]): CollectorStatus {
+  return jobRowStatus(job) === "UNCONFIRMED" ? "UNCONFIRMED" : jobStatus(job);
+}
+
 function RunCoverage({ run }: { readonly run: RunRead }) {
   const registry = useRegistry();
-  const statuses = run.jobs.map((job) => ({ job, status: jobStatus(job) }));
+  const statuses = run.jobs.map((job) => ({ job, status: coverageStatus(job) }));
   // Each status present, with how many jobs have it.
   const counts = [...new Set(statuses.map(({ status }) => status))].map(
     (status) => [status, statuses.filter((entry) => entry.status === status).length] as const,
   );
-  const ran = statuses.filter(({ status }) => status === "RAN").length;
+  // An unconfirmed empty answer ran too; it is only its answer that is in doubt.
+  const ran = statuses.filter(({ status }) => status === "RAN" || status === "UNCONFIRMED").length;
   const notRun = excludedOf(run).length;
   const items: CollectorRowItem[] = statuses.map(({ job, status }) => {
     const discipline = registry?.get(job.collectorId)?.discipline;
-    const found = plural(job.evidenceIds.length, "evidence record");
+    // Never "0 evidence records" for an unconfirmed answer: the collector's own words instead.
+    const found =
+      status === "UNCONFIRMED" && job.outcomeDetail !== null
+        ? job.outcomeDetail
+        : plural(job.evidenceIds.length, "evidence record");
     return {
       id: job.id,
       label: job.sourceLabel,
@@ -395,7 +409,7 @@ function groupByType(
 
 function GapList({ run }: { readonly run: RunRead }) {
   const registry = useRegistry();
-  const statuses = run.jobs.map((job) => ({ job, status: jobStatus(job) }));
+  const statuses = run.jobs.map((job) => ({ job, status: coverageStatus(job) }));
   const runType = runTargetType(run);
   // A source that does not take this kind of target is not a gap anyone can close. It is
   // listed apart, after the real gaps, on one collapsed line saying how many and which:

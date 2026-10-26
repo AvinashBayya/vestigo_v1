@@ -13,12 +13,15 @@
  * is gated in the worker by @repo/access; and a hung or failing case analysis
  * holds only its own queue's slots (R1-b).
  */
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createServer } from "node:http";
+import { connect, type AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
+  ARTICLE_RESULT,
   CollectorRegistry,
   CollectorRuntime,
   defineCollector,
@@ -57,6 +60,7 @@ import {
   InvestigationQueue,
   JobNotReplayableError,
   JobReplayer,
+  planRun,
   readCaseAnalysisInput,
   ReportGenerator,
   ReportQueue,
@@ -682,6 +686,7 @@ function fakeSource(id: string, network: boolean): SourceDeclaration {
   return {
     id,
     name: `[Source ${id}]`,
+    access: ["open"],
     licence: {
       commercialUse: "PERMITTED",
       reason: "[test source]",
@@ -756,7 +761,6 @@ describe("a hung collector does not stall other queues (RELEASE-BLOCKING)", () =
         sources: [fakeSource("slow-upstream", true), fakeSource("fast-local", false)],
         collectors: [hungCollector, fastCollector],
       }),
-      allowUnverifiedSources: false,
       network: {
         rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) },
         resolver: () => Promise.resolve([{ address: "1.1.1.1", family: 4 }]),
@@ -875,7 +879,6 @@ describe("a hung or failing case analysis holds only its own slots (RELEASE-BLOC
         sources: [fakeSource("fast-local", false)],
         collectors: [fastCollector],
       }),
-      allowUnverifiedSources: false,
       network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
     });
     const engine = await startEngine(runtime, {
@@ -1010,7 +1013,6 @@ describe("a case analysis whose last attempt cannot be failed is still dead-lett
     });
     const runtime = new CollectorRuntime({
       registry: new CollectorRegistry({ sources: [], collectors: [] }),
-      allowUnverifiedSources: false,
       network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
     });
     const engine = await startEngine(runtime, { caseAnalyses: { processor, concurrency: 1 } });
@@ -1140,6 +1142,88 @@ describe("a spent quota refuses before anything is dispatched", () => {
 });
 
 // ── Retries by cause ──────────────────────────────────────────────────────
+
+describe("an empty answer its source cannot be trusted on is recorded as such (RELEASE-BLOCKING, Track M Day 2)", () => {
+  it("completes the job EMPTY_UNCONFIRMED with the collector's words: no evidence, no retry, no zero", async () => {
+    // A local upstream that answers every request 200 with nothing in it.
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" }).end("{}");
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    const unconfirmed = defineCollector(
+      {
+        id: "fake.unconfirmed",
+        version: "1.0.0",
+        displayName: "[fake unconfirmed search]",
+        discipline: "TECHINT",
+        targetTypes: ["DOMAIN"],
+        collectionMode: "PASSIVE_API",
+        source: "unconfirmed-upstream",
+        credentials: { vaultIds: [], runsWithout: true },
+        claimStrength: "REPORTED",
+        timeoutMs: 5_000,
+        resultSchema: z.object({ names: z.array(z.string()), derived: z.object({}) }),
+        emptyAnswersUnreliable: true,
+      },
+      async (ctx) => {
+        const response = await ctx.fetch("https://unconfirmed-upstream.example/search", {
+          method: "GET",
+          timeoutMs: 2_000,
+        });
+        return ctx.emptyUnconfirmed(response, "[fake: the source answered with nothing]");
+      },
+    );
+    const runtime = new CollectorRuntime({
+      registry: new CollectorRegistry({
+        sources: [fakeSource("unconfirmed-upstream", true)],
+        collectors: [unconfirmed],
+      }),
+      network: {
+        rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) },
+        resolver: () => Promise.resolve([{ address: "1.1.1.1", family: 4 }]),
+        socketFactory: () => connect(port, "127.0.0.1"),
+      },
+    });
+    const engine = await startEngine(runtime);
+    try {
+      const tenant = await newTenant("unconfirmed");
+      const runId = await startRun(engine, tenant, "example.com");
+      const run = await finishedRun(tenant.tenantId, runId);
+      // Every job finished: the run is complete, and its coverage says what is unconfirmed.
+      expect(run?.status).toBe("SUCCEEDED");
+      const job = byCollector(await jobsOf(tenant.tenantId, runId), "fake.unconfirmed");
+      expect({
+        status: job.status,
+        outcome: job.outcome,
+        outcomeDetail: job.outcomeDetail,
+        attempts: job.attempts,
+        evidenceIds: job.evidenceIds,
+        result: job.result,
+        lastErrorCode: job.lastErrorCode,
+      }).toEqual({
+        status: "SUCCEEDED",
+        outcome: "EMPTY_UNCONFIRMED",
+        outcomeDetail: "[fake: the source answered with nothing]",
+        attempts: 1,
+        evidenceIds: null,
+        result: null,
+        lastErrorCode: null,
+      });
+      expect(await evidenceIdsOf(tenant.tenantId)).toEqual([]);
+      // The request it sent is charged once, like any other.
+      expect(await usageOf(tenant.tenantId)).toEqual([{ jobId: job.id, attempt: 1, quantity: 1 }]);
+    } finally {
+      await engine.close();
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      });
+    }
+  }, 30_000);
+});
 
 describe("retries distinguish cause", () => {
   it("fails a refused request at once, with no retry; retries only UNAVAILABLE", async () => {
@@ -1311,7 +1395,6 @@ describe("a TOPIC job only ever sits in a person-bearing run (RELEASE-BLOCKING; 
         sources: [fakeSource("topic-local", false)],
         collectors: [topicCollector],
       }),
-      allowUnverifiedSources: false,
       network: { rateLimiter: { acquire: () => Promise.resolve({ allowed: true }) } },
     });
     const engine = await startEngine(runtime, {
@@ -1387,5 +1470,580 @@ describe("a TOPIC job only ever sits in a person-bearing run (RELEASE-BLOCKING; 
       await letters.close();
       await engine.close();
     }
+  });
+});
+
+// ── GDELT on a topic (Track M Day 2) ──────────────────────────────────────
+
+/** A query parameter as the news collector writes it: the phrase in quote marks. */
+const queryParameter = (phrase: string): string =>
+  new URLSearchParams({ query: `"${phrase}"` }).toString();
+
+/** GDELT's recorded empty answer (for example.com), re-pointed at a topic's search. */
+function emptyAnswerFor(phrase: string): Fixture {
+  const fixture = loadFixture("news", "empty-answer");
+  return {
+    ...fixture,
+    provenance: {
+      ...fixture.provenance,
+      notes: `${fixture.provenance.notes} Re-pointed at a topic by the Track M Day 2 pipeline test.`,
+    },
+    request: {
+      ...fixture.request,
+      path: fixture.request.path.replace(queryParameter("example.com"), queryParameter(phrase)),
+    },
+  };
+}
+
+describe("a topic run on GDELT, end to end (RELEASE-BLOCKING, Track M Day 2)", () => {
+  async function entitledTenant(tag: string) {
+    const tenant = await newTenant(tag);
+    await asOwner(
+      tenant.tenantId,
+      "update public.tenants set plan = 'TECHINT_AND_PERSON', vetting_status = 'APPROVED'",
+      [],
+    );
+    return tenant;
+  }
+
+  it("plans GDELT for a topic, keeps the live answer as its evidence, and draws its articles into the graph", async () => {
+    const harness = await startHarness({
+      collectors: platform(["news"]),
+      fixtures: [loadFixture("news", "found")],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenant("gdelt-found");
+      const runId = await startRun(engine, tenant, "climate change", "TOPIC");
+      const run = await finishedRun(tenant.tenantId, runId);
+      // A topic is person data whatever collects it (Day 1).
+      expect(run).toMatchObject({ status: "SUCCEEDED", personBearing: true });
+      const jobs = await waitFor(
+        "the news job to be fused",
+        () => jobsOf(tenant.tenantId, runId),
+        (rows) => rows.length === 1 && rows[0]?.fusedAt !== null,
+      );
+      const [job] = jobs;
+      expect({
+        collectorId: job?.collectorId,
+        targetType: job?.targetType,
+        target: job?.target,
+        outcome: job?.outcome,
+        evidence: job?.evidenceIds?.length,
+      }).toEqual({
+        collectorId: "news",
+        targetType: "TOPIC",
+        target: "climate change",
+        outcome: "FOUND",
+        evidence: 1,
+      });
+      // Each article is drawn as a URL entity, its outlet a DOMAIN, the article
+      // published_by that outlet — every claim citing the one GDELT response.
+      const { entities, relationships, claims } = await db.withTenant(
+        tenant.tenantId,
+        async ({ repos }) => ({
+          entities: await repos.entities.list({ limit: 1000 }),
+          relationships: await repos.entityRelationships.list({ limit: 1000 }),
+          claims: await repos.claims.list({ limit: 1000 }),
+        }),
+      );
+      expect(entities.some((e) => e.kind === "URL")).toBe(true);
+      expect(entities.some((e) => e.kind === "DOMAIN")).toBe(true);
+      // A headline or an outlet country is never turned into a named entity.
+      expect(entities.some((e) => e.kind === "PERSON" || e.kind === "ORGANIZATION")).toBe(false);
+      expect(relationships.length).toBeGreaterThan(0);
+      expect(new Set(relationships.map((r) => r.kind))).toEqual(new Set(["published_by"]));
+      const evidenceIds = await evidenceIdsOf(tenant.tenantId);
+      expect(evidenceIds).toHaveLength(1);
+      expect(claims.length).toBeGreaterThan(0);
+      for (const claim of claims) expect(evidenceIds).toContain(claim.evidenceId);
+      expect(new Set(claims.map((c) => c.strength))).toEqual(new Set(["REPORTED", "DERIVED"]));
+      expect(harness.unmatched).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 30_000);
+
+  it("ends an empty answer EMPTY_UNCONFIRMED once the canary shows GDELT is up: the run complete, nothing stored, both requests charged", async () => {
+    const phrase = "[a quiet topic]";
+    const harness = await startHarness({
+      collectors: platform(["news"]),
+      fixtures: [emptyAnswerFor(phrase), loadFixture("news", "canary-found")],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenant("gdelt-empty");
+      const runId = await startRun(engine, tenant, phrase, "TOPIC");
+      const run = await finishedRun(tenant.tenantId, runId);
+      expect(run?.status).toBe("SUCCEEDED");
+      const job = byCollector(await jobsOf(tenant.tenantId, runId), "news");
+      expect({
+        status: job.status,
+        outcome: job.outcome,
+        evidenceIds: job.evidenceIds,
+        attempts: job.attempts,
+      }).toEqual({
+        status: "SUCCEEDED",
+        outcome: "EMPTY_UNCONFIRMED",
+        evidenceIds: null,
+        attempts: 1,
+      });
+      expect(job.outcomeDetail).toContain("returned nothing for this search — unconfirmed");
+      expect(job.outcomeDetail).toContain(
+        "A passing canary means GDELT is up — not that any query found something.",
+      );
+      expect(job.outcomeDetail).not.toContain(phrase);
+      expect(await evidenceIdsOf(tenant.tenantId)).toEqual([]);
+      // The search and the canary: two requests, charged to the tenant as one attempt.
+      expect(await usageOf(tenant.tenantId)).toEqual([{ jobId: job.id, attempt: 1, quantity: 2 }]);
+      expect(harness.unmatched).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 30_000);
+});
+
+// ── Monitoring collectors on a topic (2026-10-17) ─────────────────────────
+
+/** A search answer recorded for one topic, re-pointed at another's query. */
+function searchFor(fixture: Fixture, from: string, to: string): Fixture {
+  const query = (phrase: string) => new URLSearchParams({ q: `"${phrase}"` }).toString();
+  return {
+    ...fixture,
+    provenance: {
+      ...fixture.provenance,
+      notes: `${fixture.provenance.notes} Re-pointed at another topic by the monitoring pipeline test.`,
+    },
+    request: { ...fixture.request, path: fixture.request.path.replace(query(from), query(to)) },
+  };
+}
+
+/** Every recorded feed of BBC's publisher entry (test/fixtures/rss). */
+const BBC_FEEDS = [
+  "bbci-co-uk-hindi",
+  "bbci-co-uk-news-world-africa",
+  "bbci-co-uk-news-world-asia",
+  "bbci-co-uk-news-world-latin_america",
+  "bbci-co-uk-news-world-middle_east",
+  "bbci-co-uk-news-world",
+  "bbci-co-uk-persian",
+].map((name) => loadFixture("rss", name));
+
+describe("a topic run on the monitoring collectors, end to end (RELEASE-BLOCKING, 2026-10-17)", () => {
+  const MONITORING = ["rss.bbci-co-uk", "bluesky.search", "reddit.search"];
+  // A phrase in one of BBC World's recorded items (its titles are placeholders).
+  const PHRASE = "[news-world headline 2]";
+
+  async function entitledTenantWithKeys(tag: string) {
+    const tenant = await newTenant(tag);
+    await asOwner(
+      tenant.tenantId,
+      "update public.tenants set plan = 'TECHINT_AND_PERSON', vetting_status = 'APPROVED'",
+      [],
+    );
+    await db.withTenant(tenant.tenantId, async (ctx) => {
+      await vault.store(ctx, {
+        provider: "bluesky",
+        label: "[Bluesky account]",
+        secret: JSON.stringify({
+          identifier: "[account].bsky.social",
+          appPassword: "[app password]",
+        }),
+      });
+      await vault.store(ctx, {
+        provider: "reddit-api",
+        label: "[Reddit app]",
+        secret: JSON.stringify({ clientId: "[client id]", clientSecret: "[client secret]" }),
+      });
+    });
+    return tenant;
+  }
+
+  it("stores real feed items, and Bluesky and Reddit posts, as evidence under each one's registry label (acceptance a)", async () => {
+    const harness = await startHarness({
+      collectors: platform(MONITORING),
+      fixtures: [
+        ...BBC_FEEDS,
+        loadFixture("bluesky", "session"),
+        searchFor(loadFixture("bluesky", "search-found"), "climate change", PHRASE),
+        loadFixture("bluesky", "session-closed"),
+        loadFixture("reddit", "token"),
+        searchFor(loadFixture("reddit", "search-found"), "climate change", PHRASE),
+      ],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenantWithKeys("monitoring-found");
+      const runId = await startRun(engine, tenant, PHRASE, "TOPIC");
+      const run = await finishedRun(tenant.tenantId, runId);
+      expect(run).toMatchObject({ status: "SUCCEEDED", personBearing: true });
+      const jobs = await waitFor(
+        "the three monitoring jobs to be fused",
+        () => jobsOf(tenant.tenantId, runId),
+        (rows) => rows.length === 3 && rows.every((row) => row.fusedAt !== null),
+      );
+      expect(
+        Object.fromEntries(
+          jobs.map((job) => [job.collectorId, [job.outcome, job.evidenceIds?.length]]),
+        ),
+      ).toEqual({
+        // BBC: one feed held the item, so one response is its evidence.
+        "rss.bbci-co-uk": ["FOUND", 1],
+        "bluesky.search": ["FOUND", 1],
+        "reddit.search": ["FOUND", 1],
+      });
+      // Each stored row is its own job's: the collector that fetched it, and the
+      // response the items came from (BBC's: the World feed, where the item was).
+      const evidence = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.evidence.list({ limit: 100 }),
+      );
+      expect(evidence).toHaveLength(3);
+      const jobById = new Map(jobs.map((job) => [job.id, job]));
+      for (const row of evidence) {
+        const job = row.jobId === null ? undefined : jobById.get(row.jobId);
+        expect(job?.evidenceIds, row.collectorId).toContain(row.id);
+        expect(row.collectorId).toBe(job?.collectorId);
+        expect(row.claimStrength).toBe("OBSERVED");
+      }
+      expect(evidence.find((row) => row.collectorId === "rss.bbci-co-uk")?.sourceUrl).toBe(
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+      );
+      // Each label is the registry's, never anything the source or collector said.
+      for (const collectorId of MONITORING) {
+        const row = await db.withTenant(tenant.tenantId, ({ repos }) =>
+          repos.collectorsRegistry.find(collectorId),
+        );
+        expect(row?.sourceLabel).toBe(harness.runtime.registry.entry(collectorId).label);
+      }
+      // Nothing is drawn from an item list yet: no entity, and nothing counted.
+      const entities = await db.withTenant(tenant.tenantId, ({ repos }) =>
+        repos.entities.list({ limit: 100 }),
+      );
+      expect(entities).toEqual([]);
+      expect(harness.unmatched).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 60_000);
+
+  it("ends a feed with nothing on the topic EMPTY_UNCONFIRMED: the run complete, nothing stored, never 0 (acceptance b)", async () => {
+    const harness = await startHarness({
+      collectors: platform(["rss.thehindu-com"]),
+      fixtures: [loadFixture("rss", "thehindu-com-feeder-default")],
+    });
+    const engine = await startEngine(harness.runtime);
+    try {
+      const tenant = await entitledTenantWithKeys("monitoring-empty");
+      const runId = await startRun(engine, tenant, "[a quiet topic]", "TOPIC");
+      expect(await finishedRun(tenant.tenantId, runId)).toMatchObject({ status: "SUCCEEDED" });
+      const [job] = await jobsOf(tenant.tenantId, runId);
+      // No evidence is written for an unconfirmed empty answer.
+      expect([job?.status, job?.outcome, job?.evidenceIds]).toEqual([
+        "SUCCEEDED",
+        "EMPTY_UNCONFIRMED",
+        null,
+      ]);
+      expect(job?.outcomeDetail).toContain("unconfirmed");
+      expect(await evidenceIdsOf(tenant.tenantId)).toEqual([]);
+    } finally {
+      await engine.close();
+      await harness.close();
+    }
+  }, 30_000);
+
+  it("leaves every monitoring collector out of a topic run for a tenant without the person module or vetting (Day 1, acceptance d)", async () => {
+    const harness = await startHarness({ collectors: platform(MONITORING), fixtures: [] });
+    try {
+      for (const [entitlement, reason] of [
+        [{ plan: "TECHINT", vettingStatus: "APPROVED" }, "MODULE_NOT_IN_PLAN"],
+        [{ plan: "TECHINT_AND_PERSON", vettingStatus: "PENDING" }, "VETTING_NOT_APPROVED"],
+      ] as const) {
+        const plan = await planRun(harness.runtime, {
+          input: PHRASE,
+          requestedType: "TOPIC",
+          entitlement,
+          scopeFor: () => Promise.resolve(null),
+        });
+        expect(plan.jobs).toEqual([]);
+        expect(
+          Object.fromEntries(
+            plan.excluded.map((exclusion) => [exclusion.collectorId, exclusion.reason]),
+          ),
+        ).toEqual(Object.fromEntries(MONITORING.map((id) => [id, reason])));
+      }
+      expect(harness.requests).toEqual([]);
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+// ── Exact-article evidence persistence (M2) ───────────────────────────────
+
+/**
+ * The exact-article path end to end through the real database: an ACTIVE
+ * open-host collector, cleared for a URL by an in-force DOMAIN authorisation,
+ * fetched over the SSRF-hardened path from a recorded fixture (no real
+ * publisher), extracted, and persisted as canonical evidence that a tenant-
+ * scoped read returns with its provenance — the same read the evidence API
+ * makes. The source is UNVERIFIED, so this runs only because the harness
+ * replays recorded answers; no deployment runs it. Fixtures are synthetic, on
+ * the reserved example.com documentation domain.
+ */
+describe("the exact-article path persists retrievable, tenant-scoped evidence (exact-article M2)", () => {
+  const ARTICLE_HOST = "news.example.com";
+  const ARTICLE_URL = "https://news.example.com/world/story-1";
+  const PUBLISHED_AT = "2026-10-20T09:30:00.000Z";
+  // The one value quoted verbatim from the bytes: the raw <title>, entity undecoded.
+  const RAW_HEADLINE = "Placeholder headline for an offline test &amp; nothing real";
+  const DERIVED_ATTRIBUTES = [
+    "article_title",
+    "article_author",
+    "article_language",
+    "article_published_at",
+    "article_canonical_url",
+    "article_dedup_key",
+    "article_extraction_status",
+  ];
+
+  let harness: Harness;
+  let engine: Engine;
+  let tenant: { tenantId: TenantId; userId: string };
+  let runId: string;
+  let evidenceId = "";
+  let contentHash = "";
+
+  /** An in-force DOMAIN authorisation for a host, created as an authorised member would. */
+  const authoriseDomain = (who: { tenantId: TenantId; userId: string }, host: string) =>
+    db.withTenant(who.tenantId, ({ repos }) =>
+      repos.scopeAuthorisations.create({
+        targetType: "DOMAIN",
+        target: host,
+        authorisedByUserId: who.userId,
+        basis: "[signed engagement letter, offline test]",
+        validFrom: new Date("2020-01-01T00:00:00Z"),
+        validUntil: new Date("2090-01-01T00:00:00Z"),
+      }),
+    );
+
+  beforeAll(async () => {
+    harness = await startHarness({
+      collectors: platform(["article"]),
+      // An article and a non-article (JSON) response, both on the one authorised host.
+      fixtures: [
+        loadFixture("article", "found"),
+        loadFixture("article", "not-html"),
+        loadFixture("article", "with-mentions"),
+      ],
+    });
+    engine = await startEngine(harness.runtime);
+    tenant = await newTenant("article");
+    await authoriseDomain(tenant, ARTICLE_HOST);
+    runId = await startRun(engine, tenant, ARTICLE_URL);
+    await finishedRun(tenant.tenantId, runId);
+    const ids = byCollector(await jobsOf(tenant.tenantId, runId), "article").evidenceIds ?? [];
+    if (ids.length !== 1) {
+      throw new Error(`expected one article evidence row, got ${JSON.stringify(ids)}`);
+    }
+    evidenceId = ids[0] ?? "";
+    contentHash = `sha256:${createHash("sha256")
+      .update(Buffer.from(loadFixture("article", "found").response.body, "utf8"))
+      .digest("hex")}`;
+  }, 60_000);
+
+  afterAll(async () => {
+    await engine.close();
+    await harness.close();
+  });
+
+  it("plans and runs the ACTIVE article collector on the URL, cleared by the DOMAIN authorisation", async () => {
+    const run = await db.withTenant(tenant.tenantId, ({ repos }) => repos.runs.findById(runId));
+    expect(run?.status).toBe("SUCCEEDED");
+    const plan = z
+      .object({
+        detected: z.object({ primaryType: z.string() }),
+        jobs: z.array(
+          z.object({
+            collectorId: z.string(),
+            target: z.object({ type: z.string(), value: z.string() }),
+          }),
+        ),
+      })
+      .parse(run?.plan);
+    // A pasted URL is detected URL-primary; the article collector is planned on it.
+    expect(plan.detected.primaryType).toBe("URL");
+    expect(plan.jobs).toEqual([
+      { collectorId: "article", target: { type: "URL", value: ARTICLE_URL } },
+    ]);
+    const job = byCollector(await jobsOf(tenant.tenantId, runId), "article");
+    expect([job.status, job.outcome]).toEqual(["SUCCEEDED", "FOUND"]);
+    expect(job.evidenceIds).toHaveLength(1);
+    expect(job.fusedAt).not.toBeNull();
+    expect(harness.unmatched).toEqual([]);
+  });
+
+  it("persists one evidence row: the exact URL, the stated publish time (not the retrieval time), and the content hash", async () => {
+    const evidence = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.evidence.findById(evidenceId),
+    );
+    expect(evidence).not.toBeNull();
+    if (evidence === null) return;
+    expect(evidence.collectorId).toBe("article");
+    expect(evidence.collectorVersion).toBe("1.0.0");
+    expect(evidence.sourceUrl).toBe(ARTICLE_URL);
+    expect(evidence.jobId).not.toBeNull();
+    expect(evidence.claimStrength).toBe("REPORTED");
+    expect(evidence.contentHash).toBe(contentHash);
+    // Publication time is the page's stated time; retrieval time is measured, and later.
+    expect(evidence.observedAt?.toISOString()).toBe(PUBLISHED_AT);
+    const { observedAt, collectedAt } = evidence;
+    expect(collectedAt).toBeInstanceOf(Date);
+    expect(observedAt).toBeInstanceOf(Date);
+    if (collectedAt !== null && observedAt !== null) {
+      expect(collectedAt.getTime()).toBeGreaterThan(observedAt.getTime());
+    }
+    // The label is the registry's own — "Direct article fetch", never a publisher
+    // string and never GDELT's. This is what the evidence API shows as sourceLabel.
+    expect(harness.runtime.registry.entry("article").label).toBe("Direct article fetch");
+  });
+
+  it("stores the raw bytes, retrievable from the content store and re-hashed on read", async () => {
+    // The same read the payload-download API makes: get() re-hashes and throws on mismatch.
+    const bytes = await contentStore.get(tenant.tenantId, contentHash);
+    expect(new TextDecoder().decode(bytes)).toBe(loadFixture("article", "found").response.body);
+  });
+
+  it("separates stated (verbatim) from derived (parsed) claims, each citing the evidence", async () => {
+    const claims = await db.withTenant(tenant.tenantId, ({ repos }) =>
+      repos.claims.listForEvidence([evidenceId], { limit: 500 }),
+    );
+    expect(claims.length).toBeGreaterThan(0);
+    for (const claim of claims) expect(claim.evidenceId).toBe(evidenceId);
+    const byAttribute = new Map(claims.map((claim) => [claim.attribute, claim]));
+
+    // The one stated value is the raw <title>, at the evidence's REPORTED strength.
+    expect(byAttribute.get("article_headline")?.strength).toBe("REPORTED");
+    expect(byAttribute.get("article_headline")?.value).toBe(RAW_HEADLINE);
+    // Everything the parser produced is DERIVED, never presented as the source's own.
+    for (const attribute of DERIVED_ATTRIBUTES) {
+      expect(byAttribute.get(attribute)?.strength, attribute).toBe("DERIVED");
+    }
+    // The extraction status is recorded honestly (this fixture has body text).
+    expect(byAttribute.get("article_extraction_status")?.value).toBe("FULL_TEXT");
+    expect(byAttribute.get("article_published_at")?.value).toBe(PUBLISHED_AT);
+    // Mirrors the evidence API's stated/derived split: only the headline is stated.
+    expect(claims.filter((claim) => claim.strength !== "DERIVED").map((c) => c.attribute)).toEqual([
+      "article_headline",
+    ]);
+  });
+
+  it("fuses the article URL entity and its publisher outlet, with the article's own attributes", async () => {
+    const { entities, relationships } = await db.withTenant(tenant.tenantId, async ({ repos }) => ({
+      entities: await repos.entities.list({ limit: 1000 }),
+      relationships: await repos.entityRelationships.list({ limit: 1000 }),
+    }));
+    const urls = entities.filter((entity) => entity.kind === "URL");
+    expect(urls.map((entity) => entity.displayName)).toEqual([ARTICLE_URL]);
+    expect(
+      entities.filter((entity) => entity.kind === "DOMAIN" && entity.identifier === ARTICLE_HOST),
+    ).toHaveLength(1);
+    // No entity is invented from a headline or an author name.
+    expect(
+      entities.some((entity) => entity.kind === "PERSON" || entity.kind === "ORGANIZATION"),
+    ).toBe(false);
+    expect(relationships.map((relationship) => relationship.kind)).toEqual(["published_by"]);
+  });
+
+  it("does not duplicate evidence when a finished job is delivered again", async () => {
+    const before = await evidenceIdsOf(tenant.tenantId);
+    const job = byCollector(await jobsOf(tenant.tenantId, runId), "article");
+    expect(
+      await engine.processor.process(tenant.tenantId, job.id, { finalAttempt: false }),
+    ).toEqual({ kind: "SKIPPED", status: "SUCCEEDED" });
+    expect(await evidenceIdsOf(tenant.tenantId)).toEqual(before);
+  });
+
+  it("isolates the evidence to the tenant that collected it", async () => {
+    const other = await newTenant("article-other");
+    const seen = await db.withTenant(other.tenantId, ({ repos }) =>
+      repos.evidence.list({ limit: 1000 }),
+    );
+    expect(seen).toEqual([]);
+  });
+
+  it("records no evidence for a refused retrieval or a failed one", async () => {
+    // Refused: a URL whose host has no authorisation is excluded at planning,
+    // never fetched, and no evidence is written.
+    const refused = await startRun(engine, tenant, "https://unauthorised.example/story");
+    expect((await finishedRun(tenant.tenantId, refused))?.status).toBe("FAILED");
+    const refusedPlan = z
+      .object({
+        excluded: z.array(z.object({ collectorId: z.string(), reason: z.string() })),
+      })
+      .parse(
+        (await db.withTenant(tenant.tenantId, ({ repos }) => repos.runs.findById(refused)))?.plan,
+      );
+    expect(refusedPlan.excluded).toContainEqual(
+      expect.objectContaining({ collectorId: "article", reason: "SCOPE_AUTHORISATION_REQUIRED" }),
+    );
+    expect(await jobsOf(tenant.tenantId, refused)).toEqual([]);
+
+    // Failed: an authorised URL whose response is not an article fails the job,
+    // and still writes no evidence — a failure never becomes a false success.
+    const before = await evidenceIdsOf(tenant.tenantId);
+    const failed = await startRun(engine, tenant, "https://news.example.com/data");
+    expect((await finishedRun(tenant.tenantId, failed))?.status).toBe("FAILED");
+    const job = byCollector(await jobsOf(tenant.tenantId, failed), "article");
+    expect([job.status, job.outcome, job.lastErrorCode]).toEqual([
+      "FAILED",
+      "FAILED",
+      "UPSTREAM_RESPONSE_INVALID",
+    ]);
+    expect(job.evidenceIds).toBeNull();
+    expect(await evidenceIdsOf(tenant.tenantId)).toEqual(before);
+  });
+
+  it("retains the article text and fuses its identifier mentions into the graph (M4-2)", async () => {
+    const mentionsUrl = "https://news.example.com/contact-story";
+    const mentionsRun = await startRun(engine, tenant, mentionsUrl);
+    expect((await finishedRun(tenant.tenantId, mentionsRun))?.status).toBe("SUCCEEDED");
+    const job = byCollector(await jobsOf(tenant.tenantId, mentionsRun), "article");
+    expect([job.status, job.outcome]).toEqual(["SUCCEEDED", "FOUND"]);
+    expect(job.fusedAt).not.toBeNull();
+
+    // The body text and its identifier mentions are retained in the stored result.
+    const result = ARTICLE_RESULT.parse(job.result);
+    expect(result.derived.bodyText).toContain("press desk");
+    expect(result.derived.mentions.map((mention) => [mention.kind, mention.value])).toEqual([
+      ["EMAIL_ADDRESS", "press@example.com"],
+      ["URL", "https://report.example.org/doc-1"],
+    ]);
+
+    // The mentioned identifiers are persisted entities, linked from the article
+    // by a `mentions` edge — text-derived intelligence reaches the real graph.
+    const { entities, relationships } = await db.withTenant(tenant.tenantId, async ({ repos }) => ({
+      entities: await repos.entities.list({ limit: 1000 }),
+      relationships: await repos.entityRelationships.list({ limit: 1000 }),
+    }));
+    const article = entities.find((e) => e.kind === "URL" && e.displayName === mentionsUrl);
+    const mentionedUrl = entities.find(
+      (e) => e.kind === "URL" && e.displayName === "https://report.example.org/doc-1",
+    );
+    const mentionedEmail = entities.find(
+      (e) => e.kind === "EMAIL_ADDRESS" && e.displayName === "press@example.com",
+    );
+    expect(article).toBeDefined();
+    expect(mentionedUrl).toBeDefined();
+    expect(mentionedEmail).toBeDefined();
+    const mentionEdges = relationships.filter(
+      (relationship) =>
+        relationship.kind === "mentions" && relationship.sourceEntityId === article?.id,
+    );
+    expect(new Set(mentionEdges.map((relationship) => relationship.targetEntityId))).toEqual(
+      new Set([mentionedUrl?.id, mentionedEmail?.id]),
+    );
   });
 });

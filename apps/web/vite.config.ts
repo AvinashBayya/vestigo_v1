@@ -32,6 +32,11 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       maxWorkers: TEST_MAX_WORKERS,
+      setupFiles: ["./src/test-setup.ts"],
+      // Headroom for on-demand route-chunk compile under multi-pool CPU
+      // contention (see src/test-setup.ts); only ever reached on a slow or
+      // failing path, never on a passing render.
+      testTimeout: 30_000,
     },
   };
 });

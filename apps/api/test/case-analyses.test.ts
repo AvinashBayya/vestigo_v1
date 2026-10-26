@@ -364,6 +364,12 @@ describe("requesting and reading a case analysis (RELEASE-BLOCKING)", () => {
       expect(body.analysis?.finishedAt).not.toBeNull();
       expect(CaseAnalysisDocumentSchema.safeParse(body.analysis?.document).success).toBe(true);
       expect(body.analysis?.wording).not.toBeNull();
+      // The contradiction review is served through the API (M4-1). This fixture's
+      // single registrar claim leaves nothing to disagree on, so items is empty,
+      // but the field and its standing caveat are present and retrievable.
+      const parsed = CaseAnalysisDocumentSchema.parse(body.analysis?.document);
+      expect(parsed.contradictions?.items).toEqual([]);
+      expect(parsed.contradictions?.caveat).toContain("contradiction");
     }
     const { calls, spy } = watchEnqueues(tenant.tenantId);
     try {
