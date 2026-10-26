@@ -11,12 +11,14 @@ import {
   StatusChip,
   StatusDot,
   StrengthBadge,
+  TextLink,
   Unmeasured,
   type CollectorRowItem,
   type CollectorStatus,
   type EntityClass,
 } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { collectorsQuery, DISCIPLINE_TEXT, type CollectorList as Registry } from "../collectors.ts";
 import { plural } from "../components/Values.tsx";
@@ -104,6 +106,24 @@ function Summary({ scope }: { readonly scope: Scope }) {
     <Card title={scope.kind === "run" ? "Run summary" : "Case summary"} className="lg:col-span-8">
       <div className="flex flex-col gap-4">
         {scope.kind === "case" ? <CaseDescription id={scope.id} /> : null}
+        {scope.kind === "run" ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border-subtle bg-surface-raised px-4 py-3">
+            <div className="flex flex-col gap-0.75">
+              <span className="text-ui-strong text-ink-primary">
+                Situation Brief & Executive Synthesis
+              </span>
+              <span className="text-caption text-ink-muted">
+                Read the evidence-grounded prose synthesis, key findings, and BLUF generated for
+                this run.
+              </span>
+            </div>
+            <TextLink asChild size="meta">
+              <Link to="/runs/$runId/$tab" params={{ runId: scope.id, tab: "report" }}>
+                View Report & Brief →
+              </Link>
+            </TextLink>
+          </div>
+        ) : null}
         <NotBuilt
           title="Written summary"
           needs={`It needs a summary written by the model from the evidence, every sentence citing what it rests on, and the API has no summary endpoint for ${scope.kind === "run" ? "the Overview. The run's report, on the Report tab, has its own" : "a case"}.`}

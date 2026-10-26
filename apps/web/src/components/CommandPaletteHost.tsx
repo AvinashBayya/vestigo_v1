@@ -5,13 +5,19 @@ import {
   type PaletteGroup,
   type PaletteItem,
 } from "@repo/ui";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useState, type ReactNode } from "react";
 import { messageFor } from "../messages.ts";
 import { Instant } from "./Values.tsx";
 import { sessionQuery } from "../session.ts";
-import { casesQuery, LIST_LIMIT, type CaseRow } from "../workspace/queries.ts";
+import {
+  casesQuery,
+  investigationRunsQuery,
+  investigationsQuery,
+  LIST_LIMIT,
+  type CaseRow,
+} from "../workspace/queries.ts";
 
 /** The built pages, in the side navigation's order. */
 const PAGES = [
@@ -53,9 +59,11 @@ function caseHint(row: CaseRow): { readonly hint: ReactNode; readonly hintText: 
  */
 export function CommandPaletteHost({ button = true }: { readonly button?: boolean | undefined }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const { data: session } = useSuspenseQuery(sessionQuery);
   const cases = useQuery({ ...casesQuery, enabled: open });
+  const investigations = useQuery({ ...investigationsQuery, enabled: open });
   const onOpen = useCallback(() => {
     setOpen(true);
   }, []);
@@ -96,6 +104,28 @@ export function CommandPaletteHost({ button = true }: { readonly button?: boolea
   }
   if (caseItems.length > 0) groups.push({ label: "Cases", items: caseItems });
 
+  const investigationItems: PaletteItem[] = [];
+  if (investigations.data !== undefined) {
+    for (const row of investigations.data.items) {
+      if (row.archivedAt === null) {
+        investigationItems.push({
+          id: `investigation:${row.id}`,
+          label: row.title || row.target,
+          hint: (
+            <>
+              Target: <span className="font-mono">{row.target}</span> · created{" "}
+              <Instant iso={row.createdAt} />
+            </>
+          ),
+          hintText: `Investigation ${row.title} target ${row.target}`,
+        });
+      }
+    }
+  }
+  if (investigationItems.length > 0) {
+    groups.push({ label: "Investigations", items: investigationItems });
+  }
+
   const onSelect = (id: string) => {
     if (id === TENANT_ID) {
       void navigate({ to: "/tenant" });
@@ -104,6 +134,24 @@ export function CommandPaletteHost({ button = true }: { readonly button?: boolea
         to: "/cases/$caseId/$tab",
         params: { caseId: id.slice("case:".length), tab: "overview" },
       });
+    } else if (id.startsWith("investigation:")) {
+      const investigationId = id.slice("investigation:".length);
+      void queryClient
+        .fetchQuery(investigationRunsQuery(investigationId))
+        .then((runs) => {
+          const latest = runs.items[0];
+          if (latest !== undefined) {
+            void navigate({
+              to: "/runs/$runId/$tab",
+              params: { runId: latest.id, tab: "overview" },
+            });
+          } else {
+            void navigate({ to: "/" });
+          }
+        })
+        .catch(() => {
+          void navigate({ to: "/" });
+        });
     } else if (id.startsWith("page:")) {
       void navigate({ to: id.slice("page:".length) as PageTo });
     }

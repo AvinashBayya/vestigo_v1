@@ -27,6 +27,7 @@ type Handler = (body: Record<string, unknown>, request: Request) => Response | P
 /** What the dashboard's panels read when a test does not say otherwise: nothing yet. */
 const PANEL_DEFAULTS: Record<string, Handler> = {
   "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
+  "GET /api/v1/investigations": () => Response.json({ items: [], hasMore: false }),
   "GET /api/v1/collectors": () =>
     Response.json({
       unverifiedSourcesAllowed: false,

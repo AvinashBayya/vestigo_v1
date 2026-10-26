@@ -185,6 +185,34 @@ export const runQuery = (id: string) =>
       unwrap(api.GET("/api/v1/runs/{id}", { params: { path: { id } }, signal: timed(signal) })),
   });
 
+export type InvestigationList = Ok<"/api/v1/investigations", "get">;
+export type InvestigationRow = InvestigationList["items"][number];
+export type InvestigationRunsList = Ok<"/api/v1/investigations/{id}/runs", "get">;
+export type InvestigationRunRow = InvestigationRunsList["items"][number];
+
+export const investigationsQuery = queryOptions({
+  queryKey: ["investigations"],
+  queryFn: ({ signal }): Promise<InvestigationList> =>
+    unwrap(
+      api.GET("/api/v1/investigations", {
+        params: { query: { limit: LIST_LIMIT } },
+        signal: timed(signal),
+      }),
+    ),
+});
+
+export const investigationRunsQuery = (id: string) =>
+  queryOptions({
+    queryKey: ["investigation-runs", id],
+    queryFn: ({ signal }): Promise<InvestigationRunsList> =>
+      unwrap(
+        api.GET("/api/v1/investigations/{id}/runs", {
+          params: { path: { id }, query: { limit: 10 } },
+          signal: timed(signal),
+        }),
+      ),
+  });
+
 /** Every read a scope's tabs make, so one refresh re-reads all of them. */
 export const scopeKeys = (scope: Scope) => [
   ["entities", scope.kind, scope.id],

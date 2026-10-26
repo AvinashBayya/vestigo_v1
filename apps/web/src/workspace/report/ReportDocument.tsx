@@ -384,8 +384,20 @@ function SynthesisSection({ report }: { readonly report: ReportDocument }) {
       <ol className="flex flex-col gap-4">
         {synthesis.statements.map((statement, index) => {
           const markers = statement.citations.map((n) => <CitationMarker key={n} n={n} />);
+          const isBluf = index === 0;
           return (
-            <li key={index} className="flex flex-col gap-1">
+            <li
+              key={index}
+              className={cn(
+                "flex flex-col gap-1.5",
+                isBluf && "rounded-md border-l-2 border-accent bg-accent-soft p-3.5",
+              )}
+            >
+              {isBluf ? (
+                <span className="font-mono text-mono-caption uppercase text-accent-ink">
+                  Bottom line up front
+                </span>
+              ) : null}
               {statement.strength === "INFERRED" ? (
                 <InferredPassage from={fromSources(statement.citations)}>
                   <span>{statement.text}</span>

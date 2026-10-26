@@ -5,6 +5,7 @@ import {
   LoadingState,
   NotBuilt,
   Notice,
+  RunStatusChip,
   Skeleton,
   StatusChip,
   TagList,
@@ -39,7 +40,13 @@ import {
   type PlannedCollector,
   type TargetType,
 } from "../search/plan.ts";
-import { casesQuery, LIST_LIMIT } from "../workspace/queries.ts";
+import {
+  casesQuery,
+  investigationRunsQuery,
+  investigationsQuery,
+  LIST_LIMIT,
+  type InvestigationRow,
+} from "../workspace/queries.ts";
 
 interface Check {
   readonly target: string;
@@ -170,10 +177,22 @@ export function SearchDashboard() {
       {estimate.isPending ? <EstimateSkeleton /> : null}
 
       {plan === undefined && !estimate.isPending ? (
-        <div className="grid gap-5 lg:grid-cols-3">
-          <RecentCases />
-          <MonitorAlerts />
-          <CollectorHealth />
+        <div className="flex flex-col gap-5">
+          <RecentInvestigations
+            onInvestigate={(target) => {
+              setInput(target);
+              setEmptySubmit(false);
+              setOptions([]);
+              setChosen(null);
+              start.reset();
+              estimate.mutate({ target: target.trim(), targetType: null });
+            }}
+          />
+          <div className="grid gap-5 lg:grid-cols-3">
+            <RecentCases />
+            <MonitorAlerts />
+            <CollectorHealth />
+          </div>
         </div>
       ) : null}
 
@@ -536,6 +555,103 @@ function RecentCases() {
       {body}
     </Card>
   );
+}
+
+function InvestigationItem({
+  investigation,
+  onInvestigate,
+}: {
+  readonly investigation: InvestigationRow;
+  readonly onInvestigate: (target: string) => void;
+}) {
+  const runs = useQuery(investigationRunsQuery(investigation.id));
+  const latestRun = runs.data?.items[0] ?? null;
+
+  return (
+    <li className="flex flex-col gap-1 py-1.5 first:pt-0 last:pb-0">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-body-strong text-ink-primary">{investigation.title}</span>
+        {latestRun !== null ? <RunStatusChip status={latestRun.status} /> : null}
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-meta text-ink-muted">
+        <span>
+          Target: <span className="font-mono text-mono-meta">{investigation.target}</span> ·{" "}
+          <Instant iso={investigation.createdAt} className="text-mono-meta" />
+        </span>
+        {latestRun !== null ? (
+          <div className="flex items-center gap-2">
+            <TextLink asChild size="meta">
+              <Link to="/runs/$runId/$tab" params={{ runId: latestRun.id, tab: "overview" }}>
+                Workspace
+              </Link>
+            </TextLink>
+            <span aria-hidden="true">·</span>
+            <TextLink asChild size="meta">
+              <Link to="/runs/$runId/$tab" params={{ runId: latestRun.id, tab: "report" }}>
+                Brief
+              </Link>
+            </TextLink>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onInvestigate(investigation.target)}
+            className="cursor-pointer text-small text-link hover:underline"
+          >
+            Investigate →
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** The newest investigations (Watches), showing targets and direct run links */
+function RecentInvestigations({
+  onInvestigate,
+}: {
+  readonly onInvestigate: (target: string) => void;
+}) {
+  const investigations = useQuery(investigationsQuery);
+
+  let body: ReactNode;
+  if (investigations.isPending) {
+    body = <CardSkeleton what="Reading investigations." />;
+  } else if (investigations.isError) {
+    body = (
+      <ProblemNotice error={investigations.error} onRetry={() => void investigations.refetch()} />
+    );
+  } else {
+    const recent = investigations.data.items
+      .filter((item) => item.archivedAt === null)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 3);
+
+    body = (
+      <div className="flex flex-col gap-3">
+        {investigations.data.hasMore ? (
+          <Notice className="text-caption">
+            Partial: only the {String(LIST_LIMIT)} oldest investigations could be read.
+          </Notice>
+        ) : null}
+        {recent.length === 0 ? (
+          <div className="flex flex-col items-start gap-2">
+            <p className="text-prose-small text-ink-secondary">
+              No investigations yet. Enter a target above to begin.
+            </p>
+          </div>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border-subtle">
+            {recent.map((item) => (
+              <InvestigationItem key={item.id} investigation={item} onInvestigate={onInvestigate} />
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  return <Card title="Recent investigations">{body}</Card>;
 }
 
 /** Drawn in the mockup; nothing backs it, so it is the Not built card (§8). No count, no rows. */
