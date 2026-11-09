@@ -1,5 +1,5 @@
 import type { QuotaPeriod, UsageUnit } from "@repo/core";
-import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import {
   alerts,
   casePins,
@@ -241,12 +241,33 @@ export class MonitorsRepository extends TenantRepository {
 
   async update(
     id: string,
-    patch: Partial<Pick<NewMonitor, "name" | "target" | "scheduleCron" | "enabled">>,
+    patch: {
+      readonly name?: string | undefined;
+      readonly target?: string | undefined;
+      readonly scheduleCron?: string | undefined;
+      readonly enabled?: boolean | undefined;
+    },
   ): Promise<Monitor | null> {
     return this.run(async (tx) =>
       firstRow(await tx.update(monitors).set(patch).where(this.owned(monitors, id)).returning()),
     );
   }
+
+  async deactivate(id: string): Promise<boolean> {
+    return this.run(async (tx) => {
+      const rows = await tx
+        .update(monitors)
+        .set({ enabled: false })
+        .where(this.owned(monitors, id))
+        .returning({ id: monitors.id });
+      return rows.length === 1;
+    });
+  }
+}
+
+export interface AlertListOptions extends ListOptions {
+  readonly monitorId?: string | undefined;
+  readonly acknowledged?: boolean | undefined;
 }
 
 export class AlertsRepository extends TenantRepository {
@@ -276,13 +297,39 @@ export class AlertsRepository extends TenantRepository {
     );
   }
 
-  async list(options: ListOptions): Promise<Alert[]> {
+  async findByMonitorAndEvidence(monitorId: string, evidenceId: string): Promise<Alert | null> {
+    return this.run(async (tx) =>
+      firstRow(
+        await tx
+          .select()
+          .from(alerts)
+          .where(
+            and(
+              this.inTenant(alerts),
+              eq(alerts.monitorId, requireUuid(monitorId)),
+              eq(alerts.evidenceId, requireUuid(evidenceId)),
+            ),
+          ),
+      ),
+    );
+  }
+
+  async list(options: AlertListOptions): Promise<Alert[]> {
+    const conditions = [this.inTenant(alerts)];
+    if (options.monitorId !== undefined) {
+      conditions.push(eq(alerts.monitorId, requireUuid(options.monitorId)));
+    }
+    if (options.acknowledged === true) {
+      conditions.push(sql`${alerts.acknowledgedAt} is not null`);
+    } else if (options.acknowledged === false) {
+      conditions.push(sql`${alerts.acknowledgedAt} is null`);
+    }
     return this.run((tx) =>
       tx
         .select()
         .from(alerts)
-        .where(this.inTenant(alerts))
-        .orderBy(asc(alerts.createdAt))
+        .where(and(...conditions))
+        .orderBy(desc(alerts.createdAt), desc(alerts.id))
         .limit(limitOf(options)),
     );
   }
