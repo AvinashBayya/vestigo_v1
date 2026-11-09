@@ -1,6 +1,22 @@
 export { AppError, NotImplementedError } from "./errors.ts";
 export { detectTargetType, EmptyTargetError, type DetectedTarget } from "./target-detection.ts";
 export {
+  EmptyQueryError,
+  EXTERNAL_BROWSER_DISCLAIMER,
+  generateBrowserSearchUrls,
+  normalizeFiletype,
+  normalizeSiteDomain,
+  parseTargetedQuery,
+  type BrowserSearchLink,
+  type SearchDiscoveryItem,
+  type SearchDiscoveryProvider,
+  type SearchDiscoveryResponse,
+  type SearchOperator,
+  type TargetedSearchQuery,
+  type UnsupportedOperator,
+} from "./targeted-search.ts";
+export { validateCronExpression, type CronValidationResult } from "./cron.ts";
+export {
   MAX_GRAPH_HOPS,
   MAX_GRAPH_NODES,
   type GraphEdge,
