@@ -62,7 +62,12 @@ export function collectQueueName(sourceId: string): string {
   return `collect.${sourceId}`;
 }
 
-const RUN_MESSAGE = z.strictObject({ tenantId: z.uuid(), runId: z.uuid() });
+const RUN_MESSAGE = z.strictObject({
+  tenantId: z.uuid(),
+  runId: z.uuid(),
+  /** The sources the analyst chose to run (the source filter); absent runs all. */
+  collectorIds: z.array(z.string().min(1)).min(1).optional(),
+});
 const COLLECT_MESSAGE = z.strictObject({ tenantId: z.uuid(), runId: z.uuid(), jobId: z.uuid() });
 const REPORT_MESSAGE = z.strictObject({ tenantId: z.uuid(), reportId: z.uuid() });
 const CASE_ANALYSIS_MESSAGE = z.strictObject({
@@ -198,9 +203,21 @@ export class InvestigationQueue {
     this.#timeoutMs = options.enqueueTimeoutMs ?? DEFAULT_ENQUEUE_TIMEOUT_MS;
   }
 
-  /** Enqueues the run's planning job; enqueueing the same run twice adds it once. Bounded. */
-  async enqueueRun(tenantId: TenantId, runId: string): Promise<void> {
-    const message = RUN_MESSAGE.parse({ tenantId, runId });
+  /**
+   * Enqueues the run's planning job; enqueueing the same run twice adds it once.
+   * `collectorIds`, when given, is the source filter the planner honours (the
+   * jobId keys on the run, so a retry carries the same choice). Bounded.
+   */
+  async enqueueRun(
+    tenantId: TenantId,
+    runId: string,
+    collectorIds: readonly string[] | null = null,
+  ): Promise<void> {
+    const message = RUN_MESSAGE.parse({
+      tenantId,
+      runId,
+      ...(collectorIds === null ? {} : { collectorIds }),
+    });
     await bounded(
       this.#queue.add("plan", message, { ...deliveryOptions(this.#retry), jobId: `plan-${runId}` }),
       this.#timeoutMs,
@@ -791,7 +808,9 @@ export async function startWorkerPool(options: WorkerPoolOptions): Promise<Worke
         const tenantId = parseTenantId(message.data.tenantId);
         let planned;
         try {
-          planned = await options.coordinator.plan(tenantId, message.data.runId);
+          planned = await options.coordinator.plan(tenantId, message.data.runId, {
+            selectedCollectorIds: message.data.collectorIds ?? null,
+          });
         } catch (error) {
           // The API enqueues the run in the transaction that creates it, so
           // the planning job can arrive first: retry soon, until it commits.

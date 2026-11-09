@@ -38,6 +38,7 @@ import {
   reportedPart,
   RSS_COLLECTORS,
   RSS_RESULT,
+  TELEGRAM_CHANNEL_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
 } from "@repo/collectors";
@@ -555,5 +556,8 @@ export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   article,
   "bluesky.search": checkedOnly(BLUESKY_SEARCH_RESULT),
   "reddit.search": checkedOnly(REDDIT_SEARCH_RESULT),
+  // Telegram's parsed posts become items in a later item extractor; until then
+  // the result is checked and nothing is drawn (as for the other feeds).
+  "telegram.channel": checkedOnly(TELEGRAM_CHANNEL_RESULT),
   ...Object.fromEntries(RSS_COLLECTORS.map((collector) => [collector.declaration.id, rss])),
 };

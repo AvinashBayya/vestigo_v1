@@ -73,6 +73,9 @@ export interface NotPlannedType {
 
 export const NOT_PLANNED_UNLESS_CHOSEN = "NOT_PLANNED_UNLESS_CHOSEN";
 
+/** A source the analyst did not choose for this run (the general source filter). */
+export const NOT_SELECTED = "NOT_SELECTED";
+
 export interface PlanRequest {
   readonly input: string;
   readonly requestedType: TargetType | null;
@@ -82,6 +85,14 @@ export interface PlanRequest {
     readonly type: TargetType;
     readonly value: string;
   }) => Promise<ScopeClearance | null>;
+  /**
+   * The collector ids the analyst chose to run (the source filter). Null or
+   * absent runs every source that is otherwise admitted, as before. A source
+   * that would have run but was not chosen is excluded with NOT_SELECTED, so
+   * the plan records exactly what the choice left out. A chosen id that cannot
+   * run anyway is still excluded with its real reason, never NOT_SELECTED.
+   */
+  readonly selectedCollectorIds?: readonly string[] | null;
 }
 
 /**
@@ -146,6 +157,18 @@ export async function planRun(runtime: CollectorRuntime, request: PlanRequest): 
         targetType: target.type,
         reason: rejection.status === "REFUSED" ? rejection.reason : rejection.error.code,
         message: rejection.status === "REFUSED" ? rejection.message : rejection.error.message,
+      });
+      continue;
+    }
+    // The source filter is the last gate: a source that would run but was not
+    // chosen is recorded as not selected, so the plan shows what the choice
+    // left out. A null or absent selection runs every admitted source.
+    if (request.selectedCollectorIds != null && !request.selectedCollectorIds.includes(entry.id)) {
+      excluded.push({
+        collectorId: entry.id,
+        targetType: target.type,
+        reason: NOT_SELECTED,
+        message: "Not selected: this source was not chosen to run for this investigation.",
       });
       continue;
     }

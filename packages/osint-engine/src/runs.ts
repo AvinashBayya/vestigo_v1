@@ -55,9 +55,13 @@ export class RunCoordinator {
    * run whose job the database refuses as a person target outside a
    * person-bearing run, and that refusal is thrown on.
    */
-  async plan(tenantId: TenantId, runId: string): Promise<PlannedRun> {
+  async plan(
+    tenantId: TenantId,
+    runId: string,
+    options: { readonly selectedCollectorIds?: readonly string[] | null } = {},
+  ): Promise<PlannedRun> {
     try {
-      return await this.#plan(tenantId, runId);
+      return await this.#plan(tenantId, runId, options);
     } catch (error) {
       if (!(error instanceof PersonTargetOutsidePersonRunError)) throw error;
       // The database refused a job on a person target type (a TOPIC) because
@@ -83,7 +87,11 @@ export class RunCoordinator {
     }
   }
 
-  async #plan(tenantId: TenantId, runId: string): Promise<PlannedRun> {
+  async #plan(
+    tenantId: TenantId,
+    runId: string,
+    options: { readonly selectedCollectorIds?: readonly string[] | null },
+  ): Promise<PlannedRun> {
     return this.#db.withTenant(tenantId, async ({ repos }) => {
       const run = await repos.runs.lock(runId);
       if (run === null) throw new RunNotReadyError();
@@ -112,6 +120,7 @@ export class RunCoordinator {
           requestedType: run.requestedTargetType,
           entitlement: { plan: tenant.plan, vettingStatus: tenant.vettingStatus },
           scopeFor: (target) => resolveScopeClearance(repos.scopeAuthorisations, target),
+          selectedCollectorIds: options.selectedCollectorIds ?? null,
         });
       } catch (error) {
         if (!(error instanceof EmptyTargetError)) throw error;

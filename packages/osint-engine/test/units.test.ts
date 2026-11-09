@@ -229,6 +229,31 @@ describe("planning a run", () => {
     });
   });
 
+  it("runs only the sources the filter chose, and records the rest as not selected", async () => {
+    const request = {
+      input: "example.com",
+      requestedType: "DOMAIN" as const,
+      entitlement: TECHINT,
+      scopeFor: () => Promise.resolve(null),
+    };
+    // Chosen: the one source that would run runs.
+    const chosen = await planRun(runtime, { ...request, selectedCollectorIds: ["fake.domain"] });
+    expect(chosen.jobs.map((job) => job.collectorId)).toEqual(["fake.domain"]);
+
+    // Not chosen: it would have run, but the filter left it out, so it is
+    // recorded as not selected and nothing is planned.
+    const none = await planRun(runtime, { ...request, selectedCollectorIds: ["fake.username"] });
+    expect(none.jobs).toEqual([]);
+    const reason = Object.fromEntries(none.excluded.map((e) => [e.collectorId, e.reason]));
+    expect(reason["fake.domain"]).toBe("NOT_SELECTED");
+    // A chosen source that cannot run anyway keeps its real reason, never NOT_SELECTED.
+    expect(reason["fake.username"]).toBe("TARGET_TYPE_NOT_ACCEPTED");
+
+    // No filter (null): every admitted source runs, as before.
+    const all = await planRun(runtime, { ...request, selectedCollectorIds: null });
+    expect(all.jobs.map((job) => job.collectorId)).toEqual(["fake.domain"]);
+  });
+
   it("runs an ACTIVE collector only with a scope authorisation for the exact target", async () => {
     const plan = await planRun(runtime, {
       input: "example.com",
@@ -542,6 +567,11 @@ const NOTHING_DRAWN_CASES: readonly {
     collectorId: "reddit.search",
     target: { type: "TOPIC", value: "[an open topic]" },
     fixtures: [loadFixture("reddit", "public-search-found")],
+  },
+  {
+    collectorId: "telegram.channel",
+    target: { type: "USERNAME", value: "fixture_channel" },
+    fixtures: [loadFixture("telegram", "channel-found")],
   },
 ];
 
