@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://t.me/s/telegram",
+    "recordedOn": "2026-10-26",
+    "notes": "Synthetic HTML modelled on the t.me/s/<channel> public-preview structure (tgme_widget_message* classes, data-post, js-message_text vs js-message_reply_text, <time datetime>, tgme_widget_message_photo_wrap / _video_thumb / <video src>, and the older-messages /s/<channel>?before=<id> link) as a logged-out browser receives it. Not recorded from a live fetch in this session; placeholder channels and text."
+  },
+  "request": {
+    "host": "t.me",
+    "path": "/s/boundchannel?before=29"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html; charset=utf-8"
+    },
+    "body": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Telegram preview</title><meta property=\"og:title\" content=\"[a channel]\"></head><body><main class=\"tgme_channel_history js-message_history\"><div class=\"tgme_widget_message_wrap js-widget_message_wrap\"><div class=\"tgme_widget_message js-widget_message\" data-post=\"boundchannel/28\"><div class=\"tgme_widget_message_bubble\"><div class=\"tgme_widget_message_text js-message_text\" dir=\"auto\">[b28]</div><div class=\"tgme_widget_message_footer compact js-message_footer\"><a class=\"tgme_widget_message_date\" href=\"https://t.me/boundchannel/28\"><time datetime=\"2026-08-12T08:28:00+00:00\" class=\"time\">time</time></a></div></div></div></div><div class=\"tme_messages_more_wrap\"><a class=\"tgme_widget_messages_more js-messages_more\" data-before=\"28\" href=\"/s/boundchannel?before=28\">Load more</a></div></main></body></html>"
+  }
+}

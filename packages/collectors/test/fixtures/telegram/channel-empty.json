@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://t.me/s/telegram",
+    "recordedOn": "2026-10-26",
+    "notes": "Synthetic HTML modelled on the t.me/s/<channel> public-preview structure (tgme_widget_message* classes, data-post, js-message_text vs js-message_reply_text, <time datetime>, tgme_widget_message_photo_wrap / _video_thumb / <video src>, and the older-messages /s/<channel>?before=<id> link) as a logged-out browser receives it. Not recorded from a live fetch in this session; placeholder channels and text."
+  },
+  "request": {
+    "host": "t.me",
+    "path": "/s/silentchannel"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html; charset=utf-8"
+    },
+    "body": "<!DOCTYPE html><html><head><title>Telegram preview</title></head><body><div class=\"tgme_channel_info\">This channel has no public preview.</div></body></html>"
+  }
+}

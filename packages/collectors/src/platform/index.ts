@@ -16,6 +16,7 @@ import { newsCollector } from "./news.ts";
 import { rdapCollector } from "./rdap.ts";
 import { redditSearchCollector } from "./reddit.ts";
 import { RSS_COLLECTORS } from "./rss.ts";
+import { telegramChannelCollector } from "./telegram.ts";
 import { waybackCollector } from "./wayback.ts";
 import { wikidataCollector } from "./wikidata.ts";
 
@@ -45,6 +46,10 @@ export const PLATFORM_COLLECTORS: readonly Collector[] = [
   // until the owner records its source's terms.
   blueskySearchCollector,
   redditSearchCollector,
+  // Telegram public channel preview (ported from the previous codebase,
+  // 2026-10-26): open method, UNVERIFIED, so it never runs until the owner
+  // records Telegram's terms. A USERNAME target (the channel handle), not a topic.
+  telegramChannelCollector,
   ...RSS_COLLECTORS,
   // Direct article fetch (2026-10-22): ACTIVE, open-host, UNVERIFIED — it never
   // runs in a deployment until an owner records a per-publisher verdict, and
@@ -142,6 +147,14 @@ export { NEWS_RESULT } from "./news.ts";
 export { BLUESKY_SEARCH_RESULT } from "./bluesky.ts";
 export { REDDIT_SEARCH_RESULT } from "./reddit.ts";
 export { RSS_COLLECTORS, RSS_RESULT } from "./rss.ts";
+export { TELEGRAM_CHANNEL_RESULT } from "./telegram.ts";
 export { RDAP_RESULT } from "./rdap.ts";
 export { WAYBACK_RESULT } from "./wayback.ts";
 export { WIKIDATA_RESULT } from "./wikidata.ts";
+export {
+  braveSearchCollector,
+  BraveSearchDiscoveryProvider,
+  BraveMissingApiKeyError,
+  BRAVE_SEARCH_RESULT,
+  type BraveSearchResult,
+} from "./brave-search.ts";

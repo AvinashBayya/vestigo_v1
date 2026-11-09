@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://t.me/s/telegram",
+    "recordedOn": "2026-10-26",
+    "notes": "Synthetic HTML modelled on the t.me/s/<channel> public-preview structure (tgme_widget_message* classes, data-post, js-message_text vs js-message_reply_text, <time datetime>, tgme_widget_message_photo_wrap / _video_thumb / <video src>, and the older-messages /s/<channel>?before=<id> link) as a logged-out browser receives it. Not recorded from a live fetch in this session; placeholder channels and text."
+  },
+  "request": {
+    "host": "t.me",
+    "path": "/s/fixture_channel"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/html; charset=utf-8"
+    },
+    "body": "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Telegram preview</title><meta property=\"og:title\" content=\"[a channel]\"></head><body><main class=\"tgme_channel_history js-message_history\"><div class=\"tgme_widget_message_wrap js-widget_message_wrap\"><div class=\"tgme_widget_message js-widget_message\" data-post=\"fixture_channel/100\"><div class=\"tgme_widget_message_bubble\"><a class=\"tgme_widget_message_reply\" href=\"https://t.me/fixture_channel/1\"><div class=\"tgme_widget_message_author accent_color\"><span>Earlier post</span></div><div class=\"tgme_widget_message_text js-message_reply_text\" dir=\"auto\">quoted &#036;text that must not be collected</div></a><div class=\"tgme_widget_message_text js-message_text\" dir=\"auto\">[real message one] with &#036;200,000 and a &amp; sign<br/>second line</div><div class=\"tgme_widget_message_footer compact js-message_footer\"><a class=\"tgme_widget_message_date\" href=\"https://t.me/fixture_channel/100\"><time datetime=\"2026-08-12T14:30:08+00:00\" class=\"time\">time</time></a></div></div></div></div><div class=\"tgme_widget_message_wrap js-widget_message_wrap\"><div class=\"tgme_widget_message js-widget_message\" data-post=\"fixture_channel/99\"><div class=\"tgme_widget_message_bubble\"><a class=\"tgme_widget_message_photo_wrap\" style=\"background-image:url('https://cdn4.telesco.pe/file/photo99.jpg')\" href=\"https://t.me/fixture_channel/99\"></a><div class=\"tgme_widget_message_footer compact js-message_footer\"></div></div></div></div><div class=\"tgme_widget_message_wrap js-widget_message_wrap\"><div class=\"tgme_widget_message js-widget_message\" data-post=\"fixture_channel/98\"><div class=\"tgme_widget_message_bubble\"><div class=\"tgme_widget_message_text js-message_text\" dir=\"auto\">[message three]</div><div class=\"tgme_widget_message_footer compact js-message_footer\"><a class=\"tgme_widget_message_date\" href=\"https://t.me/fixture_channel/98\"><time datetime=\"2026-08-12T13:00:00+00:00\" class=\"time\">time</time></a></div></div></div></div></main></body></html>"
+  }
+}

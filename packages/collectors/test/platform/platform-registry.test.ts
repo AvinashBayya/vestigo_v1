@@ -28,6 +28,7 @@ const REGISTERED = [
   ["news", "PERMITTED"],
   ["bluesky.search", "UNVERIFIED"],
   ["reddit.search", "UNVERIFIED"],
+  ["telegram.channel", "UNVERIFIED"],
   ...RSS_PUBLISHERS.map((publisher) => [publisher.id, "UNVERIFIED"] as const),
   ["article", "UNVERIFIED"],
 ];

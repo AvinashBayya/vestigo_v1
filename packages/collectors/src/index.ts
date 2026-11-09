@@ -23,6 +23,10 @@ export {
 export { PLATFORM_SOURCES } from "./catalogue.ts";
 export {
   ARTICLE_RESULT,
+  braveSearchCollector,
+  BraveMissingApiKeyError,
+  BraveSearchDiscoveryProvider,
+  BRAVE_SEARCH_RESULT,
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
   createPlatformRegistry,
@@ -39,8 +43,10 @@ export {
   REDDIT_SEARCH_RESULT,
   RSS_COLLECTORS,
   RSS_RESULT,
+  TELEGRAM_CHANNEL_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
+  type BraveSearchResult,
   type HeldCollector,
   type OperatorAttachment,
 } from "./platform/index.ts";
