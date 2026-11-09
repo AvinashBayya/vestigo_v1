@@ -146,4 +146,36 @@ describe("the LLM profiles", () => {
       expect(envSchema.shape[name].meta()?.examples).toBeUndefined();
     }
   });
+
+  it("configures Hugging Face Inference Providers' router through the hosted profile alone", () => {
+    // HF documents an OpenAI-compatible router at https://router.huggingface.co/v1,
+    // and the allowlist is keyed by Hugging Face repository ids, so a Hugging Face
+    // deployment is configuration only: base URL, token, and an allowlisted model
+    // id (optionally pinned to a provider through LLM_MODEL_NAMES). No HF-specific
+    // code path exists or is needed.
+    const configuration = resolve({
+      LLM_HOSTED_BASE_URL: "https://router.huggingface.co/v1",
+      LLM_HOSTED_API_KEY: "[platform key]",
+      LLM_LARGE_MODEL: "Qwen/Qwen3-32B",
+      // A provider pin is a free-form served name over an allowlisted id.
+      LLM_MODEL_NAMES: "Qwen/Qwen3-32B=Qwen/Qwen3-32B:fireworks-ai",
+    });
+    if (configuration.status !== "READY") return expect.unreachable("should be ready");
+    expect(configuration.endpoint.profile).toBe("hosted");
+    expect(configuration.endpoint.baseUrl).toBe("https://router.huggingface.co/v1");
+    // The router host is not on the forbidden list (only Azure OpenAI is).
+    expect(new URL(configuration.endpoint.baseUrl).host).toBe("router.huggingface.co");
+    // Synthesis routes to the large model; its served name reaches the router as given.
+    expect(configuration.endpoint.large.model.id).toBe("Qwen/Qwen3-32B");
+    expect(configuration.endpoint.large.servedName).toBe("Qwen/Qwen3-32B:fireworks-ai");
+  });
+
+  it("documents the Hugging Face router in the base-URL help without pre-filling a live value", () => {
+    const meta = envSchema.shape.LLM_HOSTED_BASE_URL.meta();
+    // Named in the help so .env.example documents it...
+    expect(meta?.description).toContain("https://router.huggingface.co/v1");
+    // ...but it carries no example, so a copied .env stays NOT_CONFIGURED (no key)
+    // rather than failing closed on a base URL with no token.
+    expect(meta?.examples).toBeUndefined();
+  });
 });
