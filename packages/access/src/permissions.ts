@@ -44,6 +44,11 @@ export const PERMISSIONS = [
   "invitation:cancel",
   // R1-b: requesting a case's analysis (reading one is case:read).
   "case:analyse",
+  // Stage 3: Watch monitors and alerts.
+  "monitor:read",
+  "monitor:write",
+  "alert:read",
+  "alert:write",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -91,6 +96,10 @@ export const PERMISSION_MODULE: Readonly<Record<Permission, Module | null>> = {
   "invitation:create": null,
   "invitation:cancel": null,
   "case:analyse": "TECHINT",
+  "monitor:read": "TECHINT",
+  "monitor:write": "TECHINT",
+  "alert:read": "TECHINT",
+  "alert:write": "TECHINT",
 };
 
 /** Role names, as stored on a membership. */
@@ -106,6 +115,8 @@ const READ_ONLY: readonly Permission[] = [
   "run:read",
   "report:read",
   "member:read",
+  "monitor:read",
+  "alert:read",
 ];
 
 const ANALYST: readonly Permission[] = [
@@ -118,6 +129,8 @@ const ANALYST: readonly Permission[] = [
   "job:replay",
   "scope_authorisation:read",
   "report:create",
+  "monitor:write",
+  "alert:write",
 ];
 
 const ADMIN: readonly Permission[] = [
