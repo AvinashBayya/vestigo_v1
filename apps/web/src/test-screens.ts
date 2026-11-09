@@ -9,6 +9,7 @@ import "./screens/Cases.tsx";
 import "./screens/Enrol.tsx";
 import "./screens/Home.tsx";
 import "./screens/Members.tsx";
+import "./screens/Monitors.tsx";
 import "./screens/Run.tsx";
 import "./screens/Settings.tsx";
 import "./screens/SignIn.tsx";

@@ -146,8 +146,8 @@ describe("the signed-in frame", () => {
     // Only what is built: search, the cases results are pinned to, members and settings.
     // The side navigation (from md) and the phone row (below md) list the same destinations.
     const [side, phone] = screen.getAllByRole("navigation", { name: "Main" });
-    expect(side?.textContent).toBe(`${PRODUCT_NAME}SearchCasesMembersSettings`);
-    expect(phone?.textContent).toBe("SearchCasesMembersSettings");
+    expect(side?.textContent).toBe(`${PRODUCT_NAME}SearchCasesMonitorsMembersSettings`);
+    expect(phone?.textContent).toBe("SearchCasesMonitorsMembersSettings");
 
     fireEvent.click(screen.getByRole("button", { name: "Account" }));
     fireEvent.click(await screen.findByRole("radio", { name: "Dark" }));
@@ -230,6 +230,7 @@ describe("the signed-in frame", () => {
     ).toEqual([
       ["Search", "/"],
       ["Cases", "/cases"],
+      ["Monitors", "/monitors"],
       ["Members", "/members"],
       ["Settings", "/settings"],
     ]);
@@ -345,6 +346,54 @@ describe("the signed-in frame", () => {
       expect(router.state.location.pathname).toBe(
         "/cases/77777777-7777-4777-8777-000000000001/overview",
       );
+    });
+  });
+
+  it("opens an investigation at its newest run, not its oldest (the API lists runs oldest first)", async () => {
+    const investigationId = "33333333-3333-4333-8333-00000000000a";
+    const oldestRun = "44444444-4444-4444-8444-4444444444a1";
+    const newestRun = "44444444-4444-4444-8444-4444444444a2";
+    const runRow = (id: string, status: string, createdAt: string) => ({
+      id,
+      status,
+      createdAt,
+      startedAt: null,
+      finishedAt: null,
+    });
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(signedIn(acme.id)),
+      "GET /api/v1/me": meOf("NOT_SUBMITTED"),
+      "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
+      "GET /api/v1/investigations": () =>
+        Response.json({
+          items: [
+            {
+              id: investigationId,
+              title: "[Investigation A]",
+              target: "a.example",
+              createdByUserId: null,
+              createdAt: "2026-02-02T00:00:00.000Z",
+              archivedAt: null,
+            },
+          ],
+          hasMore: false,
+        }),
+      [`GET /api/v1/investigations/${investigationId}/runs`]: () =>
+        Response.json({
+          items: [
+            runRow(oldestRun, "FAILED", "2026-02-02T01:00:00.000Z"),
+            runRow(newestRun, "SUCCEEDED", "2026-02-02T02:00:00.000Z"),
+          ],
+          hasMore: false,
+        }),
+    });
+    const router = renderAt("/members");
+    const palette = await openPalette();
+    const group = await within(palette).findByRole("group", { name: "Investigations" });
+    expect(labels(within(group).getAllByRole("option"))).toEqual(["[Investigation A]"]);
+    fireEvent.click(within(group).getAllByRole("option")[0] as HTMLElement);
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/runs/${newestRun}/overview`);
     });
   });
 

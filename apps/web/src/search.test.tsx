@@ -26,8 +26,10 @@ type Handler = (body: Record<string, unknown>, request: Request) => Response | P
 
 /** What the dashboard's panels read when a test does not say otherwise: nothing yet. */
 const PANEL_DEFAULTS: Record<string, Handler> = {
+  "GET /api/v1/session": () => Response.json(session),
   "GET /api/v1/cases": () => Response.json({ items: [], hasMore: false }),
   "GET /api/v1/investigations": () => Response.json({ items: [], hasMore: false }),
+  "GET /api/v1/alerts": () => Response.json({ items: [], hasMore: false }),
   "GET /api/v1/collectors": () =>
     Response.json({
       unverifiedSourcesAllowed: false,
@@ -148,7 +150,7 @@ const checkTarget = async (value: string) => {
   await screen.findByLabelText("Target to investigate");
   typeTarget(value);
   fireEvent.click(screen.getByRole("button", { name: "Investigate" }));
-  await screen.findByRole("heading", { name: /Sources that would run/ });
+  await screen.findByRole("heading", { name: /Sources to run/ });
 };
 
 const requests = (method: string, path: string) =>
@@ -295,13 +297,15 @@ describe("the search dashboard", () => {
     expect(health.textContent).toContain("Live health is not measured.");
     expect(health.textContent).not.toMatch(/Needs key|Unavailable/);
 
-    // Monitors do not exist: the Not built card says so, with no count, no rows and no number at all.
+    // Monitor alerts are read from the API: none unacknowledged is a measured zero, and the card says so.
     const monitors = screen.getByRole("region", { name: "Monitor alerts" });
     expect(within(monitors).getByRole("heading", { name: "Monitor alerts" })).toBeTruthy();
-    expect(within(monitors).getByText(/^Not built yet\. Monitors do not exist/)).toBeTruthy();
-    expect(monitors.textContent).toContain("Not built yet.");
-    expect(monitors.textContent).not.toMatch(/\d/);
+    expect(within(monitors).getByText("0 unacknowledged")).toBeTruthy();
+    expect(within(monitors).getByText(/^No unacknowledged alerts\./)).toBeTruthy();
     expect(within(monitors).queryByRole("listitem")).toBeNull();
+    expect(within(monitors).getByRole("link", { name: "All monitors" }).getAttribute("href")).toBe(
+      "/monitors",
+    );
     // Only types some source here can take are offered as examples.
     expect(screen.getByText("Sources here run for:").parentElement?.textContent).toBe(
       "Sources here run for:domain",
@@ -460,7 +464,7 @@ describe("the search dashboard", () => {
     expect(screen.getByText("Detected as: Domain.")).toBeTruthy();
 
     const running = screen
-      .getByRole("heading", { name: "Sources that would run (2)" })
+      .getByRole("heading", { name: "Sources to run (2 of 2)" })
       .closest("section");
     if (running === null) throw new TypeError("no panel");
     expect(within(running).getByText("[DNS source]")).toBeTruthy();
@@ -564,7 +568,7 @@ describe("the search dashboard", () => {
     await waitFor(() => {
       expect(requests("POST", "/api/v1/estimates")).toHaveLength(2);
     });
-    await screen.findByRole("heading", { name: /Sources that would run/ });
+    await screen.findByRole("heading", { name: /Sources to run/ });
     expect(screen.getByRole<HTMLInputElement>("radio", { name: "Domain" }).checked).toBe(true);
     expect((await bodiesOf("POST", "/api/v1/estimates"))[1]).toEqual({
       target: "https://example.org/path",
@@ -582,6 +586,86 @@ describe("the search dashboard", () => {
     expect(await bodiesOf("POST", `/api/v1/investigations/${INVESTIGATION_ID}/runs`)).toEqual([
       { targetType: "DOMAIN" },
     ]);
+  });
+
+  it("runs only the sources left checked, and will not start with none checked", async () => {
+    fakeApi({
+      "POST /api/v1/estimates": (body) => Response.json(estimateFor(String(body["target"]))),
+      "POST /api/v1/investigations": (body) =>
+        Response.json(
+          {
+            id: INVESTIGATION_ID,
+            title: body["title"],
+            target: body["target"],
+            createdByUserId: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            archivedAt: null,
+          },
+          { status: 201 },
+        ),
+      [`POST /api/v1/investigations/${INVESTIGATION_ID}/runs`]: () =>
+        Response.json(
+          { id: RUN_ID, investigationId: INVESTIGATION_ID, status: "QUEUED", plan: null },
+          { status: 202 },
+        ),
+    });
+    const router = renderHome();
+    await checkTarget("example.com");
+    // The plan lists two sources, both checked to start.
+    await screen.findByRole("heading", { name: "Sources to run (2 of 2)" });
+    const dns = screen.getByRole<HTMLInputElement>("checkbox", { name: "Run [DNS source]" });
+    const keyed = screen.getByRole<HTMLInputElement>("checkbox", { name: "Run [Keyed source]" });
+    expect(dns.checked).toBe(true);
+    expect(keyed.checked).toBe(true);
+
+    // Unchecking all leaves nothing to run: the button is disabled and says why.
+    fireEvent.click(dns);
+    fireEvent.click(keyed);
+    expect(screen.getByRole("heading", { name: "Sources to run (0 of 2)" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start run" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/No source is selected/)).toBeTruthy();
+
+    // Re-check only DNS, and start: the run is asked for that one source alone.
+    fireEvent.click(dns);
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/runs/${RUN_ID}`);
+    });
+    expect(await bodiesOf("POST", `/api/v1/investigations/${INVESTIGATION_ID}/runs`)).toEqual([
+      { collectorIds: ["dns"] },
+    ]);
+  });
+
+  it("starts with no source filter when every source is left checked", async () => {
+    fakeApi({
+      "POST /api/v1/estimates": (body) => Response.json(estimateFor(String(body["target"]))),
+      "POST /api/v1/investigations": (body) =>
+        Response.json(
+          {
+            id: INVESTIGATION_ID,
+            title: body["title"],
+            target: body["target"],
+            createdByUserId: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            archivedAt: null,
+          },
+          { status: 201 },
+        ),
+      [`POST /api/v1/investigations/${INVESTIGATION_ID}/runs`]: () =>
+        Response.json(
+          { id: RUN_ID, investigationId: INVESTIGATION_ID, status: "QUEUED", plan: null },
+          { status: 202 },
+        ),
+    });
+    const router = renderHome();
+    await checkTarget("example.com");
+    await screen.findByRole("heading", { name: "Sources to run (2 of 2)" });
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/runs/${RUN_ID}`);
+    });
+    // Every source checked: the body carries no filter, so the run plans them all.
+    expect(await bodiesOf("POST", `/api/v1/investigations/${INVESTIGATION_ID}/runs`)).toEqual([{}]);
   });
 
   it("when the run cannot be queued, says so, and a retry reuses the investigation already opened", async () => {
@@ -689,5 +773,222 @@ describe("the search dashboard", () => {
     expect(block?.textContent).toContain("[what the module does]");
     expect(block?.textContent).toContain("Your organisation's vetting has not been approved.");
     expect(block?.getAttribute("role")).toBe("status");
+  });
+});
+
+/**
+ * The Recent investigations card: each investigation, its newest run and links
+ * into that run. The API lists an investigation's runs oldest first, so the
+ * newest is the last of the page, never the first; a read that is pending,
+ * failed or cut is never shown as "no runs" (§1), which would offer to start
+ * one when one may already exist.
+ */
+describe("recent investigations on the dashboard", () => {
+  const INV_WITH_RUNS = "33333333-3333-4333-8333-00000000000a";
+  const INV_NO_RUNS = "33333333-3333-4333-8333-00000000000b";
+  const RUN_OLDEST = "44444444-4444-4444-8444-4444444444a1";
+  const RUN_NEWEST = "44444444-4444-4444-8444-4444444444a2";
+
+  const investigation = (id: string, title: string, target: string, createdAt: string) => ({
+    id,
+    title,
+    target,
+    createdByUserId: null,
+    createdAt,
+    archivedAt: null,
+  });
+  const runRow = (id: string, status: string, createdAt: string) => ({
+    id,
+    status,
+    createdAt,
+    startedAt: null,
+    finishedAt: null,
+  });
+
+  it("shows the newest run (not the oldest), links into its workspace and brief, and offers to investigate a target with no runs", async () => {
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(session),
+      "GET /api/v1/investigations": () =>
+        Response.json({
+          items: [
+            investigation(
+              INV_WITH_RUNS,
+              "[Investigation A]",
+              "a.example",
+              "2026-02-02T00:00:00.000Z",
+            ),
+            investigation(
+              INV_NO_RUNS,
+              "[Investigation B]",
+              "b.example",
+              "2026-02-01T00:00:00.000Z",
+            ),
+          ],
+          hasMore: false,
+        }),
+      // Oldest first, as the API lists them: a FAILED run, then a later SUCCEEDED one.
+      [`GET /api/v1/investigations/${INV_WITH_RUNS}/runs`]: () =>
+        Response.json({
+          items: [
+            runRow(RUN_OLDEST, "FAILED", "2026-02-02T01:00:00.000Z"),
+            runRow(RUN_NEWEST, "SUCCEEDED", "2026-02-02T02:00:00.000Z"),
+          ],
+          hasMore: false,
+        }),
+      [`GET /api/v1/investigations/${INV_NO_RUNS}/runs`]: () =>
+        Response.json({ items: [], hasMore: false }),
+      "POST /api/v1/estimates": (body) => Response.json(estimateFor(String(body["target"]))),
+    });
+    renderHome();
+    const card = await screen.findByRole("region", { name: "Recent investigations" });
+
+    // The row with runs: wait for the list, then for its runs read, and assert
+    // the newest run's status ("Ran" = SUCCEEDED) shows, never the oldest (FAILED).
+    const withRuns = (await within(card).findByText("[Investigation A]")).closest("li");
+    if (withRuns === null) throw new TypeError("no row");
+    await within(withRuns).findByRole("link", { name: "Workspace" });
+    expect(within(withRuns).getByText("Ran")).toBeTruthy();
+    expect(within(withRuns).queryByText("Failed")).toBeNull();
+    // Its links open the newest run's workspace and brief, not the oldest run.
+    expect(within(withRuns).getByRole("link", { name: "Workspace" }).getAttribute("href")).toBe(
+      `/runs/${RUN_NEWEST}/overview`,
+    );
+    expect(within(withRuns).getByRole("link", { name: "Brief" }).getAttribute("href")).toBe(
+      `/runs/${RUN_NEWEST}/report`,
+    );
+
+    // The row with no runs offers to investigate the target, and does so when pressed.
+    const noRuns = within(card).getByText("[Investigation B]").closest("li");
+    if (noRuns === null) throw new TypeError("no row");
+    fireEvent.click(await within(noRuns).findByRole("button", { name: /Investigate/ }));
+    await waitFor(() => {
+      expect(requests("POST", "/api/v1/estimates")).toHaveLength(1);
+    });
+    expect(await bodiesOf("POST", "/api/v1/estimates")).toEqual([{ target: "b.example" }]);
+  });
+
+  it("never says a target has no runs while its runs read is pending, has failed, or was cut (§1)", async () => {
+    const PENDING = "33333333-3333-4333-8333-00000000000c";
+    const FAILED = "33333333-3333-4333-8333-00000000000d";
+    const CUT = "33333333-3333-4333-8333-00000000000e";
+    fakeApi({
+      "GET /api/v1/session": () => Response.json(session),
+      "GET /api/v1/investigations": () =>
+        Response.json({
+          items: [
+            investigation(PENDING, "[Still reading]", "p.example", "2026-03-03T00:00:00.000Z"),
+            investigation(FAILED, "[Read failed]", "f.example", "2026-03-02T00:00:00.000Z"),
+            investigation(CUT, "[Many runs]", "m.example", "2026-03-01T00:00:00.000Z"),
+          ],
+          hasMore: false,
+        }),
+      // Never resolves: the read stays pending.
+      [`GET /api/v1/investigations/${PENDING}/runs`]: () => new Promise<Response>(() => undefined),
+      [`GET /api/v1/investigations/${FAILED}/runs`]: () =>
+        problem(503, "[RUNS_CODE]", "The runs could not be read."),
+      // A cut page: it holds the oldest runs, so the newest is not among them.
+      [`GET /api/v1/investigations/${CUT}/runs`]: () =>
+        Response.json({
+          items: [runRow(RUN_OLDEST, "FAILED", "2026-03-01T01:00:00.000Z")],
+          hasMore: true,
+        }),
+    });
+    renderHome();
+    const card = await screen.findByRole("region", { name: "Recent investigations" });
+
+    const pending = (await within(card).findByText("[Still reading]")).closest("li");
+    const failed = within(card).getByText("[Read failed]").closest("li");
+    const cut = within(card).getByText("[Many runs]").closest("li");
+    if (pending === null || failed === null || cut === null) throw new TypeError("no rows");
+
+    // Pending: a status note, not a claim of "no runs".
+    expect(within(pending).getByRole("status").textContent).toBe("Reading runs…");
+    expect(within(pending).queryByRole("button", { name: /Investigate/ })).toBeNull();
+
+    // Failed: an em dash with the reason and code; still no "Investigate".
+    await within(failed).findByRole("button", { name: /Runs unread\./ });
+    expect(
+      within(failed)
+        .getByRole("button", { name: /Runs unread\./ })
+        .getAttribute("aria-label"),
+    ).toContain("[RUNS_CODE]");
+    expect(within(failed).queryByRole("button", { name: /Investigate/ })).toBeNull();
+
+    // Cut: it says the newest is not shown, rather than show the older run as newest.
+    await within(cut).findByRole("button", { name: /Latest run not shown\./ });
+    expect(within(cut).queryByText("Failed")).toBeNull();
+    expect(within(cut).queryByRole("button", { name: /Investigate/ })).toBeNull();
+  });
+
+  it("renders targeted public-web discovery, parses operators, and generates verified browser search links", async () => {
+    fakeApi({});
+    renderHome();
+
+    const discoveryCard = await screen.findByRole("region", {
+      name: "Targeted public-web discovery ($0 no-key search)",
+    });
+    expect(discoveryCard).toBeDefined();
+
+    const queryInput = within(discoveryCard).getByLabelText("Search operator query");
+    fireEvent.change(queryInput, {
+      target: { value: 'site:reuters.com "oil spill" filetype:pdf' },
+    });
+
+    // Normalized query is displayed
+    await within(discoveryCard).findByText('site:reuters.com filetype:pdf "oil spill"');
+
+    // External search links are rendered
+    const braveLink = within(discoveryCard).getByRole("link", { name: /Brave Search/ });
+    const ddgLink = within(discoveryCard).getByRole("link", { name: /DuckDuckGo/ });
+    const googleLink = within(discoveryCard).getByRole("link", { name: /Google Search/ });
+
+    expect(braveLink.getAttribute("href")).toContain("https://search.brave.com/search?q=");
+    expect(braveLink.getAttribute("target")).toBe("_blank");
+    expect(braveLink.getAttribute("rel")).toContain("noopener");
+
+    expect(ddgLink.getAttribute("href")).toContain("https://duckduckgo.com/?q=");
+    expect(googleLink.getAttribute("href")).toContain("https://www.google.com/search?q=");
+
+    // Disclaimer is visible
+    expect(
+      within(discoveryCard).getByText(/External browser navigation is user-initiated/),
+    ).toBeDefined();
+  });
+
+  it("warns about unsupported operators and imports discovered URLs into investigation", async () => {
+    fakeApi({
+      "POST /api/v1/estimates": (body) => {
+        expect(body).toEqual({ target: "https://example.com/discovered-report.pdf" });
+        return Response.json(
+          estimateFor("https://example.com/discovered-report.pdf", { detectedType: "URL" }),
+        );
+      },
+    });
+    renderHome();
+
+    const discoveryCard = await screen.findByRole("region", {
+      name: "Targeted public-web discovery ($0 no-key search)",
+    });
+
+    // Unsupported operator warning
+    const queryInput = within(discoveryCard).getByLabelText("Search operator query");
+    fireEvent.change(queryInput, { target: { value: "cache:example.com" } });
+    await within(discoveryCard).findByText(/The cache: operator has been retired/);
+
+    // Import discovered URL into Vestigo
+    const importInput = within(discoveryCard).getByLabelText(
+      "Found a target URL? Import into Vestigo",
+    );
+    fireEvent.change(importInput, {
+      target: { value: "https://example.com/discovered-report.pdf" },
+    });
+    fireEvent.click(within(discoveryCard).getByRole("button", { name: "Investigate URL" }));
+
+    // Verifies investigation plan triggers for the imported URL
+    await screen.findByRole("heading", { name: /Sources to run/ });
+    expect(screen.getByLabelText("Target to investigate")).toHaveProperty(
+      "value",
+      "https://example.com/discovered-report.pdf",
+    );
   });
 });

@@ -1,6 +1,9 @@
-import { Card, LoadingState, Notice, NotBuilt, Skeleton, StrengthBadge } from "@repo/ui";
-import { useQuery } from "@tanstack/react-query";
+import { Button, Card, LoadingState, Notice, NotBuilt, Skeleton, StrengthBadge } from "@repo/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
+import { timed, unwrap } from "../api.ts";
+import { api } from "../client/index.ts";
+import { ProblemNotice } from "../components/ProblemNotice.tsx";
 import { ProvenanceLink } from "./Provenance.tsx";
 import {
   caseAnalysisQuery,
@@ -77,24 +80,84 @@ export function Contradictions({ scope }: { readonly scope: Scope }) {
 }
 
 function CaseContradictions({ scope }: { readonly scope: Scope }) {
+  const queryClient = useQueryClient();
   const analysis = useQuery(caseAnalysisQuery(scope.id));
   // Names are a nicety: contradictions render whether or not the entity list is in.
   const entities = useQuery(entitiesQuery(scope));
+  // The endpoint ensures an analysis of the case as it is now exists: a new one
+  // (202), a fresh attempt at a failed one, or the existing pending/complete one
+  // (200). Nothing is collected; the person gate and archived/size limits are
+  // the API's, surfaced as the Locked/Failed state. On success the read is
+  // invalidated so the panel shows where the analysis now stands.
+  const request = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.POST("/api/v1/cases/{id}/analyses", {
+          params: { path: { id: scope.id } },
+          signal: timed(),
+        }),
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["case-analysis", scope.id] }),
+  });
   return (
     <Card title="Contradictions" className={CARD_SPAN}>
-      <Loaded
-        query={analysis}
-        loading={
-          <LoadingState what="Reading the case analysis">
-            <Skeleton className="h-target" />
-            <Skeleton className="h-target" />
-          </LoadingState>
-        }
-      >
-        {(read) => <AnalysisState read={read} names={entities.data} />}
-      </Loaded>
+      <div className="flex flex-col gap-4">
+        <Loaded
+          query={analysis}
+          loading={
+            <LoadingState what="Reading the case analysis">
+              <Skeleton className="h-target" />
+              <Skeleton className="h-target" />
+            </LoadingState>
+          }
+        >
+          {(read) => <AnalysisState read={read} names={entities.data} />}
+        </Loaded>
+        {analysis.data !== undefined && canRequestAnalysis(analysis.data) ? (
+          <div className="flex flex-col items-start gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={request.isPending}
+              onClick={() => {
+                request.mutate();
+              }}
+            >
+              {request.isPending ? "Requesting…" : requestLabel(analysis.data)}
+            </Button>
+            {request.isError ? <ProblemNotice error={request.error} /> : null}
+          </div>
+        ) : null}
+      </div>
     </Card>
   );
+}
+
+/**
+ * Whether to offer a request for a case analysis in the state the read is in.
+ * Not while one is running (PENDING), and not for a complete, current analysis
+ * that already reviewed contradictions: it describes the case as it is now.
+ */
+function canRequestAnalysis(read: AnalysisRead): boolean {
+  switch (read.state) {
+    case "PENDING":
+      return false;
+    case "NONE_YET":
+    case "FAILED":
+    case "STALE":
+      return true;
+    case "COMPLETE": {
+      const document = read.analysis?.document ?? null;
+      return document === null || document.contradictions === undefined;
+    }
+  }
+}
+
+/** The request button's label for the state the read is in. */
+function requestLabel(read: AnalysisRead): string {
+  if (read.state === "FAILED") return "Try again";
+  if (read.state === "STALE") return "Update analysis";
+  return "Request analysis";
 }
 
 /** A plain informational line (NONE_YET / PENDING / empty). */

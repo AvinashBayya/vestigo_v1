@@ -99,3 +99,20 @@ export async function unwrap<T>(
   if (result.response.ok && result.data !== undefined) return result.data;
   throw problemFrom(result.error, result.response);
 }
+
+/**
+ * A generated-client call whose success has no body (a 204): resolves when the
+ * API accepted it, and throws the same typed failures as unwrap.
+ */
+export async function unwrapEmpty(
+  call: Promise<{ error?: unknown; response: Response }>,
+): Promise<void> {
+  let result: { error?: unknown; response: Response };
+  try {
+    result = await call;
+  } catch (error) {
+    throw new ApiUnreachable(error instanceof DOMException && error.name === "TimeoutError");
+  }
+  if (result.response.ok && result.error === undefined) return;
+  throw problemFrom(result.error, result.response);
+}

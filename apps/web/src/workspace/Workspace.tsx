@@ -27,6 +27,8 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -355,8 +357,22 @@ function Freshness({ scope }: { readonly scope: Scope }) {
 
 /** A run that is not settled says so under the tab bar: what is shown will grow. */
 function StillCollecting({ scope }: { readonly scope: Scope }) {
+  const queryClient = useQueryClient();
   const run = useQuery({ ...runQuery(scope.id), enabled: scope.kind === "run" });
   const readAt = useReadAt(scope);
+  // The tabs poll while the run collects and stop the moment it settles, so
+  // their last read can just precede the final fusion. When the run settles,
+  // read every tab once more, so the final results replace the partial ones.
+  const settled = scope.kind === "run" && run.data !== undefined ? run.data.settled : null;
+  const wasSettled = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (wasSettled.current === false && settled === true) {
+      void Promise.all(
+        scopeKeys(scope).map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      );
+    }
+    wasSettled.current = settled;
+  }, [settled, scope, queryClient]);
   if (scope.kind !== "run" || run.data === undefined || run.data.settled) return null;
   return (
     <div className="px-4 pt-4">

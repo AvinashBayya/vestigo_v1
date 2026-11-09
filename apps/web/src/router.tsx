@@ -150,6 +150,14 @@ const members = createRoute({
   component: lazyRouteComponent(() => import("./screens/Members.tsx"), "MembersScreen"),
 });
 
+/** Scheduled monitors and their alerts. */
+const monitors = createRoute({
+  getParentRoute: () => root,
+  path: "/monitors",
+  beforeLoad: guard("/"),
+  component: lazyRouteComponent(() => import("./screens/Monitors.tsx"), "MonitorsScreen"),
+});
+
 /** The organisation's settings (provisional until the admin screens land). */
 const settings = createRoute({
   getParentRoute: () => root,
@@ -193,6 +201,7 @@ const routeTree = root.addChildren([
   cases,
   caseWorkspace,
   members,
+  monitors,
   settings,
 ]);
 

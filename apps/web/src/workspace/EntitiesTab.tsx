@@ -23,7 +23,13 @@ import { Instant, plural, StrengthList } from "../components/Values.tsx";
 import { EntityPanel } from "./EntityPanel.tsx";
 import { ProvenanceInspector } from "./Provenance.tsx";
 import { PinButton } from "./Pin.tsx";
-import { entitiesQuery, type EntityList, type EntityRow, type Scope } from "./queries.ts";
+import {
+  entitiesQuery,
+  useScopePollInterval,
+  type EntityList,
+  type EntityRow,
+  type Scope,
+} from "./queries.ts";
 import { CutListNotice, Loaded, NOT_BUILT_BODY } from "./states.tsx";
 import { WorkspaceInspector } from "./Workspace.tsx";
 
@@ -82,7 +88,8 @@ export function EntitiesTab({
   readonly scope: Scope;
   readonly density: Density;
 }) {
-  const entities = useQuery(entitiesQuery(scope));
+  const refetchInterval = useScopePollInterval(scope);
+  const entities = useQuery({ ...entitiesQuery(scope), refetchInterval });
   return (
     <div className="flex flex-col gap-5 px-7 py-5">
       <Loaded

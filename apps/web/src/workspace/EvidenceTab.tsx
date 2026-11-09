@@ -18,6 +18,7 @@ import { PinButton, usePinState } from "./Pin.tsx";
 import { ProvenanceLayout, ProvenanceLink, useProvenanceCurrent } from "./Provenance.tsx";
 import {
   timelineQuery,
+  useScopePollInterval,
   type Scope,
   type Strength,
   type Timeline,
@@ -147,7 +148,8 @@ const emptyFor = (scope: Scope): DataTableEmpty => ({
  * The provenance dock sits beside the grid.
  */
 export function EvidenceTab({ scope }: { readonly scope: Scope }) {
-  const timeline = useQuery(timelineQuery(scope, "collectedAt"));
+  const refetchInterval = useScopePollInterval(scope);
+  const timeline = useQuery({ ...timelineQuery(scope, "collectedAt"), refetchInterval });
   return (
     <ProvenanceLayout>
       <div className="flex flex-col gap-4 px-6 py-4.5">

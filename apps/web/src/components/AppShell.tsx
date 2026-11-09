@@ -10,7 +10,7 @@ import {
 } from "@repo/ui";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { PanelTop, Search, Settings, Users } from "lucide-react";
+import { Bell, PanelTop, Search, Settings, Users } from "lucide-react";
 import type { ReactNode } from "react";
 import { meQuery } from "../me.ts";
 import { messageFor } from "../messages.ts";
@@ -84,6 +84,7 @@ export function AppShell({ children }: { readonly children: ReactNode }) {
 const DESTINATIONS = [
   { to: "/", label: "Search", Icon: Search },
   { to: "/cases", label: "Cases", Icon: PanelTop },
+  { to: "/monitors", label: "Monitors", Icon: Bell },
   { to: "/members", label: "Members", Icon: Users },
   { to: "/settings", label: "Settings", Icon: Settings },
 ] as const;

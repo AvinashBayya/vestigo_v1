@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { timed, unwrap } from "../api.ts";
 import { api, type paths } from "../client/index.ts";
 import type { components } from "../client/schema.gen.ts";
@@ -178,12 +178,42 @@ export const caseAnalysisQuery = (id: string) =>
       ),
   });
 
+/** While a run is still collecting, how often its read and its results tabs re-read. */
+export const WORKSPACE_POLL_MS = 3_000;
+
+/**
+ * A run is settled when its status is terminal and every found job has been
+ * fused: nothing it will show is still being collected. The API returns this
+ * flag (progress), so the client never re-derives it.
+ */
+const stillCollecting = (run: RunRead | undefined): boolean => run !== undefined && !run.settled;
+
 export const runQuery = (id: string) =>
   queryOptions({
     queryKey: ["run", id],
     queryFn: ({ signal }): Promise<RunRead> =>
       unwrap(api.GET("/api/v1/runs/{id}", { params: { path: { id } }, signal: timed(signal) })),
+    // While the run is still collecting, read it again so its status chip, the
+    // "still collecting" banner and the results tabs advance on their own; stop
+    // once it is settled or a read failed (a failed read keeps the last data,
+    // whose settled flag would otherwise never clear and would poll forever).
+    refetchInterval: (query) =>
+      query.state.status !== "error" && stillCollecting(query.state.data)
+        ? WORKSPACE_POLL_MS
+        : false,
   });
+
+/**
+ * How often a scope's results tabs (timeline, entities) should re-read, or
+ * false when there is nothing to wait for. A run polls while it is still
+ * collecting and stops once it settles; a case never polls, because it only
+ * shows what is already pinned to it. The run read it consults is the one
+ * `runQuery` keeps fresh, so this adds no extra request.
+ */
+export function useScopePollInterval(scope: Scope): number | false {
+  const run = useQuery({ ...runQuery(scope.id), enabled: scope.kind === "run" });
+  return scope.kind === "run" && stillCollecting(run.data) ? WORKSPACE_POLL_MS : false;
+}
 
 export type InvestigationList = Ok<"/api/v1/investigations", "get">;
 export type InvestigationRow = InvestigationList["items"][number];
@@ -212,6 +242,27 @@ export const investigationRunsQuery = (id: string) =>
         }),
       ),
   });
+
+/**
+ * Which run of an investigation to show or open: the newest.
+ *  - `none`: the investigation has no runs.
+ *  - `run`: the newest run; the whole list was read.
+ *  - `cut`: the page was cut at the read limit (`hasMore`). The API lists runs
+ *    oldest first (`listRuns`), so a cut page holds the oldest and the newest
+ *    is not in it. There is no newest-first read, so the client cannot name the
+ *    latest without one; it says so rather than show an older run as the newest.
+ */
+export type LatestRun =
+  | { readonly kind: "none" }
+  | { readonly kind: "run"; readonly run: InvestigationRunRow }
+  | { readonly kind: "cut" };
+
+/** The newest run of an investigation from the oldest-first page the API returns. */
+export function latestRunOf(list: InvestigationRunsList): LatestRun {
+  if (list.hasMore) return { kind: "cut" };
+  const run = list.items.at(-1);
+  return run === undefined ? { kind: "none" } : { kind: "run", run };
+}
 
 /** Every read a scope's tabs make, so one refresh re-reads all of them. */
 export const scopeKeys = (scope: Scope) => [

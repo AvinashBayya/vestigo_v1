@@ -16,6 +16,7 @@ import { PinButton, usePinState } from "./Pin.tsx";
 import { ProvenanceLayout, ProvenanceLink } from "./Provenance.tsx";
 import {
   timelineQuery,
+  useScopePollInterval,
   type Scope,
   type Strength,
   type Timeline,
@@ -137,7 +138,8 @@ function RangeStrip({
  */
 export function TimelineTab({ scope }: { readonly scope: Scope }) {
   const [order, setOrder] = useState<TimeOrder>("observedAt");
-  const timeline = useQuery(timelineQuery(scope, order));
+  const refetchInterval = useScopePollInterval(scope);
+  const timeline = useQuery({ ...timelineQuery(scope, order), refetchInterval });
   const orderControl = (
     <div role="group" aria-label="Order by" className="inline-flex">
       {(["observedAt", "collectedAt"] as const).map((value) => {

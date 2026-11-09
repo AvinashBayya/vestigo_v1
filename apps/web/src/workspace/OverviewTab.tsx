@@ -36,6 +36,7 @@ import {
   PINS_UNCOUNTED,
   runQuery,
   timelineQuery,
+  useScopePollInterval,
   type EntityList,
   type PinList,
   type RunRead,
@@ -100,8 +101,9 @@ function Metric({ label, children }: { readonly label: string; readonly children
 }
 
 function Summary({ scope }: { readonly scope: Scope }) {
-  const timeline = useQuery(timelineQuery(scope, "observedAt"));
-  const entities = useQuery(entitiesQuery(scope));
+  const refetchInterval = useScopePollInterval(scope);
+  const timeline = useQuery({ ...timelineQuery(scope, "observedAt"), refetchInterval });
+  const entities = useQuery({ ...entitiesQuery(scope), refetchInterval });
   return (
     <Card title={scope.kind === "run" ? "Run summary" : "Case summary"} className="lg:col-span-8">
       <div className="flex flex-col gap-4">
@@ -207,7 +209,8 @@ function Totals({
 }
 
 function KeyEntities({ scope }: { readonly scope: Scope }) {
-  const entities = useQuery(entitiesQuery(scope));
+  const refetchInterval = useScopePollInterval(scope);
+  const entities = useQuery({ ...entitiesQuery(scope), refetchInterval });
   return (
     <Card title="Key entities" className="lg:col-span-4">
       <Loaded query={entities} loading={<SummarySkeleton what="Reading the key entities" />}>

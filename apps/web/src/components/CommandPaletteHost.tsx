@@ -15,6 +15,7 @@ import {
   casesQuery,
   investigationRunsQuery,
   investigationsQuery,
+  latestRunOf,
   LIST_LIMIT,
   type CaseRow,
 } from "../workspace/queries.ts";
@@ -137,13 +138,15 @@ export function CommandPaletteHost({ button = true }: { readonly button?: boolea
     } else if (id.startsWith("investigation:")) {
       const investigationId = id.slice("investigation:".length);
       void queryClient
-        .fetchQuery(investigationRunsQuery(investigationId))
+        .query(investigationRunsQuery(investigationId))
         .then((runs) => {
-          const latest = runs.items[0];
-          if (latest !== undefined) {
+          // The newest run (the API lists them oldest first); home when there is
+          // none, or when the page was cut so the newest is not among those read.
+          const latest = latestRunOf(runs);
+          if (latest.kind === "run") {
             void navigate({
               to: "/runs/$runId/$tab",
-              params: { runId: latest.id, tab: "overview" },
+              params: { runId: latest.run.id, tab: "overview" },
             });
           } else {
             void navigate({ to: "/" });

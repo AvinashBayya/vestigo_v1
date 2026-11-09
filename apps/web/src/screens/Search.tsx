@@ -3,7 +3,6 @@ import {
   Card,
   HeroSearch,
   LoadingState,
-  NotBuilt,
   Notice,
   RunStatusChip,
   Skeleton,
@@ -12,9 +11,14 @@ import {
   TextLink,
   Unmeasured,
 } from "@repo/ui";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  EXTERNAL_BROWSER_DISCLAIMER,
+  generateBrowserSearchUrls,
+  parseTargetedQuery,
+} from "@repo/core";
 import { timed, unwrap } from "../api.ts";
 import { api } from "../client/index.ts";
 import {
@@ -28,6 +32,8 @@ import {
 } from "../collectors.ts";
 import { ProblemNotice } from "../components/ProblemNotice.tsx";
 import { Instant } from "../components/Values.tsx";
+import { messageFor } from "../messages.ts";
+import { unacknowledgedAlertsQuery } from "../monitors.ts";
 import {
   acceptedTypes,
   creditsText,
@@ -44,20 +50,28 @@ import {
   casesQuery,
   investigationRunsQuery,
   investigationsQuery,
+  latestRunOf,
   LIST_LIMIT,
   type InvestigationRow,
+  type InvestigationRunsList,
+  type LatestRun,
 } from "../workspace/queries.ts";
 
 interface Check {
   readonly target: string;
   /** The type the analyst chose; null lets detection decide. */
   readonly targetType: TargetType | null;
+  /**
+   * The sources to run (the source filter): their collector ids. Null runs
+   * every source that would; a subset runs only those. Set from the checkboxes.
+   */
+  readonly collectorIds?: readonly string[] | null;
 }
 
 /**
  * The search dashboard (docs/design/mockups/Main.dc.html, Dashboard-dark):
  * the hero question and one search shell. Before a search, three cards in the
- * drawn order: recent cases, monitor alerts (not built) and collector health.
+ * drawn order: recent cases, monitor alerts and collector health.
  * Investigating a target replaces them with the plan: what the target is,
  * which sources would run and which would not (with why), and the cost
  * estimate; nothing runs until the analyst starts it.
@@ -75,6 +89,9 @@ export function SearchDashboard() {
     readonly id: string;
     readonly target: string;
   } | null>(null);
+  // Sources the analyst unchecked for the next run; emptied for each new plan,
+  // so every source starts checked. A source not in it runs.
+  const [deselected, setDeselected] = useState<ReadonlySet<string>>(new Set());
 
   const estimate = useMutation({
     mutationFn: (check: Check) =>
@@ -89,6 +106,8 @@ export function SearchDashboard() {
       ),
     onSuccess: (plan, check) => {
       if (check.targetType === null) setOptions(typeOptions(plan));
+      // A fresh plan: every source it lists starts checked.
+      setDeselected(new Set());
     },
   });
 
@@ -109,7 +128,10 @@ export function SearchDashboard() {
       return unwrap(
         api.POST("/api/v1/investigations/{id}/runs", {
           params: { path: { id: opened.id } },
-          body: check.targetType === null ? {} : { targetType: check.targetType },
+          body: {
+            ...(check.targetType === null ? {} : { targetType: check.targetType }),
+            ...(check.collectorIds == null ? {} : { collectorIds: [...check.collectorIds] }),
+          },
           signal: timed(),
         }),
       );
@@ -124,6 +146,21 @@ export function SearchDashboard() {
   const checked = estimate.variables;
   // The plan on screen is for what was checked; once the text changes it no longer applies.
   const stale = plan !== undefined && input.trim() !== plan.input;
+
+  // The sources that would run, and the choice made over them. When every one
+  // is checked the run is started with no filter (all run, as before); a subset
+  // is passed as the chosen ids; none checked cannot be started.
+  const runnableIds = plan?.collectors.map((collector) => collector.collectorId) ?? [];
+  const selectedIds = runnableIds.filter((id) => !deselected.has(id));
+  const noneSelected = runnableIds.length > 0 && selectedIds.length === 0;
+  const toggleSource = (collectorId: string, run: boolean) => {
+    setDeselected((prev) => {
+      const next = new Set(prev);
+      if (run) next.delete(collectorId);
+      else next.add(collectorId);
+      return next;
+    });
+  };
 
   const check = (targetType: TargetType | null) => {
     const target = input.trim();
@@ -193,6 +230,16 @@ export function SearchDashboard() {
             <MonitorAlerts />
             <CollectorHealth />
           </div>
+          <TargetedDiscoverySection
+            onInvestigateUrl={(target) => {
+              setInput(target);
+              setEmptySubmit(false);
+              setOptions([]);
+              setChosen(null);
+              start.reset();
+              estimate.mutate({ target: target.trim(), targetType: null });
+            }}
+          />
         </div>
       ) : null}
 
@@ -213,7 +260,7 @@ export function SearchDashboard() {
               check(type === options[0] ? null : type);
             }}
           />
-          <CollectorsCard plan={plan} />
+          <CollectorsCard plan={plan} deselected={deselected} onToggle={toggleSource} />
           <ExcludedCard plan={plan} />
           <Card title="Cost and start">
             <div className="flex flex-col gap-4">
@@ -231,9 +278,16 @@ export function SearchDashboard() {
               <div className="flex flex-wrap items-center gap-4">
                 <Button
                   size="lg"
-                  disabled={stale || plan.collectors.length === 0 || start.isPending}
+                  disabled={
+                    stale || plan.collectors.length === 0 || noneSelected || start.isPending
+                  }
                   onClick={() => {
-                    start.mutate({ target: plan.input, targetType: checked.targetType });
+                    start.mutate({
+                      target: plan.input,
+                      targetType: checked.targetType,
+                      // Every source checked: no filter, so the run plans them all.
+                      collectorIds: selectedIds.length === runnableIds.length ? null : selectedIds,
+                    });
                   }}
                 >
                   {start.isPending ? "Starting…" : start.isError ? "Try again" : "Start run"}
@@ -241,6 +295,10 @@ export function SearchDashboard() {
                 {plan.collectors.length === 0 ? (
                   <p className="text-prose-small text-ink-secondary">
                     No source can run for this target, so there is nothing to start.
+                  </p>
+                ) : noneSelected ? (
+                  <p className="text-prose-small text-ink-secondary">
+                    No source is selected. Check at least one source above to start a run.
                   </p>
                 ) : null}
               </div>
@@ -373,36 +431,69 @@ function CostLine({
   );
 }
 
-function CollectorsCard({ plan }: { readonly plan: Estimate }) {
+function CollectorsCard({
+  plan,
+  deselected,
+  onToggle,
+}: {
+  readonly plan: Estimate;
+  readonly deselected: ReadonlySet<string>;
+  readonly onToggle: (collectorId: string, run: boolean) => void;
+}) {
+  const selectedCount = plan.collectors.filter(
+    (collector) => !deselected.has(collector.collectorId),
+  ).length;
   return (
-    <Card title={`Sources that would run (${String(plan.collectors.length)})`}>
+    <Card title={`Sources to run (${String(selectedCount)} of ${String(plan.collectors.length)})`}>
       {plan.collectors.length === 0 ? (
         <p className="text-prose-small text-ink-secondary">
           None. Every source is listed below with the reason it would not run.
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border-subtle">
-          {plan.collectors.map((collector) => (
-            <li
-              key={collector.collectorId}
-              className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
-            >
-              <div className="flex min-w-0 flex-col gap-0.75">
-                <p className="text-ui-strong text-ink-primary">{collector.sourceLabel}</p>
-                <p className="text-caption text-ink-muted">
-                  As {TYPE_LABEL[collector.targetType].toLowerCase()}. {credentialsText(collector)}
-                </p>
-              </div>
-              {collector.estimatedCredits === null ? (
-                <Unmeasured reason={unmeasuredReason(collector)} />
-              ) : (
-                <p className="font-mono text-mono-body text-ink-primary">
-                  {creditsText(collector.estimatedCredits)}
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="pb-2 text-caption text-ink-muted">
+            Uncheck a source to leave it out of this run.
+          </p>
+          <ul className="flex flex-col divide-y divide-border-subtle">
+            {plan.collectors.map((collector) => {
+              const run = !deselected.has(collector.collectorId);
+              return (
+                <li
+                  key={collector.collectorId}
+                  className="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                >
+                  <label className="flex min-w-0 grow cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={run}
+                      aria-label={`Run ${collector.sourceLabel}`}
+                      onChange={(event) => {
+                        onToggle(collector.collectorId, event.target.checked);
+                      }}
+                      className="size-4 shrink-0 cursor-pointer accent-accent"
+                    />
+                    <span className="flex min-w-0 flex-col gap-0.75">
+                      <span className="text-ui-strong text-ink-primary">
+                        {collector.sourceLabel}
+                      </span>
+                      <span className="text-caption text-ink-muted">
+                        As {TYPE_LABEL[collector.targetType].toLowerCase()}.{" "}
+                        {credentialsText(collector)}
+                      </span>
+                    </span>
+                  </label>
+                  {collector.estimatedCredits === null ? (
+                    <Unmeasured reason={unmeasuredReason(collector)} />
+                  ) : (
+                    <p className="font-mono text-mono-body text-ink-primary">
+                      {creditsText(collector.estimatedCredits)}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </Card>
   );
@@ -565,44 +656,104 @@ function InvestigationItem({
   readonly onInvestigate: (target: string) => void;
 }) {
   const runs = useQuery(investigationRunsQuery(investigation.id));
-  const latestRun = runs.data?.items[0] ?? null;
+  const latest: LatestRun | null = runs.data === undefined ? null : latestRunOf(runs.data);
 
   return (
     <li className="flex flex-col gap-1 py-1.5 first:pt-0 last:pb-0">
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-body-strong text-ink-primary">{investigation.title}</span>
-        {latestRun !== null ? <RunStatusChip status={latestRun.status} /> : null}
+        {latest?.kind === "run" ? <RunStatusChip status={latest.run.status} /> : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-meta text-ink-muted">
         <span>
           Target: <span className="font-mono text-mono-meta">{investigation.target}</span> ·{" "}
           <Instant iso={investigation.createdAt} className="text-mono-meta" />
         </span>
-        {latestRun !== null ? (
-          <div className="flex items-center gap-2">
-            <TextLink asChild size="meta">
-              <Link to="/runs/$runId/$tab" params={{ runId: latestRun.id, tab: "overview" }}>
-                Workspace
-              </Link>
-            </TextLink>
-            <span aria-hidden="true">·</span>
-            <TextLink asChild size="meta">
-              <Link to="/runs/$runId/$tab" params={{ runId: latestRun.id, tab: "report" }}>
-                Brief
-              </Link>
-            </TextLink>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => onInvestigate(investigation.target)}
-            className="cursor-pointer text-small text-link hover:underline"
-          >
-            Investigate →
-          </button>
-        )}
+        <InvestigationRuns
+          investigation={investigation}
+          runs={runs}
+          latest={latest}
+          onInvestigate={onInvestigate}
+        />
       </div>
     </li>
+  );
+}
+
+/**
+ * The trailing slot of an investigation row: links into its newest run once
+ * the runs read is in, or an honest stand-in before it is. A read that is
+ * still pending, or that failed, is never shown as "no runs": it would offer
+ * to start one when one may already exist (§1). Only a read that came back
+ * empty offers to investigate; a page cut at the limit says the newest is not
+ * among those read, rather than show an older run as the newest.
+ */
+function InvestigationRuns({
+  investigation,
+  runs,
+  latest,
+  onInvestigate,
+}: {
+  readonly investigation: InvestigationRow;
+  readonly runs: UseQueryResult<InvestigationRunsList>;
+  readonly latest: LatestRun | null;
+  readonly onInvestigate: (target: string) => void;
+}) {
+  if (latest?.kind === "run") {
+    const { run } = latest;
+    return (
+      <div className="flex items-center gap-2">
+        <TextLink asChild size="meta">
+          <Link to="/runs/$runId/$tab" params={{ runId: run.id, tab: "overview" }}>
+            Workspace
+          </Link>
+        </TextLink>
+        <span aria-hidden="true">·</span>
+        <TextLink asChild size="meta">
+          <Link to="/runs/$runId/$tab" params={{ runId: run.id, tab: "report" }}>
+            Brief
+          </Link>
+        </TextLink>
+      </div>
+    );
+  }
+  if (latest?.kind === "cut") {
+    // More runs than were read, listed oldest first: the newest is not among them (§1).
+    return (
+      <Unmeasured
+        summary="Latest run not shown."
+        reason="This investigation has more runs than were read here, which are listed oldest first, so the most recent is not among them."
+      />
+    );
+  }
+  if (runs.isPending) {
+    return (
+      <span role="status" className="text-meta text-ink-muted">
+        Reading runs…
+      </span>
+    );
+  }
+  if (runs.isError) {
+    // Not an alert: an em dash with its reason, so the row never claims no runs.
+    const message = messageFor(runs.error);
+    return (
+      <Unmeasured
+        summary="Runs unread."
+        reason={`This investigation's runs could not be read${message.code === null ? "" : ` (${message.code})`}.`}
+      />
+    );
+  }
+  // The read is in and there are no runs: this target has not been investigated yet.
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onInvestigate(investigation.target);
+      }}
+      className="cursor-pointer text-small text-link hover:underline"
+    >
+      Investigate →
+    </button>
   );
 }
 
@@ -654,16 +805,54 @@ function RecentInvestigations({
   return <Card title="Recent investigations">{body}</Card>;
 }
 
-/** Drawn in the mockup; nothing backs it, so it is the Not built card (§8). No count, no rows. */
+/** The alerts monitors raised that no analyst has acknowledged yet, with a link to the screen that acknowledges them. */
 function MonitorAlerts() {
+  const alerts = useQuery(unacknowledgedAlertsQuery);
+  const allMonitors = (
+    <TextLink asChild size="meta">
+      <Link to="/monitors">All monitors</Link>
+    </TextLink>
+  );
+  let body: ReactNode;
+  if (alerts.isPending) {
+    body = <CardSkeleton what="Reading alerts." />;
+  } else if (alerts.isError) {
+    body = <ProblemNotice error={alerts.error} onRetry={() => void alerts.refetch()} />;
+  } else {
+    const { items, hasMore } = alerts.data;
+    body = (
+      <div className="flex flex-col gap-3">
+        {hasMore ? (
+          <Notice className="text-caption">
+            Partial: only the first {String(items.length)} unacknowledged alerts could be read, so
+            the total is not known here.
+          </Notice>
+        ) : (
+          <p className="text-meta text-ink-muted">{String(items.length)} unacknowledged</p>
+        )}
+        {items.length === 0 ? (
+          <p className="text-prose-small text-ink-secondary">
+            No unacknowledged alerts. A monitor raises one when it finds new evidence.
+          </p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border-subtle">
+            {items.slice(0, 3).map((item) => (
+              <li key={item.id} className="py-1.5 first:pt-0 last:pb-0">
+                <p className="text-body-strong text-ink-primary">{item.title}</p>
+                <p className="text-meta text-ink-muted">
+                  raised <Instant iso={item.createdAt} className="text-mono-meta" />
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
   return (
-    <section aria-label="Monitor alerts" className="flex">
-      <NotBuilt
-        title="Monitor alerts"
-        needs="Monitors do not exist: nothing watches a target between runs, and no endpoint lists alerts."
-        className="w-full"
-      />
-    </section>
+    <Card title="Monitor alerts" end={allMonitors} className="w-full">
+      {body}
+    </Card>
   );
 }
 
@@ -759,4 +948,142 @@ function CollectorHealth() {
     );
   }
   return <Card title="Collector health">{body}</Card>;
+}
+
+export function TargetedDiscoverySection({
+  onInvestigateUrl,
+}: {
+  readonly onInvestigateUrl: (url: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [urlInput, setUrlInput] = useState("");
+
+  const parsed = useMemo(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return null;
+    try {
+      return parseTargetedQuery(trimmed);
+    } catch {
+      return null;
+    }
+  }, [query]);
+
+  const searchUrls = useMemo(() => {
+    if (!parsed || !parsed.isValid) return [];
+    return generateBrowserSearchUrls(parsed);
+  }, [parsed]);
+
+  return (
+    <Card title="Targeted public-web discovery ($0 no-key search)">
+      <div className="flex flex-col gap-4">
+        <p className="text-prose-small text-ink-secondary">
+          Target public websites using standard search operators (e.g.{" "}
+          <span className="font-mono font-medium">site:</span>,{" "}
+          <span className="font-mono font-medium">filetype:</span>, quoted phrases). Launch
+          user-initiated browser searches without API fees, or import discovered URLs into Vestigo.
+        </p>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="discovery-query-input" className="text-ui font-medium text-ink-primary">
+            Search operator query
+          </label>
+          <input
+            id="discovery-query-input"
+            type="text"
+            className="w-full rounded border border-border-strong bg-surface-base px-3 py-2 text-ui text-ink-primary placeholder:text-ink-muted focus:border-accent focus:outline-none"
+            placeholder='e.g. site:reuters.com "oil spill" filetype:pdf'
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+            }}
+          />
+        </div>
+
+        {parsed !== null ? (
+          <div className="flex flex-col gap-3 rounded bg-surface-subtle p-3">
+            {parsed.validationErrors.length > 0 ? (
+              <div className="flex flex-col gap-1 text-small text-status-failed-ink">
+                {parsed.validationErrors.map((err, i) => (
+                  <p key={i} role="alert">
+                    {err}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+
+            {parsed.unsupportedOperators.length > 0 ? (
+              <div className="flex flex-col gap-1">
+                {parsed.unsupportedOperators.map((op, i) => (
+                  <Notice key={i}>
+                    <span className="font-mono font-medium">{op.operator}:</span> {op.reason}
+                  </Notice>
+                ))}
+              </div>
+            ) : null}
+
+            {parsed.isValid ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-caption text-ink-muted">Normalized query:</span>
+                  <span className="rounded bg-surface-elevated px-2 py-0.5 font-mono text-small text-ink-primary">
+                    {parsed.normalizedQuery}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-caption text-ink-muted">
+                    Open in external search engine:
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {searchUrls.map((link) => (
+                      <a
+                        key={link.engine}
+                        href={link.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded border border-border-strong bg-surface-base px-3 py-1.5 text-ui font-medium text-ink-primary hover:bg-surface-elevated"
+                      >
+                        {link.name} ↗
+                      </a>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-caption text-ink-muted">{EXTERNAL_BROWSER_DISCLAIMER}</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-2 border-t border-border-subtle pt-3">
+          <label htmlFor="import-url-input" className="text-ui font-medium text-ink-primary">
+            Found a target URL? Import into Vestigo
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="import-url-input"
+              type="text"
+              className="flex-1 rounded border border-border-strong bg-surface-base px-3 py-2 text-ui text-ink-primary placeholder:text-ink-muted focus:border-accent focus:outline-none"
+              placeholder="https://example.com/article-or-document"
+              value={urlInput}
+              onChange={(e) => {
+                setUrlInput(e.target.value);
+              }}
+            />
+            <Button
+              disabled={urlInput.trim() === ""}
+              onClick={() => {
+                if (urlInput.trim()) {
+                  onInvestigateUrl(urlInput.trim());
+                  setUrlInput("");
+                }
+              }}
+            >
+              Investigate URL
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
 }

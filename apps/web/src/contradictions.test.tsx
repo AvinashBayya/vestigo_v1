@@ -7,7 +7,7 @@
  * analysis stored before the field existed, a person-gated refusal (Locked, not
  * an error), and a run scope (which has no case analysis).
  */
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Contradictions } from "./workspace/Contradictions.tsx";
@@ -30,7 +30,7 @@ const fetchMock = vi.hoisted(() => {
   vi.stubGlobal("fetch", mock);
   return mock;
 });
-const { fakeApi } = workspaceApi(fetchMock);
+const { fakeApi, requestsTo } = workspaceApi(fetchMock);
 
 afterEach(() => {
   cleanup();
@@ -235,5 +235,100 @@ describe("the Contradictions panel", () => {
     fakeApi();
     renderPanel({ kind: "run", id: RUN_ID });
     expect(screen.getByText(/Open or build a case/)).toBeTruthy();
+  });
+
+  it("offers to request an analysis when none has run, posts it, and reflects the new state", async () => {
+    const noneYet = {
+      state: "NONE_YET",
+      reason: "[none]",
+      caseId: CASE_ID,
+      currentInputHash: "sha256:x",
+      analysis: null,
+    };
+    const pending = analysisRead({
+      state: "PENDING",
+      analysis: { ...analysisRead().analysis, status: "PENDING", finishedAt: null, document: null },
+    });
+    let requested = false;
+    fakeApi({
+      [`GET /api/v1/cases/${CASE_ID}/analyses`]: () => Response.json(requested ? pending : noneYet),
+      [`POST /api/v1/cases/${CASE_ID}/analyses`]: () => {
+        requested = true;
+        return Response.json({ state: "PENDING" }, { status: 202 });
+      },
+    });
+    renderPanel(caseScope);
+    await screen.findByText(/No analysis of this case has run yet/);
+
+    fireEvent.click(screen.getByRole("button", { name: "Request analysis" }));
+    await waitFor(() => {
+      expect(requestsTo("POST", `/api/v1/cases/${CASE_ID}/analyses`)).toHaveLength(1);
+    });
+    // The read is re-fetched, so the panel advances to "running" and no longer offers a request.
+    expect(await screen.findByText(/running/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Request analysis" })).toBeNull();
+  });
+
+  it("offers to try a failed analysis again, and shows a person-gated refusal as Locked, not an error", async () => {
+    fakeApi({
+      [`GET /api/v1/cases/${CASE_ID}/analyses`]: () =>
+        Response.json(
+          analysisRead({
+            state: "FAILED",
+            analysis: {
+              ...analysisRead().analysis,
+              status: "FAILED",
+              document: null,
+              error: { code: "CASE_TOO_LARGE", message: "[too large]" },
+            },
+          }),
+        ),
+      [`POST /api/v1/cases/${CASE_ID}/analyses`]: () =>
+        problem(403, "MODULE_NOT_IN_PLAN", "[refused; nothing was returned]", { locked: LOCKED }),
+    });
+    renderPanel(caseScope);
+    fireEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    // The refusal is the shared Locked block, never a success or a bare error.
+    expect(await screen.findByText("[the next step]")).toBeTruthy();
+    // Nothing changed underneath: the failure the read reported is still shown.
+    expect(screen.getByText(/CASE_TOO_LARGE/)).toBeTruthy();
+    expect(requestsTo("POST", `/api/v1/cases/${CASE_ID}/analyses`)).toHaveLength(1);
+  });
+
+  it("offers to update a stale analysis, but not a running one or a current complete one", async () => {
+    // STALE: an update is offered.
+    fakeApi(analyses(analysisRead({ state: "STALE" })));
+    renderPanel(caseScope);
+    expect(await screen.findByRole("button", { name: "Update analysis" })).toBeTruthy();
+    cleanup();
+
+    // PENDING: one is already running, so none is offered.
+    fakeApi(
+      analyses(
+        analysisRead({
+          state: "PENDING",
+          analysis: {
+            ...analysisRead().analysis,
+            status: "PENDING",
+            finishedAt: null,
+            document: null,
+          },
+        }),
+      ),
+    );
+    renderPanel(caseScope);
+    await screen.findByText(/running/);
+    expect(
+      screen.queryByRole("button", { name: /Request analysis|Try again|Update analysis/ }),
+    ).toBeNull();
+    cleanup();
+
+    // COMPLETE and current, with its contradictions: it describes the case as it is now.
+    fakeApi(analyses(analysisRead()));
+    renderPanel(caseScope);
+    await screen.findByText("registrar");
+    expect(
+      screen.queryByRole("button", { name: /Request analysis|Try again|Update analysis/ }),
+    ).toBeNull();
   });
 });
