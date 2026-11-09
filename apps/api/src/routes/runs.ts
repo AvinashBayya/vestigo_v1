@@ -286,6 +286,13 @@ export const runRoutes =
           body: z.object({
             /** The target's type, when the analyst knows it; otherwise it is detected. */
             targetType: z.enum(TARGET_TYPES).optional(),
+            /**
+             * The sources to run (the source filter): their collector ids, as
+             * the estimate lists them. Omitted runs every source that would.
+             * A listed source that cannot run anyway stays excluded with its
+             * own reason; the others are excluded as not selected.
+             */
+            collectorIds: z.array(z.string().min(1)).min(1).optional(),
           }),
           response: { 202: RunView, ...PROTECTED_ERRORS, ...CONFLICT },
         },
@@ -319,7 +326,11 @@ export const runRoutes =
         try {
           // Enqueued inside the run's own transaction: if it rolls back, the
           // planning job finds no run and dead-letters, visibly.
-          await runs.investigations.enqueueRun(principal.tenantId, run.id);
+          await runs.investigations.enqueueRun(
+            principal.tenantId,
+            run.id,
+            request.body.collectorIds ?? null,
+          );
         } catch {
           throw new HttpError(503, "QUEUE_UNAVAILABLE", "The job queue could not take the run.");
         }

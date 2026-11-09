@@ -27,12 +27,15 @@ import { settingsRoutes } from "./routes/settings.ts";
 import { credentialRoutes } from "./routes/credentials.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { investigationRoutes } from "./routes/investigations.ts";
+import { alertRoutes } from "./routes/alerts.ts";
+import { monitorRoutes } from "./routes/monitors.ts";
 import { meRoutes } from "./routes/me.ts";
 import { openapiRoutes } from "./routes/openapi.ts";
 import { personRoutes } from "./routes/person.ts";
 import { reportRoutes } from "./routes/reports.ts";
 import { runRoutes } from "./routes/runs.ts";
 import { scopeAuthorisationRoutes } from "./routes/scope-authorisations.ts";
+import { searchDiscoveryRoutes } from "./routes/search-discovery.ts";
 import { sessionRoutes } from "./routes/session.ts";
 import { accessServicesFor, authOf, requireServices, type Services } from "./services.ts";
 
@@ -129,6 +132,9 @@ export async function buildApp(options: AppOptions) {
   await app.register(settingsRoutes);
   await app.register(estimateRoutes(services));
   await app.register(collectorRoutes(services));
+  await app.register(searchDiscoveryRoutes(services));
+  await app.register(alertRoutes);
+  await app.register(monitorRoutes);
 
   return app;
 }

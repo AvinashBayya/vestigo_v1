@@ -290,6 +290,38 @@ export const ROUTE_GATING: Readonly<Record<string, Readonly<Record<string, Route
     "GET /api/v1/investigations": { why: "The analyst's own titles and targets." },
     "GET /api/v1/investigations/:id": { why: "The analyst's own title and target." },
   },
+  "apps/api/src/routes/monitors.ts": {
+    "POST /api/v1/monitors": {
+      why: "The analyst's own monitor fields: name, target and schedule.",
+    },
+    "GET /api/v1/monitors": { why: "The analyst's own monitor fields: name, target and schedule." },
+    "GET /api/v1/monitors/:id": {
+      why: "The analyst's own monitor fields: name, target and schedule.",
+    },
+    "PATCH /api/v1/monitors/:id": {
+      why: "Changes the analyst's own monitor fields and returns them; collects nothing.",
+    },
+    "POST /api/v1/monitors/:id/enable": {
+      why: "Toggles the analyst's own monitor on and returns its fields.",
+    },
+    "POST /api/v1/monitors/:id/disable": {
+      why: "Toggles the analyst's own monitor off and returns its fields.",
+    },
+    "DELETE /api/v1/monitors/:id": { why: "Removes the analyst's own monitor; returns nothing." },
+    // Correlates collected evidence to the target and may raise an alert from it.
+    "POST /api/v1/monitors/:id/tick": "shared-gate",
+  },
+  "apps/api/src/routes/alerts.ts": {
+    // An alert links to collected evidence that can rest on person data.
+    "GET /api/v1/alerts": "shared-gate",
+    "GET /api/v1/alerts/:id": "shared-gate",
+    "POST /api/v1/alerts/:id/ack": "shared-gate",
+  },
+  "apps/api/src/routes/search-discovery.ts": {
+    "POST /api/v1/search/discovery": {
+      why: "Parses the query and builds external browser-search URLs and live external results; reads nothing collected.",
+    },
+  },
   "apps/api/src/routes/estimates.ts": {
     "POST /api/v1/estimates": {
       why: "Plans from the catalogue and the tenant's entitlement; reads nothing collected.",
