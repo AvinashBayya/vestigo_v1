@@ -1,3 +1,4 @@
+
 # CLAUDE.md
 
 Standing rules for this repository. Read this before writing code. If a task appears to require breaking one of these rules, stop and ask rather than working around it.
@@ -31,11 +32,29 @@ Tests enforce this. Do not weaken or skip them.
 
 ## 3. Collection safety and legality
 
-- Passive collection by default. Active scanning requires a recorded scope authorisation naming tenant, target and authoriser.
-- Never add scrapers for Instagram, Facebook or X, and never work around a platform's terms of service.
+- Collection mode (passive/active) is a per-collector configuration choice made by the operator. Active scanning tools (Nuclei, Naabu, httpx) are integrated as available adapters; the operator authorizes targets and configures scope. Vestigo records the configuration and results but does not gate active scanning beyond operator confirmation.
+- Platform scrapers (Instagram, Facebook, X, LinkedIn, etc.) are permitted as operator-configured local adapters. The operator enables/disables them and is responsible for complying with the platform's terms in their deployment. Vestigo provides the integration layer, normalization, and UI; it does not enforce third-party platform policies on behalf of operators.
 - Targets are passed to tool containers as arguments. Never interpolate user input into a shell command.
 - Any fetch of a user-supplied URL goes through SSRF protection: no private ranges, no cloud metadata endpoints, no redirect chains that escape the allowlist.
-- Every collector registry entry states its data licence and whether commercial use is permitted. If in doubt, mark it blocked and ask.
+- Every collector registry entry states its data licence and commercial-use verdict. Default new/unknown sources to UNVERIFIED (listed, not run) until the operator reviews and flips the verdict. Do not permanently block sources—UNVERIFIED is the holding state, and flipping to PERMITTED is a normal code change after review.
+- Do not build CAPTCHA-solving, credential-stuffing, or exploitation features. Everything else (scrapers, crawlers, agents, OSINT tools) is fair game as a pluggable adapter.
+
+## 3B. No silent removal of planned capability
+
+Claude must never delete, skip, stub, or downgrade a planned collector, scraper, agent, crawler, or intelligence source because it relates to cybersecurity, social media, or OSINT.
+
+If a capability is restricted:
+- Implement the adapter/collector code.
+- Mark it with the appropriate state (requires_credential, requires_license, requires_authorization, requires_legal_review, or disabled).
+- Preserve the collector contract and registry entry.
+- Explain the restriction in one sentence, then proceed with the integration work.
+
+If a capability is blocked by licence:
+- Keep the declaration.
+- Keep the BLOCKED verdict only if the licence genuinely prohibits the use case.
+- Otherwise flip to UNVERIFIED pending review, or PERMITTED if terms allow.
+
+Claude must not use "restrictions" as a reason to avoid writing integration code.
 
 ## 4. LLM rules
 
