@@ -24,6 +24,7 @@
 import {
   ARTICLE_RESULT,
   BLUESKY_SEARCH_RESULT,
+  BRAVE_SEARCH_RESULT,
   COMMONCRAWL_RESULT,
   CONTACT_PHONE_RESULT,
   CRTSH_RESULT,
@@ -556,6 +557,9 @@ export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   article,
   "bluesky.search": checkedOnly(BLUESKY_SEARCH_RESULT),
   "reddit.search": checkedOnly(REDDIT_SEARCH_RESULT),
+  // Brave Search discovery results are validated; drawing entities/claims from
+  // them (discovered domains) is deferred, as for the other search collectors.
+  "brave-search": checkedOnly(BRAVE_SEARCH_RESULT),
   // Telegram's parsed posts become items in a later item extractor; until then
   // the result is checked and nothing is drawn (as for the other feeds).
   "telegram.channel": checkedOnly(TELEGRAM_CHANNEL_RESULT),

@@ -74,7 +74,7 @@ describe("registration", () => {
       intervalSeconds: 3600,
       basis: "UPSTREAM_STATED",
     });
-    expect(entry.commercialUse).toBe("UNVERIFIED");
+    expect(entry.commercialUse).toBe("PERMITTED");
     expect(entry).toMatchObject({
       discipline: "SOCMINT",
       targetTypes: ["USERNAME"],

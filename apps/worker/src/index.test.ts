@@ -129,11 +129,18 @@ describe("the worker, deployed as pools selected by queue", () => {
       }
       const planned = await db.withTenant(tenantId, ({ repos }) => repos.runs.findById(run.id));
       expect(planned?.status).toBe("RUNNING");
-      // GDELT's news, the only domain collector on a PERMITTED source, is
-      // planned; none runs, because no pool here collects. The five on an
-      // UNVERIFIED source are left out, as an unverified source never runs
-      // (access methods, 2026-10-16; until then they were planned here).
-      expect(jobs.map((job) => job.collectorId).sort()).toEqual(["news"]);
+      // After Phase 1, the PERMITTED collectors that accept a DOMAIN are planned:
+      // GDELT's news, plus crtsh, dns, wayback and the newly-registered Brave
+      // Search. None runs here, because no pool collects. commoncrawl and rdap
+      // stay on an UNVERIFIED source and are left out, as an unverified source
+      // never runs (access methods, 2026-10-16).
+      expect(jobs.map((job) => job.collectorId).sort()).toEqual([
+        "brave-search",
+        "crtsh",
+        "dns",
+        "news",
+        "wayback",
+      ]);
       const { excluded } = JSON.parse(JSON.stringify(planned?.plan)) as {
         readonly excluded: readonly { readonly collectorId: string; readonly reason: string }[];
       };
@@ -145,10 +152,7 @@ describe("the worker, deployed as pools selected by queue", () => {
         ),
       ).toEqual({
         commoncrawl: "UNVERIFIED_SOURCE_NOT_ALLOWED",
-        crtsh: "UNVERIFIED_SOURCE_NOT_ALLOWED",
-        dns: "UNVERIFIED_SOURCE_NOT_ALLOWED",
         rdap: "UNVERIFIED_SOURCE_NOT_ALLOWED",
-        wayback: "UNVERIFIED_SOURCE_NOT_ALLOWED",
       });
       expect(jobs.every((job) => job.status === "QUEUED" && job.attempts === 0)).toBe(true);
     } finally {
@@ -189,7 +193,10 @@ describe("the worker, deployed as pools selected by queue", () => {
       const jobs = await db.withTenant(tenantId, ({ repos }) =>
         repos.jobs.listForRun(run.id, { limit: 100 }),
       );
-      expect(jobs).toEqual([]);
+      // Open is off, so news (open-only) is refused; Brave Search reaches its
+      // source through the official method, which is enabled here, so it is the
+      // one collector planned.
+      expect(jobs.map((job) => job.collectorId)).toEqual(["brave-search"]);
       const { excluded } = JSON.parse(JSON.stringify(planned?.plan)) as {
         readonly excluded: readonly { readonly collectorId: string; readonly reason: string }[];
       };

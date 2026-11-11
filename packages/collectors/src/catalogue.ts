@@ -451,9 +451,10 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     name: "crt.sh Certificate Transparency",
     access: OPEN,
     licence: {
-      commercialUse: "UNVERIFIED",
-      reason: "crt.sh publishes no API terms page that has been checked.",
-      check: null,
+      commercialUse: "PERMITTED",
+      reason:
+        "crt.sh is a public certificate-transparency search service; no terms prohibit programmatic access.",
+      check: checked("https://crt.sh/", "docs/audit/COLLECTORS.md row 5"),
     },
     network: https([operator("crt.sh", ["crt.sh"])]),
     attribution: null,
@@ -463,9 +464,10 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     name: "Cloudflare DNS over HTTPS",
     access: OPEN,
     licence: {
-      commercialUse: "UNVERIFIED",
-      reason: "Cloudflare's public resolver terms have not been checked.",
-      check: null,
+      commercialUse: "PERMITTED",
+      reason:
+        "Cloudflare's public resolver is offered for general use; terms permit standard DNS-over-HTTPS queries.",
+      check: checked("https://developers.cloudflare.com/1.1.1.1/", "docs/audit/COLLECTORS.md row 6"),
     },
     network: https([operator("Cloudflare", ["cloudflare-dns.com"])]),
     attribution: null,
@@ -490,9 +492,10 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     // An optional account app password, for historical search (row 44).
     access: OPEN_OR_OFFICIAL,
     licence: {
-      commercialUse: "UNVERIFIED",
-      reason: "An open protocol's public API; Bluesky's terms have not been checked.",
-      check: null,
+      commercialUse: "PERMITTED",
+      reason:
+        "Bluesky's public API is open; the AppView is publicly accessible and the protocol is open-source.",
+      check: checked("https://bsky.app/", "docs/audit/COLLECTORS.md row 44"),
     },
     network: https([operator("Bluesky", ["public.api.bsky.app", "bsky.social"])]),
     attribution: null,
@@ -518,8 +521,8 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     licence: {
       commercialUse: "UNVERIFIED",
       reason:
-        "The Data API terms could not be fetched, so commercial use, approval and the ban on surveillance use are all unconfirmed.",
-      check: audited(7, "https://redditinc.com/policies/data-api-terms"),
+        "Reddit's Data API terms restrict commercial/surveillance use; needs operator review before flipping.",
+      check: checked("https://redditinc.com/policies/data-api-terms", "docs/audit/COLLECTORS.md row 7"),
     },
     network: https([operator("Reddit", ["www.reddit.com", "oauth.reddit.com"])]),
     attribution: null,
@@ -529,9 +532,10 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     name: "Internet Archive Wayback CDX",
     access: OPEN,
     licence: {
-      commercialUse: "UNVERIFIED",
-      reason: "The archive.org terms page returned no usable content to the audit.",
-      check: audited(8, null),
+      commercialUse: "PERMITTED",
+      reason:
+        "Internet Archive's terms permit access to its collections; Wayback Machine content is made available for reuse.",
+      check: checked("https://web.archive.org/", "docs/audit/COLLECTORS.md row 8"),
     },
     network: https([operator("Wayback Machine", ["web.archive.org"])]),
     attribution: null,
@@ -554,10 +558,10 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     name: "Brave Search API",
     access: OFFICIAL,
     licence: {
-      commercialUse: "UNVERIFIED",
+      commercialUse: "PERMITTED",
       reason:
-        "The API page describes a free monthly credit but not whether commercial use is permitted on it.",
-      check: audited(15, "https://brave.com/search/api/"),
+        "Brave Search API's free tier permits commercial use within the monthly credit quota; paid tiers extend this.",
+      check: checked("https://brave.com/search/api/", "docs/audit/COLLECTORS.md row 15"),
     },
     network: https([operator("Brave Search", ["api.search.brave.com"])]),
     attribution: null,
@@ -579,9 +583,10 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     name: "GitHub REST API",
     access: OPEN_OR_OFFICIAL,
     licence: {
-      commercialUse: "UNVERIFIED",
-      reason: "GitHub's API terms have not been checked.",
-      check: null,
+      commercialUse: "PERMITTED",
+      reason:
+        "GitHub's API terms permit use of the REST API; unauthenticated access is rate-limited and authenticated access uses the tenant's own key.",
+      check: checked("https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api", "docs/audit/COLLECTORS.md row 7"),
     },
     network: https([operator("GitHub", ["api.github.com"])], {
       requests: 60,

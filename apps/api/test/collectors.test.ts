@@ -108,9 +108,11 @@ describe("the collector list", () => {
 
   it("says null, with why, for a collector or source with no method that can run here: never 0, never an empty list (RELEASE-BLOCKING, acceptance c)", async () => {
     const list = (await owner.request("GET", "/api/v1/collectors")).json<CollectorList>();
-    const crtsh = list.items.find((item) => item.id === "crtsh");
-    expect(crtsh?.availability).toBe("UNVERIFIED");
-    expect(crtsh?.access).toMatchObject({
+    // rdap is still held at UNVERIFIED (Phase 1 flipped crtsh/dns/wayback/github/
+    // bluesky to PERMITTED), so it is the example of a source that cannot run here.
+    const rdap = list.items.find((item) => item.id === "rdap");
+    expect(rdap?.availability).toBe("UNVERIFIED");
+    expect(rdap?.access).toMatchObject({
       runsVia: null,
       refusal: "UNVERIFIED_SOURCE_NOT_ALLOWED",
       reason: expect.stringContaining("an unverified source never runs") as unknown,

@@ -15,6 +15,7 @@ import {
   type SourceDeclaration,
 } from "@repo/collectors";
 import { loadFixture, startHarness, type Fixture } from "@repo/collectors/testing";
+import type { CollectorSecret } from "@repo/collectors";
 import { EmptyTargetError, type TargetType } from "@repo/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -551,6 +552,7 @@ const NOTHING_DRAWN_CASES: readonly {
   readonly collectorId: string;
   readonly target: { readonly type: TargetType; readonly value: string };
   readonly fixtures: readonly Fixture[];
+  readonly credentials?: ReadonlyMap<string, CollectorSecret>;
 }[] = [
   // The monitoring collectors (2026-10-17), on their recorded answers.
   {
@@ -572,6 +574,16 @@ const NOTHING_DRAWN_CASES: readonly {
     collectorId: "telegram.channel",
     target: { type: "USERNAME", value: "fixture_channel" },
     fixtures: [loadFixture("telegram", "channel-found")],
+  },
+  // Brave Search needs its tenant API key; a synthetic test token is supplied so
+  // the collector reaches its (synthetic) recorded answer. checkedOnly draws nothing.
+  {
+    collectorId: "brave-search",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [loadFixture("brave-search", "discovery-found")],
+    credentials: new Map<string, CollectorSecret>([
+      ["brave-search", { expose: () => "[test-token]" }],
+    ]),
   },
 ];
 
@@ -756,7 +768,11 @@ describe("extractors", () => {
         fixtures: testCase.fixtures,
       });
       try {
-        const outcome = await harness.run(testCase.collectorId, testCase.target);
+        const outcome = await harness.run(
+        testCase.collectorId,
+        testCase.target,
+        testCase.credentials === undefined ? {} : { credentials: testCase.credentials },
+      );
         expect(outcome.status, JSON.stringify(outcome)).toBe("FOUND");
         if (outcome.status !== "FOUND") return;
         const extract = EXTRACTORS[testCase.collectorId];

@@ -131,19 +131,17 @@ describe("a BLOCKED or UNVERIFIED platform source never runs (RELEASE-BLOCKING, 
         const runtime = deploymentRuntime(nodeEnv, methods);
         const entries = runtime.registry.list();
         const notPermitted = entries.filter((entry) => entry.commercialUse !== "PERMITTED");
-        // Phase 3B's eight, every monitoring collector of 2026-10-17, and the
-        // direct article fetch (2026-10-22, exact-article Stage 3).
+        // After Phase 1 (operator verdicts, 2026-11-10) flipped crtsh, dns,
+        // github, wayback and bluesky.search to PERMITTED, the sources still held
+        // at UNVERIFIED are these: commoncrawl, devto, hackernews, rdap,
+        // reddit.search, telegram.channel, the direct article fetch, and one RSS
+        // source per publisher.
         expect(notPermitted.map((entry) => entry.id).sort()).toEqual(
           [
             "commoncrawl",
-            "crtsh",
             "devto",
-            "dns",
-            "github",
             "hackernews",
             "rdap",
-            "wayback",
-            "bluesky.search",
             "reddit.search",
             "telegram.channel",
             "article",
@@ -165,7 +163,7 @@ describe("a BLOCKED or UNVERIFIED platform source never runs (RELEASE-BLOCKING, 
     },
   );
 
-  it("plans a domain on PERMITTED collectors only: GDELT's news, and nothing UNVERIFIED", () => {
+  it("plans a domain on PERMITTED collectors only, never an UNVERIFIED source", () => {
     const runtime = deploymentRuntime("production");
     const admitted = runtime.registry
       .list()
@@ -174,9 +172,15 @@ describe("a BLOCKED or UNVERIFIED platform source never runs (RELEASE-BLOCKING, 
         (entry) =>
           runtime.admit(entry.id, { target, entitlement: ENTITLED, scopeAuthorisation: null }) ===
           null,
-      )
-      .map((entry) => entry.id);
-    expect(admitted).toEqual(["news"]);
+      );
+    // The gate still admits nothing UNVERIFIED (RELEASE-BLOCKING, acceptance b).
+    // After Phase 1 the PERMITTED set a domain plans is GDELT's news plus the
+    // flipped sources, so the invariant is asserted rather than a fixed list.
+    expect(admitted.length).toBeGreaterThan(0);
+    for (const entry of admitted) {
+      expect(entry.commercialUse, entry.id).toBe("PERMITTED");
+    }
+    expect(admitted.map((entry) => entry.id)).toContain("news");
   });
 });
 

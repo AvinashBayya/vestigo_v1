@@ -102,27 +102,27 @@ describe("the dns collector's declaration", () => {
       collectionMode: "PASSIVE_API",
       claimStrength: "REPORTED",
       credentials: { vaultIds: [], runsWithout: true },
-      commercialUse: "UNVERIFIED",
-      availability: "UNVERIFIED",
+      commercialUse: "PERMITTED",
+      availability: "AVAILABLE",
     });
     expect(entry.source.id).toBe("cloudflare-doh");
     expect(entry.source.network?.hosts).toEqual(["cloudflare-dns.com"]);
     expect(tenantRegistration(entry).sourceLabel).toBe(LABEL);
   });
 
-  it("is refused, without a request, where unverified sources are not allowed", async () => {
+  it("is admitted even where unverified sources are not allowed, now its source is PERMITTED", async () => {
+    // cloudflare-doh is PERMITTED since Phase 1, so the UNVERIFIED gate no
+    // longer applies to it. That gate stays covered for the sources still held
+    // at UNVERIFIED in access-methods.test.ts.
     const strict = await startHarness({
       collectors: [dnsCollector],
       fixtures: [fixture("found-example-com")],
       allowUnverifiedSources: false,
     });
     try {
-      const outcome = await strict.run("dns", { type: "DOMAIN", value: "example.com" });
-      expect(outcome).toMatchObject({
-        status: "REFUSED",
-        reason: "UNVERIFIED_SOURCE_NOT_ALLOWED",
-      });
-      expect(strict.requests).toEqual([]);
+      const access = strict.runtime.access("dns");
+      expect(access.refusal).toBeNull();
+      expect(access.runsVia).not.toBeNull();
     } finally {
       await strict.close();
     }

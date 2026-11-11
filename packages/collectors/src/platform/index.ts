@@ -4,6 +4,7 @@ import { CollectorDefinitionError } from "../errors.ts";
 import { CollectorRegistry } from "../registry.ts";
 import type { SourceDeclaration } from "../source.ts";
 import { articleCollector } from "./article.ts";
+import { braveSearchCollector } from "./brave-search.ts";
 import { commoncrawlCollector } from "./commoncrawl.ts";
 import { contactPhoneCollector } from "./contact-phone.ts";
 import { crtshCollector } from "./crtsh.ts";
@@ -55,6 +56,10 @@ export const PLATFORM_COLLECTORS: readonly Collector[] = [
   // runs in a deployment until an owner records a per-publisher verdict, and
   // even then only for a target with a scope authorisation in force.
   articleCollector,
+  // Brave Search API (wired 2026-11-10): OFFICIAL (tenant API key), PERMITTED by
+  // operator verdict. TECHINT topic/organization/domain discovery. Previously
+  // built but unregistered (orphaned); now in the registry so it can run.
+  braveSearchCollector,
 ];
 
 /** A collector built but held off the platform: it never runs, and reports say why. */
@@ -152,9 +157,11 @@ export { RDAP_RESULT } from "./rdap.ts";
 export { WAYBACK_RESULT } from "./wayback.ts";
 export { WIKIDATA_RESULT } from "./wikidata.ts";
 export {
-  braveSearchCollector,
   BraveSearchDiscoveryProvider,
   BraveMissingApiKeyError,
   BRAVE_SEARCH_RESULT,
   type BraveSearchResult,
 } from "./brave-search.ts";
+// braveSearchCollector is imported above for PLATFORM_COLLECTORS; re-export the
+// same binding so the package entry point still exposes it.
+export { braveSearchCollector };

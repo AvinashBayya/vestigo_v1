@@ -258,14 +258,14 @@ describe("bluesky.search with the tenant's account app password: the official me
 });
 
 describe("bluesky.search's registration", () => {
-  it("reads only Bluesky's source, takes a topic, and is UNVERIFIED until its terms are recorded", () => {
+  it("reads only Bluesky's source, takes a topic, and is PERMITTED (operator verdict, Phase 1)", () => {
     const entry = createPlatformRegistry().entry("bluesky.search");
     expect(entry).toMatchObject({
       label: "Bluesky post search (Bluesky public API)",
       discipline: "SOCMINT",
       targetTypes: ["TOPIC"],
       claimStrength: "OBSERVED",
-      commercialUse: "UNVERIFIED",
+      commercialUse: "PERMITTED",
       emptyAnswersUnreliable: true,
       accessMethods: ["open", "official"],
       credentials: { vaultIds: ["bluesky"], runsWithout: true },

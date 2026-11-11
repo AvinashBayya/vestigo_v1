@@ -14,23 +14,28 @@ import {
   PLATFORM_COLLECTORS,
 } from "../../src/index.ts";
 
+// Phase 1 (operator verdicts, 2026-11-10) flipped crtsh, dns (cloudflare-doh),
+// wayback, github and bluesky.search to PERMITTED, and wired the previously
+// orphaned Brave Search collector in. reddit.search stays UNVERIFIED (its Data
+// API acceptable-use clause is unresolved), as do the remaining sources.
 const REGISTERED = [
-  ["crtsh", "UNVERIFIED"],
-  ["dns", "UNVERIFIED"],
+  ["crtsh", "PERMITTED"],
+  ["dns", "PERMITTED"],
   ["rdap", "UNVERIFIED"],
-  ["wayback", "UNVERIFIED"],
+  ["wayback", "PERMITTED"],
   ["contact.phone", "PERMITTED"],
   ["wikidata", "PERMITTED"],
-  ["github", "UNVERIFIED"],
+  ["github", "PERMITTED"],
   ["hackernews", "UNVERIFIED"],
   ["devto", "UNVERIFIED"],
   ["commoncrawl", "UNVERIFIED"],
   ["news", "PERMITTED"],
-  ["bluesky.search", "UNVERIFIED"],
+  ["bluesky.search", "PERMITTED"],
   ["reddit.search", "UNVERIFIED"],
   ["telegram.channel", "UNVERIFIED"],
   ...RSS_PUBLISHERS.map((publisher) => [publisher.id, "UNVERIFIED"] as const),
   ["article", "UNVERIFIED"],
+  ["brave-search", "PERMITTED"],
 ];
 
 describe("the platform registry", () => {

@@ -1,0 +1,19 @@
+{
+  "provenance": {
+    "kind": "synthetic",
+    "source": "https://brave.com/search/api/",
+    "recordedOn": "2026-11-10",
+    "notes": "Synthetic: the Brave Web Search API answer in its documented shape, with bracketed placeholder values and the RFC-reserved example.com domain. No live answer could be recorded — no Brave Search API key is held here — so this stands in until a real response can be captured. Keyed to the collector's query for the TOPIC '[an open topic]'."
+  },
+  "request": {
+    "host": "api.search.brave.com",
+    "path": "/res/v1/web/search?q=%5Ban+open+topic%5D&count=20"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": "{\"query\":{\"original\":\"[an open topic]\"},\"web\":{\"total\":1,\"results\":[{\"title\":\"[result title 1]\",\"url\":\"https://www.example.com/\",\"description\":null,\"page_age\":null}]}}"
+  }
+}

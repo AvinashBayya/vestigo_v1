@@ -287,10 +287,10 @@ as `LOCAL_ANALYSIS`/DERIVED evidence. Several collectors make multiple requests 
 different source** — a fallback would have to be its own registered collector with its own verdict
 (the source-labelling invariant).
 
-Also present but **not registered**: `braveSearchCollector` (Brave Search API) is defined and
-re-exported but is absent from the `PLATFORM_COLLECTORS` array, so it is not dispatchable through
-the collector runtime. Its `BraveSearchDiscoveryProvider` is used by a separate search-discovery
-path outside the collector runtime.
+Registered in Phase 1 (2026-11-10): `braveSearchCollector` (Brave Search API) is in the
+`PLATFORM_COLLECTORS` array and dispatchable through the collector runtime, on the now-PERMITTED
+`brave-search` source (`official` method, `runsWithout: false`). Separately, its
+`BraveSearchDiscoveryProvider` is used by the search-discovery path outside the collector runtime.
 
 ### 4.5 Authentication / credentials for collectors
 
@@ -300,8 +300,8 @@ keyed access method is actually enabled in the deployment; each reveal is audite
 registered collectors all use the `official` method and all `runsWithout: true` (so they also run
 unauthenticated, usually at a lower rate limit): `github` (`github`, bearer token),
 `bluesky.search` (`bluesky`, `{identifier, appPassword}`), `reddit.search` (`reddit-api`,
-`{clientId, clientSecret}` → token exchange). The unregistered `brave-search` would use
-`brave-search` with `runsWithout: false`. Inside a run, a collector reads `ctx.credentials.get(id)`
+`{clientId, clientSecret}` → token exchange). The registered `brave-search` collector uses the
+`brave-search` vault id with `runsWithout: false`. Inside a run, a collector reads `ctx.credentials.get(id)`
 and only calls `.expose()` when building the request; secret values are scrubbed from recorded URLs.
 
 ### 4.6 Gates before a collector runs
@@ -474,8 +474,8 @@ deployment today; the rest are UNVERIFIED and gated off until their terms are re
   report still generates.
 - **Better Auth** — self-hosted identity, mounted at `/api/auth`, backed by the `auth` schema.
 - **Postgres / Redis** — the platform's own data stores (§3.4), not third-party APIs.
-- **Brave Search API** — reached by a separate `BraveSearchDiscoveryProvider` (search-discovery
-  path), configured via environment; the equivalent collector exists but is not registered.
+- **Brave Search API** — reached by the `brave-search` collector (registered Phase 1) and, for the
+  search-discovery path, a separate `BraveSearchDiscoveryProvider`; both use a tenant Brave key.
 - **CLI/protocol note:** there are **no CLI, Playwright/browser-automation, MCP, or subprocess
   integrations** in the running system. The "tool container" sources (SpiderFoot, theHarvester,
   SearXNG, IVRE) appear only as catalogue entries; their containers are not in the repo.
@@ -539,8 +539,10 @@ These are places where the code explicitly marks itself incomplete (not defects 
   deletion path is wired yet (the architecture record describes the intended cascade).
 - **Fusion for `FILE` and `TOPIC` targets** throws `NotImplementedError` (no collector reads FILE
   targets yet; a TOPIC has no entity kind yet).
-- **`brave-search` collector** is implemented and exported but not registered in
-  `PLATFORM_COLLECTORS`.
+- **Phase 1 licence flips (2026-11-10):** `crtsh`, `dns`/`cloudflare-doh`, `wayback-cdx`,
+  `github-api` and `bluesky` are now PERMITTED (operator verdicts); `reddit-api` stays UNVERIFIED.
+  The `brave-search` collector is registered and PERMITTED, and its result now carries computed
+  values (`sourceDomain`, counts) under `derived` blocks to satisfy the provenance contract.
 - **UI "not built" stubs:** Map tab (no geolocation read / MapLibre deferred), Media tab (no media
   endpoints), Overview "Written summary", Entities "Merge candidates", Settings "API keys"; Members
   and Settings screens are marked "provisional". Credits/cost-after-run display shows "not built"
@@ -565,9 +567,8 @@ Neutral design questions where the code and the records left something ambiguous
 2. **How do scheduled monitors fire?** The `monitors` table carries `schedule_cron` and the API
    manages monitors/alerts, but the worker composition root wires no monitor-scheduling queue or
    process. Is the scheduler-to-run path built yet, and if so where does it live?
-3. **`brave-search` registration.** Is leaving the implemented Brave collector out of
-   `PLATFORM_COLLECTORS` intentional (discovery-only for now), or pending registration once its
-   source verdict is recorded?
+3. **`brave-search` registration.** Resolved in Phase 1 (2026-11-10): the Brave collector is
+   registered in `PLATFORM_COLLECTORS` and its source is PERMITTED (operator verdict).
 4. **Content-store production backend.** The `ContentStore` interface anticipates an S3-compatible
    backend; is there a target implementation/timeline, and does evidence deletion depend on it?
 5. **pgvector usage.** The extension is provisioned and asserted but unused by the schema. What is

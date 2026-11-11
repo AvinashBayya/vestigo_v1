@@ -74,18 +74,24 @@ export type BraveSearchApiResponse = z.infer<typeof BRAVE_SEARCH_RESPONSE_SCHEMA
 // ── What the collector reports ────────────────────────────────────────────
 
 export const BRAVE_SEARCH_RESULT = z.object({
-  query: z.string(),
-  resultsCount: z.number().int().min(0),
   results: z.array(
     z.object({
       url: z.string(),
       title: z.string(),
       snippet: z.string().nullable(),
       publishedDate: z.string().nullable(),
-      sourceDomain: z.string(),
+      // sourceDomain is computed from the result's url, so it lives under a
+      // derived block (src/provenance.ts): the runtime refuses a value the
+      // collector computed at a reported path.
+      derived: z.object({
+        sourceDomain: z.string(),
+      }),
     }),
   ),
+  // The query echo and the counts are the collector's own, not the upstream's.
   derived: z.object({
+    query: z.string(),
+    resultsCount: z.number().int().min(0),
     discoveredDomains: z.array(z.string()),
   }),
 });
@@ -295,10 +301,16 @@ export const braveSearchCollector: Collector = defineCollector(
 
     return ctx.found(
       {
-        query,
-        resultsCount: items.length,
-        results: items,
+        results: items.map((item) => ({
+          url: item.url,
+          title: item.title,
+          snippet: item.snippet,
+          publishedDate: item.publishedDate,
+          derived: { sourceDomain: item.sourceDomain },
+        })),
         derived: {
+          query,
+          resultsCount: items.length,
           discoveredDomains: uniqueDomains,
         },
       },

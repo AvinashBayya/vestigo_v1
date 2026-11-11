@@ -85,9 +85,9 @@ describe("the wayback declaration", () => {
     expect(entry.credentials).toEqual({ vaultIds: [], runsWithout: true });
   });
 
-  it("inherits its source's UNVERIFIED licence verdict", () => {
-    expect(entry.commercialUse).toBe("UNVERIFIED");
-    expect(entry.availability).toBe("UNVERIFIED");
+  it("inherits its source's PERMITTED licence verdict (operator verdict, Phase 1)", () => {
+    expect(entry.commercialUse).toBe("PERMITTED");
+    expect(entry.availability).toBe("AVAILABLE");
   });
 });
 
@@ -325,16 +325,19 @@ describe("the wayback collector against recorded CDX answers", () => {
 });
 
 describe("the wayback collector's gates and limits", () => {
-  it("is refused where unverified sources are not allowed, and sends nothing", async () => {
+  it("is admitted even where unverified sources are not allowed, now its source is PERMITTED", async () => {
+    // The UNVERIFIED gate (RELEASE-BLOCKING) is covered for every source still
+    // held at UNVERIFIED in access-methods.test.ts; wayback-cdx is PERMITTED
+    // since Phase 1, so that gate no longer applies to it and it runs.
     const harness = await startHarness({
       collectors: [waybackCollector],
       fixtures: FIXTURES,
       allowUnverifiedSources: false,
     });
     try {
-      const outcome = await harness.run(ID, domain("example.net"));
-      expect(expectStatus(outcome, "REFUSED").reason).toBe("UNVERIFIED_SOURCE_NOT_ALLOWED");
-      expect(harness.requests).toEqual([]);
+      const access = harness.runtime.access(ID);
+      expect(access.refusal).toBeNull();
+      expect(access.runsVia).not.toBeNull();
     } finally {
       await harness.close();
     }
