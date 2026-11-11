@@ -4,6 +4,7 @@
  * logic lives in @repo/osint-engine and the packages under it.
  */
 import {
+  agentReachSettings,
   enabledAccessMethods,
   PRODUCT_NAME,
   resolveContentStoreDir,
@@ -11,9 +12,11 @@ import {
   type Env,
 } from "@repo/config";
 import {
+  configureAgentReach,
   CollectorRuntime,
   createPlatformRegistry,
   HELD_PLATFORM_COLLECTORS,
+  runContainerTool,
 } from "@repo/collectors";
 import { createDatabase, FileSystemContentStore, type Database } from "@repo/db";
 import {
@@ -56,6 +59,13 @@ export const WORKER_ENV = [
   "CONTENT_STORE_DIR",
   // The access methods collectors may use here; the same value as the API.
   "COLLECTORS_ACCESS_METHODS",
+  // How this worker runs the Agent-Reach reader container, when enabled. Not a
+  // credential: a login-gated channel's session is the container's own config.
+  "AGENT_REACH_ENABLED",
+  "AGENT_REACH_COMMAND",
+  "AGENT_REACH_BASE_ARGS",
+  "AGENT_REACH_TIMEOUT_MS",
+  "AGENT_REACH_MAX_OUTPUT_BYTES",
   "QUEUE_PREFIX",
   "WORKER_QUEUES",
   "COLLECT_CONCURRENCY",
@@ -133,6 +143,20 @@ export async function startWorker(env: WorkerEnv, logger: Logger): Promise<Runni
       ),
     },
   });
+  // The Agent-Reach tool container, when this pool is configured to run it.
+  // Left unconfigured, its channels report the tool unavailable rather than
+  // guessing; a channel still runs only if its licence verdict is PERMITTED.
+  const agentReach = agentReachSettings(env);
+  if (agentReach.enabled) {
+    configureAgentReach({
+      runner: runContainerTool,
+      command: agentReach.command,
+      baseArgs: agentReach.baseArgs,
+      timeoutMs: agentReach.timeoutMs,
+      maxOutputBytes: agentReach.maxOutputBytes,
+    });
+    logger.info({ command: agentReach.command }, "Agent-Reach container configured");
+  }
   // Shared with the API, which serves the PDFs stored here.
   const contentStore = new FileSystemContentStore(resolveContentStoreDir(env.CONTENT_STORE_DIR));
   const executor = new CollectionExecutor({

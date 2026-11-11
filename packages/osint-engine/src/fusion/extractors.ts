@@ -22,6 +22,8 @@
  *     is the order the collector cited its responses in.
  */
 import {
+  AGENT_REACH_COLLECTOR_IDS,
+  AGENT_REACH_RESULT,
   ARTICLE_RESULT,
   BLUESKY_SEARCH_RESULT,
   BRAVE_SEARCH_RESULT,
@@ -563,5 +565,11 @@ export const EXTRACTORS: Readonly<Record<string, Extractor>> = {
   // Telegram's parsed posts become items in a later item extractor; until then
   // the result is checked and nothing is drawn (as for the other feeds).
   "telegram.channel": checkedOnly(TELEGRAM_CHANNEL_RESULT),
+  // Agent-Reach channels: each returns a list of items the container read. The
+  // result is checked; drawing entities and claims from the items (and never a
+  // count) is deferred to a later item extractor, as for the other readers.
+  ...Object.fromEntries(
+    AGENT_REACH_COLLECTOR_IDS.map((id) => [id, checkedOnly(AGENT_REACH_RESULT)]),
+  ),
   ...Object.fromEntries(RSS_COLLECTORS.map((collector) => [collector.declaration.id, rss])),
 };

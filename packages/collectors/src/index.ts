@@ -22,6 +22,11 @@ export {
 } from "./access.ts";
 export { PLATFORM_SOURCES } from "./catalogue.ts";
 export {
+  AGENT_REACH_RESULT,
+  AGENT_REACH_COLLECTOR_IDS,
+  AgentReachNotConfiguredError,
+  configureAgentReach,
+  resetAgentReach,
   ARTICLE_RESULT,
   braveSearchCollector,
   BraveMissingApiKeyError,
@@ -46,10 +51,20 @@ export {
   TELEGRAM_CHANNEL_RESULT,
   WAYBACK_RESULT,
   WIKIDATA_RESULT,
+  type AgentReachResult,
+  type AgentReachRuntimeConfig,
   type BraveSearchResult,
   type HeldCollector,
   type OperatorAttachment,
 } from "./platform/index.ts";
+export {
+  runContainerTool,
+  ToolFailedError,
+  ToolOutputTooLargeError,
+  type ContainerInvocation,
+  type ContainerOutput,
+  type ContainerRunner,
+} from "./tool/container.ts";
 export { DERIVED_KEY, reportedPart } from "./provenance.ts";
 export {
   declareCollector,

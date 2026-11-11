@@ -13,6 +13,7 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "loadEnv",
     "loadEnvSubset",
     "enabledAccessMethods",
+    "agentReachSettings",
     "ACCESS_METHODS",
     "AccessMethod",
     "DEFAULT_ACCESS_METHODS",
@@ -106,6 +107,12 @@ const REQUIRED_EXPORTS: Readonly<Record<string, readonly string[]>> = {
     "createPlatformRegistry",
     "HELD_PLATFORM_COLLECTORS",
     "reportedPart",
+    // Agent-Reach tool container channels (2026-11-11): the runner the worker
+    // configures, the deployment config, and the result schema fusion reads.
+    "configureAgentReach",
+    "runContainerTool",
+    "AGENT_REACH_RESULT",
+    "AGENT_REACH_COLLECTOR_IDS",
     // Access methods (2026-10-16): how a source is reached, and what runs here.
     "ACCESS_METHODS",
     "AccessMethod",

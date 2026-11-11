@@ -54,6 +54,24 @@ function decided(row: number, sourceUrl: string | null = null): LicenceCheck {
   };
 }
 
+const OPERATOR_DECIDED_ON = "2026-11-11";
+
+/**
+ * A verdict the operator set by their own decision (not a terms reading). Used
+ * for the operator-enabled platform channels (CLAUDE.md §3: operator-configured
+ * local adapters). `sourceUrl` is the platform's own terms, which the operator
+ * is responsible for complying with; the verdict records the operator's
+ * decision, never a determination that those terms permit the use.
+ */
+function operatorEnabled(sourceUrl: string): LicenceCheck {
+  return {
+    checkedOn: OPERATOR_DECIDED_ON,
+    sourceUrl,
+    recordedIn:
+      "Operator decision (CLAUDE.md §3: operator-configured local adapters); docs/PLAN.md, Agent-Reach integration",
+  };
+}
+
 /**
  * How each source is reached (src/access.ts), from what docs/audit/COLLECTORS.md
  * records of it: a key, a token or a paid account, or none. A method says how
@@ -103,6 +121,50 @@ const RSS_RATE_LIMIT: SourceRateLimit = {
   basis: "SELF_IMPOSED",
   note: "No published limit has been checked for this publisher's feeds; one request every two seconds until one is.",
 };
+
+/**
+ * An Agent-Reach channel as a source: a LOCAL_ANALYSIS tool container, so no
+ * network (the container does its own egress; the in-process fetcher's SSRF
+ * and forbidden-platform guards neither see nor bound it — CLAUDE.md §3,
+ * operator-configured local adapters). Every channel is PERMITTED by the
+ * operator's recorded decision, so the operator can enable or disable each one
+ * per deployment (`agent-reach add/remove <channel>` and the tenant registry's
+ * enabled flag). The verdict records the operator's decision and their
+ * ownership of the channel's terms, never a determination that those terms
+ * permit the use. No credential sits here or in the tenant vault: a channel's
+ * signed-in session, where it needs one, is the container's own configuration.
+ */
+function agentReachSource(id: string, name: string, platform: string): SourceDeclaration {
+  return {
+    id,
+    name,
+    access: OPEN,
+    licence: {
+      commercialUse: "PERMITTED",
+      reason: `Operator-enabled Agent-Reach channel, run as a local container adapter (CLAUDE.md §3). The operator authorises its use and owns compliance with ${platform}'s terms in their deployment, and enables or disables the channel per deployment; this verdict records the operator's decision, not a determination that ${platform}'s terms permit the use.`,
+      check: operatorEnabled("https://github.com/Panniantong/Agent-Reach"),
+    },
+    network: null,
+    attribution: null,
+  };
+}
+
+const AGENT_REACH_SOURCES: readonly SourceDeclaration[] = [
+  agentReachSource("agent-reach-web", "Agent-Reach web read", "the web source"),
+  agentReachSource("agent-reach-github", "Agent-Reach GitHub read", "GitHub"),
+  agentReachSource("agent-reach-youtube", "Agent-Reach YouTube read", "YouTube"),
+  agentReachSource("agent-reach-v2ex", "Agent-Reach V2EX read", "V2EX"),
+  agentReachSource("agent-reach-bilibili", "Agent-Reach Bilibili read", "Bilibili"),
+  agentReachSource("agent-reach-xueqiu", "Agent-Reach Xueqiu read", "Xueqiu"),
+  agentReachSource("agent-reach-xiaoyuzhou", "Agent-Reach Xiaoyuzhou read", "Xiaoyuzhou"),
+  agentReachSource("agent-reach-boss", "Agent-Reach Boss Zhipin read", "Boss Zhipin"),
+  agentReachSource("agent-reach-x", "Agent-Reach X read", "X"),
+  agentReachSource("agent-reach-linkedin", "Agent-Reach LinkedIn read", "LinkedIn"),
+  agentReachSource("agent-reach-reddit", "Agent-Reach Reddit read", "Reddit"),
+  agentReachSource("agent-reach-xiaohongshu", "Agent-Reach Xiaohongshu read", "Xiaohongshu"),
+  agentReachSource("agent-reach-facebook", "Agent-Reach Facebook read", "Facebook"),
+  agentReachSource("agent-reach-instagram", "Agent-Reach Instagram read", "Instagram"),
+];
 
 /**
  * A publisher's RSS feeds (src/data/rss-feeds.ts): reached openly, its terms
@@ -831,6 +893,9 @@ export const PLATFORM_SOURCES: readonly SourceDeclaration[] = [
     network: null,
     attribution: null,
   },
+
+  // ── Agent-Reach tool container channels (LOCAL_ANALYSIS, network: null) ──
+  ...AGENT_REACH_SOURCES,
 
   // ── Direct article fetch: the one open-host source ─────────────────────
   // A direct article fetch reaches whatever publisher the tenant authorised

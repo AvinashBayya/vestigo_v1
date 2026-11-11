@@ -6,10 +6,12 @@
  * own recorded FOUND fixtures.
  */
 import {
+  configureAgentReach,
   CollectorRegistry,
   CollectorRuntime,
   defineCollector,
   PLATFORM_COLLECTORS,
+  resetAgentReach,
   type CollectionOutcome,
   type ScopeClearance,
   type SourceDeclaration,
@@ -17,7 +19,7 @@ import {
 import { loadFixture, startHarness, type Fixture } from "@repo/collectors/testing";
 import type { CollectorSecret } from "@repo/collectors";
 import { EmptyTargetError, type TargetType } from "@repo/core";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   circuitVerdict,
@@ -585,7 +587,104 @@ const NOTHING_DRAWN_CASES: readonly {
       ["brave-search", { expose: () => "[test-token]" }],
     ]),
   },
+  // The Agent-Reach channels (2026-11-11): LOCAL_ANALYSIS tool containers, so no
+  // HTTP fixtures; the container is replaced by the synthetic runner configured
+  // below (beforeAll), which returns one placeholder item. checkedOnly draws
+  // nothing. The login-gated channels (x, linkedin, reddit) run under the
+  // harness's fully-entitled tenant, so the person gate admits them here.
+  {
+    collectorId: "agent-reach.web",
+    target: { type: "DOMAIN", value: "example.com" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.github",
+    target: { type: "USERNAME", value: "fixture_user" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.youtube",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.v2ex",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.bilibili",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.x",
+    target: { type: "USERNAME", value: "fixture_user" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.linkedin",
+    target: { type: "USERNAME", value: "fixture_user" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.reddit",
+    target: { type: "USERNAME", value: "fixture_user" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.xueqiu",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.xiaoyuzhou",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.boss",
+    target: { type: "TOPIC", value: "[an open topic]" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.xiaohongshu",
+    target: { type: "USERNAME", value: "fixture_user" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.facebook",
+    target: { type: "USERNAME", value: "fixture_user" },
+    fixtures: [],
+  },
+  {
+    collectorId: "agent-reach.instagram",
+    target: { type: "USERNAME", value: "fixture_user" },
+    fixtures: [],
+  },
 ];
+
+// The Agent-Reach channels run a tool container; here a synthetic runner stands
+// in for it, returning one placeholder item so each channel reaches FOUND and
+// its checkedOnly extractor can be asserted to draw nothing. No value names a
+// real person, account or post (CLAUDE.md §1).
+beforeAll(() => {
+  configureAgentReach({
+    runner: () =>
+      Promise.resolve({
+        json: { collectedAt: "[container-run-time]", items: [{ url: "https://example.com/[item]" }] },
+        stdout: '{"items":[{"url":"https://example.com/[item]"}]}',
+      }),
+    command: "[unused-in-tests]",
+    baseArgs: [],
+    timeoutMs: 30_000,
+    maxOutputBytes: 1_000_000,
+  });
+});
+
+afterAll(() => {
+  resetAgentReach();
+});
 
 describe("extractors", () => {
   it("every registered platform collector has one, and nothing else does", () => {

@@ -121,6 +121,50 @@ export const envSchema = z.object({
         "The access methods collectors may use here, comma-separated: open, official, licensed, operator. The operator method (an operator's own attached collector) runs only where this names it. Set the same value on the API and every worker. A source still runs only if its licence verdict is PERMITTED.",
     }),
 
+  // ── Agent-Reach tool container (2026-11-11) ──
+  // How this deployment launches the Agent-Reach reader container. These are not
+  // credentials: a login-gated channel's signed-in session is the container's
+  // own configuration (its own volumes or environment on the launch command),
+  // never a Vestigo vault credential. A channel still runs only if its licence
+  // verdict is PERMITTED (the keyless channels are UNVERIFIED and never run).
+  AGENT_REACH_ENABLED: z.enum(["true", "false"]).default("false").meta({
+    description:
+      "Whether this process may run the Agent-Reach container. Off by default; set true on the worker pools that should run its channels, once the container (infra/agent-reach) is built and reachable.",
+  }),
+  AGENT_REACH_COMMAND: z
+    .string()
+    .min(1)
+    .default("docker")
+    .meta({
+      description:
+        "The executable that launches the Agent-Reach container, run argv-only with no shell. The default launches it with Docker; a deployment may point this at another container runner.",
+    }),
+  AGENT_REACH_BASE_ARGS: z
+    .string()
+    .default("run,--rm,vestigo/agent-reach")
+    .meta({
+      description:
+        "The fixed leading arguments before the channel, action and target, comma-separated. The default is a one-shot `docker run --rm vestigo/agent-reach`; add the mounts or environment a login-gated channel's session needs here.",
+      examples: ["run,--rm,vestigo/agent-reach", "run,--rm,--network,host,vestigo/agent-reach"],
+    }),
+  AGENT_REACH_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(1_000)
+    .max(600_000)
+    .default(90_000)
+    .meta({ description: "Longest one Agent-Reach container invocation may run before it is killed." }),
+  AGENT_REACH_MAX_OUTPUT_BYTES: z.coerce
+    .number()
+    .int()
+    .min(1_024)
+    .max(67_108_864)
+    .default(8_388_608)
+    .meta({
+      description:
+        "The most stdout to accept from one Agent-Reach container invocation; more fails the invocation rather than growing unbounded.",
+    }),
+
   // ── Jobs and workers (Phase 4) ──
   QUEUE_PREFIX: z
     .string()
@@ -300,6 +344,46 @@ export function enabledAccessMethods(
     ]);
   }
   return Object.freeze(methods);
+}
+
+/** How a process runs the Agent-Reach container, parsed from the environment. */
+export interface AgentReachSettings {
+  /** Whether this process may run the container at all. */
+  readonly enabled: boolean;
+  readonly command: string;
+  readonly baseArgs: readonly string[];
+  readonly timeoutMs: number;
+  readonly maxOutputBytes: number;
+}
+
+/**
+ * The Agent-Reach container settings for this process. `baseArgs` is the
+ * comma-separated list split and trimmed. The worker passes these to
+ * `configureAgentReach` only when `enabled`; otherwise the channels report the
+ * tool unavailable rather than running. No credential is here: a login-gated
+ * channel's session is the container's own configuration.
+ */
+export function agentReachSettings(
+  env: Pick<
+    Env,
+    | "AGENT_REACH_ENABLED"
+    | "AGENT_REACH_COMMAND"
+    | "AGENT_REACH_BASE_ARGS"
+    | "AGENT_REACH_TIMEOUT_MS"
+    | "AGENT_REACH_MAX_OUTPUT_BYTES"
+  >,
+): AgentReachSettings {
+  return {
+    enabled: env.AGENT_REACH_ENABLED === "true",
+    command: env.AGENT_REACH_COMMAND,
+    baseArgs: Object.freeze(
+      env.AGENT_REACH_BASE_ARGS.split(",")
+        .map((arg) => arg.trim())
+        .filter((arg) => arg.length > 0),
+    ),
+    timeoutMs: env.AGENT_REACH_TIMEOUT_MS,
+    maxOutputBytes: env.AGENT_REACH_MAX_OUTPUT_BYTES,
+  };
 }
 
 /**

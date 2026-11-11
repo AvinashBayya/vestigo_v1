@@ -36,6 +36,24 @@ const REGISTERED = [
   ...RSS_PUBLISHERS.map((publisher) => [publisher.id, "UNVERIFIED"] as const),
   ["article", "UNVERIFIED"],
   ["brave-search", "PERMITTED"],
+  // Agent-Reach tool container channels (2026-11-11): every channel is PERMITTED
+  // by the operator's decision, so the operator can enable or disable each one
+  // per deployment (the catalogue verdict is the code gate; the per-deployment
+  // toggle is `agent-reach add/remove` and the tenant registry's enabled flag).
+  ["agent-reach.web", "PERMITTED"],
+  ["agent-reach.github", "PERMITTED"],
+  ["agent-reach.youtube", "PERMITTED"],
+  ["agent-reach.v2ex", "PERMITTED"],
+  ["agent-reach.bilibili", "PERMITTED"],
+  ["agent-reach.xueqiu", "PERMITTED"],
+  ["agent-reach.xiaoyuzhou", "PERMITTED"],
+  ["agent-reach.boss", "PERMITTED"],
+  ["agent-reach.x", "PERMITTED"],
+  ["agent-reach.linkedin", "PERMITTED"],
+  ["agent-reach.reddit", "PERMITTED"],
+  ["agent-reach.xiaohongshu", "PERMITTED"],
+  ["agent-reach.facebook", "PERMITTED"],
+  ["agent-reach.instagram", "PERMITTED"],
 ];
 
 describe("the platform registry", () => {

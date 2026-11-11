@@ -135,6 +135,11 @@ describe("the worker, deployed as pools selected by queue", () => {
       // stay on an UNVERIFIED source and are left out, as an unverified source
       // never runs (access methods, 2026-10-16).
       expect(jobs.map((job) => job.collectorId).sort()).toEqual([
+        // agent-reach.web is a PERMITTED, operator-enabled channel that accepts a
+        // DOMAIN; it is planned like the other PERMITTED domain collectors. It
+        // runs only on a worker pool configured to run the container; none runs
+        // here, as no pool collects.
+        "agent-reach.web",
         "brave-search",
         "crtsh",
         "dns",
@@ -151,6 +156,10 @@ describe("the worker, deployed as pools selected by queue", () => {
             .map((exclusion) => [exclusion.collectorId, exclusion.reason]),
         ),
       ).toEqual({
+        // The Agent-Reach channels are PERMITTED; the one that accepts a DOMAIN
+        // (agent-reach.web) is planned, and the rest are excluded with
+        // TARGET_TYPE_NOT_ACCEPTED (filtered out above). commoncrawl and rdap
+        // stay on an UNVERIFIED source and are left out.
         commoncrawl: "UNVERIFIED_SOURCE_NOT_ALLOWED",
         rdap: "UNVERIFIED_SOURCE_NOT_ALLOWED",
       });

@@ -145,6 +145,8 @@ describe("a BLOCKED or UNVERIFIED platform source never runs (RELEASE-BLOCKING, 
             "reddit.search",
             "telegram.channel",
             "article",
+            // Every Agent-Reach channel is PERMITTED by the operator's decision
+            // (2026-11-11), so none is here among the unverified sources.
             ...RSS_PUBLISHERS.map((publisher) => publisher.id),
           ].sort(),
         );

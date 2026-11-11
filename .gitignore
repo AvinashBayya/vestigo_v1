@@ -21,3 +21,7 @@ apps/worker/data/
 # or shipped, and holds copies of the source tree — so Prettier (which honours
 # .gitignore) and the source guards (fabrication.ts EXCLUDED_DIRECTORIES) skip it.
 .claude/
+
+# Python bytecode (e.g. infra tool-container wrappers)
+__pycache__/
+*.pyc

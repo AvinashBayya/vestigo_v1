@@ -65,6 +65,21 @@ services:
               capabilities: [gpu]
     restart: unless-stopped
 
+  # Agent-Reach reader container (the first tool container). Not a long-running
+  # service: the worker launches it one-shot per collection (`docker run --rm`).
+  # This entry only builds the image, under a profile so it never starts with a
+  # plain `docker compose up`:
+  #   docker compose --profile tools build agent-reach
+  # See infra/agent-reach/README.md.
+  agent-reach:
+    profiles: ["tools"]
+    build:
+      context: ./infra/agent-reach
+    image: vestigo/agent-reach
+    # Never started as a service; overridden per invocation by the worker.
+    entrypoint: ["true"]
+    restart: "no"
+
 volumes:
   postgres-data:
   redis-data:

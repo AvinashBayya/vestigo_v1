@@ -7,10 +7,12 @@ export {
   type AccessMethod,
 } from "./access-methods.ts";
 export {
+  agentReachSettings,
   enabledAccessMethods,
   envSchema,
   loadEnv,
   loadEnvSubset,
+  type AgentReachSettings,
   type Env,
   type EnvSource,
 } from "./env.ts";

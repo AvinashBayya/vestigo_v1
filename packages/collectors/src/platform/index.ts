@@ -3,6 +3,7 @@ import type { Collector } from "../contract.ts";
 import { CollectorDefinitionError } from "../errors.ts";
 import { CollectorRegistry } from "../registry.ts";
 import type { SourceDeclaration } from "../source.ts";
+import { AGENT_REACH_COLLECTORS } from "./agent-reach.ts";
 import { articleCollector } from "./article.ts";
 import { braveSearchCollector } from "./brave-search.ts";
 import { commoncrawlCollector } from "./commoncrawl.ts";
@@ -60,6 +61,12 @@ export const PLATFORM_COLLECTORS: readonly Collector[] = [
   // operator verdict. TECHINT topic/organization/domain discovery. Previously
   // built but unregistered (orphaned); now in the registry so it can run.
   braveSearchCollector,
+  // Agent-Reach tool container channels (2026-11-11): LOCAL_ANALYSIS / DERIVED,
+  // the repo's first tool container. The keyless channels are UNVERIFIED (listed,
+  // not run until an operator records their terms); the login-gated platform
+  // channels (x, linkedin, reddit) are operator-enabled and PERSON-discipline.
+  // A deployment calls configureAgentReach(...) at startup to run them.
+  ...AGENT_REACH_COLLECTORS,
 ];
 
 /** A collector built but held off the platform: it never runs, and reports say why. */
@@ -140,6 +147,15 @@ export function createPlatformRegistry(
 }
 
 // The result schemas, for code that reads what a collector recorded (fusion).
+export {
+  AGENT_REACH_RESULT,
+  AGENT_REACH_COLLECTOR_IDS,
+  AgentReachNotConfiguredError,
+  configureAgentReach,
+  resetAgentReach,
+  type AgentReachResult,
+  type AgentReachRuntimeConfig,
+} from "./agent-reach.ts";
 export { ARTICLE_RESULT } from "./article.ts";
 export { COMMONCRAWL_RESULT } from "./commoncrawl.ts";
 export { CONTACT_PHONE_RESULT } from "./contact-phone.ts";

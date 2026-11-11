@@ -277,11 +277,17 @@ theHarvester / SearXNG / IVRE, Kpler, etc.). These never run by any path.
 
 ### 4.4 Implementation mechanism
 
-**Every implemented collector collects via a library HTTP call through the provided `fetch`.** There
-are **no subprocess, tool-container-HTTP, or browser-automation collectors** in the registered set;
-HTML/JSON parsing is dependency-free (bounded regex / Zod) in-process. The single exception to "HTTP"
-is `contact.phone`, a **local library analysis** (`libphonenumber-js`, no network at all), recorded
-as `LOCAL_ANALYSIS`/DERIVED evidence. Several collectors make multiple requests internally (e.g.
+**Most implemented collectors collect via a library HTTP call through the provided `fetch`**, with
+HTML/JSON parsing dependency-free (bounded regex / Zod) in-process. Two kinds of collector do not use
+`fetch`: `contact.phone`, a **local library analysis** (`libphonenumber-js`, no network at all); and
+the **Agent-Reach tool-container channels** (added 2026-11-11), the first **subprocess / tool
+container** in the repo. A tool-container collector is `LOCAL_ANALYSIS`/DERIVED: it runs the
+container argv-only (no shell), bounded by a timeout and an output cap, through the one subprocess
+runner (`packages/collectors/src/tool/container.ts`), and records what the container prints as its
+evidence. The container does its own egress, so the in-process fetcher's SSRF and forbidden-platform
+guards neither see nor bound it — these are operator-configured local adapters (CLAUDE.md §3), and the
+guards stay fully intact for every `fetch`-based collector. Several collectors make multiple requests
+internally (e.g.
 `github` profile→repos→commits; `wikidata` search→get; `article` fetch→in-process extract;
 `bluesky`/`reddit` open vs. credentialed session paths), but **no collector falls back to a
 different source** — a fallback would have to be its own registered collector with its own verdict
@@ -291,6 +297,18 @@ Registered in Phase 1 (2026-11-10): `braveSearchCollector` (Brave Search API) is
 `PLATFORM_COLLECTORS` array and dispatchable through the collector runtime, on the now-PERMITTED
 `brave-search` source (`official` method, `runsWithout: false`). Separately, its
 `BraveSearchDiscoveryProvider` is used by the search-discovery path outside the collector runtime.
+
+Registered 2026-11-11: the **Agent-Reach tool-container channels** — 14 `LOCAL_ANALYSIS`/DERIVED
+collectors (`agent-reach.web`, `.github`, `.youtube`, `.v2ex`, `.bilibili`, `.xueqiu`, `.xiaoyuzhou`,
+`.boss`, `.x`, `.linkedin`, `.reddit`, `.xiaohongshu`, `.facebook`, `.instagram`), each on a
+`network: null` source that is **PERMITTED by the operator's recorded decision** (CLAUDE.md §3:
+operator-configured local adapters; the operator owns each platform's terms and enables/disables each
+channel per deployment via `agent-reach add/remove` and the tenant registry's `enabled` flag). The
+people-centric channels are PERSON-discipline, so the plan/vetting gate applies. The worker launches
+the container only when `AGENT_REACH_ENABLED=true` (`configureAgentReach`); unconfigured, the channels
+report the tool unavailable rather than guessing. The container (`infra/agent-reach`) and its
+per-channel output field mapping are confirmed against a live run as a follow-up; the collector,
+runner, schema and gating are covered offline.
 
 ### 4.5 Authentication / credentials for collectors
 
@@ -476,9 +494,14 @@ deployment today; the rest are UNVERIFIED and gated off until their terms are re
 - **Postgres / Redis** — the platform's own data stores (§3.4), not third-party APIs.
 - **Brave Search API** — reached by the `brave-search` collector (registered Phase 1) and, for the
   search-discovery path, a separate `BraveSearchDiscoveryProvider`; both use a tenant Brave key.
-- **CLI/protocol note:** there are **no CLI, Playwright/browser-automation, MCP, or subprocess
-  integrations** in the running system. The "tool container" sources (SpiderFoot, theHarvester,
-  SearXNG, IVRE) appear only as catalogue entries; their containers are not in the repo.
+- **Agent-Reach tool container** — the first **subprocess / tool-container** integration (added
+  2026-11-11). The worker launches the container (`infra/agent-reach`) one-shot per collection,
+  argv-only, to read public-web and platform channels; it is enabled per worker pool with
+  `AGENT_REACH_ENABLED`. Read-only. See §4.4.
+- **CLI/protocol note:** apart from the Agent-Reach tool container above, there are **no other CLI,
+  Playwright/browser-automation, or MCP integrations** in the running system. The GPL/AGPL "tool
+  container" sources (SpiderFoot, theHarvester, SearXNG, IVRE) still appear only as catalogue entries;
+  their containers are not in the repo.
 
 State-changing actions are confined to the platform's own stores: creating investigations/runs/jobs,
 writing evidence/claims/entities, the per-tenant credential vault (envelope-encrypted writes), API
